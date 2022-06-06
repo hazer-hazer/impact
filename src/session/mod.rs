@@ -5,11 +5,11 @@ use crate::message::message::{MessageHolder, Message};
  */
 
 #[derive(Default, Debug)]
-struct Session {
+pub struct Session {
     interner: u32,
 }
 
-struct Result<T> {
+pub struct Result<T> {
     sess: Session,
     data: T,
     messages: Vec<Message>,

@@ -1,8 +1,8 @@
 use crate::{span::span::Span};
 
 
-
-enum MessageKind {
+#[derive(PartialEq)]
+pub enum MessageKind {
     Error,
     Warn,
 }
@@ -49,6 +49,10 @@ impl Message {
     pub fn text(&mut self, text: String) -> &mut Self {
         self.text = Some(text);
         self
+    }
+
+    pub fn is(&self, kind: MessageKind) -> bool {
+        self.kind == kind
     }
 
     // Emitting //
