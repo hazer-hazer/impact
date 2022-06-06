@@ -1,5 +1,4 @@
 use crate::dt::sync::Lock;
-use crate::session::session::with_session_globals;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;

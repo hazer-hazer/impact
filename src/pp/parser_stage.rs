@@ -4,7 +4,7 @@ use parser::token::{
 };
 
 impl PP for TokenKind {
-    pub fn pp(&self) -> &str {
+    fn pp(&self) -> &str {
 
     }
 }
