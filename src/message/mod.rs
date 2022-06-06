@@ -6,8 +6,8 @@ pub mod debug_emitter;
 pub mod message;
 pub mod term_emitter;
 
-pub trait MessageEmitter {
-    fn emit(&mut self, sess: Session, messages: Vec<Message>) -> Session {
+pub trait MessageEmitter<'a> {
+    fn emit(&mut self, sess: Session<'a>, messages: Vec<Message>) -> Session<'a> {
         for msg in messages.iter() {
             if msg.is(message::MessageKind::Error) {
                 self.error_appeared();
@@ -18,7 +18,7 @@ pub trait MessageEmitter {
         sess
     }
 
-    fn set_sess(&mut self, sess: Session);
+    fn set_sess(&mut self, sess: Session<'a>);
 
     fn error_appeared(&mut self);
 

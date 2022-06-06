@@ -1,5 +1,7 @@
+use crate::message::message::MessageHolder;
 use crate::parser::token::{Token, TokenKind, TokenStream};
 
+use crate::session::{Result, Session, Stage};
 use crate::span::span::{Span, SpanLen, Symbol};
 
 pub struct Lexer<'a> {
@@ -7,6 +9,8 @@ pub struct Lexer<'a> {
     pos: usize,
     token_start_pos: u64,
     tokens: Vec<Token>,
+    msg: MessageHolder,
+    sess: Session<'a>,
 }
 
 trait LexerCharCheck {
@@ -43,12 +47,14 @@ impl LexerCharCheck for char {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(source: &'a str, sess: Session<'a>) -> Self {
         Self {
             source,
             pos: 0,
             token_start_pos: 0,
             tokens: Vec::default(),
+            msg: MessageHolder::default(),
+            sess,
         }
     }
 
@@ -92,13 +98,13 @@ impl<'a> Lexer<'a> {
         while !self.eof() && self.peek().is_ident_next() {
             ident.push(self.advance());
         }
-        self.add_token(
-            TokenKind::Ident(Symbol::intern(ident.as_str())),
-            ident.len() as u32,
-        );
+        self.add_token(TokenKind::Ident(Symbol::new(0)), ident.len() as u32);
     }
+}
 
-    pub fn lex(mut self) -> TokenStream {
+impl<'a> Stage<TokenStream> for Lexer<'a> {
+    fn run<'b: 'a>(mut self, sess: crate::session::Session<'a>) -> crate::session::Result<'b, TokenStream> {
+        self.sess = sess;
         while !self.eof() {
             let maybe_unit_token = self.peek().maybe_unit_token(self.lookup());
             if let Some(unit_token) = maybe_unit_token {
@@ -113,13 +119,16 @@ impl<'a> Lexer<'a> {
                 let first = String::from(self.advance());
                 self.lex_ident(first);
             } else {
-                self.add_token(TokenKind::Unexpected(self.peek()), 1);
+                self.add_token(
+                    TokenKind::Unexpected(sess.intern(self.peek().to_string().as_str())),
+                    1,
+                );
                 self.advance();
             }
         }
 
         self.add_token(TokenKind::Eof, 1);
 
-        TokenStream::new(self.tokens)
+        Result::new(self.sess, TokenStream::new(self.tokens), self.msg)
     }
 }

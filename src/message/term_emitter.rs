@@ -2,12 +2,12 @@ use crate::session::Session;
 
 use super::{MessageEmitter, message::Message};
 
-pub struct TermEmitter {
-    sess: Session,
+pub struct TermEmitter<'a> {
+    sess: Session<'a>,
     got_error: bool,
 }
 
-impl MessageEmitter for TermEmitter {
+impl<'a> MessageEmitter<'a> for TermEmitter<'a> {
     fn error_appeared(&mut self) {
         self.got_error = true;
     }
@@ -16,7 +16,7 @@ impl MessageEmitter for TermEmitter {
         
     }
 
-    fn set_sess(&mut self, sess: Session) {
+    fn set_sess(&mut self, sess: Session<'a>) {
         self.sess = sess;
     }
 }

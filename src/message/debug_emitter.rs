@@ -1,20 +1,18 @@
-use std::default;
-
 use crate::session::Session;
 
-use super::{MessageEmitter, message::{self, Message}};
+use super::{MessageEmitter, message::{Message}};
 
 #[derive(Default)]
-struct DebugEmitter {
-    sess: Session,
+struct DebugEmitter<'a> {
+    sess: Session<'a>,
 }
 
-impl MessageEmitter for DebugEmitter {
+impl<'a> MessageEmitter<'a> for DebugEmitter<'a> {
     fn process_msg(&self, msg: &Message) {
         
     }
 
-    fn set_sess(&mut self, sess: Session) {
+    fn set_sess(&mut self, sess: Session<'a>) {
         self.sess = sess;
     }
 
