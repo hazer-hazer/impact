@@ -18,6 +18,8 @@ pub trait MessageEmitter {
         sess
     }
 
+    fn set_sess(&mut self, sess: Session);
+
     fn error_appeared(&mut self);
 
     fn process_msg(&self, msg: &Message);

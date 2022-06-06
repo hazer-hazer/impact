@@ -6,15 +6,17 @@ use super::{MessageEmitter, message::{self, Message}};
 
 #[derive(Default)]
 struct DebugEmitter {
-    got_error: bool,
+    sess: Session,
 }
 
 impl MessageEmitter for DebugEmitter {
-    fn error_appeared(&mut self) {
-        self.got_error = true;
-    }
-
     fn process_msg(&self, msg: &Message) {
         
     }
+
+    fn set_sess(&mut self, sess: Session) {
+        self.sess = sess;
+    }
+
+    fn error_appeared(&mut self) {}
 }
