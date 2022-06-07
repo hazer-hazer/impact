@@ -7,5 +7,3 @@ edition = "2021"
 
 [dependencies]
 string-interner = "0.14.0"
-nom = "7.1.1"
-nom_locate = "4.0.0"

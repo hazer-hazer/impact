@@ -1,5 +1,4 @@
 extern crate string_interner;
-extern crate nom;
 
 use parser::lexer::Lexer;
 use session::{Stage, Session};

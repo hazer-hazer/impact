@@ -1,12 +1,17 @@
-use crate::span::span::{LSpan, Span, Symbol};
+use crate::span::span::{Span, Symbol};
 
 #[derive(PartialEq, Debug)]
-pub enum BinOp {
+pub enum Infix {
     Plus,
     Minus,
     Mul,
     Div,
     Mod,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Prefix {
+    Not,
 }
 
 #[derive(PartialEq)]
@@ -18,7 +23,8 @@ pub enum TokenKind {
     String(Symbol),
     Ident(Symbol),
 
-    BinOp(BinOp),
+    Prefix(Prefix),
+    Infix(Infix),
 }
 
 impl TokenKind {}
@@ -29,9 +35,9 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn located(span: LSpan, kind: TokenKind) -> Self {
+    pub fn new(span: Span, kind: TokenKind) -> Self {
         Self {
-            span: Span::located(span),
+            span,
             kind,
         }
     }
