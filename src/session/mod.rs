@@ -41,5 +41,5 @@ impl<T> StageResult<T> {
 }
 
 pub trait Stage<T> {
-    fn run(self, sess: Session) -> StageResult<T>;
+    fn run(self) -> StageResult<T>;
 }
