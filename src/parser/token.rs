@@ -1,7 +1,4 @@
-use crate::span::span::{
-    Span,
-    Symbol,
-};
+use crate::span::span::{LSpan, Span, Symbol};
 
 #[derive(PartialEq, Debug)]
 pub enum BinOp {
@@ -24,12 +21,20 @@ pub enum TokenKind {
     BinOp(BinOp),
 }
 
-impl TokenKind {
-}
+impl TokenKind {}
 
 pub struct Token {
     pub span: Span,
     pub kind: TokenKind,
+}
+
+impl Token {
+    pub fn located(span: LSpan, kind: TokenKind) -> Self {
+        Self {
+            span: Span::located(span),
+            kind,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -39,7 +44,9 @@ impl std::ops::Index<usize> for TokenStream {
     type Output = Token;
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.0.get(index).expect(format!("Failed to get token from TokenStream by index {index:}").as_str())
+        self.0
+            .get(index)
+            .expect(format!("Failed to get token from TokenStream by index {index:}").as_str())
     }
 }
 

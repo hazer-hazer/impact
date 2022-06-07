@@ -2,17 +2,19 @@ use nom::branch::alt;
 use nom::bytes::complete::{escaped, tag};
 use nom::character::complete::{alphanumeric1, digit1, one_of};
 use nom::character::streaming::space0;
-use nom::combinator::value;
+use nom::combinator::{value, map_res};
 use nom::combinator::{map, opt};
 use nom::error::{ErrorKind, ParseError};
+use nom::multi::many0;
 use nom::sequence::{delimited, preceded};
 use nom::IResult;
+use nom_locate::LocatedSpan;
 
 use crate::message::message::MessageHolder;
 use crate::parser::token::{Token, TokenKind, TokenStream};
 
 use crate::session::{Session, Stage, StageResult};
-use crate::span::span::{Span, SpanLen, Symbol};
+use crate::span::span::{LSpan, Span, Symbol};
 
 use super::token::BinOp;
 
@@ -30,25 +32,41 @@ struct LexInput<'a> {
     sess: Session,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum LexError<I> {
-    Nom(I, ErrorKind),
-}
+// #[derive(Debug, PartialEq)]
+// pub enum LexError<I> {
+//     Nom(I, ErrorKind),
+// }
 
-impl<I> ParseError<I> for LexError<I> {
-    fn from_error_kind(input: I, kind: ErrorKind) -> Self {
-        LexError::Nom(input, kind)
-    }
+// impl<I> ParseError<I> for LexError<I> {
+//     fn from_error_kind(input: I, kind: ErrorKind) -> Self {
+//         LexError::Nom(input, kind)
+//     }
 
-    fn append(_: I, _: ErrorKind, other: Self) -> Self {
-        other
-    }
-}
+//     fn append(_: I, _: ErrorKind, other: Self) -> Self {
+//         other
+//     }
+// }
 
-type Result<'a, T = TokenKind> = IResult<&'a str, T, LexError<&'a str>>;
+type Result<'a, T = Token> = IResult<LSpan<'a>, T>;
 
 // trait Parser {}
 // impl<'a, T: FnMut(&'a str) -> Result> Parser for T {}
+
+fn bin_op(input: LSpan) -> Result {
+    let (s, v) = one_of("+-*/%")(input)?;
+
+    Ok((
+        s,
+        Token::located(s, TokenKind::BinOp(match v {
+            '+' => BinOp::Plus,
+            '-' => BinOp::Minus,
+            '*' => BinOp::Mul,
+            '/' => BinOp::Div,
+            '%' => BinOp::Mod,
+            _ => unreachable!(),
+        })),
+    ))
+}
 
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str, sess: Session) -> Self {
@@ -62,51 +80,49 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn bool_lit(input: &'a str) -> Result {
+    fn bool_lit(input: LSpan) -> Result {
         let t = value(true, tag("true"));
         let f = value(false, tag("false"));
-        map(alt((t, f)), |v| TokenKind::Bool(v))(input)
+
+        let (s, v) = alt((t, f))(input)?;
+
+        Ok((s, Token::located(s, TokenKind::Bool(v))))
     }
 
-    fn str_lit(&mut self) -> impl FnMut(&'a str) -> Result + '_ {
-        |input: &'a str| -> Result {
-            let p = escaped(alphanumeric1, '\\', one_of("\"n\\"));
+    fn str_lit(&mut self) -> impl FnMut(LSpan) -> Result + '_ {
+        |input: LSpan| -> Result {
+            let (s, v) = escaped(alphanumeric1, '\\', one_of("\"n\\"))(input)?;
 
-            map(p, |v| TokenKind::String(self.sess.intern(v)))(input)
+            Ok((
+                s,
+                Token::located(s, TokenKind::String(self.sess.intern(v.fragment()))),
+            ))
         }
     }
 
-    fn lit(&mut self) -> impl FnMut(&'a str) -> Result + '_ {
-        |input: &'a str| -> Result { alt((Lexer::bool_lit, self.str_lit()))(input) }
+    fn lit(&mut self) -> impl FnMut(LSpan<'a>) -> Result + '_ {
+        |input| alt((Lexer::bool_lit, self.str_lit()))(input)
     }
 
-    fn bin_op(input: &'a str) -> Result<BinOp> {
-        let (i, tok) = one_of("+-*/%")(input)?;
-
-        Ok((
-            i,
-            match tok {
-                '+' => BinOp::Plus,
-                '-' => BinOp::Minus,
-                '*' => BinOp::Mul,
-                '/' => BinOp::Div,
-                '%' => BinOp::Mod,
-                _ => unreachable!(),
-            },
-        ))
-    }
-
-    fn num(&mut self) -> impl FnMut(&'a str) -> Result + '_ {
-        |input: &'a str| {
-            map(preceded(tag("-"), digit1), |v| {
-                TokenKind::Int(self.sess.intern(v))
-            })(input)
+    fn num(&mut self) -> impl FnMut(LSpan) -> Result + '_ {
+        |input| {
+            let (s, v) = preceded(tag("-"), digit1)(input)?;
+            Ok((
+                s,
+                Token::located(s, TokenKind::Int(self.sess.intern(s.fragment())))
+            ))
         }
     }
 }
 
 impl<'a> Stage<TokenStream> for Lexer<'a> {
     fn run(mut self, sess: crate::session::Session) -> StageResult<TokenStream> {
+        let res = many0(alt((
+            self.num(),
+            self.lit(),
+            bin_op,
+        )))(LSpan::new(self.source));
+
         StageResult::new(self.sess, TokenStream::new(self.tokens), self.msg)
     }
 }

@@ -1,5 +1,6 @@
 use std::fmt::Formatter;
 
+use nom_locate::LocatedSpan;
 use string_interner::DefaultSymbol;
 
 type SymbolInner = DefaultSymbol;
@@ -17,12 +18,23 @@ impl Symbol {
     }
 }
 
+pub type LSpan<'a> = LocatedSpan<&'a str>;
+
 pub type SpanLen = u32;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Span {
     pub pos: u64,
     pub len: u32,
+}
+
+impl Span {
+    pub fn located(span: LSpan) -> Self {
+        Self {
+            pos: span.location_offset() as u64,
+            len: span.fragment().len() as u32,
+        }
+    }
 }
 
 impl std::fmt::Display for Span {
