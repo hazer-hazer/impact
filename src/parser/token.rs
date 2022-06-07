@@ -1,4 +1,4 @@
-use crate::span::span::{Span, Symbol};
+use crate::{span::span::{Span, Symbol}, session::Session};
 
 #[derive(PartialEq, Debug)]
 pub enum Infix {
@@ -25,9 +25,22 @@ pub enum TokenKind {
 
     Prefix(Prefix),
     Infix(Infix),
+
+    Error(Symbol),
 }
 
-impl TokenKind {}
+impl TokenKind {
+    pub fn try_from_reserved_sym(sess: &Session, sym: Symbol) -> Option<Self> {
+        let string = sess.get_str(sym);
+
+        match string {
+            "true" => Some(TokenKind::Bool(true)),
+            "false" => Some(TokenKind::Bool(false)),
+            "not" => Some(TokenKind::Prefix(Prefix::Not)),
+            _ => None
+        }
+    }
+}
 
 pub struct Token {
     pub span: Span,
@@ -44,7 +57,7 @@ impl Token {
 }
 
 #[derive(Default)]
-pub struct TokenStream(Vec<Token>);
+pub struct TokenStream(pub Vec<Token>);
 
 impl std::ops::Index<usize> for TokenStream {
     type Output = Token;

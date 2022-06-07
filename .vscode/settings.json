@@ -6,5 +6,6 @@
         "Interner",
         "rustc",
         "Uninit"
-    ]
+    ],
+    "rust-analyzer.trace.extension": true
 }

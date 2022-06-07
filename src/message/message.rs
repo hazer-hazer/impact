@@ -1,12 +1,13 @@
 use crate::{span::span::Span};
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum MessageKind {
     Error,
     Warn,
 }
 
+#[derive(Debug)]
 pub struct Message {
     kind: MessageKind,
     span: Span,

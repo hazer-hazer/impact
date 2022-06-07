@@ -7,15 +7,13 @@ pub mod message;
 pub mod term_emitter;
 
 pub trait MessageEmitter {
-    fn emit(&mut self, sess: Session, messages: Vec<Message>) -> Session {
+    fn emit<'a>(&mut self, sess: &'a Session, messages: Vec<Message>) {
         for msg in messages.iter() {
             if msg.is(message::MessageKind::Error) {
                 self.error_appeared();
             }
             self.process_msg(&msg);
         }
-
-        sess
     }
 
     fn set_sess(&mut self, sess: Session);

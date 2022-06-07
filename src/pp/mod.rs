@@ -12,6 +12,6 @@ impl<'a> PrettyPrinter<'a> {
     }
 }
 
-trait PP<'a> {
-    fn fmt(&self, sess: &'a Session) -> &'a str;
+pub trait PP<'a> {
+    fn ppfmt(&self, sess: &'a Session) -> String;
 }
