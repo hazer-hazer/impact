@@ -1,3 +1,6 @@
+extern crate string_interner;
+extern crate nom;
+
 use parser::lexer::Lexer;
 use session::{Stage, Session};
 
@@ -12,5 +15,5 @@ fn main() {
     let sess = Session::default();
 
     let source = "a b";
-    let result = Lexer::new(source).run(sess);
+    // let result = Lexer::new(source).run(sess);
 }

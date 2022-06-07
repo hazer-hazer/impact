@@ -1,53 +1,57 @@
+use nom::branch::alt;
+use nom::bytes::complete::{escaped, tag};
+use nom::character::complete::{alphanumeric1, digit1, one_of};
+use nom::character::streaming::space0;
+use nom::combinator::value;
+use nom::combinator::{map, opt};
+use nom::error::{ErrorKind, ParseError};
+use nom::sequence::{delimited, preceded};
+use nom::IResult;
+
 use crate::message::message::MessageHolder;
 use crate::parser::token::{Token, TokenKind, TokenStream};
 
-use crate::session::{Result, Session, Stage};
+use crate::session::{Session, Stage, StageResult};
 use crate::span::span::{Span, SpanLen, Symbol};
+
+use super::token::BinOp;
 
 pub struct Lexer<'a> {
     source: &'a str,
     pos: usize,
-    token_start_pos: u64,
+    token_start_pos: u32,
     tokens: Vec<Token>,
     msg: MessageHolder,
-    sess: Session<'a>,
+    sess: Session,
 }
 
-trait LexerCharCheck {
-    fn is_ident_first(&self) -> bool;
-    fn is_ident_next(&self) -> bool;
-    fn maybe_unit_token(&self, next: Option<char>) -> Option<(TokenKind, SpanLen)>;
+struct LexInput<'a> {
+    string: &'a str,
+    sess: Session,
 }
 
-impl LexerCharCheck for char {
-    fn is_ident_first(&self) -> bool {
-        self.is_alphabetic() || *self == '_'
+#[derive(Debug, PartialEq)]
+pub enum LexError<I> {
+    Nom(I, ErrorKind),
+}
+
+impl<I> ParseError<I> for LexError<I> {
+    fn from_error_kind(input: I, kind: ErrorKind) -> Self {
+        LexError::Nom(input, kind)
     }
 
-    fn is_ident_next(&self) -> bool {
-        self.is_ident_first() || self.is_digit(10)
-    }
-
-    /// Returns kind of unit token if some and advancement offset
-    fn maybe_unit_token(&self, next: Option<char>) -> Option<(TokenKind, SpanLen)> {
-        match self {
-            '=' => Some((TokenKind::Assign, 1)),
-            '+' => Some((TokenKind::Add, 1)),
-            '*' => Some((TokenKind::Mul, 1)),
-            '/' => Some((TokenKind::Div, 1)),
-            '%' => Some((TokenKind::Mod, 1)),
-            ':' => Some((TokenKind::Colon, 1)),
-            _ => match (self, next) {
-                ('-', Some('>')) => Some((TokenKind::Arrow, 2)),
-                ('-', _) => Some((TokenKind::Sub, 1)),
-                _ => None,
-            },
-        }
+    fn append(_: I, _: ErrorKind, other: Self) -> Self {
+        other
     }
 }
+
+type Result<'a, T = TokenKind> = IResult<&'a str, T, LexError<&'a str>>;
+
+// trait Parser {}
+// impl<'a, T: FnMut(&'a str) -> Result> Parser for T {}
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str, sess: Session<'a>) -> Self {
+    pub fn new(source: &'a str, sess: Session) -> Self {
         Self {
             source,
             pos: 0,
@@ -58,77 +62,51 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn eof(&self) -> bool {
-        self.pos >= self.source.chars().count()
+    fn bool_lit(input: &'a str) -> Result {
+        let t = value(true, tag("true"));
+        let f = value(false, tag("false"));
+        map(alt((t, f)), |v| TokenKind::Bool(v))(input)
     }
 
-    fn peek(&self) -> char {
-        self.source
-            .chars()
-            .nth(self.pos)
-            .expect("Lexer went out of source")
-    }
+    fn str_lit(&mut self) -> impl FnMut(&'a str) -> Result + '_ {
+        |input: &'a str| -> Result {
+            let p = escaped(alphanumeric1, '\\', one_of("\"n\\"));
 
-    fn advance(&mut self) -> char {
-        self.advance_offset(1)
-    }
-
-    fn advance_offset(&mut self, offset: u8) -> char {
-        let last = self.peek();
-        self.pos += offset as usize;
-        last
-    }
-
-    fn lookup(&self) -> Option<char> {
-        self.source.chars().nth(self.pos + 1)
-    }
-
-    fn add_token(&mut self, kind: TokenKind, len: SpanLen) {
-        self.tokens.push(Token {
-            kind,
-            span: Span {
-                pos: self.token_start_pos,
-                len,
-            },
-        });
-    }
-
-    fn lex_ident(&mut self, first: String) {
-        let mut ident = first;
-        while !self.eof() && self.peek().is_ident_next() {
-            ident.push(self.advance());
+            map(p, |v| TokenKind::String(self.sess.intern(v)))(input)
         }
-        self.add_token(TokenKind::Ident(Symbol::new(0)), ident.len() as u32);
+    }
+
+    fn lit(&mut self) -> impl FnMut(&'a str) -> Result + '_ {
+        |input: &'a str| -> Result { alt((Lexer::bool_lit, self.str_lit()))(input) }
+    }
+
+    fn bin_op(input: &'a str) -> Result<BinOp> {
+        let (i, tok) = one_of("+-*/%")(input)?;
+
+        Ok((
+            i,
+            match tok {
+                '+' => BinOp::Plus,
+                '-' => BinOp::Minus,
+                '*' => BinOp::Mul,
+                '/' => BinOp::Div,
+                '%' => BinOp::Mod,
+                _ => unreachable!(),
+            },
+        ))
+    }
+
+    fn num(&mut self) -> impl FnMut(&'a str) -> Result + '_ {
+        |input: &'a str| {
+            map(preceded(tag("-"), digit1), |v| {
+                TokenKind::Int(self.sess.intern(v))
+            })(input)
+        }
     }
 }
 
 impl<'a> Stage<TokenStream> for Lexer<'a> {
-    fn run<'b: 'a>(mut self, sess: crate::session::Session<'a>) -> crate::session::Result<'b, TokenStream> {
-        self.sess = sess;
-        while !self.eof() {
-            let maybe_unit_token = self.peek().maybe_unit_token(self.lookup());
-            if let Some(unit_token) = maybe_unit_token {
-                self.add_token(unit_token.0, unit_token.1);
-                self.advance();
-                continue;
-            }
-
-            if self.peek().is_ident_first() {
-                // IDK WTF it works only when I create string outside of `lex_ident` scope
-                // But I wanna kill
-                let first = String::from(self.advance());
-                self.lex_ident(first);
-            } else {
-                self.add_token(
-                    TokenKind::Unexpected(sess.intern(self.peek().to_string().as_str())),
-                    1,
-                );
-                self.advance();
-            }
-        }
-
-        self.add_token(TokenKind::Eof, 1);
-
-        Result::new(self.sess, TokenStream::new(self.tokens), self.msg)
+    fn run(mut self, sess: crate::session::Session) -> StageResult<TokenStream> {
+        StageResult::new(self.sess, TokenStream::new(self.tokens), self.msg)
     }
 }

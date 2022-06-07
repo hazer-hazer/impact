@@ -3,7 +3,7 @@ use crate::session::Session;
 mod parser_stage;
 
 struct PrettyPrinter<'a> {
-    sess: &'a Session<'a>,
+    sess: &'a Session,
 }
 
 impl<'a> PrettyPrinter<'a> {
@@ -12,6 +12,6 @@ impl<'a> PrettyPrinter<'a> {
     }
 }
 
-trait PP {
-    fn fmt<'a>(&self, sess: &'a Session) -> &'a str;
+trait PP<'a> {
+    fn fmt(&self, sess: &'a Session) -> &'a str;
 }

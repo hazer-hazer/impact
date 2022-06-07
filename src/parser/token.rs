@@ -3,25 +3,25 @@ use crate::span::span::{
     Symbol,
 };
 
+#[derive(PartialEq, Debug)]
+pub enum BinOp {
+    Plus,
+    Minus,
+    Mul,
+    Div,
+    Mod,
+}
+
 #[derive(PartialEq)]
 pub enum TokenKind {
     Eof,
     Nl,
+    Bool(bool),
     Int(Symbol),
     String(Symbol),
     Ident(Symbol),
 
-    Assign,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-
-    Colon,
-    Arrow,
-
-    Unexpected(Symbol),
+    BinOp(BinOp),
 }
 
 impl TokenKind {

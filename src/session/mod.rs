@@ -1,6 +1,8 @@
+use string_interner::{StringInterner};
+
 use crate::{
     message::message::{Message, MessageHolder},
-    span::span::{Interner, Symbol},   
+    span::span::Symbol,
 };
 
 /**
@@ -8,28 +10,28 @@ use crate::{
  */
 
 #[derive(Default)]
-pub struct Session<'a> {
-    interner: Interner<'a>,
+pub struct Session {
+    interner: StringInterner,
 }
 
-impl<'a> Session<'a> {
+impl Session {
+    pub fn intern<T>(&mut self, string: T) -> Symbol where T: AsRef<str> {
+        Symbol::new(self.interner.get_or_intern(string))
+    }
+
     pub fn get_str(&self, sym: Symbol) -> &str {
-        self.interner.get_str(sym)
-    }
-
-    pub fn intern(&self, string: &'a str) -> Symbol {
-        self.interner.intern(string)
+        self.interner.resolve(sym.as_inner()).expect(format!("Failed to resolve symbol {sym:?}").as_str())
     }
 }
 
-pub struct Result<'a, T> {
-    sess: Session<'a>,
+pub struct StageResult<T> {
+    sess: Session,
     data: T,
     messages: Vec<Message>,
 }
 
-impl<'a, T> Result<'a, T> {
-    pub fn new(sess: Session<'a>, data: T, message_holder: MessageHolder) -> Self {
+impl<T> StageResult<T> {
+    pub fn new(sess: Session, data: T, message_holder: MessageHolder) -> Self {
         Self {
             sess,
             data,
@@ -39,5 +41,5 @@ impl<'a, T> Result<'a, T> {
 }
 
 pub trait Stage<T> {
-    fn run<'a>(self, sess: Session<'a>) -> Result<'a, T>;
+    fn run(self, sess: Session) -> StageResult<T>;
 }
