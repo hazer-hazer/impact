@@ -5,12 +5,16 @@ use crate::{
     },
     pp::PP,
     session::{Session, Stage, StageResult},
-    span::span::{Kw, Span},
+    span::span::{Ident, Kw, Span},
 };
 
 use super::{
-    ast::AST,
-    token::{Token, TokenKind, TokenStream, TokenCmp},
+    ast::{
+        expr::ExprKind,
+        stmt::{LetStmt, StmtKind},
+        AST,
+    },
+    token::{Punct, Token, TokenCmp, TokenKind, TokenStream},
 };
 
 struct Parser {
@@ -95,10 +99,7 @@ impl Parser {
     }
 
     fn skip(&mut self, cmp: TokenCmp, expected: &str) {
-        self.skip_if(
-            |kind| cmp == *kind,
-            expected,
-        );
+        self.skip_if(|kind| cmp == *kind, expected);
     }
 
     fn skip_kw(&mut self, kw: Kw) {
@@ -106,6 +107,13 @@ impl Parser {
             |kind| TokenCmp::Kw(kw) == *kind,
             format!("Keyword {}", kw).as_str(),
         )
+    }
+
+    fn skip_punct(&mut self, punct: Punct) {
+        self.skip_if(
+            |kind| TokenCmp::Punct(punct) == *kind,
+            format!("punctuation {}", punct).as_str(),
+        );
     }
 
     fn parse_multiple(&mut self, cmp: TokenCmp) -> Vec<Token> {
@@ -120,14 +128,21 @@ impl Parser {
         items
     }
 
-    fn parse_let(&mut self) {
+    fn parse_let(&mut self) -> StmtKind {
         self.skip_kw(Kw::Let);
 
-        let idents = self.parse_multiple(TokenCmp::Ident);
-        
-        if (idents.len() > 1) {
-            
-        }
+        let idents = self
+            .parse_multiple(TokenCmp::Ident)
+            .iter()
+            .map(|tok| Ident::from_token(*tok))
+            .collect::<Vec<_>>();
+
+        self.skip_punct(Punct::Assign);
+
+        let value = self.parse_expr();
+
+        // There might be a better way to slice vector
+        StmtKind::Let(LetStmt::new(idents[0], idents[1..].to_vec(), value))
     }
 
     fn parse_stmt(&mut self) {
@@ -135,6 +150,8 @@ impl Parser {
             self.parse_let();
         }
     }
+
+    fn parse_expr(&mut self) -> Expr {}
 
     fn parse(&mut self) -> AST {
         AST::new(vec![])

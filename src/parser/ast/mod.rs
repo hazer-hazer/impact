@@ -1,7 +1,7 @@
 use self::stmt::Stmt;
 
-mod expr;
-mod stmt;
+pub mod expr;
+pub mod stmt;
 
 type N<T> = Box<T>;
 

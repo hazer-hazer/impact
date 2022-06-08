@@ -1,4 +1,4 @@
-use crate::{pp::PP, session::Session};
+use crate::{pp::PP, session::Session, parser::token::{Token, TokenKind}};
 use std::fmt::{Display, Formatter};
 use string_interner::DefaultSymbol;
 
@@ -91,6 +91,7 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Ident {
     span: Span,
     sym: Symbol,
@@ -99,6 +100,13 @@ pub struct Ident {
 impl Ident {
     pub fn new(span: Span, sym: Symbol) -> Self {
         Self { span, sym }
+    }
+
+    pub fn from_token(tok: Token) -> Self {
+        match tok.kind {
+            TokenKind::Ident(sym) => Ident { span: tok.span, sym },
+            _ => unreachable!()
+        }
     }
 }
 

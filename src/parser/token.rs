@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     pp::PP,
     session::Session,
@@ -21,6 +23,18 @@ pub enum Prefix {
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Punct {
     Assign,
+}
+
+impl Display for Punct {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Punct::Assign => "=",
+            }
+        )
+    }
 }
 
 #[derive(PartialEq)]
@@ -97,7 +111,7 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::Prefix(_), TokenCmp::Prefix)
             | (TokenKind::Infix(_), TokenCmp::Infix)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
-            | (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
+            (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
             _ => false,
         }
@@ -132,6 +146,9 @@ impl<'a> PP<'a> for TokenKind {
             },
             TokenKind::Kw(kw) => match kw {
                 Kw::Let => "let",
+            },
+            TokenKind::Punct(punct) => match punct {
+                Punct::Assign => "=",
             },
         }
         .to_string()

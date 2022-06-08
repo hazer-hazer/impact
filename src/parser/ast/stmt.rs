@@ -3,7 +3,7 @@ use crate::{
     span::span::{Ident, Span},
 };
 
-use super::expr::{Expr, self};
+use super::expr::Expr;
 
 pub struct Stmt {
     span: Span,
@@ -12,7 +12,7 @@ pub struct Stmt {
 
 pub enum StmtKind {
     Expr(Expr),
-    TermDef(LetStmt),
+    Let(LetStmt),
 }
 
 pub struct LetStmt {
@@ -22,6 +22,14 @@ pub struct LetStmt {
 }
 
 impl LetStmt {
+    pub fn new(name: Ident, params: Vec<Ident>, value: Expr) -> Self {
+        Self {
+            name,
+            params,
+            value,
+        }
+    }
+
     pub fn is_var(&self) -> bool {
         self.params.is_empty()
     }
@@ -37,7 +45,7 @@ impl<'a> PP<'a> for StmtKind {
     fn ppfmt(&self, sess: &'a crate::session::Session) -> String {
         match self {
             StmtKind::Expr(expr) => expr.ppfmt(sess),
-            StmtKind::TermDef(def) => def.ppfmt(sess),
+            StmtKind::Let(def) => def.ppfmt(sess),
         }
     }
 }
