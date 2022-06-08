@@ -137,12 +137,19 @@ impl Parser {
             .map(|tok| Ident::from_token(*tok))
             .collect::<Vec<_>>();
 
+        if idents.len() == 0 {
+            MessageBuilder::error()
+                .span(self.span())
+                .text("Expected variable name and optional list of parameters".to_string())
+                .emit(self);
+        }
+
         self.skip_punct(Punct::Assign);
 
         let value = self.parse_expr();
 
         // There might be a better way to slice vector
-        StmtKind::Let(LetStmt::new(idents[0], idents[1..].to_vec(), value))
+        StmtKind::Let(LetStmt::new(idents.first().unwrap(), idents[1..].to_vec(), value))
     }
 
     fn parse_stmt(&mut self) {
