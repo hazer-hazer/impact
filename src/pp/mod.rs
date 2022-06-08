@@ -1,7 +1,5 @@
 use crate::session::Session;
 
-mod parser_stage;
-
 struct PrettyPrinter<'a> {
     sess: &'a Session,
 }

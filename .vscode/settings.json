@@ -1,10 +1,11 @@
 {
     "cSpell.words": [
-        "interner",
-        "sess",
         "CIFR",
+        "interner",
         "Interner",
+        "ppfmt",
         "rustc",
+        "sess",
         "Uninit"
     ],
     "rust-analyzer.trace.extension": true

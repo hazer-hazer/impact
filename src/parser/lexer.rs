@@ -75,6 +75,24 @@ impl<'a> Lexer<'a> {
         self.pos >= self.source.len()
     }
 
+    // fn take_while<F>(&self, mut predicate: F) -> (&str, usize)
+    // where F: FnMut(char) -> bool
+    // {
+    //     let mut offset = 0;
+
+    //     for c in self.source.chars() {
+    //         if !predicate(c) {
+    //             break;
+    //         }
+
+    //         offset += c.len_utf8();
+    //     }
+
+    //     if offset == self.pos {
+    //         panic
+    //     }
+    // }
+
     fn peek_by_pos(&self, pos: usize) -> char {
         self.source
             .chars()
