@@ -1,5 +1,4 @@
-use crate::{span::span::Span};
-
+use crate::span::span::Span;
 
 #[derive(PartialEq, Debug)]
 pub enum MessageKind {
@@ -11,15 +10,19 @@ pub enum MessageKind {
 pub struct Message {
     kind: MessageKind,
     span: Span,
-    text: Option<String>,
+    text: String,
+}
+
+pub trait MessageHolder {
+    fn save(&mut self, msg: Message);
 }
 
 #[derive(Default)]
-pub struct MessageHolder {
+pub struct MessageStorage {
     messages: Vec<Message>,
 }
 
-impl MessageHolder {
+impl MessageStorage {
     pub fn add_message(&mut self, msg: Message) {
         self.messages.push(msg);
     }
@@ -30,34 +33,53 @@ impl MessageHolder {
 }
 
 impl Message {
-    // Building //
-    fn of_kind(kind: MessageKind, span: Span) -> Self {
+    pub fn is(&self, kind: MessageKind) -> bool {
+        self.kind == kind
+    }
+}
+
+pub struct MessageBuilder {
+    kind: MessageKind,
+    span: Option<Span>,
+    text: Option<String>,
+}
+
+impl MessageBuilder {
+    pub fn of_kind(kind: MessageKind) -> Self {
         Self {
             kind,
-            span,
+            span: None,
             text: None,
         }
     }
 
-    pub fn error(span: Span) -> Self {
-        Message::of_kind(MessageKind::Error, span)
+    pub fn error() -> MessageBuilder {
+        MessageBuilder::of_kind(MessageKind::Error)
     }
 
-    pub fn warn(span: Span) -> Self {
-        Message::of_kind(MessageKind::Warn, span)
+    pub fn warn() -> MessageBuilder {
+        MessageBuilder::of_kind(MessageKind::Warn)
     }
 
-    pub fn text(&mut self, text: String) -> &mut Self {
+    pub fn span(mut self, span: Span) -> Self {
+        self.span = Some(span);
+        self
+    }
+
+    pub fn text(mut self, text: String) -> Self {
         self.text = Some(text);
         self
     }
 
-    pub fn is(&self, kind: MessageKind) -> bool {
-        self.kind == kind
+    pub fn build(self) -> Message {
+        Message {
+            kind: self.kind,
+            span: self.span.expect("Tried to create message without span specified"),
+            text: self.text.expect("Tried to create message without text specified"),
+        }
     }
 
-    // Emitting //
-    pub fn emit<T>(self, holder: &mut MessageHolder) {
-        holder.add_message(self)
+    pub fn emit(self, holder: &mut impl MessageHolder) {
+        holder.save(self.build());
     }
 }

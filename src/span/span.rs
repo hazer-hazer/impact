@@ -1,6 +1,29 @@
 use crate::{pp::PP, session::Session};
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use string_interner::DefaultSymbol;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Kw {
+    Let,
+}
+
+impl Display for Kw {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Kw::Let => "let",
+            }
+        )
+    }
+}
+
+impl<'a> PP<'a> for Kw {
+    fn ppfmt(&self, sess: &'a Session) -> String {
+        format!("{}", self)
+    }
+}
 
 type SymbolInner = DefaultSymbol;
 
@@ -14,6 +37,10 @@ impl Symbol {
 
     pub fn as_inner(self) -> SymbolInner {
         self.0
+    }
+
+    pub fn as_kw(self, sess: &Session) -> Option<Kw> {
+        sess.as_kw(self)
     }
 }
 
@@ -55,7 +82,10 @@ pub struct Spanned<T> {
     val: T,
 }
 
-impl<'a, T> PP<'a> for Spanned<T> where T: PP<'a> {
+impl<'a, T> PP<'a> for Spanned<T>
+where
+    T: PP<'a>,
+{
     fn ppfmt(&self, sess: &'a Session) -> String {
         format!("{}", self.val.ppfmt(sess))
     }

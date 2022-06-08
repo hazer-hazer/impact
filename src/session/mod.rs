@@ -3,8 +3,8 @@ use std::fmt::Debug;
 use string_interner::{StringInterner};
 
 use crate::{
-    message::{message::{Message, MessageHolder}, MessageEmitter},
-    span::span::Symbol,
+    message::{message::{Message, MessageStorage}, MessageEmitter},
+    span::span::{Symbol, Kw},
 };
 
 /**
@@ -26,12 +26,20 @@ impl Session {
         WithSession { sess: self, val: val }
     }
 
+    // Interner API //
     pub fn intern<T>(&mut self, string: T) -> Symbol where T: AsRef<str> {
         Symbol::new(self.interner.get_or_intern(string))
     }
 
     pub fn get_str(&self, sym: Symbol) -> &str {
         self.interner.resolve(sym.as_inner()).expect(format!("Failed to resolve symbol {sym:?}").as_str())
+    }
+
+    pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {
+        match self.get_str(sym) {
+            "let" => Some(Kw::Let),
+            _ => None,
+        }
     }
 }
 
@@ -44,7 +52,7 @@ pub struct StageResult<T> {
 pub type OkStageResult<T> = (T, Session);
 
 impl<T> StageResult<T> {
-    pub fn new(sess: Session, data: T, message_holder: MessageHolder) -> Self {
+    pub fn new(sess: Session, data: T, message_holder: MessageStorage) -> Self {
         Self {
             sess,
             data,

@@ -1,5 +1,5 @@
 use crate::message::MessageEmitter;
-use crate::message::message::MessageHolder;
+use crate::message::message::MessageStorage;
 use crate::parser::token::{Token, TokenKind, TokenStream};
 
 use crate::session::{Session, Stage, StageResult, OkStageResult};
@@ -12,7 +12,7 @@ pub struct Lexer<'a> {
     pos: usize,
     token_start_pos: SpanPos,
     tokens: Vec<Token>,
-    msg: MessageHolder,
+    msg: MessageStorage,
     sess: Session,
 }
 
@@ -66,7 +66,7 @@ impl<'a> Lexer<'a> {
             pos: 0,
             token_start_pos: 0,
             tokens: Vec::default(),
-            msg: MessageHolder::default(),
+            msg: MessageStorage::default(),
             sess,
         }
     }

@@ -12,16 +12,16 @@ pub struct Stmt {
 
 pub enum StmtKind {
     Expr(Expr),
-    TermDef(TermDef),
+    TermDef(LetStmt),
 }
 
-pub struct TermDef {
+pub struct LetStmt {
     name: Ident,
     params: Vec<Ident>,
     value: Expr,
 }
 
-impl TermDef {
+impl LetStmt {
     pub fn is_var(&self) -> bool {
         self.params.is_empty()
     }
@@ -42,7 +42,7 @@ impl<'a> PP<'a> for StmtKind {
     }
 }
 
-impl<'a> PP<'a> for TermDef {
+impl<'a> PP<'a> for LetStmt {
     fn ppfmt(&self, sess: &'a crate::session::Session) -> String {
         format!(
             "{} {}",
