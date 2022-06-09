@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{format, Display};
 
 use crate::{
     pp::PP,
@@ -65,7 +65,7 @@ impl Display for Punct {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum TokenKind {
     Eof,
     Nl,
@@ -79,6 +79,8 @@ pub enum TokenKind {
     Infix(Infix),
 
     Punct(Punct),
+
+    Indent(Symbol),
 
     Error(Symbol),
 }
@@ -125,6 +127,8 @@ pub enum TokenCmp {
     Infix(Infix),
     Kw(Kw),
     Punct(Punct),
+    SomeIndent,
+    Indent(Symbol),
     Error,
 }
 
@@ -137,12 +141,14 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::Int(_), TokenCmp::Int)
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
+            | (TokenKind::Prefix(_), TokenCmp::SomePrefix)
+            | (TokenKind::Indent(_), TokenCmp::SomeIndent)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
-            (TokenKind::Prefix(_), TokenCmp::SomePrefix) => true,
             (TokenKind::Prefix(prefix1), TokenCmp::Prefix(prefix2)) => prefix1 == prefix2,
             (TokenKind::Infix(infix1), TokenCmp::Infix(infix2)) => infix1 == infix2,
+            (TokenKind::Indent(ind1), TokenCmp::Indent(ind2)) => ind1 == ind2,
             _ => false,
         }
     }
@@ -151,12 +157,12 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
 impl<'a> PP<'a> for TokenKind {
     fn ppfmt(&self, sess: &'a Session) -> String {
         match self {
-            TokenKind::Eof => "[EOF]",
-            TokenKind::Nl => "\n",
-            TokenKind::Int(val) => val.to_string().as_str(),
-            TokenKind::String(val) | TokenKind::Ident(val) => sess.get_str(*val),
-            TokenKind::Infix(infix) => format!("{}", infix).as_str(),
-            TokenKind::Error(val) => sess.get_str(*val),
+            TokenKind::Eof => "[EOF]".to_string(),
+            TokenKind::Nl => "\n".to_string(),
+            TokenKind::Int(val) => val.to_string(),
+            TokenKind::String(val) | TokenKind::Ident(val) => sess.get_str(*val).to_string(),
+            TokenKind::Infix(infix) => format!("{}", infix).as_str().to_string(),
+            TokenKind::Error(val) => sess.get_str(*val).to_string(),
             TokenKind::Bool(val) => {
                 if *val {
                     "true"
@@ -164,16 +170,19 @@ impl<'a> PP<'a> for TokenKind {
                     "false"
                 }
             }
-            TokenKind::Prefix(prefix) => format!("{}", prefix).as_str(),
-            TokenKind::Kw(kw) => format!("{}", kw).as_str(),
+            .to_string(),
+            TokenKind::Prefix(prefix) => format!("{}", prefix),
+            TokenKind::Kw(kw) => format!("{}", kw),
+            TokenKind::Indent(_) => "[indent]".to_string(),
             TokenKind::Punct(punct) => match punct {
                 Punct::Assign => "=",
-            },
+            }
+            .to_string(),
         }
-        .to_string()
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Token {
     pub span: Span,
     pub kind: TokenKind,

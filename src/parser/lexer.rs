@@ -1,8 +1,8 @@
-use crate::message::MessageEmitter;
 use crate::message::message::MessageStorage;
+use crate::message::MessageEmitter;
 use crate::parser::token::{Token, TokenKind, TokenStream};
 
-use crate::session::{Session, Stage, StageResult, OkStageResult};
+use crate::session::{OkStageResult, Session, Stage, StageResult};
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
 use super::token::{Infix, Prefix};
@@ -14,12 +14,14 @@ pub struct Lexer<'a> {
     tokens: Vec<Token>,
     msg: MessageStorage,
     sess: Session,
+    last_char: char,
 }
 
 enum TokenStartMatch {
     Ident,
     Num,
     String,
+    Indent,
     Skip,
     Unknown,
 }
@@ -28,6 +30,8 @@ trait LexerCharCheck {
     fn is_ident_first(&self) -> bool;
     fn is_ident_next(&self) -> bool;
     fn is_skippable(&self) -> bool;
+    fn is_indent(&self) -> bool;
+    fn is_indent_precursor(&self) -> bool;
     fn match_first(&self) -> TokenStartMatch;
 }
 
@@ -44,13 +48,24 @@ impl LexerCharCheck for char {
         self.is_whitespace()
     }
 
+    fn is_indent(&self) -> bool {
+        *self == ' ' || *self == '\t'
+    }
+
+    fn is_indent_precursor(&self) -> bool {
+        *self == '\n'
+    }
+
     fn match_first(&self) -> TokenStartMatch {
+        // Note: Keep order please, at least for indent and skippable
         if self.is_ident_first() {
             TokenStartMatch::Ident
         } else if self.is_digit(10) {
             TokenStartMatch::Num
         } else if *self == '"' {
             TokenStartMatch::String
+        } else if self.is_indent() {
+            TokenStartMatch::Indent
         } else if self.is_skippable() {
             TokenStartMatch::Skip
         } else {
@@ -68,6 +83,7 @@ impl<'a> Lexer<'a> {
             tokens: Vec::default(),
             msg: MessageStorage::default(),
             sess,
+            last_char: source.chars().nth(0).unwrap_or('\0'),
         }
     }
 
@@ -114,6 +130,7 @@ impl<'a> Lexer<'a> {
 
     fn advance_offset(&mut self, offset: SpanLen) -> char {
         let last = self.pos;
+        self.last_char = self.peek();
         self.pos += offset as usize;
         self.peek_by_pos(last)
     }
@@ -141,12 +158,18 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    fn get_fragment(&mut self, start: usize) -> (&str, SpanLen) {
-        (&self.source[start..self.pos], self.pos as SpanPos - start as SpanPos)
+    fn get_fragment(&self, start: usize) -> (&str, SpanLen) {
+        (
+            &self.source[start..self.pos],
+            self.pos as SpanPos - start as SpanPos,
+        )
     }
 
     fn get_fragment_intern(&mut self, start: usize) -> (Symbol, SpanLen) {
-        let (frag, len) = self.get_fragment(start);
+        let (frag, len) = (
+            &self.source[start..self.pos],
+            self.pos as SpanPos - start as SpanPos,
+        );
         (self.sess.intern(frag), len)
     }
 
@@ -192,7 +215,25 @@ impl<'a> Lexer<'a> {
         }
 
         let (frag, len) = self.get_fragment(start);
-        self.add_token(TokenKind::Int(frag.parse().expect("TODO: Check integer lexing")), self.pos as SpanLen - start as SpanLen)
+        self.add_token(
+            TokenKind::Int(frag.parse().expect("TODO: Check integer lexing")),
+            len,
+        );
+    }
+
+    fn lex_indent(&mut self) {
+        if !self.last_char.is_indent_precursor() {
+            return;
+        }
+
+        let start = self.pos;
+
+        while self.peek().is_indent() {
+            self.advance();
+        }
+
+        let (sym, len) = self.get_fragment_intern(start);
+        self.add_token(TokenKind::Indent(sym), len);
     }
 }
 
@@ -201,10 +242,13 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
         while !self.eof() {
             self.token_start_pos = self.pos as SpanPos;
             match self.peek().match_first() {
-                TokenStartMatch::Skip => {self.advance();},
+                TokenStartMatch::Skip => {
+                    self.advance();
+                }
                 TokenStartMatch::Ident => self.lex_ident(),
                 TokenStartMatch::Num => self.lex_num(),
                 TokenStartMatch::String => self.lex_str(),
+                TokenStartMatch::Indent => self.lex_indent(),
                 TokenStartMatch::Unknown => match self.peek() {
                     '+' => self.add_token_adv(TokenKind::Infix(Infix::Plus), 1),
                     '-' => self.add_token_adv(TokenKind::Infix(Infix::Minus), 1),
