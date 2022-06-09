@@ -80,7 +80,7 @@ pub enum TokenKind {
 
     Punct(Punct),
 
-    Indent(Symbol),
+    Indent(u32),
 
     Error(Symbol),
 }
@@ -128,7 +128,7 @@ pub enum TokenCmp {
     Kw(Kw),
     Punct(Punct),
     SomeIndent,
-    Indent(Symbol),
+    Indent(u32),
     Error,
 }
 

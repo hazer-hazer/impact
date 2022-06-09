@@ -106,7 +106,7 @@ impl<T> Spanned<T> {
         self.span
     }
 
-    pub fn node(&self) -> T {
+    pub fn node(self) -> T {
         self.node
     }
 }

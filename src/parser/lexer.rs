@@ -49,7 +49,7 @@ impl LexerCharCheck for char {
     }
 
     fn is_indent(&self) -> bool {
-        *self == ' ' || *self == '\t'
+        *self == ' '
     }
 
     fn is_indent_precursor(&self) -> bool {
@@ -232,8 +232,8 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
 
-        let (sym, len) = self.get_fragment_intern(start);
-        self.add_token(TokenKind::Indent(sym), len);
+        let (_, len) = self.get_fragment(start);
+        self.add_token(TokenKind::Indent(len), len);
     }
 }
 

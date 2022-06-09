@@ -1,4 +1,8 @@
-use crate::{pp::PP, span::span::{Span, WithSpan}, span::span::Spanned};
+use crate::{
+    pp::PP,
+    span::span::Spanned,
+    span::span::{Span, WithSpan},
+};
 
 use self::stmt::Stmt;
 
@@ -17,15 +21,16 @@ where
         format!(
             "{}",
             match self {
-                Ok(v) => v.ppfmt(sess).as_str(),
-                Err(_) => "[ERROR]",
+                Ok(v) => v.ppfmt(sess),
+                Err(_) => "[ERROR]".to_string(),
             }
         )
     }
 }
 
 impl<T> WithSpan for PR<T>
-where T: WithSpan
+where
+    T: WithSpan,
 {
     fn span(&self) -> Span {
         match self {
@@ -35,12 +40,13 @@ where T: WithSpan
     }
 }
 
+#[derive(Default)]
 pub struct AST {
-    stmts: Vec<Stmt>,
+    stmts: Vec<PR<N<Stmt>>>,
 }
 
 impl AST {
-    pub fn new(stmts: Vec<Stmt>) -> Self {
+    pub fn new(stmts: Vec<PR<N<Stmt>>>) -> Self {
         Self { stmts }
     }
 }

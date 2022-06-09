@@ -8,7 +8,7 @@ use super::{expr::Expr, PR, N};
 pub type Stmt = Spanned<StmtKind>;
 
 pub enum StmtKind {
-    Expr(Expr),
+    Expr(PR<N<Expr>>),
     Let(LetStmt),
 }
 

@@ -45,7 +45,7 @@ pub enum PrefixOpKind {
 }
 
 impl PrefixOpKind {
-    pub fn from_tok(tok: Token) -> Spanned<Self> {
+    pub fn from_tok(tok: &Token) -> Spanned<Self> {
         Spanned::new(tok.span, match tok.kind {
             TokenKind::Prefix(prefix) => match prefix {
                 Prefix::Not => PrefixOpKind::Not,
