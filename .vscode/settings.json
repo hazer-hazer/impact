@@ -1,9 +1,12 @@
 {
     "cSpell.words": [
         "CIFR",
+        "idents",
         "interner",
         "Interner",
         "ppfmt",
+        "prec",
+        "Punct",
         "rustc",
         "sess",
         "Uninit"

@@ -1,4 +1,8 @@
-use crate::{pp::PP, session::Session, parser::token::{Token, TokenKind}};
+use crate::{
+    parser::token::{Token, TokenKind},
+    pp::PP,
+    session::Session,
+};
 use std::fmt::{Display, Formatter};
 use string_interner::DefaultSymbol;
 
@@ -63,6 +67,17 @@ impl Span {
     pub fn new(pos: SpanPos, len: SpanLen) -> Self {
         Self { pos, len }
     }
+
+    pub fn high(&self) -> SpanPos {
+        self.pos + self.len
+    }
+
+    pub fn to(&self, end: Span) -> Self {
+        Span::new(
+            std::cmp::min(self.pos, end.pos),
+            std::cmp::max(self.high(), end.high()),
+        )
+    }
 }
 
 impl std::fmt::Display for Span {
@@ -79,7 +94,21 @@ impl<'a> PP<'a> for Span {
 
 pub struct Spanned<T> {
     span: Span,
-    val: T,
+    node: T,
+}
+
+impl<T> Spanned<T> {
+    pub fn new(span: Span, node: T) -> Self {
+        Self { span, node }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn node(&self) -> T {
+        self.node
+    }
 }
 
 impl<'a, T> PP<'a> for Spanned<T>
@@ -87,7 +116,24 @@ where
     T: PP<'a>,
 {
     fn ppfmt(&self, sess: &'a Session) -> String {
-        format!("{}", self.val.ppfmt(sess))
+        format!("{}", self.node.ppfmt(sess))
+    }
+}
+
+impl<T> WithSpan for Spanned<T> {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+pub trait WithSpan {
+    fn span(&self) -> Span;
+}
+
+impl<T> WithSpan for Box<T>
+where T: WithSpan {
+    fn span(&self) -> Span {
+        self.as_ref().span()
     }
 }
 
@@ -104,8 +150,11 @@ impl Ident {
 
     pub fn from_token(tok: Token) -> Self {
         match tok.kind {
-            TokenKind::Ident(sym) => Ident { span: tok.span, sym },
-            _ => unreachable!()
+            TokenKind::Ident(sym) => Ident {
+                span: tok.span,
+                sym,
+            },
+            _ => unreachable!(),
         }
     }
 }

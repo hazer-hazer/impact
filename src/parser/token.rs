@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     pp::PP,
     session::Session,
-    span::span::{Kw, Span, Symbol},
+    span::span::{Kw, Span, Symbol, WithSpan},
 };
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -15,9 +15,37 @@ pub enum Infix {
     Mod,
 }
 
+impl Display for Infix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Infix::Plus => "+",
+                Infix::Minus => "-",
+                Infix::Mul => "*",
+                Infix::Div => "/",
+                Infix::Mod => "%",
+            }
+        )
+    }
+}
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Prefix {
     Not,
+}
+
+impl Display for Prefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Prefix::Not => "not",
+            }
+        )
+    }
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -42,7 +70,7 @@ pub enum TokenKind {
     Eof,
     Nl,
     Bool(bool),
-    Int(Symbol),
+    Int(i64),
     String(Symbol),
     Kw(Kw),
     Ident(Symbol),
@@ -92,8 +120,9 @@ pub enum TokenCmp {
     Int,
     String,
     Ident,
-    Prefix,
-    Infix,
+    SomePrefix,
+    Prefix(Prefix),
+    Infix(Infix),
     Kw(Kw),
     Punct(Punct),
     Error,
@@ -108,11 +137,12 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::Int(_), TokenCmp::Int)
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
-            | (TokenKind::Prefix(_), TokenCmp::Prefix)
-            | (TokenKind::Infix(_), TokenCmp::Infix)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
+            (TokenKind::Prefix(_), TokenCmp::SomePrefix) => true,
+            (TokenKind::Prefix(prefix1), TokenCmp::Prefix(prefix2)) => prefix1 == prefix2,
+            (TokenKind::Infix(infix1), TokenCmp::Infix(infix2)) => infix1 == infix2,
             _ => false,
         }
     }
@@ -123,16 +153,9 @@ impl<'a> PP<'a> for TokenKind {
         match self {
             TokenKind::Eof => "[EOF]",
             TokenKind::Nl => "\n",
-            TokenKind::Int(val) | TokenKind::String(val) | TokenKind::Ident(val) => {
-                sess.get_str(*val)
-            }
-            TokenKind::Infix(infix) => match infix {
-                Infix::Plus => "+",
-                Infix::Minus => "-",
-                Infix::Mul => "*",
-                Infix::Div => "/",
-                Infix::Mod => "%",
-            },
+            TokenKind::Int(val) => val.to_string().as_str(),
+            TokenKind::String(val) | TokenKind::Ident(val) => sess.get_str(*val),
+            TokenKind::Infix(infix) => format!("{}", infix).as_str(),
             TokenKind::Error(val) => sess.get_str(*val),
             TokenKind::Bool(val) => {
                 if *val {
@@ -141,12 +164,8 @@ impl<'a> PP<'a> for TokenKind {
                     "false"
                 }
             }
-            TokenKind::Prefix(prefix) => match *prefix {
-                Prefix::Not => "not",
-            },
-            TokenKind::Kw(kw) => match kw {
-                Kw::Let => "let",
-            },
+            TokenKind::Prefix(prefix) => format!("{}", prefix).as_str(),
+            TokenKind::Kw(kw) => format!("{}", kw).as_str(),
             TokenKind::Punct(punct) => match punct {
                 Punct::Assign => "=",
             },
@@ -168,7 +187,13 @@ impl Token {
 
 impl<'a> PP<'a> for Token {
     fn ppfmt(&self, sess: &'a Session) -> String {
-        format!("{} at {}", self.kind.ppfmt(sess), self.span.ppfmt(sess))
+        format!("{}", self.kind.ppfmt(sess))
+    }
+}
+
+impl WithSpan for Token {
+    fn span(&self) -> Span {
+        self.span
     }
 }
 

@@ -141,8 +141,13 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    fn get_fragment(&mut self, start: usize) -> (Symbol, SpanLen) {
-        (self.sess.intern(&self.source[start..self.pos]), self.pos as SpanPos - start as SpanPos)
+    fn get_fragment(&mut self, start: usize) -> (&str, SpanLen) {
+        (&self.source[start..self.pos], self.pos as SpanPos - start as SpanPos)
+    }
+
+    fn get_fragment_intern(&mut self, start: usize) -> (Symbol, SpanLen) {
+        let (frag, len) = self.get_fragment(start);
+        (self.sess.intern(frag), len)
     }
 
     fn lex_ident(&mut self) {
@@ -151,7 +156,7 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
 
-        let (sym, len) = self.get_fragment(start);
+        let (sym, len) = self.get_fragment_intern(start);
 
         let kind = if let Some(reserved) = TokenKind::try_from_reserved_sym(&self.sess, sym) {
             reserved
@@ -176,8 +181,7 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
 
-        let (sym, len) = self.get_fragment(start);
-
+        let (sym, len) = self.get_fragment_intern(start);
         self.add_token(TokenKind::String(sym), len);
     }
 
@@ -187,8 +191,8 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
 
-        let sym = self.sess.intern(&self.source[start..self.pos]);
-        self.add_token(TokenKind::Int(sym), self.pos as SpanLen - start as SpanLen)
+        let (frag, len) = self.get_fragment(start);
+        self.add_token(TokenKind::Int(frag.parse().expect("TODO: Check integer lexing")), self.pos as SpanLen - start as SpanLen)
     }
 }
 
