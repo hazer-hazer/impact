@@ -1,10 +1,11 @@
-use std::fmt::Debug;
-
-use string_interner::{StringInterner};
+use string_interner::StringInterner;
 
 use crate::{
-    message::{message::{Message, MessageStorage}, MessageEmitter},
-    span::span::{Symbol, Kw},
+    message::{
+        message::{Message, MessageStorage},
+        MessageEmitter,
+    },
+    span::span::{Kw, Symbol, SpanPos},
 };
 
 /**
@@ -12,9 +13,22 @@ use crate::{
  */
 
 #[derive(Default)]
+pub struct SourceLines {
+    lines: Vec<String>,
+    positions: Vec<SpanPos>,
+}
+
+impl SourceLines {
+    pub fn add_line(&mut self, line: String, pos: SpanPos) {
+        self.lines.push(line);
+        self.positions.push(pos);
+    }
+}
+
+#[derive(Default)]
 pub struct Session {
     interner: StringInterner,
-    source_lines: Vec<String>,
+    source_lines: SourceLines,
 }
 
 pub struct WithSession<'a, T> {
@@ -24,20 +38,32 @@ pub struct WithSession<'a, T> {
 
 impl Session {
     pub fn with_sess<'a, T>(&'a self, val: &'a T) -> WithSession<'a, T> {
-        WithSession { sess: self, val: val }
+        WithSession {
+            sess: self,
+            val: val,
+        }
     }
 
-    pub fn add_source_line(&mut self, string: String) {
-        self.source_lines.push(string);
+    pub fn source_lines(&self) -> &SourceLines {
+        &self.source_lines
+    }
+
+    pub fn source_lines_mut(&mut self) -> &mut SourceLines {
+        &mut self.source_lines
     }
 
     // Interner API //
-    pub fn intern<T>(&mut self, string: T) -> Symbol where T: AsRef<str> {
+    pub fn intern<T>(&mut self, string: T) -> Symbol
+    where
+        T: AsRef<str>,
+    {
         Symbol::new(self.interner.get_or_intern(string))
     }
 
     pub fn get_str(&self, sym: Symbol) -> &str {
-        self.interner.resolve(sym.as_inner()).expect(format!("Failed to resolve symbol {sym:?}").as_str())
+        self.interner
+            .resolve(sym.as_inner())
+            .expect(format!("Failed to resolve symbol {sym:?}").as_str())
     }
 
     pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {
@@ -45,10 +71,6 @@ impl Session {
             "let" => Some(Kw::Let),
             _ => None,
         }
-    }
-
-    pub fn source_lines(&self) -> &Vec<String> {
-        &self.source_lines
     }
 }
 

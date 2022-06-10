@@ -9,14 +9,14 @@ use super::token::{Infix, Punct};
 
 pub struct Lexer<'a> {
     source: &'a str,
-    pos: usize,
+    pos: SpanPos,
     token_start_pos: SpanPos,
     tokens: Vec<Token>,
     msg: MessageStorage,
     sess: Session,
     last_char: char,
     indent_levels: Vec<usize>,
-    last_line_begin: usize,
+    last_line_begin: SpanPos,
 }
 
 enum TokenStartMatch {
@@ -98,7 +98,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn eof(&self) -> bool {
-        self.pos >= self.source.len()
+        self.pos as usize >= self.source.len()
     }
 
     // fn take_while<F>(&self, mut predicate: F) -> (&str, usize)
@@ -119,10 +119,10 @@ impl<'a> Lexer<'a> {
     //     }
     // }
 
-    fn peek_by_pos(&self, pos: usize) -> char {
+    fn peek_by_pos(&self, pos: SpanPos) -> char {
         self.source
             .chars()
-            .nth(pos)
+            .nth(pos as usize)
             .expect(format!("Failed to get char from source by index {}", self.pos).as_str())
     }
 
@@ -133,7 +133,7 @@ impl<'a> Lexer<'a> {
     fn advance_offset(&mut self, offset: SpanLen) -> char {
         let last = self.pos;
         self.last_char = self.peek();
-        self.pos += offset as usize;
+        self.pos += offset;
         self.peek_by_pos(last)
     }
 
@@ -167,21 +167,21 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    fn get_fragment_to(&self, start: usize, end: usize) -> (&str, SpanLen) {
+    fn get_fragment_to(&self, start: SpanPos, end: SpanPos) -> (&str, SpanLen) {
         (
-            &self.source[start..end],
-            self.pos as SpanPos - start as SpanPos,
+            &self.source[start as usize..end as usize],
+            self.pos - start,
         )
     }
 
-    fn get_fragment(&self, start: usize) -> (&str, SpanLen) {
+    fn get_fragment(&self, start: SpanPos) -> (&str, SpanLen) {
         self.get_fragment_to(start, self.pos)
     }
 
-    fn get_fragment_intern(&mut self, start: usize) -> (Symbol, SpanLen) {
+    fn get_fragment_intern(&mut self, start: SpanPos) -> (Symbol, SpanLen) {
         let (frag, len) = (
-            &self.source[start..self.pos],
-            self.pos as SpanPos - start as SpanPos,
+            &self.source[start as usize..self.pos as usize],
+            self.pos - start,
         );
         (self.sess.intern(frag), len)
     }
@@ -239,10 +239,11 @@ impl<'a> Lexer<'a> {
         while self.peek().is_indent_precursor() {
             self.add_token_adv(TokenKind::Nl, 1);
             // FIXME: Save NL or not to save 🤔
-            self.sess.add_source_line(
+            self.sess.source_lines().add_line(
                 self.get_fragment_to(self.last_line_begin, self.pos - 1)
                     .0
                     .to_string(),
+                self.last_line_begin,
             );
             self.last_line_begin = self.pos;
         }
