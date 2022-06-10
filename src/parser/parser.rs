@@ -22,7 +22,6 @@ struct Parser {
     pos: usize,
     tokens: TokenStream,
     msg: MessageStorage,
-    indent_stack: Vec<Symbol>,
 }
 
 impl MessageHolder for Parser {
@@ -38,7 +37,6 @@ impl Parser {
             tokens,
             pos: 0,
             msg: MessageStorage::default(),
-            indent_stack: Default::default(),
         }
     }
 
@@ -238,21 +236,13 @@ impl Parser {
         }
 
         let mut stmts = vec![];
-        // let mut prev_indent = None;
-        // // let mut block_indent = None;
-        // while let Some(indent) = self.skip_indent() {
-        //     // TODO: Update if #53667 will be stable
-        //     if let Some(prev_indent) = prev_indent {
-        //         if prev_indent != indent {
-        //             // block_indent = Some(indent);
-        //             break;
-        //         }
-        //     }
+        let skip = self.skip(TokenCmp::Indent);
+        self.expected(skip, "indentation");
 
-        //     stmts.push(self.parse_stmt());
-
-        //     prev_indent = Some(indent);
-        // }
+        while !self.eof() {
+            // if 
+        }
+        
 
         stmts
     }

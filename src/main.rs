@@ -20,7 +20,8 @@ fn main() {
     let source = "
     if a
         print kek
-    
+        print kek
+        print kek
     ";
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap(&mut emitter);
 

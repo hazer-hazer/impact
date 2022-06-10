@@ -229,23 +229,31 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_indent(&mut self) {
-        self.add_token_adv(TokenKind::Nl, 1);
+        let pos = self.pos;
+        while self.peek().is_indent_precursor() {
+            self.add_token_adv(TokenKind::Nl, 1);
+        }
+
+        if pos == self.pos {
+            unreachable!();
+        }
 
         let mut indent_size = 0;
 
-        while !self.eof() && self.advance().is_indent() {
+        while !self.eof() && self.peek().is_indent() {
             indent_size += 1;
+            self.advance();
         }
 
         let mut level = *self.indent_levels.last().unwrap_or(&0);
 
         if indent_size > level {
-            self.add_token_adv(TokenKind::Indent, 1);
+            self.add_token(TokenKind::Indent, 1);
             self.indent_levels.push(indent_size);
         }
 
         while !self.eof() && indent_size < level {
-            self.add_token_adv(TokenKind::Dedent, 1);
+            self.add_token(TokenKind::Dedent, 1);
             level = self.indent_levels.pop().unwrap();
             if level < indent_size {
                 self.add_error("Invalid indentation");
@@ -272,7 +280,6 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
                     '*' => self.add_token_adv(TokenKind::Infix(Infix::Mul), 1),
                     '/' => self.add_token_adv(TokenKind::Infix(Infix::Div), 1),
                     '%' => self.add_token_adv(TokenKind::Infix(Infix::Mod), 1),
-                    '\n' => self.lex_indent(),
 
                     _ => unreachable!("'{}'", self.peek()),
                 },
