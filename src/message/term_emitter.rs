@@ -24,11 +24,11 @@ impl<'a> MessageEmitter for TermEmitter<'a> {
     fn process_msg(&self, msg: &Message) {
         let span = msg.span();
         let (line, line_pos) = self.sess.source_lines().find_line(span);
-        assert!(line_pos >= span.pos);
+        assert!(line_pos <= span.pos);
 
-        println!("{}\n", line);
+        println!("{}", line);
         print!(
-            "{}{} --- {}",
+            "{}{} --- {}\n",
             " ".repeat((span.pos - line_pos) as usize),
             "^".repeat(span.len as usize),
             msg.text()

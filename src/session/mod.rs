@@ -17,9 +17,24 @@ use crate::{
 pub struct SourceLines {
     lines: Vec<String>,
     positions: Vec<SpanPos>,
+    source_size: usize,
 }
 
 impl SourceLines {
+    pub fn new(source_size: usize) -> Self {
+        Self {
+            source_size,
+            ..Default::default()
+        }
+    }
+
+    // FIXME: This is a design, don't use setters,
+    //  just create session with source
+    //  lines using constructor (requires some work with Default's)
+    pub fn set_source_size(&mut self, source_size: usize) {
+        self.source_size = source_size;
+    }
+
     pub fn add_line(&mut self, line: String, pos: SpanPos) {
         self.lines.push(line);
         self.positions.push(pos);
@@ -31,13 +46,17 @@ impl SourceLines {
 
         for i in 0..self.lines.len() {
             let line_pos = self.positions[i];
+            let next_line_pos = *self
+                .positions
+                .get(i + 1)
+                .unwrap_or(&(self.source_size as u32));
 
             // We encountered line further than span
             if span.pos < line_pos {
                 break;
             }
 
-            if span.pos >= line_pos {
+            if span.pos >= line_pos && span.pos < next_line_pos {
                 line = Some(&self.lines[i]);
                 pos = Some(line_pos);
                 break;

@@ -276,6 +276,8 @@ impl<'a> Lexer<'a> {
 
 impl<'a> Stage<TokenStream> for Lexer<'a> {
     fn run(mut self) -> StageResult<TokenStream> {
+        self.sess.source_lines_mut().set_source_size(self.source.len());
+
         while !self.eof() {
             self.token_start_pos = self.pos as SpanPos;
             match self.peek().match_first() {
