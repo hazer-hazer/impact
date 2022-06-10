@@ -7,7 +7,7 @@ use crate::{
     },
     pp::PP,
     session::{Session, Stage, StageResult},
-    span::span::{Ident, Kw, Span, Symbol, WithSpan},
+    span::span::{Ident, Kw, Span, WithSpan},
 };
 
 use super::{
@@ -16,10 +16,10 @@ use super::{
         stmt::{LetStmt, Stmt, StmtKind},
         ErrorNode, AST, N, PR,
     },
-    token::{Infix, Prefix, Punct, Token, TokenCmp, TokenCmpMany, TokenKind, TokenStream},
+    token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream},
 };
 
-struct Parser {
+pub struct Parser {
     sess: Session,
     pos: usize,
     tokens: TokenStream,
@@ -216,7 +216,7 @@ impl Parser {
         items
     }
 
-    fn parse_delim<P, T>(
+    fn parse_delim<T, P>(
         &mut self,
         begin: TokenCmp,
         delim: TokenCmp,
@@ -262,7 +262,7 @@ impl Parser {
         let lo = self.span();
 
         let skip = self.skip_kw(Kw::Let);
-        self.expected(skip, "`let` keyword");
+        self.expect(skip, "`let` keyword");
 
         let idents = self
             .parse_multiple(TokenCmp::Ident)
@@ -283,7 +283,7 @@ impl Parser {
         };
 
         let skip = self.skip_punct(Punct::Assign);
-        self.expected(skip, "");
+        self.expect(skip, "");
 
         let expr = self.parse_expr();
         let value = self.expected_pr(
@@ -308,17 +308,34 @@ impl Parser {
     }
 
     fn parse_block(&mut self) -> Vec<PR<N<Stmt>>> {
-        self.parse_block_inner()
-    }
-
-    fn parse_block_inner(&mut self) -> Vec<PR<N<Stmt>>> {
         if !self.skip_nls() {
             return vec![self.parse_stmt()];
         }
 
-        let stmts = self.parse_delim(TokenCmp::Indent, TokenCmp::Nl, TokenCmp::Dedent, || {
-            self.parse_stmt();
-        });
+        let mut stmts = vec![];
+
+        let mut first = true;
+        while !self.eof() {
+            if TokenCmp::Dedent == self.peek() {
+                break;
+            }
+
+            if first {
+                first = false;
+            } else {
+                let skip = self.skip(TokenCmp::Nl);
+                self.expect(skip, "line break");
+            }
+
+            if TokenCmp::Dedent == self.peek() {
+                break;
+            }
+
+            stmts.push(self.parse_stmt());
+        }
+
+        let skip = self.skip(TokenCmp::Dedent);
+        self.expect(skip, "dedent");
 
         stmts
     }
@@ -381,7 +398,7 @@ impl Parser {
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
         if let Some(op) = self.skip(TokenCmp::SomePrefix) {
-            let rhs = self.parse_primary();
+            let rhs = self.parse_postfix();
 
             let rhs = if let Some(rhs) = rhs {
                 rhs
@@ -447,7 +464,13 @@ impl Parser {
     }
 
     fn parse(&mut self) -> AST {
-        AST::new(vec![])
+        let mut stmts = vec![];
+
+        while !self.eof() {
+            stmts.push(self.parse_stmt());
+        }
+
+        AST::new(stmts)
     }
 }
 

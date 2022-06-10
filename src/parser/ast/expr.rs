@@ -70,19 +70,6 @@ pub enum ExprKind {
     App(PR<N<Expr>>, Vec<PR<N<Expr>>>),
 }
 
-// impl<'a> PP<'a> for Expr {
-//     fn ppfmt(&self, sess: &'a crate::session::Session) -> String {
-//         match &self.node() {
-//             ExprKind::Lit(lit) => lit.ppfmt(sess),
-//             ExprKind::Ident(sym) => sym.ppfmt(sess),
-//             ExprKind::Infix(lhs, op, rhs) => {
-//                 format!("{} {} {}", lhs.ppfmt(sess), op.ppfmt(sess), rhs.ppfmt(sess))
-//             }
-//             ExprKind::Prefix(op, rhs) => format!("{} {}", op.ppfmt(sess), rhs.ppfmt(sess)),
-//         }
-//     }
-// }
-
 impl<'a> PP<'a> for InfixOpKind {
     fn ppfmt(&self, sess: &'a Session) -> String {
         match self {

@@ -24,16 +24,19 @@ impl LetStmt {
     pub fn is_var(&self) -> bool {
         self.params.is_empty()
     }
-}
 
-// impl<'a> PP<'a> for StmtKind {
-//     fn ppfmt(&self, sess: &'a crate::session::Session) -> String {
-//         match self {
-//             StmtKind::Expr(expr) => expr.ppfmt(sess),
-//             StmtKind::Let(def) => def.ppfmt(sess),
-//         }
-//     }
-// }
+    pub fn name(&self) -> &PR<Ident> {
+        &self.name
+    }
+
+    pub fn params(&self) -> &Vec<Ident> {
+        &self.params
+    }
+
+    pub fn value(&self) -> &PR<N<Expr>> {
+        &self.value
+    }
+}
 
 impl<'a> PP<'a> for LetStmt {
     fn ppfmt(&self, sess: &'a crate::session::Session) -> String {

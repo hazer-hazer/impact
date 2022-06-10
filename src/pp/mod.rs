@@ -1,5 +1,7 @@
 use crate::session::Session;
 
+pub mod ast;
+
 struct PrettyPrinter<'a> {
     sess: &'a Session,
 }

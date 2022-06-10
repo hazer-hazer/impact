@@ -1,9 +1,11 @@
 extern crate string_interner;
 
 use message::debug_emitter::DebugEmitter;
-use parser::lexer::Lexer;
+use parser::{lexer::Lexer, parser::Parser};
 use pp::PP;
 use session::{Stage, Session};
+
+use crate::{pp::ast::AstPP, parser::ast::visitor::Visitor};
 
 mod dt;
 mod parser;
@@ -23,8 +25,13 @@ fn main() {
         print kek
         print kek
     ";
+    
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap(&mut emitter);
+    
+    println!("{}", tokens.ppfmt(&sess));
 
-    // println!("{}", source);
-    println!("{}", tokens.ppfmt(&sess))
+    let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap(&mut emitter);
+
+    let mut pp = AstPP::new(&sess);
+    pp.visit_ast(&ast);
 }

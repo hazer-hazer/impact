@@ -8,6 +8,7 @@ use self::stmt::Stmt;
 
 pub mod expr;
 pub mod stmt;
+pub mod visitor;
 
 pub type N<T> = Box<T>;
 
@@ -48,6 +49,10 @@ pub struct AST {
 impl AST {
     pub fn new(stmts: Vec<PR<N<Stmt>>>) -> Self {
         Self { stmts }
+    }
+
+    pub fn stmts(&self) -> &Vec<PR<N<Stmt>>> {
+        &self.stmts
     }
 }
 
