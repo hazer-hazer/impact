@@ -3,9 +3,10 @@ use string_interner::StringInterner;
 use crate::{
     message::{
         message::{Message, MessageStorage},
+        term_emitter::TermEmitter,
         MessageEmitter,
     },
-    span::span::{Kw, Symbol, SpanPos},
+    span::span::{Kw, Span, SpanPos, Symbol},
 };
 
 /**
@@ -22,6 +23,36 @@ impl SourceLines {
     pub fn add_line(&mut self, line: String, pos: SpanPos) {
         self.lines.push(line);
         self.positions.push(pos);
+    }
+
+    pub fn find_line(&self, span: Span) -> (&String, SpanPos) {
+        let mut line = None;
+        let mut pos = None;
+
+        for i in 0..self.lines.len() {
+            let line_pos = self.positions[i];
+
+            // We encountered line further than span
+            if span.pos < line_pos {
+                break;
+            }
+
+            if span.pos >= line_pos {
+                line = Some(&self.lines[i]);
+                pos = Some(line_pos);
+                break;
+            }
+        }
+
+        (line.unwrap(), pos.unwrap())
+    }
+
+    pub fn get_lines(&self) -> &Vec<String> {
+        &self.lines
+    }
+
+    pub fn get_positions(&self) -> &Vec<SpanPos> {
+        &self.positions
     }
 }
 
@@ -91,8 +122,8 @@ impl<T> StageResult<T> {
         }
     }
 
-    pub fn unwrap(self, emitter: &mut impl MessageEmitter) -> OkStageResult<T> {
-        emitter.emit(&self.sess, self.messages);
+    pub fn unwrap(self) -> OkStageResult<T> {
+        TermEmitter::new(&self.sess).emit(self.messages);
 
         (self.data, self.sess)
     }
@@ -101,5 +132,5 @@ impl<T> StageResult<T> {
 pub trait Stage<T> {
     fn run(self) -> StageResult<T>;
 
-    fn run_and_unwrap(self, emitter: &mut impl MessageEmitter) -> OkStageResult<T>;
+    fn run_and_unwrap(self) -> OkStageResult<T>;
 }

@@ -168,10 +168,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn get_fragment_to(&self, start: SpanPos, end: SpanPos) -> (&str, SpanLen) {
-        (
-            &self.source[start as usize..end as usize],
-            self.pos - start,
-        )
+        (&self.source[start as usize..end as usize], self.pos - start)
     }
 
     fn get_fragment(&self, start: SpanPos) -> (&str, SpanLen) {
@@ -239,12 +236,13 @@ impl<'a> Lexer<'a> {
         while self.peek().is_indent_precursor() {
             self.add_token_adv(TokenKind::Nl, 1);
             // FIXME: Save NL or not to save 🤔
-            self.sess.source_lines().add_line(
-                self.get_fragment_to(self.last_line_begin, self.pos - 1)
-                    .0
-                    .to_string(),
-                self.last_line_begin,
-            );
+            let line = self
+                .get_fragment_to(self.last_line_begin, self.pos - 1)
+                .0
+                .to_string();
+            self.sess
+                .source_lines_mut()
+                .add_line(line, self.last_line_begin);
             self.last_line_begin = self.pos;
         }
 
@@ -306,7 +304,7 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
         StageResult::new(self.sess, TokenStream::new(self.tokens), self.msg)
     }
 
-    fn run_and_unwrap(self, emitter: &mut impl MessageEmitter) -> OkStageResult<TokenStream> {
-        self.run().unwrap(emitter)
+    fn run_and_unwrap(self) -> OkStageResult<TokenStream> {
+        self.run().unwrap()
     }
 }

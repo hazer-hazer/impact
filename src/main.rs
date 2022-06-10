@@ -1,34 +1,31 @@
 extern crate string_interner;
 
-use message::debug_emitter::DebugEmitter;
 use parser::{lexer::Lexer, parser::Parser};
 use pp::PP;
-use session::{Stage, Session};
+use session::{Session, Stage};
 
-use crate::{pp::ast::AstPP, parser::ast::visitor::Visitor};
+use crate::{parser::ast::visitor::Visitor, pp::ast::AstPP};
 
 mod dt;
-mod parser;
 mod message;
+mod parser;
+mod pp;
 mod session;
 mod span;
-mod pp;
 
 fn main() {
     let sess = Session::default();
 
-    let mut emitter = DebugEmitter::default();
-
     let source = "
     let a = 123
     ";
-    
-    let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap(&mut emitter);
 
-    println!("{:?}", sess.source_lines());
+    let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap();
+
+    println!("{:?}", sess.source_lines().get_lines());
     println!("{}", tokens.ppfmt(&sess));
 
-    let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap(&mut emitter);
+    let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap();
 
     let mut pp = AstPP::new(&sess);
     pp.visit_ast(&ast);

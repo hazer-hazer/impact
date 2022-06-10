@@ -36,6 +36,18 @@ impl Message {
     pub fn is(&self, kind: MessageKind) -> bool {
         self.kind == kind
     }
+
+    pub fn kind(&self) -> &MessageKind {
+        &self.kind
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn text(&self) -> &str {
+        self.text.as_ref()
+    }
 }
 
 pub struct MessageBuilder {
@@ -74,8 +86,12 @@ impl MessageBuilder {
     pub fn build(self) -> Message {
         Message {
             kind: self.kind,
-            span: self.span.expect("Tried to create message without span specified"),
-            text: self.text.expect("Tried to create message without text specified"),
+            span: self
+                .span
+                .expect("Tried to create message without span specified"),
+            text: self
+                .text
+                .expect("Tried to create message without text specified"),
         }
     }
 

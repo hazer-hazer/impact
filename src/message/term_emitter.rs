@@ -1,22 +1,37 @@
 use crate::session::Session;
 
-use super::{MessageEmitter, message::Message};
+use super::{message::Message, MessageEmitter};
 
-pub struct TermEmitter {
-    sess: Session,
+pub struct TermEmitter<'a> {
+    sess: &'a Session,
     got_error: bool,
 }
 
-impl MessageEmitter for TermEmitter {
+impl<'a> TermEmitter<'a> {
+    pub fn new(sess: &'a Session) -> Self {
+        Self {
+            sess,
+            got_error: false,
+        }
+    }
+}
+
+impl<'a> MessageEmitter for TermEmitter<'a> {
     fn error_appeared(&mut self) {
         self.got_error = true;
     }
 
     fn process_msg(&self, msg: &Message) {
-        
-    }
+        let span = msg.span();
+        let (line, line_pos) = self.sess.source_lines().find_line(span);
+        assert!(line_pos >= span.pos);
 
-    fn set_sess(&mut self, sess: Session) {
-        self.sess = sess;
+        println!("{}\n", line);
+        print!(
+            "{}{} --- {}",
+            " ".repeat((span.pos - line_pos) as usize),
+            "^".repeat(span.len as usize),
+            msg.text()
+        );
     }
 }

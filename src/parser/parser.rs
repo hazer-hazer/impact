@@ -1,12 +1,7 @@
-use std::fmt::format;
-
 use crate::{
-    message::{
-        message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-        MessageEmitter,
-    },
+    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     pp::PP,
-    session::{Session, Stage, StageResult},
+    session::{OkStageResult, Session, Stage, StageResult},
     span::span::{Ident, Kw, Span, WithSpan},
 };
 
@@ -480,10 +475,7 @@ impl<'a> Stage<AST> for Parser {
         StageResult::new(self.sess, ast, self.msg)
     }
 
-    fn run_and_unwrap(
-        self,
-        emitter: &mut impl MessageEmitter,
-    ) -> crate::session::OkStageResult<AST> {
-        self.run().unwrap(emitter)
+    fn run_and_unwrap(self) -> OkStageResult<AST> {
+        self.run().unwrap()
     }
 }

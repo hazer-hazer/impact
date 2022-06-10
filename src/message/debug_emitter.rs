@@ -1,19 +1,16 @@
+use std::fmt::Debug;
+
 use crate::session::Session;
 
-use super::{MessageEmitter, message::{Message}};
+use super::{message::Message, MessageEmitter};
 
-#[derive(Default)]
-pub struct DebugEmitter {
-    sess: Session,
-}
+pub struct DebugEmitter {}
+
+impl DebugEmitter {}
 
 impl MessageEmitter for DebugEmitter {
     fn process_msg(&self, msg: &Message) {
         println!("{:?}", msg);
-    }
-
-    fn set_sess(&mut self, sess: Session) {
-        self.sess = sess;
     }
 
     fn error_appeared(&mut self) {}
