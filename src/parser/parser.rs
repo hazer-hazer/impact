@@ -204,7 +204,9 @@ impl Parser {
 
         while !self.eof() {
             if self.is(cmp) {
-                items.push(self.peek_tok());
+                items.push(self.advance_tok());
+            } else {
+                break;
             }
         }
 
@@ -336,7 +338,9 @@ impl Parser {
     }
 
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
-        if self.peek().is_kw(&self.sess, Kw::Let) {
+        println!("parse stmt '{}'", self.peek().ppfmt(&self.sess));
+
+        if TokenCmp::Kw(Kw::Let) == self.peek() {
             Ok(Box::new(self.parse_let()))
         } else if let Some(expr) = self.parse_expr() {
             Ok(Box::new(Stmt::new(expr.span(), StmtKind::Expr(expr))))
@@ -440,7 +444,7 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
-        let Token { kind, span } = self.advance_tok();
+        let Token { kind, span } = self.peek_tok();
 
         let kind = match kind {
             TokenKind::Bool(val) => Some(Ok(ExprKind::Lit(Lit::Bool(val)))),
@@ -454,6 +458,10 @@ impl Parser {
 
             _ => None,
         };
+
+        if let Some(_) = kind {
+            self.advance();
+        }
 
         kind.map(|k| k.map(|k| Box::new(Expr::new(span, k))))
     }

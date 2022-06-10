@@ -117,6 +117,7 @@ impl Session {
     }
 
     pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {
+        println!("as_kw '{}'", self.get_str(sym));
         match self.get_str(sym) {
             "let" => Some(Kw::Let),
             _ => None,

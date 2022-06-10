@@ -98,21 +98,6 @@ impl TokenKind {
             _ => None,
         }
     }
-
-    pub fn as_kw(&self, sess: &Session) -> Option<Kw> {
-        match self {
-            TokenKind::Ident(sym) => sess.as_kw(*sym),
-            _ => None,
-        }
-    }
-
-    pub fn is_kw(&self, sess: &Session, check: Kw) -> bool {
-        if let Some(kw) = self.as_kw(sess) {
-            kw == check
-        } else {
-            false
-        }
-    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
