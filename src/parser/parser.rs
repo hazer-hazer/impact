@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use crate::{
     message::{
         message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -14,7 +16,7 @@ use super::{
         stmt::{LetStmt, Stmt, StmtKind},
         ErrorNode, AST, N, PR,
     },
-    token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream},
+    token::{Infix, Prefix, Punct, Token, TokenCmp, TokenCmpMany, TokenKind, TokenStream},
 };
 
 struct Parser {
@@ -124,6 +126,22 @@ impl Parser {
         }
     }
 
+    fn expect<'a, T>(&'a mut self, entity: Option<T>, expected: &str)
+    where
+        T: PP<'a> + WithSpan,
+    {
+        if entity.is_none() {
+            MessageBuilder::error()
+                .span(self.span())
+                .text(format!(
+                    "Expected {}, got {}",
+                    expected,
+                    self.peek().ppfmt(&self.sess)
+                ))
+                .emit(self);
+        }
+    }
+
     // Sadly, cause of problems with exclusive borrowing,
     // it is simpler to make predicate implicitly check for peek in implementation points
     fn skip_if<F>(&mut self, pred: F) -> Option<Token>
@@ -137,8 +155,29 @@ impl Parser {
         }
     }
 
+    fn skip_many_if<F>(&mut self, pred: F) -> Option<Vec<Token>>
+    where
+        F: Fn(TokenKind) -> bool,
+    {
+        let mut tokens = Vec::<Token>::new();
+
+        while pred(self.peek()) {
+            tokens.push(self.advance_tok());
+        }
+
+        if tokens.is_empty() {
+            None
+        } else {
+            Some(tokens)
+        }
+    }
+
     fn skip(&mut self, cmp: TokenCmp) -> Option<Token> {
         self.skip_if(|kind| cmp == kind)
+    }
+
+    fn skip_many(&mut self, cmp: TokenCmp) -> Option<Vec<Token>> {
+        self.skip_many_if(|kind| cmp == kind)
     }
 
     fn skip_any(&mut self, cmp: &[TokenCmp]) -> Option<Token> {
@@ -175,6 +214,48 @@ impl Parser {
         }
 
         items
+    }
+
+    fn parse_delim<P, T>(
+        &mut self,
+        begin: TokenCmp,
+        delim: TokenCmp,
+        end: TokenCmp,
+        mut parser: P,
+    ) -> Vec<T>
+    where
+        P: FnMut() -> T,
+    {
+        let skip = self.skip(begin);
+        self.expected(skip, format!("{}", begin).as_str());
+
+        let mut els = Vec::<T>::new();
+
+        let mut first = true;
+        while !self.eof() {
+            if end == self.peek() {
+                break;
+            }
+
+            if first {
+                first = false;
+            } else {
+                let skip = self.skip(delim);
+                self.expect(skip, format!("{} delimiter", delim).as_str());
+            }
+
+            if end == self.peek() {
+                // TODO: Trailing?
+                break;
+            }
+
+            els.push(parser());
+        }
+
+        let skip = self.skip(end);
+        self.expected(skip, format!("{}", end).as_str());
+
+        els
     }
 
     fn parse_let(&mut self) -> Stmt {
@@ -235,14 +316,9 @@ impl Parser {
             return vec![self.parse_stmt()];
         }
 
-        let mut stmts = vec![];
-        let skip = self.skip(TokenCmp::Indent);
-        self.expected(skip, "indentation");
-
-        while !self.eof() {
-            // if 
-        }
-        
+        let stmts = self.parse_delim(TokenCmp::Indent, TokenCmp::Nl, TokenCmp::Dedent, || {
+            self.parse_stmt();
+        });
 
         stmts
     }
