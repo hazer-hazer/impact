@@ -14,6 +14,7 @@ use crate::{
 #[derive(Default)]
 pub struct Session {
     interner: StringInterner,
+    source_lines: Vec<String>,
 }
 
 pub struct WithSession<'a, T> {
@@ -24,6 +25,10 @@ pub struct WithSession<'a, T> {
 impl Session {
     pub fn with_sess<'a, T>(&'a self, val: &'a T) -> WithSession<'a, T> {
         WithSession { sess: self, val: val }
+    }
+
+    pub fn add_source_line(&mut self, string: String) {
+        self.source_lines.push(string);
     }
 
     // Interner API //
@@ -40,6 +45,10 @@ impl Session {
             "let" => Some(Kw::Let),
             _ => None,
         }
+    }
+
+    pub fn source_lines(&self) -> &Vec<String> {
+        &self.source_lines
     }
 }
 

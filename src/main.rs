@@ -20,14 +20,12 @@ fn main() {
     let mut emitter = DebugEmitter::default();
 
     let source = "
-    if a
-        print kek
-        print kek
-        print kek
+    let a = 123
     ";
     
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap(&mut emitter);
-    
+
+    println!("{:?}", sess.source_lines());
     println!("{}", tokens.ppfmt(&sess));
 
     let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap(&mut emitter);

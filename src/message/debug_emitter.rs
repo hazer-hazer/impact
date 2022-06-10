@@ -9,7 +9,7 @@ pub struct DebugEmitter {
 
 impl MessageEmitter for DebugEmitter {
     fn process_msg(&self, msg: &Message) {
-        println!("Message {:?}", msg);
+        println!("{:?}", msg);
     }
 
     fn set_sess(&mut self, sess: Session) {

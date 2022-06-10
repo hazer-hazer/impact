@@ -5,7 +5,7 @@ use crate::parser::token::{Token, TokenKind, TokenStream};
 use crate::session::{OkStageResult, Session, Stage, StageResult};
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
-use super::token::{Infix};
+use super::token::{Infix, Punct};
 
 pub struct Lexer<'a> {
     source: &'a str,
@@ -16,6 +16,7 @@ pub struct Lexer<'a> {
     sess: Session,
     last_char: char,
     indent_levels: Vec<usize>,
+    last_line_begin: usize,
 }
 
 enum TokenStartMatch {
@@ -92,6 +93,7 @@ impl<'a> Lexer<'a> {
             sess,
             last_char: source.chars().nth(0).unwrap_or('\0'),
             indent_levels: Default::default(),
+            last_line_begin: 0,
         }
     }
 
@@ -165,11 +167,15 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    fn get_fragment(&self, start: usize) -> (&str, SpanLen) {
+    fn get_fragment_to(&self, start: usize, end: usize) -> (&str, SpanLen) {
         (
-            &self.source[start..self.pos],
+            &self.source[start..end],
             self.pos as SpanPos - start as SpanPos,
         )
+    }
+
+    fn get_fragment(&self, start: usize) -> (&str, SpanLen) {
+        self.get_fragment_to(start, self.pos)
     }
 
     fn get_fragment_intern(&mut self, start: usize) -> (Symbol, SpanLen) {
@@ -232,6 +238,13 @@ impl<'a> Lexer<'a> {
         let pos = self.pos;
         while self.peek().is_indent_precursor() {
             self.add_token_adv(TokenKind::Nl, 1);
+            // FIXME: Save NL or not to save 🤔
+            self.sess.add_source_line(
+                self.get_fragment_to(self.last_line_begin, self.pos - 1)
+                    .0
+                    .to_string(),
+            );
+            self.last_line_begin = self.pos;
         }
 
         if pos == self.pos {
@@ -280,6 +293,7 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
                     '*' => self.add_token_adv(TokenKind::Infix(Infix::Mul), 1),
                     '/' => self.add_token_adv(TokenKind::Infix(Infix::Div), 1),
                     '%' => self.add_token_adv(TokenKind::Infix(Infix::Mod), 1),
+                    '=' => self.add_token_adv(TokenKind::Punct(Punct::Assign), 1),
 
                     _ => unreachable!("'{}'", self.peek()),
                 },
