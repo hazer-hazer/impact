@@ -1,11 +1,11 @@
-use crate::message::message::MessageStorage;
+use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
 use crate::message::MessageEmitter;
 use crate::parser::token::{Token, TokenKind, TokenStream};
 
 use crate::session::{OkStageResult, Session, Stage, StageResult};
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
-use super::token::{Infix, Prefix};
+use super::token::{Infix};
 
 pub struct Lexer<'a> {
     source: &'a str,
@@ -15,14 +15,15 @@ pub struct Lexer<'a> {
     msg: MessageStorage,
     sess: Session,
     last_char: char,
+    indent_levels: Vec<usize>,
 }
 
 enum TokenStartMatch {
     Ident,
     Num,
     String,
-    Indent,
     Skip,
+    IndentPrecursor,
     Unknown,
 }
 
@@ -64,13 +65,19 @@ impl LexerCharCheck for char {
             TokenStartMatch::Num
         } else if *self == '"' {
             TokenStartMatch::String
-        } else if self.is_indent() {
-            TokenStartMatch::Indent
+        } else if self.is_indent_precursor() {
+            TokenStartMatch::IndentPrecursor
         } else if self.is_skippable() {
             TokenStartMatch::Skip
         } else {
             TokenStartMatch::Unknown
         }
+    }
+}
+
+impl<'a> MessageHolder for Lexer<'a> {
+    fn save(&mut self, msg: Message) {
+        self.msg.add_message(msg)
     }
 }
 
@@ -84,6 +91,7 @@ impl<'a> Lexer<'a> {
             msg: MessageStorage::default(),
             sess,
             last_char: source.chars().nth(0).unwrap_or('\0'),
+            indent_levels: Default::default(),
         }
     }
 
@@ -120,14 +128,6 @@ impl<'a> Lexer<'a> {
         self.peek_by_pos(self.pos)
     }
 
-    fn slice_end(&self, start: usize, end: usize) -> &str {
-        &self.source[start..end]
-    }
-
-    fn slice(&self, start: usize) -> &str {
-        &self.source[start..self.pos]
-    }
-
     fn advance_offset(&mut self, offset: SpanLen) -> char {
         let last = self.pos;
         self.last_char = self.peek();
@@ -152,8 +152,15 @@ impl<'a> Lexer<'a> {
     }
 
     fn add_error(&mut self, msg: &str) {
+        let span = Span::new(self.token_start_pos, 1);
+
+        MessageBuilder::error()
+            .span(span)
+            .text(msg.to_string())
+            .emit(self);
+
         self.tokens.push(Token {
-            span: Span::new(self.token_start_pos, 1),
+            span,
             kind: TokenKind::Error(self.sess.intern(msg)),
         })
     }
@@ -222,18 +229,28 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_indent(&mut self) {
-        if !self.last_char.is_indent_precursor() {
-            return;
+        self.add_token_adv(TokenKind::Nl, 1);
+
+        let mut indent_size = 0;
+
+        while !self.eof() && self.advance().is_indent() {
+            indent_size += 1;
         }
 
-        let start = self.pos;
+        let mut level = *self.indent_levels.last().unwrap_or(&0);
 
-        while self.peek().is_indent() {
-            self.advance();
+        if indent_size > level {
+            self.add_token_adv(TokenKind::Indent, 1);
+            self.indent_levels.push(indent_size);
         }
 
-        let (_, len) = self.get_fragment(start);
-        self.add_token(TokenKind::Indent(len), len);
+        while !self.eof() && indent_size < level {
+            self.add_token_adv(TokenKind::Dedent, 1);
+            level = self.indent_levels.pop().unwrap();
+            if level < indent_size {
+                self.add_error("Invalid indentation");
+            }
+        }
     }
 }
 
@@ -248,14 +265,14 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
                 TokenStartMatch::Ident => self.lex_ident(),
                 TokenStartMatch::Num => self.lex_num(),
                 TokenStartMatch::String => self.lex_str(),
-                TokenStartMatch::Indent => self.lex_indent(),
+                TokenStartMatch::IndentPrecursor => self.lex_indent(),
                 TokenStartMatch::Unknown => match self.peek() {
                     '+' => self.add_token_adv(TokenKind::Infix(Infix::Plus), 1),
                     '-' => self.add_token_adv(TokenKind::Infix(Infix::Minus), 1),
                     '*' => self.add_token_adv(TokenKind::Infix(Infix::Mul), 1),
                     '/' => self.add_token_adv(TokenKind::Infix(Infix::Div), 1),
                     '%' => self.add_token_adv(TokenKind::Infix(Infix::Mod), 1),
-                    '\n' => self.add_token_adv(TokenKind::Nl, 1),
+                    '\n' => self.lex_indent(),
 
                     _ => unreachable!("'{}'", self.peek()),
                 },

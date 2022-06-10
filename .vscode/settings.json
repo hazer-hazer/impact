@@ -9,6 +9,7 @@
         "Punct",
         "rustc",
         "sess",
+        "skippable",
         "Uninit"
     ],
     "rust-analyzer.trace.extension": true

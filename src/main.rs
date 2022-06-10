@@ -18,11 +18,12 @@ fn main() {
     let mut emitter = DebugEmitter::default();
 
     let source = "
-    a b 123 \"asdasdsd\"
-    not true false
-    + - * / %
+    if a
+        print kek
+    
     ";
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap(&mut emitter);
 
+    // println!("{}", source);
     println!("{}", tokens.ppfmt(&sess))
 }

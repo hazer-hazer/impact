@@ -80,7 +80,8 @@ pub enum TokenKind {
 
     Punct(Punct),
 
-    Indent(u32),
+    Indent,
+    Dedent,
 
     Error(Symbol),
 }
@@ -127,8 +128,8 @@ pub enum TokenCmp {
     Infix(Infix),
     Kw(Kw),
     Punct(Punct),
-    SomeIndent,
-    Indent(u32),
+    Indent,
+    Dedent,
     Error,
 }
 
@@ -142,13 +143,13 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
             | (TokenKind::Prefix(_), TokenCmp::SomePrefix)
-            | (TokenKind::Indent(_), TokenCmp::SomeIndent)
+            | (TokenKind::Indent, TokenCmp::Indent)
+            | (TokenKind::Dedent, TokenCmp::Dedent)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
             (TokenKind::Prefix(prefix1), TokenCmp::Prefix(prefix2)) => prefix1 == prefix2,
             (TokenKind::Infix(infix1), TokenCmp::Infix(infix2)) => infix1 == infix2,
-            (TokenKind::Indent(ind1), TokenCmp::Indent(ind2)) => ind1 == ind2,
             _ => false,
         }
     }
@@ -158,7 +159,7 @@ impl<'a> PP<'a> for TokenKind {
     fn ppfmt(&self, sess: &'a Session) -> String {
         match self {
             TokenKind::Eof => "[EOF]".to_string(),
-            TokenKind::Nl => "\n".to_string(),
+            TokenKind::Nl => "[NL]".to_string(),
             TokenKind::Int(val) => val.to_string(),
             TokenKind::String(val) | TokenKind::Ident(val) => sess.get_str(*val).to_string(),
             TokenKind::Infix(infix) => format!("{}", infix).as_str().to_string(),
@@ -173,7 +174,8 @@ impl<'a> PP<'a> for TokenKind {
             .to_string(),
             TokenKind::Prefix(prefix) => format!("{}", prefix),
             TokenKind::Kw(kw) => format!("{}", kw),
-            TokenKind::Indent(_) => "[indent]".to_string(),
+            TokenKind::Indent => "[indent]".to_string(),
+            TokenKind::Dedent => "[dedent]".to_string(),
             TokenKind::Punct(punct) => match punct {
                 Punct::Assign => "=",
             }

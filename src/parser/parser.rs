@@ -155,16 +155,6 @@ impl Parser {
         nl
     }
 
-    fn skip_indent(&mut self) -> Option<u32> {
-        match self.skip(TokenCmp::SomeIndent) {
-            Some(tok) => match tok.kind {
-                TokenKind::Indent(indent) => Some(indent),
-                _ => unreachable!(),
-            },
-            None => None 
-        }
-    }
-
     fn skip_prefix(&mut self, prefix: Prefix) -> Option<Token> {
         self.skip_if(|kind| TokenCmp::Prefix(prefix) == kind)
     }
@@ -248,21 +238,21 @@ impl Parser {
         }
 
         let mut stmts = vec![];
-        let mut prev_indent = None;
-        // let mut block_indent = None;
-        while let Some(indent) = self.skip_indent() {
-            // TODO: Update if #53667 will be stable
-            if let Some(prev_indent) = prev_indent {
-                if prev_indent != indent {
-                    // block_indent = Some(indent);
-                    break;
-                }
-            }
+        // let mut prev_indent = None;
+        // // let mut block_indent = None;
+        // while let Some(indent) = self.skip_indent() {
+        //     // TODO: Update if #53667 will be stable
+        //     if let Some(prev_indent) = prev_indent {
+        //         if prev_indent != indent {
+        //             // block_indent = Some(indent);
+        //             break;
+        //         }
+        //     }
 
-            stmts.push(self.parse_stmt());
+        //     stmts.push(self.parse_stmt());
 
-            prev_indent = Some(indent);
-        }
+        //     prev_indent = Some(indent);
+        // }
 
         stmts
     }
@@ -385,14 +375,6 @@ impl Parser {
             TokenKind::Error(_) => Some(Err(ErrorNode::new(span))),
 
             _ => None,
-            // TODO: Move to top-level check
-            // _ => {
-            //     MessageBuilder::error()
-            //         .span(*span)
-            //         .text(format!("Unexpected token {}", kind.ppfmt(&self.sess)))
-            //         .emit(self);
-            //     Err(ErrorNode::new(*span))
-            // }
         };
 
         kind.map(|k| k.map(|k| Box::new(Expr::new(span, k))))
