@@ -20,23 +20,7 @@ impl NodeTyCheck for ExprKind {
                 });
                 ctx.clone()
             }
-            (ExprKind::Lit(_), Type::Func(_, _)) => todo!(),
-            (ExprKind::Lit(_), Type::Forall(_, _)) => todo!(),
-            (ExprKind::Ident(_), Type::Lit(_)) => todo!(),
-            (ExprKind::Ident(_), Type::Func(_, _)) => todo!(),
-            (ExprKind::Ident(_), Type::Forall(_, _)) => todo!(),
-            (ExprKind::Infix(_, _, _), Type::Lit(_)) => todo!(),
-            (ExprKind::Infix(_, _, _), Type::Func(_, _)) => todo!(),
-            (ExprKind::Infix(_, _, _), Type::Forall(_, _)) => todo!(),
-            (ExprKind::Prefix(_, _), Type::Lit(_)) => todo!(),
-            (ExprKind::Prefix(_, _), Type::Func(_, _)) => todo!(),
-            (ExprKind::Prefix(_, _), Type::Forall(_, _)) => todo!(),
-            (ExprKind::App(_, _), Type::Lit(_)) => todo!(),
-            (ExprKind::App(_, _), Type::Func(_, _)) => todo!(),
-            (ExprKind::App(_, _), Type::Forall(_, _)) => todo!(),
-            (ExprKind::Block(_), Type::Lit(_)) => todo!(),
-            (ExprKind::Block(_), Type::Func(_, _)) => todo!(),
-            (ExprKind::Block(_), Type::Forall(_, _)) => todo!(),
+            
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::{
 use super::{
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
-        stmt::{LetStmt, Stmt, StmtKind},
+        stmt::{Stmt, StmtKind},
         ErrorNode, AST, N, PR,
     },
     token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream},
@@ -255,59 +255,13 @@ impl Parser {
         els
     }
 
-    fn parse_let(&mut self) -> Stmt {
-        let lo = self.span();
-
-        let skip = self.skip_kw(Kw::Let);
-        self.expect(skip, "`let` keyword");
-
-        let idents = self
-            .parse_multiple(TokenCmp::Ident)
-            .iter()
-            .map(|tok| Ident::from_token(*tok))
-            .collect::<Vec<_>>();
-
-        let (name, params) = match idents.as_slice() {
-            [] => {
-                MessageBuilder::error()
-                    .span(self.span())
-                    .text("Expected variable name and optional list of parameters".to_string())
-                    .emit(self);
-                (Err(ErrorNode::new(self.span())), vec![])
-            }
-            [name] => (Ok(*name), vec![]),
-            [name, params @ ..] => (Ok(*name), params.to_vec()),
-        };
-
-        let skip = self.skip_punct(Punct::Assign);
-        self.expect(skip, "");
-
-        let expr = self.parse_expr();
-        let value = self.expected_pr(
-            expr,
-            format!(
-                "{}",
-                match (&name, params.len()) {
-                    (Ok(_), 0) => "variable value",
-                    (Ok(_), x) if x > 1 => "function body",
-                    (Err(_), _) => "function body or variable value",
-                    _ => unreachable!(),
-                }
-            )
-            .as_str(),
-        );
-
-        // There might be a better way to slice vector
-        Stmt::new(
-            lo.to(self.span()),
-            StmtKind::Let(LetStmt::new(name, params, value)),
-        )
+    fn parse_ident(&mut self, expected: &str) -> PR<Ident> {
+        let skip = self.skip(TokenCmp::Ident).map(|tok| Ident::from_token(tok));
+        self.expected(skip, expected)
     }
 
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
-        if TokenCmp::Kw(Kw::Let) == self.peek() {
-            Ok(Box::new(self.parse_let()))
-        } else if let Some(expr) = self.parse_expr() {
+        if let Some(expr) = self.parse_expr() {
             Ok(Box::new(Stmt::new(expr.span(), StmtKind::Expr(expr))))
         } else {
             MessageBuilder::error()
@@ -322,7 +276,32 @@ impl Parser {
     }
 
     fn parse_expr(&mut self) -> Option<PR<N<Expr>>> {
+        if TokenCmp::Kw(Kw::Let) == self.peek() {
+            return Some(self.parse_let());
+        }
+
         self.parse_prec(0)
+    }
+
+    fn parse_let(&mut self) -> PR<N<Expr>> {
+        let lo = self.span();
+
+        let skip = self.skip_kw(Kw::Let);
+        self.expect(skip, "`let` keyword");
+
+        let name = self.parse_ident("variable name");
+
+        let value = self.parse_expr();
+        let value = self.expected_pr(value, "value");
+
+        let body = self.parse_expr();
+        let body = self.expected_pr(body, "body");
+
+        // There might be a better way to slice vector
+        Ok(Box::new(Expr::new(
+            lo.to(self.span()),
+            ExprKind::Let(name, value, body),
+        )))
     }
 
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {

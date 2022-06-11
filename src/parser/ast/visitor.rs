@@ -1,6 +1,6 @@
 use crate::{span::span::Ident};
 
-use super::{expr::{Expr, Lit, ExprKind}, stmt::{Stmt, LetStmt}, AST};
+use super::{expr::{Expr, Lit, ExprKind}, stmt::{Stmt}, AST};
 
 pub trait Visitor<T> {
     fn visit_ast(&mut self, ast: &AST) -> T;
@@ -11,9 +11,9 @@ pub trait Visitor<T> {
     fn visit_prefix_expr(&mut self, expr: &ExprKind) -> T;
     fn visit_app_expr(&mut self, expr: &ExprKind) -> T;
     fn visit_block_expr(&mut self, expr: &ExprKind) -> T;
+    fn visit_let_expr(&mut self, expr: &ExprKind) -> T;
 
     fn visit_stmt(&mut self, stmt: &Stmt) -> T;
-    fn visit_let_stmt(&mut self, stmt: &LetStmt) -> T;
 
     fn visit_ident(&mut self, ident: &Ident) -> T;
 }

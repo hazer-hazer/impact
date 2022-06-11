@@ -1,7 +1,7 @@
 use crate::{
     parser::ast::{
         expr::{Expr, ExprKind, Lit},
-        stmt::{LetStmt, Stmt, StmtKind},
+        stmt::{Stmt, StmtKind},
         visitor::Visitor,
         ErrorNode, AST,
     },
@@ -81,6 +81,7 @@ impl<'a> Visitor<String> for AstPP<'a> {
             expr @ ExprKind::Prefix(_, _) => self.visit_prefix_expr(expr),
             expr @ ExprKind::App(_, _) => self.visit_app_expr(expr),
             expr @ ExprKind::Block(_) => self.visit_block_expr(expr),
+            expr @  ExprKind::Let(_, _, _) => self.visit_let_expr(expr),
         }
     }
 
@@ -132,27 +133,24 @@ impl<'a> Visitor<String> for AstPP<'a> {
         })
     }
 
+    fn visit_let_expr(&mut self, expr: &ExprKind) -> String {
+        match_kind!(expr, ExprKind::Let(name, value, body), {
+            format!(
+                "let {} = {} in {}",
+                visit_pr!(self, name, visit_ident),
+                visit_pr!(self, value, visit_expr),
+                visit_pr!(self, body, visit_expr)
+            )
+        })
+    }
+
     fn visit_stmt(&mut self, stmt: &Stmt) -> String {
         format!(
             "{}{}\n",
             self.cur_indent(),
             match stmt.node() {
                 StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
-                StmtKind::Let(stmt) => self.visit_let_stmt(stmt),
             }
-        )
-    }
-
-    fn visit_let_stmt(&mut self, stmt: &LetStmt) -> String {
-        format!(
-            "let {}{} = {}",
-            visit_pr!(self, stmt.name(), visit_ident),
-            stmt.params()
-                .iter()
-                .map(|param| format!(" {}", param.ppfmt(self.sess)))
-                .collect::<Vec<_>>()
-                .join(""),
-            visit_pr!(self, stmt.value(), visit_expr)
         )
     }
 
