@@ -1,10 +1,11 @@
 use crate::{
-    parser::token::{Prefix, Token, TokenKind, Infix},
+    parser::token::{Infix, Prefix, Token, TokenKind},
     pp::PP,
-    span::span::{Ident, Span, Spanned, Symbol}, session::Session,
+    session::Session,
+    span::span::{Ident, Span, Spanned, Symbol},
 };
 
-use super::{N, PR};
+use super::{stmt::Stmt, N, PR};
 
 pub type Expr = Spanned<ExprKind>;
 
@@ -25,16 +26,19 @@ pub enum InfixOpKind {
 
 impl InfixOpKind {
     pub fn from_tok(tok: Token) -> Spanned<Self> {
-        Spanned::new(tok.span, match tok.kind {
-            TokenKind::Infix(infix) => match infix {
-                Infix::Plus => InfixOpKind::Plus,
-                Infix::Minus => InfixOpKind::Minus,
-                Infix::Mul => InfixOpKind::Mul,
-                Infix::Div => InfixOpKind::Div,
-                Infix::Mod => InfixOpKind::Mod,
+        Spanned::new(
+            tok.span,
+            match tok.kind {
+                TokenKind::Infix(infix) => match infix {
+                    Infix::Plus => InfixOpKind::Plus,
+                    Infix::Minus => InfixOpKind::Minus,
+                    Infix::Mul => InfixOpKind::Mul,
+                    Infix::Div => InfixOpKind::Div,
+                    Infix::Mod => InfixOpKind::Mod,
+                },
+                _ => panic!("Cannot make InfixOpKind from not a Infix Token"),
             },
-            _ => panic!("Cannot make InfixOpKind from not a Infix Token"),
-        })
+        )
     }
 }
 
@@ -46,12 +50,15 @@ pub enum PrefixOpKind {
 
 impl PrefixOpKind {
     pub fn from_tok(tok: &Token) -> Spanned<Self> {
-        Spanned::new(tok.span, match tok.kind {
-            TokenKind::Prefix(prefix) => match prefix {
-                Prefix::Not => PrefixOpKind::Not,
+        Spanned::new(
+            tok.span,
+            match tok.kind {
+                TokenKind::Prefix(prefix) => match prefix {
+                    Prefix::Not => PrefixOpKind::Not,
+                },
+                _ => panic!("Cannot make PrefixOpKind from not a Prefix Token"),
             },
-            _ => panic!("Cannot make PrefixOpKind from not a Prefix Token"),
-        })
+        )
     }
 }
 
@@ -68,6 +75,7 @@ pub enum ExprKind {
     Infix(PR<N<Expr>>, InfixOp, PR<N<Expr>>),
     Prefix(PrefixOp, PR<N<Expr>>),
     App(PR<N<Expr>>, Vec<PR<N<Expr>>>),
+    Block(Vec<PR<N<Stmt>>>),
 }
 
 impl<'a> PP<'a> for InfixOpKind {
@@ -110,6 +118,7 @@ impl<'a> PP<'a> for ExprKind {
             ExprKind::Infix(lhs, op, rhs) => todo!(),
             ExprKind::Prefix(op, rhs) => todo!(),
             ExprKind::App(lhs, params) => todo!(),
+            ExprKind::Block(exprs) => todo!(),
         }
     }
 }

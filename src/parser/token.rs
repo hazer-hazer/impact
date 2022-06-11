@@ -65,7 +65,7 @@ impl Display for Punct {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TokenKind {
     Eof,
     Nl,
@@ -206,7 +206,7 @@ impl<'a> PP<'a> for TokenKind {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Token {
     pub span: Span,
     pub kind: TokenKind,
@@ -230,7 +230,7 @@ impl WithSpan for Token {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TokenStream(pub Vec<Token>);
 
 impl std::ops::Index<usize> for TokenStream {

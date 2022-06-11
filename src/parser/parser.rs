@@ -224,7 +224,7 @@ impl Parser {
         P: FnMut() -> T,
     {
         let skip = self.skip(begin);
-        self.expected(skip, format!("{}", begin).as_str());
+        self.expect(skip, format!("{}", begin).as_str());
 
         let mut els = Vec::<T>::new();
 
@@ -250,7 +250,7 @@ impl Parser {
         }
 
         let skip = self.skip(end);
-        self.expected(skip, format!("{}", end).as_str());
+        self.expect(skip, format!("{}", end).as_str());
 
         els
     }
@@ -304,39 +304,6 @@ impl Parser {
         )
     }
 
-    fn parse_block(&mut self) -> Vec<PR<N<Stmt>>> {
-        if !self.skip_nls() {
-            return vec![self.parse_stmt()];
-        }
-
-        let mut stmts = vec![];
-
-        let mut first = true;
-        while !self.eof() {
-            if TokenCmp::Dedent == self.peek() {
-                break;
-            }
-
-            if first {
-                first = false;
-            } else {
-                let skip = self.skip(TokenCmp::Nl);
-                self.expect(skip, "line break");
-            }
-
-            if TokenCmp::Dedent == self.peek() {
-                break;
-            }
-
-            stmts.push(self.parse_stmt());
-        }
-
-        let skip = self.skip(TokenCmp::Dedent);
-        self.expect(skip, "dedent");
-
-        stmts
-    }
-
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
         println!("parse stmt '{}'", self.peek().ppfmt(&self.sess));
 
@@ -361,6 +328,7 @@ impl Parser {
     }
 
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
+        println!("prec parse {}", self.peek().ppfmt(&self.sess));
         const PREC_TABLE: &[&[TokenCmp]] = &[
             &[TokenCmp::Infix(Infix::Plus), TokenCmp::Infix(Infix::Minus)],
             &[
@@ -370,7 +338,7 @@ impl Parser {
             ],
         ];
 
-        if prec as usize >= PREC_TABLE.len() {
+        if prec as usize == PREC_TABLE.len() {
             return self.parse_prefix();
         }
 
@@ -417,7 +385,7 @@ impl Parser {
                 ExprKind::Prefix(PrefixOpKind::from_tok(&op), rhs),
             ))))
         } else {
-            None
+            self.parse_postfix()
         }
     }
 
@@ -426,8 +394,12 @@ impl Parser {
 
         let lhs = self.parse_primary();
 
+        if lhs.is_none() {
+            return None;
+        }
+
         let mut args: Vec<PR<N<Expr>>> = Vec::default();
-        while let Some(expr) = self.parse_expr() {
+        while let Some(expr) = self.parse_primary() {
             args.push(expr);
         }
 
@@ -445,6 +417,10 @@ impl Parser {
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
         let Token { kind, span } = self.peek_tok();
+
+        if TokenCmp::Nl == self.peek() {
+            return self.parse_block();
+        }
 
         let kind = match kind {
             TokenKind::Bool(val) => Some(Ok(ExprKind::Lit(Lit::Bool(val)))),
@@ -466,9 +442,57 @@ impl Parser {
         kind.map(|k| k.map(|k| Box::new(Expr::new(span, k))))
     }
 
+    fn parse_block(&mut self) -> Option<PR<N<Expr>>> {
+        let lo = self.span();
+
+        let mut stmts = vec![];
+
+        if self.skip_nls() {
+            if self.eof() {
+                return None;
+            }
+
+            let skip = self.skip(TokenCmp::Indent);
+            self.expect(skip, "indent");
+
+            let mut first = true;
+            while !self.eof() {
+                if self.eof() || TokenCmp::Dedent == self.peek() {
+                    break;
+                }
+
+                if first {
+                    first = false;
+                } else {
+                    let skip = self.skip(TokenCmp::Nl);
+                    self.expect(skip, "line break");
+                }
+
+                if self.eof() || TokenCmp::Dedent == self.peek() {
+                    break;
+                }
+
+                stmts.push(self.parse_stmt());
+            }
+
+            if !self.eof() {
+                let skip = self.skip(TokenCmp::Dedent);
+                self.expect(skip, "dedent");
+            }
+        } else {
+            stmts = vec![self.parse_stmt()];
+        }
+
+        Some(Ok(Box::new(Expr::new(
+            lo.to(self.span()),
+            ExprKind::Block(stmts),
+        ))))
+    }
+
     fn parse(&mut self) -> AST {
         let mut stmts = vec![];
 
+        self.skip_nls();
         while !self.eof() {
             stmts.push(self.parse_stmt());
         }

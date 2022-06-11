@@ -23,7 +23,7 @@ fn main() {
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap();
 
     println!("{:?}", sess.source_lines().get_lines());
-    println!("{:?}", tokens.ppfmt(&sess));
+    println!("{}", tokens.ppfmt(&sess));
 
     let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap();
 

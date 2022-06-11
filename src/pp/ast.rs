@@ -32,12 +32,12 @@ impl<'a> AstPP<'a> {
         self.indent_level -= 1;
     }
 
-    fn print_indent(&self) {
-        print!("{}", "    ".repeat(self.indent_level as usize));
+    fn cur_indent(&self) -> String {
+        format!("{}", "    ".repeat(self.indent_level as usize))
     }
 
-    fn visit_err(&self, err: &ErrorNode) {
-        print!("[ERROR]");
+    fn visit_err(&self, err: &ErrorNode) -> String {
+        "[ERROR]".to_string()
     }
 }
 
@@ -46,7 +46,16 @@ macro_rules! visit_pr {
         match $pr {
             Ok(ok) => $self.$ok_visitor(ok),
             Err(err) => $self.visit_err(err),
-        };
+        }
+    };
+}
+
+macro_rules! visit_pr_vec {
+    ($self: ident, $prs: expr, $ok_visitor: ident, $sep: expr) => {
+        $prs.iter()
+            .map(|pr| visit_pr!($self, pr, $ok_visitor))
+            .collect::<Vec<_>>()
+            .join($sep)
     };
 }
 
@@ -59,85 +68,92 @@ macro_rules! match_kind {
     };
 }
 
-impl<'a> Visitor<()> for AstPP<'a> {
-    fn visit_ast(&mut self, ast: &AST) {
-        for stmt in ast.stmts() {
-            visit_pr!(self, stmt, visit_stmt);
-        }
+impl<'a> Visitor<String> for AstPP<'a> {
+    fn visit_ast(&mut self, ast: &AST) -> String {
+        visit_pr_vec!(self, ast.stmts(), visit_stmt, "\n")
     }
 
-    fn visit_expr(&mut self, expr: &Expr) {
+    fn visit_expr(&mut self, expr: &Expr) -> String {
         match expr.node() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Ident(ident) => self.visit_ident_expr(ident),
             expr @ ExprKind::Infix(_, _, _) => self.visit_infix_expr(expr),
             expr @ ExprKind::Prefix(_, _) => self.visit_prefix_expr(expr),
             expr @ ExprKind::App(_, _) => self.visit_app_expr(expr),
+            expr @ ExprKind::Block(_) => self.visit_block_expr(expr),
         }
     }
 
-    fn visit_lit_expr(&mut self, lit: &Lit) {
-        print!("{}", lit.ppfmt(self.sess));
+    fn visit_lit_expr(&mut self, lit: &Lit) -> String {
+        format!("{}", lit.ppfmt(self.sess))
     }
 
-    fn visit_ident_expr(&mut self, ident: &Ident) {
-        print!("{}", ident.ppfmt(self.sess));
+    fn visit_ident_expr(&mut self, ident: &Ident) -> String {
+        format!("{}", ident.ppfmt(self.sess))
     }
 
-    fn visit_infix_expr(&mut self, expr: &ExprKind) {
+    fn visit_infix_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Infix(lhs, op, rhs), {
-            visit_pr!(self, lhs, visit_expr);
-            print!(" {} ", op.ppfmt(self.sess));
-            visit_pr!(self, rhs, visit_expr);
+            format!(
+                "{} {} {}",
+                visit_pr!(self, lhs, visit_expr),
+                op.ppfmt(self.sess),
+                visit_pr!(self, rhs, visit_expr)
+            )
         })
     }
 
-    fn visit_prefix_expr(&mut self, expr: &ExprKind) {
+    fn visit_prefix_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Prefix(op, rhs), {
-            print!("{}", op.ppfmt(self.sess));
-            visit_pr!(self, rhs, visit_expr);
+            format!(
+                "{}{}",
+                op.ppfmt(self.sess),
+                visit_pr!(self, rhs, visit_expr)
+            )
         })
     }
 
-    fn visit_app_expr(&mut self, expr: &ExprKind) {
+    fn visit_app_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::App(lhs, args), {
-            visit_pr!(self, lhs, visit_expr);
-
-            for arg in args {
-                print!(" ");
-                visit_pr!(self, arg, visit_expr);
-            }
+            format!(
+                "{} {}",
+                visit_pr!(self, lhs, visit_expr),
+                visit_pr_vec!(self, args, visit_expr, " ")
+            )
         })
     }
 
-    fn visit_stmt(&mut self, stmt: &Stmt) {
-        self.print_indent();
-        match stmt.node() {
-            StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
-            StmtKind::Let(stmt) => self.visit_let_stmt(stmt),
-        }
-        print!("\n");
+    fn visit_block_expr(&mut self, expr: &ExprKind) -> String {
+        match_kind!(expr, ExprKind::Block(exprs), {
+            format!("{}", visit_pr_vec!(self, exprs, visit_stmt, "\n"))
+        })
     }
 
-    fn visit_let_stmt(&mut self, stmt: &LetStmt) {
-        print!("let ");
-        visit_pr!(self, stmt.name(), visit_ident);
+    fn visit_stmt(&mut self, stmt: &Stmt) -> String {
+        format!(
+            "{}{}\n",
+            self.cur_indent(),
+            match stmt.node() {
+                StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
+                StmtKind::Let(stmt) => self.visit_let_stmt(stmt),
+            }
+        )
+    }
 
-        print!(
-            "{}",
+    fn visit_let_stmt(&mut self, stmt: &LetStmt) -> String {
+        format!(
+            "let {} {} = {}",
+            visit_pr!(self, stmt.name(), visit_ident),
             stmt.params()
                 .iter()
                 .map(|param| param.ppfmt(self.sess))
                 .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        print!(" = ");
-
-        visit_pr!(self, stmt.value(), visit_expr);
+                .join(" "),
+            visit_pr!(self, stmt.value(), visit_expr)
+        )
     }
 
-    fn visit_ident(&mut self, ident: &Ident) {
-        print!("{}", ident.ppfmt(self.sess));
+    fn visit_ident(&mut self, ident: &Ident) -> String {
+        format!("{}", ident.ppfmt(self.sess))
     }
 }

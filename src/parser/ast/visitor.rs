@@ -10,6 +10,7 @@ pub trait Visitor<T> {
     fn visit_infix_expr(&mut self, expr: &ExprKind) -> T;
     fn visit_prefix_expr(&mut self, expr: &ExprKind) -> T;
     fn visit_app_expr(&mut self, expr: &ExprKind) -> T;
+    fn visit_block_expr(&mut self, expr: &ExprKind) -> T;
 
     fn visit_stmt(&mut self, stmt: &Stmt) -> T;
     fn visit_let_stmt(&mut self, stmt: &LetStmt) -> T;
