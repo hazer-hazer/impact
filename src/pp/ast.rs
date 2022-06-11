@@ -101,7 +101,7 @@ impl<'a> Visitor<String> for AstLikePP<'a> {
     fn visit_block_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Block(exprs), {
             self.indent();
-            let output = format!("{}", visit_pr_vec!(self, exprs, visit_stmt, "\n"));
+            let output = visit_pr_vec!(self, exprs, visit_stmt, "\n");
             self.dedent();
             output
         })
@@ -120,7 +120,7 @@ impl<'a> Visitor<String> for AstLikePP<'a> {
 
     fn visit_stmt(&mut self, stmt: &Stmt) -> String {
         format!(
-            "{}{}\n",
+            "{}{}",
             self.cur_indent(),
             match stmt.node() {
                 StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
@@ -129,6 +129,6 @@ impl<'a> Visitor<String> for AstLikePP<'a> {
     }
 
     fn visit_ident(&mut self, ident: &Ident) -> String {
-        format!("{}", ident.ppfmt(self.sess))
+        ident.ppfmt(self.sess)
     }
 }

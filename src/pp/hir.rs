@@ -1,5 +1,3 @@
-use std::process::Output;
-
 use crate::{
     hir::{
         expr::{Expr, ExprKind},
@@ -8,7 +6,6 @@ use crate::{
         HIR,
     },
     parser::ast::expr::Lit,
-    session::Session,
     span::span::Ident,
 };
 
