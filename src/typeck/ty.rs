@@ -19,6 +19,7 @@ pub enum Type {
 #[derive(Clone)]
 pub enum CtxEl {
     Var(Symbol),
+    TypedVar(Symbol, Type),
     Exist(Symbol),
 }
 

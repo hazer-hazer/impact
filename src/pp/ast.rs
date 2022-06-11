@@ -10,36 +10,8 @@ use crate::{
     span::span::Ident,
 };
 
-pub struct AstPP<'a> {
-    indent_level: u32,
-    sess: &'a Session,
-}
-
-impl<'a> AstPP<'a> {
-    pub fn new(sess: &'a Session) -> Self {
-        Self {
-            indent_level: 0,
-            sess,
-        }
-    }
-
-    fn indent(&mut self) {
-        self.indent_level += 1;
-    }
-
-    fn dedent(&mut self) {
-        assert_ne!(self.indent_level, 0);
-        self.indent_level -= 1;
-    }
-
-    fn cur_indent(&self) -> String {
-        format!("{}", "    ".repeat(self.indent_level as usize))
-    }
-
-    fn visit_err(&self, _: &ErrorNode) -> String {
-        "[ERROR]".to_string()
-    }
-}
+use super::AstLikePP;
+use super::match_kind;
 
 macro_rules! visit_pr {
     ($self: ident, $pr: expr, $ok_visitor: ident) => {
@@ -59,16 +31,7 @@ macro_rules! visit_pr_vec {
     };
 }
 
-macro_rules! match_kind {
-    ($kind: expr, $should_be: pat, $visit: expr) => {
-        match $kind {
-            $should_be => $visit,
-            _ => unreachable!(),
-        }
-    };
-}
-
-impl<'a> Visitor<String> for AstPP<'a> {
+impl<'a> Visitor<String> for AstLikePP<'a> {
     fn visit_ast(&mut self, ast: &AST) -> String {
         visit_pr_vec!(self, ast.stmts(), visit_stmt, "\n")
     }

@@ -4,7 +4,7 @@ use parser::{lexer::Lexer, parser::Parser};
 use pp::PP;
 use session::{Session, Stage};
 
-use crate::{parser::ast::visitor::Visitor, pp::ast::AstPP};
+use crate::{parser::ast::visitor::Visitor, pp::AstLikePP};
 
 mod dt;
 mod message;
@@ -13,6 +13,7 @@ mod pp;
 mod session;
 mod span;
 mod typeck;
+mod hir;
 
 fn main() {
     let sess = Session::default();
@@ -26,6 +27,6 @@ fn main() {
 
     let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap();
 
-    let mut pp = AstPP::new(&sess);
+    let mut pp = AstLikePP::new(&sess);
     println!("{}", pp.visit_ast(&ast));
 }

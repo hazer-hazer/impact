@@ -2,7 +2,7 @@ use crate::{
     parser::ast::expr::ExprKind, parser::ast::expr::Lit, session::Session, typeck::ty::LitTy,
 };
 
-use super::ty::{State, TyCtx, Type};
+use super::ty::{State, TyCtx, Type, CtxEl};
 
 trait NodeTyCheck {
     fn check(&self, sess: &mut Session, state: &mut State, ctx: &TyCtx, ty: &Type) -> TyCtx;
@@ -20,7 +20,7 @@ impl NodeTyCheck for ExprKind {
                 });
                 ctx.clone()
             }
-            
+            _ => todo!()
         }
     }
 }
