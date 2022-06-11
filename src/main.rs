@@ -16,9 +16,7 @@ mod span;
 fn main() {
     let sess = Session::default();
 
-    let source = "
-    let a = 123
-    ";
+    let source = "let a = 123";
 
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap();
 
