@@ -29,6 +29,8 @@ impl<'a> TermEmitter<'a> {
                 line
             );
         }
+
+        println!("=== SOURCE END ===\n");
     }
 }
 

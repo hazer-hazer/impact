@@ -82,7 +82,7 @@ impl Span {
 
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.pos, self.len)
+        write!(f, "{}-{}", self.pos, self.pos + self.len)
     }
 }
 

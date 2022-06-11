@@ -221,19 +221,23 @@ impl<'a> Lexer<'a> {
         );
     }
 
+    fn save_source_line(&mut self) {
+        // FIXME: Save NL or not to save 🤔
+        let line = self
+            .get_fragment_to(self.last_line_begin, self.pos - 1)
+            .0
+            .to_string();
+        self.sess
+            .source_lines_mut()
+            .add_line(line, self.last_line_begin);
+        self.last_line_begin = self.pos;
+    }
+
     fn lex_indent(&mut self) {
         let pos = self.pos;
         while self.peek().is_indent_precursor() {
             self.add_token_adv(TokenKind::Nl, 1);
-            // FIXME: Save NL or not to save 🤔
-            let line = self
-                .get_fragment_to(self.last_line_begin, self.pos - 1)
-                .0
-                .to_string();
-            self.sess
-                .source_lines_mut()
-                .add_line(line, self.last_line_begin);
-            self.last_line_begin = self.pos;
+            self.save_source_line();
         }
 
         if pos == self.pos {
@@ -296,6 +300,10 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
                     _ => self.unexpected_token(),
                 },
             };
+        }
+
+        if self.last_line_begin == 0 {
+            self.save_source_line();
         }
 
         self.add_token(TokenKind::Eof, 1);
