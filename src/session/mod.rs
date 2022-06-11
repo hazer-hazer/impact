@@ -42,10 +42,6 @@ impl SourceLines {
 
     /// get (line string, line position, line number)
     pub fn find_line(&self, span: Span) -> (&String, SpanPos, usize) {
-        let mut line = None;
-        let mut pos = None;
-        let mut num = None;
-
         for i in 0..self.lines.len() {
             let line_pos = self.positions[i];
             let next_line_pos = *self
@@ -59,14 +55,11 @@ impl SourceLines {
             }
 
             if span.pos >= line_pos && span.pos < next_line_pos {
-                line = Some(&self.lines[i]);
-                pos = Some(line_pos);
-                num = Some(i + 1);
-                break;
+                return (&self.lines[i], line_pos, i + 1);
             }
         }
 
-        (line.unwrap(), pos.unwrap(), num.unwrap())
+        panic!("No source line found for span {}", span);
     }
 
     pub fn get_lines(&self) -> &Vec<String> {

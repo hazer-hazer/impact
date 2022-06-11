@@ -101,24 +101,6 @@ impl<'a> Lexer<'a> {
         self.pos as usize >= self.source.len()
     }
 
-    // fn take_while<F>(&self, mut predicate: F) -> (&str, usize)
-    // where F: FnMut(char) -> bool
-    // {
-    //     let mut offset = 0;
-
-    //     for c in self.source.chars() {
-    //         if !predicate(c) {
-    //             break;
-    //         }
-
-    //         offset += c.len_utf8();
-    //     }
-
-    //     if offset == self.pos {
-    //         panic
-    //     }
-    // }
-
     fn peek_by_pos(&self, pos: SpanPos) -> char {
         self.source
             .chars()
@@ -300,15 +282,15 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
                 TokenStartMatch::IndentPrecursor => self.lex_indent(),
                 TokenStartMatch::Unknown => match self.peek() {
                     '+' => self.add_token_adv(TokenKind::Infix(Infix::Plus), 1),
-                    '-' => self.add_token_adv(TokenKind::Infix(Infix::Minus), 1),
                     '*' => self.add_token_adv(TokenKind::Infix(Infix::Mul), 1),
                     '/' => self.add_token_adv(TokenKind::Infix(Infix::Div), 1),
                     '%' => self.add_token_adv(TokenKind::Infix(Infix::Mod), 1),
                     '=' => self.add_token_adv(TokenKind::Punct(Punct::Assign), 1),
                     '\\' => self.add_token_adv(TokenKind::Punct(Punct::Backslash), 1),
+
                     '-' => match self.lookup() {
                         Some('>') => self.add_token_adv(TokenKind::Punct(Punct::Arrow), 2),
-                        _ => self.unexpected_token(),
+                        _ => self.add_token_adv(TokenKind::Infix(Infix::Minus), 1),
                     },
 
                     _ => self.unexpected_token(),

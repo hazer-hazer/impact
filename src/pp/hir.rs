@@ -5,7 +5,7 @@ use crate::{
         visitor::Visitor,
         HIR,
     },
-    parser::ast::expr::Lit,
+    ast::expr::Lit,
     span::span::Ident,
 };
 

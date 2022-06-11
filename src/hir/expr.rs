@@ -1,5 +1,5 @@
 use crate::{
-    parser::ast::expr::{InfixOp, Lit, PrefixOp},
+    ast::expr::{InfixOp, Lit, PrefixOp},
     span::span::{Ident, Span, Spanned},
 };
 

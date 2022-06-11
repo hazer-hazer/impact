@@ -4,8 +4,9 @@ use parser::{lexer::Lexer, parser::Parser};
 use pp::PP;
 use session::{Session, Stage};
 
-use crate::{parser::ast::visitor::Visitor, pp::AstLikePP};
+use crate::{ast::visitor::Visitor, pp::AstLikePP, message::term_emitter::TermEmitter};
 
+mod ast;
 mod dt;
 mod message;
 mod parser;
@@ -19,6 +20,9 @@ fn main() {
     let sess = Session::default();
 
     let source = "let a = 123";
+
+    let term_emitter = TermEmitter::new(&sess);
+    term_emitter.print_source();
 
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap();
 

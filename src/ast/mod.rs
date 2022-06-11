@@ -1,6 +1,5 @@
 use crate::{
     pp::PP,
-    span::span::Spanned,
     span::span::{Span, WithSpan},
 };
 

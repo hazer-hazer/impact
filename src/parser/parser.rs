@@ -3,14 +3,14 @@ use crate::{
     pp::PP,
     session::{OkStageResult, Session, Stage, StageResult},
     span::span::{Ident, Kw, Span, WithSpan},
-};
-
-use super::{
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         stmt::{Stmt, StmtKind},
         ErrorNode, AST, N, PR,
     },
+};
+
+use super::{
     token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream},
 };
 

@@ -14,6 +14,22 @@ impl<'a> TermEmitter<'a> {
             got_error: false,
         }
     }
+
+    pub fn print_source(&self) {
+        println!("=== SOURCE ===");
+        let source_lines = self.sess.source_lines().get_lines();
+        let last_line_num = source_lines.len() + 1;
+
+        for (i, line) in source_lines.iter().enumerate() {
+            let line_num = i + 1;
+            println!(
+                "{}{} | {}",
+                " ".repeat(line_num.to_string().len() - last_line_num.to_string().len()),
+                line_num,
+                line
+            );
+        }
+    }
 }
 
 impl<'a> MessageEmitter for TermEmitter<'a> {

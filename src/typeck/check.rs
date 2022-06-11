@@ -1,5 +1,5 @@
 use crate::{
-    parser::ast::expr::ExprKind, parser::ast::expr::Lit, session::Session, typeck::ty::LitTy,
+    ast::expr::ExprKind, ast::expr::Lit, session::Session, typeck::ty::LitTy,
 };
 
 use super::ty::{State, TyCtx, Type, CtxEl};

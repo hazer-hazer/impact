@@ -1,5 +1,5 @@
 use crate::{
-    parser::ast::{
+    ast::{
         expr::{Expr, ExprKind, Lit},
         stmt::{Stmt, StmtKind},
         visitor::Visitor,
