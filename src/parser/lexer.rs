@@ -130,6 +130,10 @@ impl<'a> Lexer<'a> {
         self.peek_by_pos(self.pos)
     }
 
+    fn lookup(&self) -> Option<char> {
+        self.source.chars().nth((self.pos + 1) as usize)
+    }
+
     fn advance_offset(&mut self, offset: SpanLen) -> char {
         let last = self.pos;
         self.last_char = self.peek();
@@ -165,6 +169,10 @@ impl<'a> Lexer<'a> {
             span,
             kind: TokenKind::Error(self.sess.intern(msg)),
         })
+    }
+
+    fn unexpected_token(&mut self) {
+        self.add_error("Unexpected token");
     }
 
     fn get_fragment_to(&self, start: SpanPos, end: SpanPos) -> (&str, SpanLen) {
@@ -276,7 +284,9 @@ impl<'a> Lexer<'a> {
 
 impl<'a> Stage<TokenStream> for Lexer<'a> {
     fn run(mut self) -> StageResult<TokenStream> {
-        self.sess.source_lines_mut().set_source_size(self.source.len());
+        self.sess
+            .source_lines_mut()
+            .set_source_size(self.source.len());
 
         while !self.eof() {
             self.token_start_pos = self.pos as SpanPos;
@@ -295,8 +305,13 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
                     '/' => self.add_token_adv(TokenKind::Infix(Infix::Div), 1),
                     '%' => self.add_token_adv(TokenKind::Infix(Infix::Mod), 1),
                     '=' => self.add_token_adv(TokenKind::Punct(Punct::Assign), 1),
+                    '\\' => self.add_token_adv(TokenKind::Punct(Punct::Backslash), 1),
+                    '-' => match self.lookup() {
+                        Some('>') => self.add_token_adv(TokenKind::Punct(Punct::Arrow), 2),
+                        _ => self.unexpected_token(),
+                    },
 
-                    _ => unreachable!("'{}'", self.peek()),
+                    _ => self.unexpected_token(),
                 },
             };
         }

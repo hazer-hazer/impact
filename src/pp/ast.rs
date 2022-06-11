@@ -81,7 +81,8 @@ impl<'a> Visitor<String> for AstPP<'a> {
             expr @ ExprKind::Prefix(_, _) => self.visit_prefix_expr(expr),
             expr @ ExprKind::App(_, _) => self.visit_app_expr(expr),
             expr @ ExprKind::Block(_) => self.visit_block_expr(expr),
-            expr @  ExprKind::Let(_, _, _) => self.visit_let_expr(expr),
+            expr @ ExprKind::Let(_, _, _) => self.visit_let_expr(expr),
+            expr @ ExprKind::Abs(_, _) => self.visit_abs_expr(expr),
         }
     }
 
@@ -110,6 +111,16 @@ impl<'a> Visitor<String> for AstPP<'a> {
                 "{}{}",
                 op.ppfmt(self.sess),
                 visit_pr!(self, rhs, visit_expr)
+            )
+        })
+    }
+
+    fn visit_abs_expr(&mut self, expr: &ExprKind) -> String {
+        match_kind!(expr, ExprKind::Abs(param, body), {
+            format!(
+                "\\{} -> {}",
+                visit_pr!(self, param, visit_ident),
+                visit_pr!(self, body, visit_expr)
             )
         })
     }

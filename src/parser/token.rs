@@ -51,6 +51,8 @@ impl Display for Prefix {
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Punct {
     Assign,
+    Backslash,
+    Arrow,
 }
 
 impl Display for Punct {
@@ -60,6 +62,8 @@ impl Display for Punct {
             "{}",
             match self {
                 Punct::Assign => "=",
+                Punct::Backslash => "\\",
+                Punct::Arrow => "->",
             }
         )
     }
@@ -200,6 +204,8 @@ impl<'a> PP<'a> for TokenKind {
             TokenKind::Dedent => "[dedent]".to_string(),
             TokenKind::Punct(punct) => match punct {
                 Punct::Assign => "=",
+                Punct::Backslash => "\\",
+                Punct::Arrow => "->",
             }
             .to_string(),
         }

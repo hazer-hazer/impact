@@ -398,6 +398,10 @@ impl Parser {
             return self.parse_block();
         }
 
+        if TokenCmp::Punct(Punct::Backslash) == self.peek() {
+            return self.parse_abs();
+        }
+
         let kind = match kind {
             TokenKind::Bool(val) => Some(Ok(ExprKind::Lit(Lit::Bool(val)))),
             TokenKind::Int(val) => Some(Ok(ExprKind::Lit(Lit::Int(val)))),
@@ -462,6 +466,24 @@ impl Parser {
         Some(Ok(Box::new(Expr::new(
             lo.to(self.span()),
             ExprKind::Block(stmts),
+        ))))
+    }
+
+    fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {
+        let lo = self.span();
+
+        self.skip(TokenCmp::Punct(Punct::Backslash));
+
+        let param = self.parse_ident("parameter name");
+
+        self.skip(TokenCmp::Punct(Punct::Arrow));
+
+        let body = self.parse_expr();
+        let body = self.expected_pr(body, "lambda body");
+
+        Some(Ok(Box::new(Expr::new(
+            lo.to(self.span()),
+            ExprKind::Abs(param, body),
         ))))
     }
 
