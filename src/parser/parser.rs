@@ -305,8 +305,6 @@ impl Parser {
     }
 
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
-        println!("parse stmt '{}'", self.peek().ppfmt(&self.sess));
-
         if TokenCmp::Kw(Kw::Let) == self.peek() {
             Ok(Box::new(self.parse_let()))
         } else if let Some(expr) = self.parse_expr() {
@@ -328,7 +326,6 @@ impl Parser {
     }
 
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
-        println!("prec parse {}", self.peek().ppfmt(&self.sess));
         const PREC_TABLE: &[&[TokenCmp]] = &[
             &[TokenCmp::Infix(Infix::Plus), TokenCmp::Infix(Infix::Minus)],
             &[

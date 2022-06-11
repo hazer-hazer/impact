@@ -36,7 +36,7 @@ impl<'a> AstPP<'a> {
         format!("{}", "    ".repeat(self.indent_level as usize))
     }
 
-    fn visit_err(&self, err: &ErrorNode) -> String {
+    fn visit_err(&self, _: &ErrorNode) -> String {
         "[ERROR]".to_string()
     }
 }
@@ -62,7 +62,7 @@ macro_rules! visit_pr_vec {
 macro_rules! match_kind {
     ($kind: expr, $should_be: pat, $visit: expr) => {
         match $kind {
-            kind @ $should_be => $visit,
+            $should_be => $visit,
             _ => unreachable!(),
         }
     };
@@ -125,7 +125,10 @@ impl<'a> Visitor<String> for AstPP<'a> {
 
     fn visit_block_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Block(exprs), {
-            format!("{}", visit_pr_vec!(self, exprs, visit_stmt, "\n"))
+            self.indent();
+            let output = format!("{}", visit_pr_vec!(self, exprs, visit_stmt, "\n"));
+            self.dedent();
+            output
         })
     }
 
@@ -142,13 +145,13 @@ impl<'a> Visitor<String> for AstPP<'a> {
 
     fn visit_let_stmt(&mut self, stmt: &LetStmt) -> String {
         format!(
-            "let {} {} = {}",
+            "let {}{} = {}",
             visit_pr!(self, stmt.name(), visit_ident),
             stmt.params()
                 .iter()
-                .map(|param| param.ppfmt(self.sess))
+                .map(|param| format!(" {}", param.ppfmt(self.sess)))
                 .collect::<Vec<_>>()
-                .join(" "),
+                .join(""),
             visit_pr!(self, stmt.value(), visit_expr)
         )
     }

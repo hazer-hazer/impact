@@ -26,5 +26,5 @@ fn main() {
     let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap();
 
     let mut pp = AstPP::new(&sess);
-    pp.visit_ast(&ast);
+    println!("{}", pp.visit_ast(&ast));
 }
