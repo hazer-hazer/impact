@@ -2,7 +2,7 @@ use crate::{
     parser::token::{Infix, Prefix, Token, TokenKind},
     pp::PP,
     session::Session,
-    span::span::{Ident, Span, Spanned, Symbol},
+    span::span::{Ident, Spanned, Symbol},
 };
 
 use super::{stmt::Stmt, N, PR};
@@ -64,11 +64,6 @@ impl PrefixOpKind {
 
 pub type PrefixOp = Spanned<PrefixOpKind>;
 
-pub struct App {
-    lhs: Expr,
-    args: Vec<Expr>,
-}
-
 pub enum ExprKind {
     Lit(Lit),
     Ident(Ident),
@@ -79,7 +74,7 @@ pub enum ExprKind {
 }
 
 impl<'a> PP<'a> for InfixOpKind {
-    fn ppfmt(&self, sess: &'a Session) -> String {
+    fn ppfmt(&self, _: &'a Session) -> String {
         match self {
             InfixOpKind::Plus => "+",
             InfixOpKind::Minus => "-",
@@ -92,7 +87,7 @@ impl<'a> PP<'a> for InfixOpKind {
 }
 
 impl<'a> PP<'a> for PrefixOpKind {
-    fn ppfmt(&self, sess: &'a Session) -> String {
+    fn ppfmt(&self, _: &'a Session) -> String {
         match self {
             PrefixOpKind::Not => "not",
         }
@@ -111,14 +106,14 @@ impl<'a> PP<'a> for Lit {
 }
 
 impl<'a> PP<'a> for ExprKind {
-    fn ppfmt(&self, sess: &'a Session) -> String {
+    fn ppfmt(&self, _: &'a Session) -> String {
         match self {
-            ExprKind::Lit(lit) => todo!(),
-            ExprKind::Ident(ident) => todo!(),
-            ExprKind::Infix(lhs, op, rhs) => todo!(),
-            ExprKind::Prefix(op, rhs) => todo!(),
-            ExprKind::App(lhs, params) => todo!(),
-            ExprKind::Block(exprs) => todo!(),
+            ExprKind::Lit(_) => todo!(),
+            ExprKind::Ident(_) => todo!(),
+            ExprKind::Infix(_, _, _) => todo!(),
+            ExprKind::Prefix(_, _) => todo!(),
+            ExprKind::App(_, _) => todo!(),
+            ExprKind::Block(_) => todo!(),
         }
     }
 }

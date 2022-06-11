@@ -31,7 +31,7 @@ impl<'a> PP<'a> for Kw {
 
 type SymbolInner = DefaultSymbol;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Eq, Hash)]
 pub struct Symbol(SymbolInner);
 
 impl Symbol {

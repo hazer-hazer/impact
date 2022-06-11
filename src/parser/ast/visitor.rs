@@ -1,6 +1,6 @@
 use crate::{span::span::Ident};
 
-use super::{expr::{Expr, Lit, ExprKind}, stmt::{Stmt, StmtKind, LetStmt}, AST};
+use super::{expr::{Expr, Lit, ExprKind}, stmt::{Stmt, LetStmt}, AST};
 
 pub trait Visitor<T> {
     fn visit_ast(&mut self, ast: &AST) -> T;
