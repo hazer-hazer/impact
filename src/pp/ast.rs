@@ -2,7 +2,7 @@ use crate::{
     ast::{
         expr::{Expr, ExprKind, Lit},
         stmt::{Stmt, StmtKind},
-        visitor::Visitor,
+        visitor::AstVisitor,
         ErrorNode, AST,
     },
     pp::PP,
@@ -31,8 +31,9 @@ macro_rules! visit_pr_vec {
     };
 }
 
-impl<'a> Visitor<String> for AstLikePP<'a> {
+impl<'a> AstVisitor<String> for AstLikePP<'a> {
     fn visit_ast(&mut self, ast: &AST) -> String {
+        println!("=== AST ===");
         visit_pr_vec!(self, ast.stmts(), visit_stmt, "\n")
     }
 

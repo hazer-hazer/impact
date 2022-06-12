@@ -3,7 +3,7 @@ use crate::{
     hir::{
         expr::{Expr, ExprKind},
         stmt::{Stmt, StmtKind},
-        visitor::Visitor,
+        visitor::HirVisitor,
         HIR,
     },
     span::span::Ident,
@@ -21,8 +21,9 @@ macro_rules! visit_each {
     };
 }
 
-impl<'a> Visitor<String> for AstLikePP<'a> {
+impl<'a> HirVisitor<String> for AstLikePP<'a> {
     fn visit_hir(&mut self, hir: &HIR) -> String {
+        println!("=== HIR ===");
         visit_each!(self, hir.stmts(), visit_stmt, "\n")
     }
 

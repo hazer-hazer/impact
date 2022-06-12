@@ -6,7 +6,7 @@ use super::{
     HIR,
 };
 
-pub trait Visitor<T> {
+pub trait HirVisitor<T> {
     fn visit_hir(&mut self, hir: &HIR) -> T;
     fn visit_expr(&mut self, expr: &Expr) -> T;
     fn visit_lit_expr(&mut self, lit: &Lit) -> T;

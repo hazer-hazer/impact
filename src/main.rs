@@ -4,18 +4,21 @@ use parser::{lexer::Lexer, parser::Parser};
 
 use session::{Session, Stage};
 
-use crate::{ast::visitor::Visitor, message::term_emitter::TermEmitter, pp::AstLikePP};
+use crate::{
+    ast::visitor::AstVisitor, hir::visitor::HirVisitor, lower::Lower, message::term_emitter::TermEmitter,
+    pp::AstLikePP,
+};
 
 mod ast;
 mod dt;
 mod hir;
+mod lower;
 mod message;
 mod parser;
 mod pp;
 mod session;
 mod span;
 mod typeck;
-mod lower;
 
 fn main() {
     let sess = Session::default();
@@ -33,4 +36,9 @@ fn main() {
 
     let mut pp = AstLikePP::new(&sess);
     println!("{}", pp.visit_ast(&ast));
+
+    let (hir, sess) = Lower::new(sess, &ast).run_and_unwrap();
+
+    let mut pp = AstLikePP::new(&sess);
+    println!("{}", pp.visit_hir(&hir));
 }

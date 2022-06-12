@@ -1,15 +1,15 @@
 use crate::{
     ast::{
         expr::{Expr, ExprKind, Lit},
-        stmt::{Stmt, StmtKind},
+        stmt::{self, Stmt, StmtKind},
         AST,
     },
-    hir,
+    hir::{self, HIR},
+    message::message::MessageStorage,
     pp::match_kind,
+    session::{OkStageResult, Session, Stage, StageResult},
     span::span::Ident,
 };
-
-pub struct Lower {}
 
 macro_rules! lower_pr_boxed {
     ($self: ident, $pr: expr, $lower: ident) => {
@@ -45,9 +45,23 @@ macro_rules! lower_each_pr {
     };
 }
 
-impl Lower {
-    fn lower_ast(&mut self, ast: &AST) -> hir::HIR {
-        hir::HIR::new(lower_each_pr_boxed!(self, ast.stmts(), lower_stmt))
+pub struct Lower<'a> {
+    sess: Session,
+    ast: &'a AST,
+    msg: MessageStorage,
+}
+
+impl<'a> Lower<'a> {
+    pub fn new(sess: Session, ast: &'a AST) -> Self {
+        Self {
+            sess,
+            ast,
+            msg: Default::default(),
+        }
+    }
+
+    fn lower_ast(&mut self) -> HIR {
+        HIR::new(lower_each_pr_boxed!(self, self.ast.stmts(), lower_stmt))
     }
 
     fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
@@ -134,5 +148,16 @@ impl Lower {
 
     fn lower_ident(&mut self, ident: &Ident) -> Ident {
         *ident
+    }
+}
+
+impl<'a> Stage<HIR> for Lower<'a> {
+    fn run(mut self) -> StageResult<HIR> {
+        let hir = self.lower_ast();
+        StageResult::new(self.sess, hir, self.msg)
+    }
+
+    fn run_and_unwrap(self) -> OkStageResult<HIR> {
+        self.run().unwrap()
     }
 }

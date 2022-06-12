@@ -6,7 +6,7 @@ use super::{
     ErrorNode, AST,
 };
 
-pub trait Visitor<T> {
+pub trait AstVisitor<T> {
     fn visit_err(&self, _: &ErrorNode) -> String {
         "[ERROR]".to_string()
     }
