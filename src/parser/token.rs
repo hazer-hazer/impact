@@ -99,6 +99,7 @@ impl TokenKind {
             "false" => Some(TokenKind::Bool(false)),
             "not" => Some(TokenKind::Prefix(Prefix::Not)),
             "let" => Some(TokenKind::Kw(Kw::Let)),
+            "in" => Some(TokenKind::Kw(Kw::In)),
             _ => None,
         }
     }

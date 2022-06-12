@@ -1,19 +1,19 @@
 use crate::{
     ast::expr::{InfixOp, Lit, PrefixOp},
-    span::span::{Ident, Span, Spanned},
+    span::span::{Ident, Spanned},
 };
 
-use super::stmt::Stmt;
+use super::{stmt::Stmt, N};
 
-pub type Expr<'a> = Spanned<ExprKind<'a>>;
+pub type Expr = Spanned<ExprKind>;
 
-pub enum ExprKind<'a> {
+pub enum ExprKind {
     Lit(Lit),
     Ident(Ident),
-    Infix(&'a Expr<'a>, InfixOp, &'a Expr<'a>),
-    Prefix(PrefixOp, &'a Expr<'a>),
-    Abs(Ident, &'a Expr<'a>),
-    App(&'a Expr<'a>, &'a Expr<'a>),
-    Block(&'a [Stmt<'a>]),
-    Let(Ident, &'a Expr<'a>, &'a Expr<'a>),
+    Infix(N<Expr>, InfixOp, N<Expr>),
+    Prefix(PrefixOp, N<Expr>),
+    Abs(Ident, N<Expr>),
+    App(N<Expr>, N<Expr>),
+    Block(Vec<Stmt>),
+    Let(Ident, N<Expr>, N<Expr>),
 }

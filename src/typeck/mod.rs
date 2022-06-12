@@ -1,2 +1,2 @@
-mod ty;
 pub mod check;
+mod ty;

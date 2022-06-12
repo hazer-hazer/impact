@@ -16,6 +16,7 @@ pub enum Lit {
     String(Symbol),
 }
 
+#[derive(Clone, Copy)]
 pub enum InfixOpKind {
     Plus,
     Minus,
@@ -44,6 +45,7 @@ impl InfixOpKind {
 
 pub type InfixOp = Spanned<InfixOpKind>;
 
+#[derive(Clone, Copy)]
 pub enum PrefixOpKind {
     Not,
 }
@@ -70,7 +72,8 @@ pub enum ExprKind {
     Infix(PR<N<Expr>>, InfixOp, PR<N<Expr>>),
     Prefix(PrefixOp, PR<N<Expr>>),
     Abs(PR<Ident>, PR<N<Expr>>),
-    App(PR<N<Expr>>, Vec<PR<N<Expr>>>),
+    // App(PR<N<Expr>>, Vec<PR<N<Expr>>>),
+    App(PR<N<Expr>>, PR<N<Expr>>),
     Block(Vec<PR<N<Stmt>>>),
     Let(PR<Ident>, PR<N<Expr>>, PR<N<Expr>>),
 }

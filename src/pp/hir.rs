@@ -1,11 +1,11 @@
 use crate::{
+    ast::expr::Lit,
     hir::{
         expr::{Expr, ExprKind},
         stmt::{Stmt, StmtKind},
         visitor::Visitor,
         HIR,
     },
-    ast::expr::Lit,
     span::span::Ident,
 };
 
@@ -21,12 +21,12 @@ macro_rules! visit_each {
     };
 }
 
-impl<'a> Visitor<'a, String> for AstLikePP<'a> {
-    fn visit_hir(&mut self, hir: &'a HIR) -> String {
+impl<'a> Visitor<String> for AstLikePP<'a> {
+    fn visit_hir(&mut self, hir: &HIR) -> String {
         visit_each!(self, hir.stmts(), visit_stmt, "\n")
     }
 
-    fn visit_expr(&mut self, expr: &'a Expr) -> String {
+    fn visit_expr(&mut self, expr: &Expr) -> String {
         match expr.node() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Ident(ident) => self.visit_ident_expr(ident),
@@ -47,7 +47,7 @@ impl<'a> Visitor<'a, String> for AstLikePP<'a> {
         ident.ppfmt(self.sess)
     }
 
-    fn visit_infix_expr(&mut self, expr: &'a ExprKind<'a>) -> String {
+    fn visit_infix_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Infix(lhs, op, rhs), {
             format!(
                 "{} {} {}",
@@ -58,25 +58,25 @@ impl<'a> Visitor<'a, String> for AstLikePP<'a> {
         })
     }
 
-    fn visit_prefix_expr(&mut self, expr: &'a ExprKind<'a>) -> String {
+    fn visit_prefix_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Prefix(op, rhs), {
             format!("{}{}", op.ppfmt(self.sess), self.visit_expr(rhs))
         })
     }
 
-    fn visit_abs_expr(&mut self, expr: &'a ExprKind<'a>) -> String {
+    fn visit_abs_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Abs(param, body), {
             format!("\\{} -> {}", self.visit_ident(param), self.visit_expr(body))
         })
     }
 
-    fn visit_app_expr(&mut self, expr: &'a ExprKind<'a>) -> String {
+    fn visit_app_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::App(lhs, arg), {
             format!("{} {}", self.visit_expr(lhs), self.visit_expr(arg))
         })
     }
 
-    fn visit_block_expr(&mut self, expr: &'a ExprKind<'a>) -> String {
+    fn visit_block_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Block(stmts), {
             self.indent();
             let output = visit_each!(self, stmts, visit_stmt, "\n");
@@ -85,7 +85,7 @@ impl<'a> Visitor<'a, String> for AstLikePP<'a> {
         })
     }
 
-    fn visit_let_expr(&mut self, expr: &'a ExprKind<'a>) -> String {
+    fn visit_let_expr(&mut self, expr: &ExprKind) -> String {
         match_kind!(expr, ExprKind::Let(name, value, body), {
             format!(
                 "let {} = {} in {}",
@@ -96,7 +96,7 @@ impl<'a> Visitor<'a, String> for AstLikePP<'a> {
         })
     }
 
-    fn visit_stmt(&mut self, stmt: &'a Stmt<'a>) -> String {
+    fn visit_stmt(&mut self, stmt: &Stmt) -> String {
         format!(
             "{}{}",
             self.cur_indent(),

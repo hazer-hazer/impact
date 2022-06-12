@@ -9,6 +9,7 @@ use string_interner::DefaultSymbol;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kw {
     Let,
+    In,
 }
 
 impl Display for Kw {
@@ -18,13 +19,14 @@ impl Display for Kw {
             "{}",
             match self {
                 Kw::Let => "let",
+                Kw::In => "in",
             }
         )
     }
 }
 
 impl<'a> PP<'a> for Kw {
-    fn ppfmt(&self, sess: &'a Session) -> String {
+    fn ppfmt(&self, _: &'a Session) -> String {
         format!("{}", self)
     }
 }
@@ -97,6 +99,18 @@ pub struct Spanned<T> {
     node: T,
 }
 
+impl<T> Clone for Spanned<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            span: self.span.clone(),
+            node: self.node.clone(),
+        }
+    }
+}
+
 impl<T> Spanned<T> {
     pub fn new(span: Span, node: T) -> Self {
         Self { span, node }
@@ -131,7 +145,9 @@ pub trait WithSpan {
 }
 
 impl<T> WithSpan for Box<T>
-where T: WithSpan {
+where
+    T: WithSpan,
+{
     fn span(&self) -> Span {
         self.as_ref().span()
     }

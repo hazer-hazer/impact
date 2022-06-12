@@ -1,9 +1,8 @@
 use crate::{
-    pp::PP,
-    span::span::{Ident, Spanned},
+    span::span::{Spanned},
 };
 
-use super::{expr::Expr, PR, N};
+use super::{expr::Expr, N, PR};
 
 pub type Stmt = Spanned<StmtKind>;
 

@@ -1,4 +1,7 @@
-use std::{cell::{RefCell, RefMut}, borrow::Borrow};
+use std::{
+    borrow::Borrow,
+    cell::{RefCell, RefMut},
+};
 
 #[derive(Debug)]
 pub struct Lock<T>(RefCell<T>);
@@ -18,5 +21,3 @@ impl<T: Default> Default for Lock<T> {
         Lock::new(T::default())
     }
 }
-
-

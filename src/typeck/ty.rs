@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{span::span::Symbol, session::Session};
+use crate::{session::Session, span::span::Symbol};
 
 #[derive(Debug, Clone)]
 pub enum LitTy {
@@ -25,7 +25,7 @@ pub enum CtxEl {
 
 #[derive(Default, Clone)]
 pub struct TyCtx {
-    els: Vec<CtxEl>
+    els: Vec<CtxEl>,
 }
 
 impl TyCtx {

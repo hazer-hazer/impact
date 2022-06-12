@@ -1,25 +1,26 @@
 extern crate string_interner;
 
 use parser::{lexer::Lexer, parser::Parser};
-use pp::PP;
+
 use session::{Session, Stage};
 
-use crate::{ast::visitor::Visitor, pp::AstLikePP, message::term_emitter::TermEmitter};
+use crate::{ast::visitor::Visitor, message::term_emitter::TermEmitter, pp::AstLikePP};
 
 mod ast;
 mod dt;
+mod hir;
 mod message;
 mod parser;
 mod pp;
 mod session;
 mod span;
 mod typeck;
-mod hir;
+mod lower;
 
 fn main() {
     let sess = Session::default();
 
-    let source = "let a = 123";
+    let source = "let a = 123 in a";
 
     let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap();
 

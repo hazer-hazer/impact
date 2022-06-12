@@ -7,12 +7,18 @@ pub mod expr;
 pub mod stmt;
 pub mod visitor;
 
-pub struct HIR<'a> {
-    stmts: Vec<Stmt<'a>>,
+pub type N<T> = Box<T>;
+
+pub struct HIR {
+    stmts: Vec<N<Stmt>>,
 }
 
-impl<'a> HIR<'a> {
-    pub fn stmts(&self) -> &Vec<Stmt> {
+impl HIR {
+    pub fn new(stmts: Vec<N<Stmt>>) -> Self {
+        Self { stmts }
+    }
+
+    pub fn stmts(&self) -> &Vec<N<Stmt>> {
         &self.stmts
     }
 }

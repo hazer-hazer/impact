@@ -1,6 +1,10 @@
-use crate::{span::span::Ident};
+use crate::span::span::Ident;
 
-use super::{expr::{Expr, Lit, ExprKind}, stmt::{Stmt}, AST, ErrorNode};
+use super::{
+    expr::{Expr, ExprKind, Lit},
+    stmt::Stmt,
+    ErrorNode, AST,
+};
 
 pub trait Visitor<T> {
     fn visit_err(&self, _: &ErrorNode) -> String {

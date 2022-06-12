@@ -10,8 +10,8 @@ use crate::{
     span::span::Ident,
 };
 
-use super::AstLikePP;
 use super::match_kind;
+use super::AstLikePP;
 
 macro_rules! visit_pr {
     ($self: ident, $pr: expr, $ok_visitor: ident) => {
@@ -89,11 +89,11 @@ impl<'a> Visitor<String> for AstLikePP<'a> {
     }
 
     fn visit_app_expr(&mut self, expr: &ExprKind) -> String {
-        match_kind!(expr, ExprKind::App(lhs, args), {
+        match_kind!(expr, ExprKind::App(lhs, arg), {
             format!(
                 "{} {}",
                 visit_pr!(self, lhs, visit_expr),
-                visit_pr_vec!(self, args, visit_expr, " ")
+                visit_pr!(self, arg, visit_expr)
             )
         })
     }

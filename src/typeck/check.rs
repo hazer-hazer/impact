@@ -1,8 +1,6 @@
-use crate::{
-    ast::expr::ExprKind, ast::expr::Lit, session::Session, typeck::ty::LitTy,
-};
+use crate::{ast::expr::ExprKind, ast::expr::Lit, session::Session, typeck::ty::LitTy};
 
-use super::ty::{State, TyCtx, Type, CtxEl};
+use super::ty::{CtxEl, State, TyCtx, Type};
 
 trait NodeTyCheck {
     fn check(&self, sess: &mut Session, state: &mut State, ctx: &TyCtx, ty: &Type) -> TyCtx;
@@ -20,7 +18,7 @@ impl NodeTyCheck for ExprKind {
                 });
                 ctx.clone()
             }
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }

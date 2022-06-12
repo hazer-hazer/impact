@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     pp::PP,
     span::span::{Span, WithSpan},
@@ -62,5 +64,11 @@ pub struct ErrorNode {
 impl ErrorNode {
     pub fn new(span: Span) -> Self {
         Self { span }
+    }
+}
+
+impl Display for ErrorNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.span)
     }
 }

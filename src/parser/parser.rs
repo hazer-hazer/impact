@@ -1,18 +1,16 @@
 use crate::{
-    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    pp::PP,
-    session::{OkStageResult, Session, Stage, StageResult},
-    span::span::{Ident, Kw, Span, WithSpan},
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         stmt::{Stmt, StmtKind},
         ErrorNode, AST, N, PR,
     },
+    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    pp::PP,
+    session::{OkStageResult, Session, Stage, StageResult},
+    span::span::{Ident, Kw, Span, WithSpan},
 };
 
-use super::{
-    token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream},
-};
+use super::token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream};
 
 pub struct Parser {
     sess: Session,
@@ -291,8 +289,14 @@ impl Parser {
 
         let name = self.parse_ident("variable name");
 
+        let skip = self.skip_punct(Punct::Assign);
+        self.expect(skip, "`=` operator");
+
         let value = self.parse_expr();
         let value = self.expected_pr(value, "value");
+
+        let skip = self.skip_kw(Kw::In);
+        self.expect(skip, "`in` keyword");
 
         let body = self.parse_expr();
         let body = self.expected_pr(body, "body");
@@ -370,25 +374,25 @@ impl Parser {
 
         let lhs = self.parse_primary();
 
-        if lhs.is_none() {
-            return None;
-        }
+        if let Some(lhs) = lhs {
+            let arg = self.parse_primary();
 
-        let mut args: Vec<PR<N<Expr>>> = Vec::default();
-        while let Some(expr) = self.parse_primary() {
-            args.push(expr);
-        }
-
-        if args.is_empty() {
-            lhs
-        } else if let Some(lhs) = lhs {
-            Some(Ok(Box::new(Expr::new(
-                lo.to(self.span()),
-                ExprKind::App(lhs, args),
-            ))))
+            if let Some(arg) = arg {
+                Some(Ok(Box::new(Expr::new(
+                    lo.to(self.span()),
+                    ExprKind::App(lhs, arg),
+                ))))
+            } else {
+                Some(lhs)
+            }
         } else {
-            unreachable!()
+            lhs
         }
+
+        // let mut args: Vec<PR<N<Expr>>> = Vec::default();
+        // while let Some(expr) = self.parse_primary() {
+        //     args.push(expr);
+        // }
     }
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
