@@ -1,74 +1,49 @@
 use crate::{
     ast::expr::Lit,
     hir::expr::{Expr, ExprKind},
-    session::Session,
 };
 
-use super::{
-    check::NodeTyCheck,
-    ty::{CtxEl, LitTy, State, TyCtx, Type},
-};
+use super::check::TypeCheck;
+use super::ty::{Ctx, CtxItem, LitTy, Type, TypeKind, TypeResult};
 
-pub trait NodeTySynth {
-    fn synth(&self, sess: &mut Session, state: &mut State, ctx: &TyCtx) -> (Type, TyCtx);
+pub trait SynthExprType {
+    fn synth_type(&mut self, expr: &Expr) -> Type;
 }
 
-impl NodeTySynth for Expr {
-    fn synth(&self, sess: &mut Session, state: &mut State, ctx: &TyCtx) -> (Type, TyCtx) {
-        match self.node() {
-            ExprKind::Lit(lit) => (
-                match lit {
-                    Lit::Bool(_) => Type::Lit(LitTy::Bool),
-                    Lit::Int(_) => Type::Lit(LitTy::Int),
-                    Lit::String(_) => Type::Lit(LitTy::String),
-                },
-                ctx.clone(),
-            ),
-            ExprKind::Ident(ident) => {
-                // TODO: Anno
-                todo!()
+impl SynthExprType for Ctx {
+    fn synth_type(&mut self, expr: &Expr) -> TypeResult<Type> {
+        match expr.node() {
+            ExprKind::Lit(lit) => Ok(Type::new(TypeKind::Lit(LitTy::from_lit_expr(*lit)))),
+
+            ExprKind::Ident(id) => {
+                if let Some(ty) = self.lookup_var(*id) {
+                    return Ok(ty);
+                }
+                todo!("ident expr synth_type error")
             }
-            ExprKind::Infix(_, _, _) => todo!(),
-            ExprKind::Prefix(_, _) => todo!(),
+
             ExprKind::Abs(param, body) => {
-                let alpha = state.fresh(sess);
-                let beta = state.fresh(sess);
-                let gamma = ctx
-                    .extended(CtxEl::Exist(alpha.clone()))
-                    .extended(CtxEl::Exist(beta.clone()))
-                    .extended(CtxEl::TypedVar(
-                        param.name(),
-                        Type::Existential(alpha.clone()),
+                let alpha = self.fresh_existential();
+                let beta = self.fresh_existential();
+                let gamma = self
+                    .extended(CtxItem::ExistentialDecl(alpha, None))
+                    .extended(CtxItem::ExistentialDecl(beta, None))
+                    .extended(CtxItem::VarType(
+                        param.clone(),
+                        Type::new(TypeKind::Existential(alpha)),
                     ));
 
-                let delta = body
-                    .check(sess, state, &gamma, &Type::Existential(beta.clone()))
-                    .drop(CtxEl::TypedVar(
-                        param.name(),
-                        Type::Existential(alpha.clone()),
-                    ));
+                let delta = self.check(**body, &Type::new(TypeKind::Existential(beta.clone())));
 
-                return (
-                    Type::Func(
-                        Box::new(Type::Existential(alpha.clone())),
-                        Box::new(Type::Existential(beta.clone())),
-                    ),
-                    delta,
-                );
+                Ok(Type::new(TypeKind::Func(
+                    Type::new(TypeKind::Existential(alpha.clone())),
+                    Type::new(TypeKind::Existential(beta.clone())),
+                )))
             }
-            ExprKind::App(lhs, arg) => {
-                let (a, theta) = lhs.synth(sess, state, ctx);
-                todo!()
-            },
-            ExprKind::Block(_) => todo!(),
+
             ExprKind::Let(name, value, body) => {
-                let (t0, gamma) = value.synth(sess, state, ctx);
-                let theta = gamma.extended(CtxEl::TypedVar(name.name(), t0));
-
-                let (t1, delta) = body.synth(sess, state, &theta);
-
-                todo!()
-            },
+                let (t0, gamma) = self.synth_type(expr);
+            }
         }
     }
 }

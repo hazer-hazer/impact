@@ -59,7 +59,7 @@ impl<'a> PP<'a> for Symbol {
 pub type SpanPos = u32;
 pub type SpanLen = u32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Span {
     pub pos: SpanPos,
     pub len: SpanLen,
@@ -153,7 +153,7 @@ where
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Ident {
     span: Span,
     sym: Symbol,
