@@ -159,6 +159,16 @@ pub struct Ident {
     sym: Symbol,
 }
 
+impl Ident {
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn name(&self) -> Symbol {
+        self.sym
+    }
+}
+
 impl WithSpan for Ident {
     fn span(&self) -> Span {
         self.span

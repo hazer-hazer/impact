@@ -1,16 +1,21 @@
 {
     "cSpell.words": [
         "CIFR",
+        "Forall",
+        "formedness",
         "idents",
         "interner",
         "Interner",
+        "polytype",
         "ppfmt",
         "prec",
         "Punct",
         "rustc",
         "sess",
         "skippable",
-        "Uninit"
+        "Subtyping",
+        "Uninit",
+        "Uvar"
     ],
     "rust-analyzer.trace.extension": true
 }

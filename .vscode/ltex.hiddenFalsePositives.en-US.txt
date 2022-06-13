@@ -1,0 +1,4 @@
+{"rule":"LETS_LET","sentence":"^\\QLet's breakdown this.\\E$"}
+{"rule":"UPPERCASE_SENTENCE_START","sentence":"^\\Qα is a type variable\\E$"}
+{"rule":"UPPERCASE_SENTENCE_START","sentence":"^\\Qα is a type variable, i.e. placeholder for a specific type.\\E$"}
+{"rule":"ENGLISH_WORD_REPEAT_RULE","sentence":"^\\QExpression is a variable (\\E(?:Dummy|Ina|Jimmy-)[0-9]+\\Q), unit type (\\E(?:Dummy|Ina|Jimmy-)[0-9]+\\Q), abstraction (aka lambda) (\\E(?:Dummy|Ina|Jimmy-)[0-9]+\\Q), application (aka function call) (e e) or an annotation (expression e annotated with some type A).\\E$"}
