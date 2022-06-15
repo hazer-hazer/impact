@@ -3,17 +3,6 @@ use crate::session::Session;
 pub mod ast;
 pub mod hir;
 
-macro_rules! match_kind {
-    ($kind: expr, $should_be: pat, $visit: expr) => {
-        match $kind {
-            $should_be => $visit,
-            _ => unreachable!(),
-        }
-    };
-}
-
-pub(crate) use match_kind;
-
 pub struct AstLikePP<'a> {
     indent_level: u32,
     sess: &'a Session,

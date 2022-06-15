@@ -2,11 +2,11 @@ use crate::{
     ast::{
         expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
         stmt::{Stmt, StmtKind},
-        AST, N, PR, ty::Ty,
+        ty::{LitTy, Ty, TyKind},
+        AST, N, PR,
     },
     hir::{self, HIR},
     message::message::MessageStorage,
-    pp::match_kind,
     session::{OkStageResult, Session, Stage, StageResult},
     span::span::Ident,
 };
@@ -64,6 +64,16 @@ impl<'a> Lower<'a> {
         HIR::new(lower_each_pr_boxed!(self, self.ast.stmts(), lower_stmt))
     }
 
+    fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
+        match stmt.node() {
+            StmtKind::Expr(expr) => hir::stmt::Stmt::new(
+                stmt.span(),
+                hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
+            ),
+        }
+    }
+
+    // Expressions //
     fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
         let kind = match expr.node() {
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
@@ -137,22 +147,44 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_ty_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Ascription(lower_pr_boxed!(self, expr, lower_expr), lower_pr!(self, ty, lower_ty))
+        hir::expr::ExprKind::Ascription(
+            lower_pr_boxed!(self, expr, lower_expr),
+            lower_pr!(self, ty, lower_ty),
+        )
     }
 
+    // Types //
     fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
-        todo!()
+        let kind = match ty.node() {
+            TyKind::Unit => self.lower_unit_ty(),
+            TyKind::Lit(lit_ty) => self.lower_lit_ty(lit_ty),
+            TyKind::Var(ident) => self.lower_var_ty(ident),
+            TyKind::Func(param_ty, return_ty) => self.lower_func_ty(param_ty, return_ty),
+        };
+
+        hir::ty::Ty::new(ty.span(), kind)
     }
 
-    fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
-        match stmt.node() {
-            StmtKind::Expr(expr) => hir::stmt::Stmt::new(
-                stmt.span(),
-                hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
-            ),
-        }
+    fn lower_unit_ty(&mut self) -> hir::ty::TyKind {
+        hir::ty::TyKind::Unit
     }
 
+    fn lower_lit_ty(&mut self, lit_ty: &LitTy) -> hir::ty::TyKind {
+        hir::ty::TyKind::Lit(*lit_ty)
+    }
+
+    fn lower_var_ty(&mut self, ident: &Ident) -> hir::ty::TyKind {
+        hir::ty::TyKind::Var(self.lower_ident(ident))
+    }
+
+    fn lower_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> hir::ty::TyKind {
+        hir::ty::TyKind::Func(
+            lower_pr_boxed!(self, param_ty, lower_ty),
+            lower_pr_boxed!(self, return_ty, lower_ty),
+        )
+    }
+
+    // Fragments //
     fn lower_ident(&mut self, ident: &Ident) -> Ident {
         *ident
     }
