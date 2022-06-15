@@ -1,12 +1,12 @@
+use std::fmt::format;
+
 use crate::{
     ast::{
         expr::{Expr, ExprKind, Lit},
         stmt::{Stmt, StmtKind},
-        visitor::AstVisitor,
-        ErrorNode, AST,
+        visitor::AstVisitor, AST, ty::{Type, TypeKind, LitType}, PR, N,
     },
     pp::PP,
-    session::Session,
     span::span::Ident,
 };
 
@@ -47,6 +47,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
             expr @ ExprKind::Block(_) => self.visit_block_expr(expr),
             expr @ ExprKind::Let(_, _, _) => self.visit_let_expr(expr),
             expr @ ExprKind::Abs(_, _) => self.visit_abs_expr(expr),
+            expr @ ExprKind::Type(_, _) => self.visit_type_expr(expr),
         }
     }
 
@@ -117,6 +118,40 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
                 visit_pr!(self, body, visit_expr)
             )
         })
+    }
+
+    fn visit_type_expr(&mut self, expr: &ExprKind) -> String {
+        match_kind!(expr, ExprKind::Type(expr, ty), {
+            format!("{}: {}", visit_pr!(self, expr, visit_expr), visit_pr!(self, ty, visit_ty))
+        })
+    }
+
+    fn visit_ty(&mut self, ty: &Type) -> String {
+        match ty.node() {
+            TypeKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
+
+            TypeKind::Unit => self.visit_unit_ty(),
+
+            TypeKind::Var(ident) => self.visit_var_ty(ident),
+
+            TypeKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+        }
+    }
+
+    fn visit_unit_ty(&mut self) -> String {
+        "()".to_string()
+    }
+
+    fn visit_lit_ty(&mut self, lit_ty: &LitType) -> String {
+        format!("{}", lit_ty)
+    }
+
+    fn visit_var_ty(&mut self, ident: &Ident) -> String {
+        self.visit_ident(ident)
+    }
+
+    fn visit_func_ty(&mut self, param_ty: &PR<N<Type>>, return_ty: &PR<N<Type>>) -> String {
+        format!("{} -> {}", visit_pr!(self, param_ty, visit_ty), visit_pr!(self, return_ty, visit_ty))
     }
 
     fn visit_stmt(&mut self, stmt: &Stmt) -> String {
