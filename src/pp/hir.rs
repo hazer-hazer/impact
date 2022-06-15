@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{self, Lit},
+        expr::{Lit, PrefixOp, InfixOp},
         ty::LitTy,
     },
     hir::{
@@ -64,7 +64,7 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         ident.ppfmt(self.sess)
     }
 
-    fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &expr::InfixOp, rhs: &N<Expr>) -> String {
+    fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) -> String {
         format!(
             "{} {} {}",
             self.visit_expr(lhs),
@@ -73,7 +73,7 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         )
     }
 
-    fn visit_prefix_expr(&mut self, op: &expr::PrefixOp, rhs: &N<Expr>) -> String {
+    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) -> String {
         format!("{}{}", op.ppfmt(self.sess), self.visit_expr(rhs))
     }
 
