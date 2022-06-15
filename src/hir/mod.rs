@@ -5,6 +5,7 @@ use self::stmt::Stmt;
  */
 pub mod expr;
 pub mod stmt;
+pub mod ty;
 pub mod visitor;
 
 pub type N<T> = Box<T>;

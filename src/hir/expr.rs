@@ -3,7 +3,7 @@ use crate::{
     span::span::{Ident, Spanned},
 };
 
-use super::{stmt::Stmt, N};
+use super::{stmt::Stmt, N, ty::Ty};
 
 pub type Expr = Spanned<ExprKind>;
 
@@ -16,4 +16,5 @@ pub enum ExprKind {
     App(N<Expr>, N<Expr>),
     Block(Vec<Stmt>),
     Let(Ident, N<Expr>, N<Expr>),
+    Ascription(N<Expr>, Ty),
 }

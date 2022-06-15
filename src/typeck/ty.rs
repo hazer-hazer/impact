@@ -10,7 +10,10 @@ use crate::{
     span::span::{Ident, Symbol},
 };
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct TypeId(u64);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Type {
     kind: Rc<TypeKind>,
 }
@@ -24,6 +27,32 @@ impl Type {
 
     pub fn kind(&self) -> &TypeKind {
         &self.kind
+    }
+
+    pub fn substitute(&self, replace: &Type, with: Ident, in_ty: &Type) -> Type {
+        match *in_ty.kind() {
+            TypeKind::Unit | TypeKind::Lit(_) => replace.clone(),
+            TypeKind::Var(var) => {
+                if var == with {
+                    // Replace variable with substituted one
+                    replace.clone()
+                } else {
+                    // Leave unsubstituted
+                    in_ty.clone()
+                }
+            }
+            TypeKind::Func(ref a, ref b) => Type::new(TypeKind::Func(
+                self.substitute(replace, with, a),
+                self.substitute(replace, with, b),
+            )),
+            TypeKind::Forall(id, ref ty) => {
+                Type::new(TypeKind::Forall(id, self.substitute(replace, with, ty)))
+            }
+            TypeKind::Existential(id) => match self.lookup_existential(id) {
+                Some(u) => self.substitute(replace, with, &u),
+                None => in_ty.clone(),
+            },
+        }
     }
 
     /*
@@ -70,9 +99,54 @@ impl Type {
             TypeKind::Existential(id1) => id == id1,
         }
     }
+
+    /*
+     * Figure 8. Applying a context, as a substitution, to a type
+     *
+     * Syntax [Γ]Α means "Γ applied as a substitution to type Α"
+     */
+    pub fn apply_ctx(&self, ctx: &Ctx) -> Self {
+        match self.kind() {
+            /*
+             * [Γ]1 = 1
+             */
+            TypeKind::Unit | TypeKind::Lit(_) => self.clone(),
+
+            /*
+             * [Γ]α = α
+             */
+            TypeKind::Var(_) => self.clone(),
+
+            /*
+             * [Γ](Α → Β) = ([Γ]Α) → ([Γ]Β)
+             */
+            TypeKind::Func(param, body) => {
+                Type::new(TypeKind::Func(param.apply_ctx(ctx), body.apply_ctx(ctx)))
+            }
+
+            /*
+             * [Γ](∀α. Α) = ∀α. [Γ]Α
+             */
+            TypeKind::Forall(alpha, a) => Type::new(TypeKind::Forall(*alpha, a.apply_ctx(ctx))),
+
+            /*
+             * For solved:
+             *  [Γ[α^ = τ]]α^ = [Γ[α^ = τ]]τ
+             * For unsolved:
+             *  [Γ[α^]]α^ = α^
+             */
+            TypeKind::Existential(id) => {
+                if let Some(tau) = ctx.lookup_existential(*id) {
+                    tau.apply_ctx(ctx)
+                } else {
+                    self.clone()
+                }
+            }
+        }
+    }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum LitTy {
     Bool,
     Int,
@@ -103,7 +177,7 @@ impl Display for LitTy {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TypeKind {
     Unit,
     Lit(LitTy),
@@ -115,13 +189,13 @@ pub enum TypeKind {
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum CtxItem {
-    TypeDecl(Ident),
-    VarType(Ident, Type),
-    ExistentialDecl(ExistentialId, Option<Type>),
-    Marker(ExistentialId),
+    Var(Ident),                                   // α              | Type variable
+    TypedVar(Ident, Type), // (x : A)        | Variable (expression!) with known type
+    ExistentialDecl(ExistentialId, Option<Type>), // α^ or α^ = τ   | Potentially unsolved existential
+    Marker(ExistentialId),                        // ‣α^            | Marker
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct ExistentialId(pub u32);
 
 #[derive(Clone)]
@@ -160,7 +234,10 @@ impl Ctx {
 
         items.push(item);
 
-        Self { items, existentials }
+        Self {
+            items,
+            existentials,
+        }
     }
 
     pub fn with_item<R, F>(&mut self, item: CtxItem, body: F) -> R
@@ -206,10 +283,23 @@ impl Ctx {
         self.items
             .iter()
             .filter_map(|item| match *item {
-                CtxItem::VarType(id1, ref ty) if id == id1 => Some(ty.clone()),
+                CtxItem::TypedVar(id1, ref ty) if id == id1 => Some(ty.clone()),
                 _ => None,
             })
             .next()
+    }
+
+    pub fn add_in_place(&self, item: CtxItem, inserts: Vec<CtxItem>) -> Self {
+        if let Some(index) = self.items.iter().position(|it| it == &item) {
+            let mut items = self.items.clone();
+            items.splice(index..=index, inserts).count();
+            Ctx {
+                items,
+                existentials: self.existentials,
+            }
+        } else {
+            unreachable!()
+        }
     }
 
     /**
@@ -228,7 +318,7 @@ impl Ctx {
              *  Γ[α] ⊢ α
              */
             TypeKind::Var(id) => {
-                if self.contains(CtxItem::TypeDecl(id)) {
+                if self.contains(CtxItem::Var(id)) {
                     Ok(())
                 } else {
                     Err(TypeError(format!(
@@ -253,9 +343,7 @@ impl Ctx {
              * —————————— ForallWF
              * Γ ⊢ ∀α. Α
              */
-            TypeKind::Forall(id, ref ty) => {
-                self.with_item(CtxItem::TypeDecl(id), |ctx| ctx.ty_wf(ty))
-            }
+            TypeKind::Forall(id, ref ty) => self.with_item(CtxItem::Var(id), |ctx| ctx.ty_wf(ty)),
 
             /*
              * ——————————— EvarWF
@@ -285,20 +373,6 @@ impl Ctx {
             .next()
     }
 
-    pub fn substitute(&self, ty: &Type) -> Type {
-        match *ty.kind() {
-            TypeKind::Unit | TypeKind::Lit(_) | TypeKind::Var(_) => ty.clone(),
-            TypeKind::Func(ref a, ref b) => {
-                Type::new(TypeKind::Func(self.substitute(a), self.substitute(b)))
-            }
-            TypeKind::Forall(id, ref ty) => Type::new(TypeKind::Forall(id, self.substitute(ty))),
-            TypeKind::Existential(id) => match self.lookup_existential(id) {
-                Some(u) => self.substitute(&u),
-                None => ty.clone(),
-            },
-        }
-    }
-
     pub fn try_under_context<F, T>(&mut self, op: F) -> TypeResult<T>
     where
         F: FnOnce(&mut Ctx) -> TypeResult<T>,
@@ -313,26 +387,30 @@ impl Ctx {
         }
     }
 
-    pub fn subtype(&mut self, a_ty: &Type, b_ty: &Type) -> TypeResult<()> {
+    pub fn subtype(&mut self, a_ty: &Type, b_ty: &Type) -> TypeResult<Ctx> {
         match (a_ty.kind(), b_ty.kind()) {
             /*
              * —————————————————————— <:Var
              *  Γ[α] ⊢ α <: α ⊣ Γ[α]
              */
-            (&TypeKind::Var(a_id), &TypeKind::Var(b_id)) if a_id == b_id => self.ty_wf(a_ty),
+            (&TypeKind::Var(a_id), &TypeKind::Var(b_id)) if a_id == b_id => {
+                self.ty_wf(a_ty).map(|ok| self.clone())
+            }
 
             /*
              * ——————————————— <:Unit
              * Γ ⊢ 1 <: 1 ⊣ Γ
              */
-            (&TypeKind::Unit, &TypeKind::Unit) | (&TypeKind::Lit(_), &TypeKind::Lit(_)) => Ok(()),
+            (&TypeKind::Unit, &TypeKind::Unit) => Ok(self.clone()),
+            (&TypeKind::Lit(lit_a), &TypeKind::Lit(lit_b)) if lit_a == lit_b => Ok(self.clone()),
 
             /*
              * —————————————————— <: Exvar
              * Γ[α^] ⊢ α^ ⊣ Γ[α^]
              */
             (&TypeKind::Existential(a_id), &TypeKind::Existential(b_id)) if a_id == b_id => {
-                self.ty_wf(a_ty)
+                self.ty_wf(a_ty)?;
+                Ok(self.clone())
             }
 
             /*
@@ -340,28 +418,28 @@ impl Ctx {
              * ————————————————————————————————————————— <:→
              *       Γ ⊢ Α₁ → Α₂ <: Β₁ → Β₂ ⊣ Δ
              */
-            (&TypeKind::Func(ref a_in, ref a_out), &TypeKind::Func(ref b_in, ref b_out)) => self
-                .try_under_context(|this| {
-                    this.subtype(b_in, a_in)?;
-                    let a_out1 = this.substitute(a_out);
-                    let b_out1 = this.substitute(b_out);
-                    this.subtype(&a_out1, &b_out1)
-                }),
+            (&TypeKind::Func(ref a_in, ref a_out), &TypeKind::Func(ref b_in, ref b_out)) => {
+                let mut theta = self.subtype(a_in, b_in)?;
+
+                theta.subtype(&a_out.apply_ctx(&theta), &b_out.apply_ctx(&theta))
+            }
 
             /*
              * Γ, ‣α^, α^ ⊢ [α^/α]Α <: B ⊣ Δ, ‣α^, Θ
              * ————————————————————————————————————— <:∀L
              *          Γ ⊢ ∀α. Α <: Β ⊣ Δ
              */
-            (&TypeKind::Forall(alpha_id, ref a_ty), _) => self.try_under_context(|this| {
-                let alpha_ex_id = this.fresh_existential();
-                this.items.push(CtxItem::Marker(alpha_ex_id));
-                this.items.push(CtxItem::ExistentialDecl(alpha_ex_id, None));
+            (&TypeKind::Forall(alpha_id, ref a_ty), _) => {
+                let alpha_ex = self.fresh_existential();
+                let gamma = self
+                    .extended(CtxItem::Marker(alpha_ex))
+                    .extended(CtxItem::ExistentialDecl(alpha_ex, None));
 
-                let a_ty = a_ty.instantiate(alpha_id, alpha_ex_id);
-                this.subtype(&a_ty, b_ty)?;
-                this.pop_marker(alpha_ex_id)
-            }),
+                let subst_a =
+                    self.substitute(&Type::new(TypeKind::Existential(alpha_ex)), with, a_ty);
+
+                todo!()
+            }
 
             /*
              * Γ, α ⊢ Α <: Β ⊣ Δ, α, Θ
@@ -369,7 +447,7 @@ impl Ctx {
              *   Γ ⊢ Α <: ∀α. Β ⊣ Δ
              */
             (_, &TypeKind::Forall(alpha_id, ref b_ty)) => self.try_under_context(|this| {
-                this.items.push(CtxItem::TypeDecl(alpha_id));
+                this.items.push(CtxItem::Var(alpha_id));
                 this.subtype(a_ty, b_ty)?;
                 this.pop_type_decl(alpha_id)
             }),
@@ -437,7 +515,7 @@ impl Ctx {
             }
 
             TypeKind::Forall(id, ref ty) => self.try_under_context(|this| {
-                this.items.push(CtxItem::TypeDecl(id));
+                this.items.push(CtxItem::Var(id));
                 this.instantiate_left(alpha_id, ty);
                 this.pop_type_decl(id)
             }),
@@ -563,7 +641,7 @@ impl Ctx {
     pub fn pop_type_decl(&mut self, id: Ident) -> TypeResult<()> {
         while let Some(item) = self.items.pop() {
             match item {
-                CtxItem::TypeDecl(id1) if id1 == id => {
+                CtxItem::Var(id1) if id1 == id => {
                     return Ok(());
                 }
                 _ => {}

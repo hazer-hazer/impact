@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "CIFR",
+        "Evar",
         "existentials",
         "Exvar",
         "Forall",
@@ -17,6 +18,7 @@
         "skippable",
         "Subtyping",
         "Uninit",
+        "unsubstituted",
         "Uvar"
     ],
     "rust-analyzer.trace.extension": true
