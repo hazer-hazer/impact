@@ -8,31 +8,31 @@ use crate::{
 use super::PR;
 
 #[derive(Clone, Copy)]
-pub enum LitType {
+pub enum LitTy {
     Bool,
     Int,
     String,
 }
 
-impl Display for LitType {
+impl Display for LitTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                LitType::Bool => "bool",
-                LitType::Int => "int",
-                LitType::String => "string",
+                LitTy::Bool => "bool",
+                LitTy::Int => "int",
+                LitTy::String => "string",
             }
         )
     }
 }
 
-pub enum TypeKind {
+pub enum TyKind {
     Unit,
-    Lit(LitType),
+    Lit(LitTy),
     Var(Ident),
-    Func(PR<N<Type>>, PR<N<Type>>),
+    Func(PR<N<Ty>>, PR<N<Ty>>),
 }
 
-pub type Type = Spanned<TypeKind>;
+pub type Ty = Spanned<TyKind>;

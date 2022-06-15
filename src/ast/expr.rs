@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Spanned, Symbol},
 };
 
-use super::{stmt::Stmt, N, PR, ty::Type};
+use super::{stmt::Stmt, N, PR, ty::Ty};
 
 pub type Expr = Spanned<ExprKind>;
 
@@ -76,7 +76,7 @@ pub enum ExprKind {
     App(PR<N<Expr>>, PR<N<Expr>>),
     Block(Vec<PR<N<Stmt>>>),
     Let(PR<Ident>, PR<N<Expr>>, PR<N<Expr>>),
-    Type(PR<N<Expr>>, PR<N<Type>>),
+    Type(PR<N<Expr>>, PR<N<Ty>>),
 }
 
 impl<'a> PP<'a> for InfixOpKind {
