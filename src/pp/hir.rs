@@ -1,10 +1,11 @@
 use crate::{
-    ast::expr::Lit,
+    ast::{expr::Lit, ty::LitTy},
     hir::{
         expr::{Expr, ExprKind},
         stmt::{Stmt, StmtKind},
+        ty::{Ty, TyKind},
         visitor::HirVisitor,
-        HIR,
+        HIR, N,
     },
     span::span::Ident,
 };
@@ -27,6 +28,17 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         visit_each!(self, hir.stmts(), visit_stmt, "\n")
     }
 
+    fn visit_stmt(&mut self, stmt: &Stmt) -> String {
+        format!(
+            "{}{}",
+            self.cur_indent(),
+            match stmt.node() {
+                StmtKind::Expr(expr) => self.visit_expr(expr),
+            }
+        )
+    }
+
+    // Expressions //
     fn visit_expr(&mut self, expr: &Expr) -> String {
         match expr.node() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
@@ -97,16 +109,37 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         })
     }
 
-    fn visit_stmt(&mut self, stmt: &Stmt) -> String {
+    // Types //
+    fn visit_ty(&mut self, ty: &Ty) -> String {
+        match ty.node() {
+            TyKind::Unit => self.visit_unit_ty(),
+            TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
+            TyKind::Var(ident) => self.visit_var_ty(ident),
+            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+        }
+    }
+
+    fn visit_unit_ty(&mut self) -> String {
+        "()".to_string()
+    }
+
+    fn visit_lit_ty(&mut self, lit_ty: &LitTy) -> String {
+        format!("{}", lit_ty)
+    }
+
+    fn visit_var_ty(&mut self, ident: &Ident) -> String {
+        self.visit_ident(ident)
+    }
+
+    fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) -> String {
         format!(
-            "{}{}",
-            self.cur_indent(),
-            match stmt.node() {
-                StmtKind::Expr(expr) => self.visit_expr(expr),
-            }
+            "{} -> {}",
+            self.visit_ty(param_ty),
+            self.visit_ty(return_ty)
         )
     }
 
+    // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> String {
         ident.ppfmt(self.sess)
     }

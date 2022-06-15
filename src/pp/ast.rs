@@ -36,6 +36,17 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         visit_pr_vec!(self, ast.stmts(), visit_stmt, "\n")
     }
 
+    fn visit_stmt(&mut self, stmt: &Stmt) -> String {
+        format!(
+            "{}{}",
+            self.cur_indent(),
+            match stmt.node() {
+                StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
+            }
+        )
+    }
+
+    // Expressions //
     fn visit_expr(&mut self, expr: &Expr) -> String {
         match expr.node() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
@@ -125,14 +136,12 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         )
     }
 
+    // Types //
     fn visit_ty(&mut self, ty: &Ty) -> String {
         match ty.node() {
             TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
-
             TyKind::Unit => self.visit_unit_ty(),
-
             TyKind::Var(ident) => self.visit_var_ty(ident),
-
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
         }
     }
@@ -157,16 +166,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         )
     }
 
-    fn visit_stmt(&mut self, stmt: &Stmt) -> String {
-        format!(
-            "{}{}",
-            self.cur_indent(),
-            match stmt.node() {
-                StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
-            }
-        )
-    }
-
+    // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> String {
         ident.ppfmt(self.sess)
     }
