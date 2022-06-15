@@ -1,7 +1,7 @@
-use crate::{ast::{expr::Lit, ty::LitTy}, span::span::Ident};
+use crate::{ast::{expr::{InfixOp, Lit, PrefixOp}, ty::LitTy}, span::span::Ident};
 
 use super::{
-    expr::{Expr, ExprKind},
+    expr::{Expr},
     stmt::Stmt,
     HIR, ty::Ty, N,
 };
@@ -14,12 +14,13 @@ pub trait HirVisitor<T> {
     fn visit_expr(&mut self, expr: &Expr) -> T;
     fn visit_lit_expr(&mut self, lit: &Lit) -> T;
     fn visit_ident_expr(&mut self, ident: &Ident) -> T;
-    fn visit_infix_expr(&mut self, expr: &ExprKind) -> T;
-    fn visit_prefix_expr(&mut self, expr: &ExprKind) -> T;
-    fn visit_abs_expr(&mut self, expr: &ExprKind) -> T;
-    fn visit_app_expr(&mut self, expr: &ExprKind) -> T;
-    fn visit_block_expr(&mut self, expr: &ExprKind) -> T;
-    fn visit_let_expr(&mut self, expr: &ExprKind) -> T;
+    fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) -> T;
+    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) -> T;
+    fn visit_app_expr(&mut self, lhs: &N<Expr>, arg: &N<Expr>) -> T;
+    fn visit_abs_expr(&mut self, param: &Ident, body: &N<Expr>) -> T;
+    fn visit_block_expr(&mut self, stmts: &Vec<Stmt>) -> T;
+    fn visit_let_expr(&mut self, name: &Ident, value: &N<Expr>, body: &N<Expr>) -> T;
+    fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) -> T;
 
     // Types //
     fn visit_ty(&mut self, ty: &Ty) -> T;
