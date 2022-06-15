@@ -76,7 +76,7 @@ pub enum ExprKind {
     App(PR<N<Expr>>, PR<N<Expr>>),
     Block(Vec<PR<N<Stmt>>>),
     Let(PR<Ident>, PR<N<Expr>>, PR<N<Expr>>),
-    Type(PR<N<Expr>>, PR<N<Ty>>),
+    Ty(PR<N<Expr>>, PR<N<Ty>>),
 }
 
 impl<'a> PP<'a> for InfixOpKind {
@@ -122,7 +122,7 @@ impl<'a> PP<'a> for ExprKind {
             ExprKind::Block(_) => todo!(),
             ExprKind::Let(_, _, _) => todo!(),
             ExprKind::Abs(_, _) => todo!(),
-            ExprKind::Type(_, _) => todo!(),
+            ExprKind::Ty(_, _) => todo!(),
         }
     }
 }

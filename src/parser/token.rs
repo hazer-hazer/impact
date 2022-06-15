@@ -1,4 +1,4 @@
-use std::fmt::{format, Display};
+use std::fmt::{Display};
 
 use crate::{
     pp::PP,

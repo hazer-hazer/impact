@@ -16,5 +16,5 @@ pub enum ExprKind {
     App(N<Expr>, N<Expr>),
     Block(Vec<Stmt>),
     Let(Ident, N<Expr>, N<Expr>),
-    Ascription(N<Expr>, Ty),
+    Ty(N<Expr>, Ty),
 }

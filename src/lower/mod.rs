@@ -84,7 +84,7 @@ impl<'a> Lower<'a> {
             ExprKind::App(lhs, arg) => self.lower_app_expr(lhs, arg),
             ExprKind::Block(stmts) => self.lower_block_expr(stmts),
             ExprKind::Let(name, value, body) => self.lower_let_expr(name, value, body),
-            ExprKind::Type(expr, ty) => self.lower_ty_expr(expr, ty),
+            ExprKind::Ty(expr, ty) => self.lower_ty_expr(expr, ty),
         };
 
         hir::expr::Expr::new(expr.span(), kind)
@@ -147,7 +147,7 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_ty_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Ascription(
+        hir::expr::ExprKind::Ty(
             lower_pr_boxed!(self, expr, lower_expr),
             lower_pr!(self, ty, lower_ty),
         )

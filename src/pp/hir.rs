@@ -52,7 +52,7 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
             ExprKind::Block(stmts) => self.visit_block_expr(stmts),
             ExprKind::Let(name, value, ty) => self.visit_let_expr(name, value, ty),
-            ExprKind::Ascription(expr, ty) => self.visit_type_expr(expr, ty),
+            ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
         }
     }
 

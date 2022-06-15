@@ -57,7 +57,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
             ExprKind::Block(stmts) => self.visit_block_expr(stmts),
             ExprKind::Let(name, value, body) => self.visit_let_expr(name, value, body),
             ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
-            ExprKind::Type(expr, ty) => self.visit_type_expr(expr, ty),
+            ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
         }
     }
 
