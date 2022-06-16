@@ -30,8 +30,9 @@ pub trait AstVisitor<T> {
     fn visit_ty(&mut self, ty: &Ty) -> T;
     fn visit_unit_ty(&mut self) -> T;
     fn visit_lit_ty(&mut self, lit_ty: &LitTy) -> T;
-    fn visit_var_ty(&mut self, ident: &Ident) -> T;
+    fn visit_var_ty(&mut self, ident: &PR<Ident>) -> T;
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> T;
+    fn visit_paren_ty(&mut self, inner: &PR<N<Ty>>) -> T;
 
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> T;

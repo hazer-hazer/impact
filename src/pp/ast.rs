@@ -143,6 +143,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
             TyKind::Unit => self.visit_unit_ty(),
             TyKind::Var(ident) => self.visit_var_ty(ident),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+            TyKind::Paren(inner) => self.visit_paren_ty(inner),
         }
     }
 
@@ -154,8 +155,8 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         format!("{}", lit_ty)
     }
 
-    fn visit_var_ty(&mut self, ident: &Ident) -> String {
-        self.visit_ident(ident)
+    fn visit_var_ty(&mut self, ident: &PR<Ident>) -> String {
+        visit_pr!(self, ident, visit_ident)
     }
 
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> String {
@@ -164,6 +165,10 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
             visit_pr!(self, param_ty, visit_ty),
             visit_pr!(self, return_ty, visit_ty)
         )
+    }
+
+    fn visit_paren_ty(&mut self, inner: &PR<N<Ty>>) -> String {
+        format!("({})", visit_pr!(self, inner, visit_ty))
     }
 
     // Fragments //

@@ -160,6 +160,7 @@ impl<'a> Lower<'a> {
             TyKind::Lit(lit_ty) => self.lower_lit_ty(lit_ty),
             TyKind::Var(ident) => self.lower_var_ty(ident),
             TyKind::Func(param_ty, return_ty) => self.lower_func_ty(param_ty, return_ty),
+            TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
         };
 
         hir::ty::Ty::new(ty.span(), kind)
@@ -173,8 +174,8 @@ impl<'a> Lower<'a> {
         hir::ty::TyKind::Lit(*lit_ty)
     }
 
-    fn lower_var_ty(&mut self, ident: &Ident) -> hir::ty::TyKind {
-        hir::ty::TyKind::Var(self.lower_ident(ident))
+    fn lower_var_ty(&mut self, ident: &PR<Ident>) -> hir::ty::TyKind {
+        hir::ty::TyKind::Var(lower_pr!(self, ident, lower_ident))
     }
 
     fn lower_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> hir::ty::TyKind {

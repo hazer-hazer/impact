@@ -84,7 +84,7 @@ impl Parser {
 
     fn expected_pr<'a, T>(&'a mut self, entity: Option<PR<N<T>>>, expected: &str) -> PR<N<T>>
     where
-        T: PP<'a> + WithSpan,
+        T: WithSpan,
     {
         if let Some(entity) = entity {
             entity
@@ -329,15 +329,28 @@ impl Parser {
         let mut lhs = self.parse_prec(prec + 1)?;
 
         while let Some(op) = self.skip_any(&PREC_TABLE[prec as usize]) {
-            let rhs = self.parse_prec(prec + 1);
-
-            if let Some(rhs) = rhs {
+            if op.kind == TokenKind::Punct(Punct::Colon) {
+                // Parse ascription (type expression)
+                let ty = self.parse_ty();
+                let ty = self.expected_pr(ty, "type annotation");
                 lhs = Ok(Box::new(Expr::new(
                     lo.to(self.span()),
-                    ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
+                    ExprKind::Ty(lhs, ty),
                 )));
-            } else {
+
+                // TODO: Allow ascription of ascription?
                 break;
+            } else {
+                let rhs = self.parse_prec(prec + 1);
+    
+                if let Some(rhs) = rhs {
+                    lhs = Ok(Box::new(Expr::new(
+                        lo.to(self.span()),
+                        ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
+                    )));
+                } else {
+                    break;
+                }
             }
         }
 
@@ -520,13 +533,14 @@ impl Parser {
         let ty = Ok(Box::new(Ty::new(lo.to(self.span()), kind)));
 
         if self.skip_punct(Punct::Arrow).is_some() {
-            let return_ty = self.expected(self.parse_ty(), "return type");
+            let return_ty = self.parse_ty();
+            let return_ty = self.expected_pr(return_ty, "return type");
             Some(Ok(Box::new(Ty::new(
                 lo.to(self.span()),
                 TyKind::Func(ty, return_ty),
             ))))
         } else {
-            Some(Ok(ty))
+            Some(ty)
         }
     }
 
