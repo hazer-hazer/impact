@@ -312,6 +312,7 @@ impl Parser {
 
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
         const PREC_TABLE: &[&[TokenCmp]] = &[
+            &[TokenCmp::Punct(Punct::Colon)],
             &[TokenCmp::Infix(Infix::Plus), TokenCmp::Infix(Infix::Minus)],
             &[
                 TokenCmp::Infix(Infix::Mul),
