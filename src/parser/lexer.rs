@@ -1,11 +1,11 @@
 use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
+use crate::{parser::token::{Token, TokenKind, TokenStream}};
+use crate::{session::{OkStageResult, Session, Stage, StageResult}};
 use crate::message::MessageEmitter;
-use crate::parser::token::{Token, TokenKind, TokenStream};
 
-use crate::session::{OkStageResult, Session, Stage, StageResult};
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
-use super::token::{Infix, Punct};
+
 
 pub struct Lexer<'a> {
     source: &'a str,
