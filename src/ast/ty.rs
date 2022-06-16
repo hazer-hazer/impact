@@ -1,11 +1,10 @@
 use std::fmt::Display;
 
-use crate::{
-    hir::N,
-    span::span::{Ident, Spanned},
-};
+use crate::{hir::N, span::span::Ident};
 
 use super::PR;
+
+use crate::span::span::Spanned;
 
 #[derive(Clone, Copy)]
 pub enum LitTy {
@@ -31,8 +30,9 @@ impl Display for LitTy {
 pub enum TyKind {
     Unit,
     Lit(LitTy),
-    Var(Ident),
+    Var(PR<Ident>),
     Func(PR<N<Ty>>, PR<N<Ty>>),
+    Paren(PR<N<Ty>>),
 }
 
 pub type Ty = Spanned<TyKind>;

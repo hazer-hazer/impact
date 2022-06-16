@@ -2,12 +2,13 @@ use crate::{
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         stmt::{Stmt, StmtKind},
+        ty::{Ty, TyKind},
         ErrorNode, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     pp::PP,
     session::{OkStageResult, Session, Stage, StageResult},
-    span::span::{Ident, Kw, Span, WithSpan},
+    span::span::{Ident, Kw, Span, SpanLen, WithSpan},
 };
 
 use super::token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream};
@@ -102,7 +103,7 @@ impl Parser {
 
     fn expected<'a, T>(&'a mut self, entity: Option<T>, expected: &str) -> PR<T>
     where
-        T: PP<'a> + WithSpan,
+        T: WithSpan,
     {
         if let Some(entity) = entity {
             Ok(entity)
@@ -121,7 +122,7 @@ impl Parser {
 
     fn expect<'a, T>(&'a mut self, entity: Option<T>, expected: &str)
     where
-        T: PP<'a> + WithSpan,
+        T: WithSpan,
     {
         if entity.is_none() {
             MessageBuilder::error()
@@ -273,6 +274,7 @@ impl Parser {
         }
     }
 
+    // Expressions //
     fn parse_expr(&mut self) -> Option<PR<N<Expr>>> {
         if TokenCmp::Kw(Kw::Let) == self.peek() {
             return Some(self.parse_let());
@@ -489,6 +491,43 @@ impl Parser {
             lo.to(self.span()),
             ExprKind::Abs(param, body),
         ))))
+    }
+
+    // Types //
+    fn parse_ty(&mut self) -> Option<PR<N<Ty>>> {
+        let lo = self.span();
+
+        let kind = match self.peek() {
+            TokenKind::Punct(Punct::LParen) => {
+                self.advance();
+                let inner = self.parse_ty();
+                self.skip(TokenCmp::Punct(Punct::RParen));
+
+                match inner {
+                    Some(inner) => TyKind::Paren(inner),
+                    None => TyKind::Unit,
+                }
+            }
+
+            // TODO: Literal types
+            TokenKind::Ident(sym) => TyKind::Var(self.parse_ident("type name")),
+
+            _ => {
+                return None;
+            }
+        };
+
+        let ty = Ok(Box::new(Ty::new(lo.to(self.span()), kind)));
+
+        if self.skip_punct(Punct::Arrow).is_some() {
+            let return_ty = self.expected(self.parse_ty(), "return type");
+            Some(Ok(Box::new(Ty::new(
+                lo.to(self.span()),
+                TyKind::Func(ty, return_ty),
+            ))))
+        } else {
+            Some(Ok(ty))
+        }
     }
 
     fn parse(&mut self) -> AST {
