@@ -284,21 +284,13 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
                 TokenStartMatch::Num => self.lex_num(),
                 TokenStartMatch::String => self.lex_str(),
                 TokenStartMatch::IndentPrecursor => self.lex_indent(),
-                TokenStartMatch::Unknown => match self.peek() {
-                    '+' => self.add_token_adv(TokenKind::Infix(Infix::Plus), 1),
-                    '*' => self.add_token_adv(TokenKind::Infix(Infix::Mul), 1),
-                    '/' => self.add_token_adv(TokenKind::Infix(Infix::Div), 1),
-                    '%' => self.add_token_adv(TokenKind::Infix(Infix::Mod), 1),
-                    '=' => self.add_token_adv(TokenKind::Punct(Punct::Assign), 1),
-                    '\\' => self.add_token_adv(TokenKind::Punct(Punct::Backslash), 1),
+                TokenStartMatch::Unknown => {
+                    match TokenKind::try_from_chars(self.peek(), self.lookup()) {
+                        Some((kind, len)) => self.add_token_adv(kind, len),
 
-                    '-' => match self.lookup() {
-                        Some('>') => self.add_token_adv(TokenKind::Punct(Punct::Arrow), 2),
-                        _ => self.add_token_adv(TokenKind::Infix(Infix::Minus), 1),
-                    },
-
-                    _ => self.unexpected_token(),
-                },
+                        None => self.unexpected_token(),
+                    }
+                }
             };
         }
 

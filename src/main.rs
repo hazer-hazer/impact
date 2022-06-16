@@ -18,7 +18,6 @@ mod parser;
 mod pp;
 mod session;
 mod span;
-mod typeck;
 
 fn main() {
     let sess = Session::default();

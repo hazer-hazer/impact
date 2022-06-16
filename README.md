@@ -9,7 +9,7 @@ This is a toy programming language meant to practice some new topics for me:
 
 [*] This topics might be excluded from the project if do not match with other features or making it too complex to KISS.
 
-Comparing with my primary project -- [_Jacy_](https://github.com/jacylang/jacy) which I got stuck with because of initial complexity (it's about 20k sloc but even type check is not done 😪), in _Impact_ I'm trying to go with KISS from start to the end, even considering the fact that I'll try to cover so many topics.
+Comparing with my primary project -- [_Jacy_](https://github.com/jacylang/jacy) which I got stuck with because of initial complexity (it's about 20k sloc but even type check is not done yet 😪), in _Impact_ I'm trying to go with KISS from start to the end, even considering the fact that I'll try to cover so many topics.
 
 ### References
 

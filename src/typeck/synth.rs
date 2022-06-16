@@ -1,5 +1,4 @@
 use crate::{
-    ast::expr::Lit,
     hir::expr::{Expr, ExprKind},
 };
 

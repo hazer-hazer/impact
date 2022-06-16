@@ -1,9 +1,9 @@
-use std::fmt::{format, Display};
+use std::fmt::{Display};
 
 use crate::{
     pp::PP,
     session::Session,
-    span::span::{Kw, Span, Symbol, WithSpan},
+    span::span::{Kw, Span, Symbol, WithSpan, SpanLen},
 };
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -53,6 +53,9 @@ pub enum Punct {
     Assign,
     Backslash,
     Arrow,
+    Colon,
+    LParen,
+    RParen,
 }
 
 impl Display for Punct {
@@ -64,6 +67,9 @@ impl Display for Punct {
                 Punct::Assign => "=",
                 Punct::Backslash => "\\",
                 Punct::Arrow => "->",
+                Punct::Colon => ":",
+                Punct::LParen => "(",
+                Punct::RParen => ")",
             }
         )
     }
@@ -100,6 +106,22 @@ impl TokenKind {
             "not" => Some(TokenKind::Prefix(Prefix::Not)),
             "let" => Some(TokenKind::Kw(Kw::Let)),
             "in" => Some(TokenKind::Kw(Kw::In)),
+            _ => None,
+        }
+    }
+
+    pub fn try_from_chars(char1: char, char2: Option<char>) -> Option<(Self, SpanLen)> {
+        match (char1, char2) {
+            ('+', None) => Some((TokenKind::Infix(Infix::Plus), 1)),
+            ('*', None) => Some((TokenKind::Infix(Infix::Mul), 1)),
+            ('/', None) => Some((TokenKind::Infix(Infix::Div), 1)),
+            ('%', None) => Some((TokenKind::Infix(Infix::Mod), 1)),
+            ('=', None) => Some((TokenKind::Punct(Punct::Assign), 1)),
+            ('\\', None) => Some((TokenKind::Punct(Punct::Backslash), 1)),
+
+            ('-', None) => Some((TokenKind::Infix(Infix::Minus), 1)),
+            ('-', Some('>')) => Some((TokenKind::Punct(Punct::Arrow), 2)),
+
             _ => None,
         }
     }
@@ -203,12 +225,7 @@ impl<'a> PP<'a> for TokenKind {
             TokenKind::Kw(kw) => format!("{}", kw),
             TokenKind::Indent => "[indent]".to_string(),
             TokenKind::Dedent => "[dedent]".to_string(),
-            TokenKind::Punct(punct) => match punct {
-                Punct::Assign => "=",
-                Punct::Backslash => "\\",
-                Punct::Arrow => "->",
-            }
-            .to_string(),
+            TokenKind::Punct(punct) => format!("{}", punct)
         }
     }
 }
