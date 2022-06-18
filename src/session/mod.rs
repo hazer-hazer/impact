@@ -6,7 +6,7 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    span::span::{Kw, Span, SpanPos, Symbol},
+    span::span::{Kw, Span, SpanPos, Symbol, Interner},
 };
 
 /**
@@ -73,7 +73,7 @@ impl SourceLines {
 
 #[derive(Default)]
 pub struct Session {
-    interner: StringInterner,
+    interner: Interner,
     source_lines: SourceLines,
 }
 
@@ -99,25 +99,16 @@ impl Session {
     }
 
     // Interner API //
-    pub fn intern<T>(&mut self, string: T) -> Symbol
-    where
-        T: AsRef<str>,
-    {
-        Symbol::new(self.interner.get_or_intern(string))
+    pub fn intern(&mut self, string: &str) -> Symbol {
+        self.interner.intern(string)
     }
 
     pub fn get_str(&self, sym: Symbol) -> &str {
-        self.interner
-            .resolve(sym.as_inner())
-            .expect(format!("Failed to resolve symbol {sym:?}").as_str())
+        self.interner.get(sym)
     }
 
     pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {
-        println!("as_kw '{}'", self.get_str(sym));
-        match self.get_str(sym) {
-            "let" => Some(Kw::Let),
-            _ => None,
-        }
+        self.interner.as_kw(sym)
     }
 }
 

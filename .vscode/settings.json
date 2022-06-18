@@ -17,6 +17,7 @@
         "sess",
         "skippable",
         "Subtyping",
+        "typeck",
         "Uninit",
         "unsubstituted",
         "Uvar"

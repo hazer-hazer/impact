@@ -4,32 +4,79 @@ use crate::{
     session::Session,
 };
 use std::fmt::{Display, Formatter};
-use string_interner::DefaultSymbol;
+use string_interner::{DefaultSymbol, StringInterner, Symbol as ISymbol};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Kw {
-    Let,
-    In,
-}
+macro_rules! symbols {
+    ($($kw:ident: $str:expr),+) => {
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub enum Kw {
+            $($kw),+
+        }
 
-impl Display for Kw {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Kw::Let => "let",
-                Kw::In => "in",
+        impl Kw {
+            pub fn as_str(&self) -> &str {
+                match self {
+                    $(Self::$kw => $str),+
+                    _ => unreachable!(),
+                }
             }
-        )
-    }
+
+            pub fn from_str(string: &str) -> Option<Self> {
+                match string {
+                    $($str => Some(Self::$kw)),+
+                    _ => None,
+                }
+            }
+
+            pub fn as_usize(&self) -> usize {
+                *self as usize
+            }
+        }
+
+        impl Display for Kw {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.as_str())
+            }
+        }
+
+        impl<'a> PP<'a> for Kw {
+            fn ppfmt(&self, _: &'a Session) -> String {
+                format!("{}", self)
+            }
+        }
+
+        pub struct Interner(StringInterner);
+
+        impl Interner {
+            pub fn new() -> Self {
+                let interner = Self(StringInterner::default());
+                $(interner.intern($kw);)+
+                interner
+            }
+
+            pub fn intern(&mut self, string: &str) -> Symbol {
+                Symbol::new(self.0.get_or_intern(string))
+            }
+
+            pub fn get(&self, sym: Symbol) -> &str {
+                self.0
+                    .resolve(sym.as_inner())
+                    .expect(format!("Failed to resolve symbol {sym:?}").as_str())
+            }
+
+            pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {
+                Kw::from_str(self.get(sym))
+            }
+        }
+    };
 }
 
-impl<'a> PP<'a> for Kw {
-    fn ppfmt(&self, _: &'a Session) -> String {
-        format!("{}", self)
-    }
-}
+symbols! {
+    Let: "let",
+    In: "in",
+    M: "m",
+    Unknown: "[UNKNOWN]"
+};
 
 type SymbolInner = DefaultSymbol;
 
@@ -39,6 +86,15 @@ pub struct Symbol(SymbolInner);
 impl Symbol {
     pub fn new(sym: SymbolInner) -> Self {
         Self(sym)
+    }
+
+    pub fn kw(kw: Kw) -> Self {
+        match kw {
+            kw @ Kw::Let | kw @ Kw::In | kw @ Kw::M | kw @ Kw::Unknown => Symbol(
+                SymbolInner::try_from_usize(kw as usize)
+                    .expect(format!("Failed to construct symbol from keyword {}", kw).as_str()),
+            ),
+        }
     }
 
     pub fn as_inner(self) -> SymbolInner {
@@ -55,6 +111,7 @@ impl<'a> PP<'a> for Symbol {
         format!("{}", sess.get_str(*self))
     }
 }
+
 
 pub type SpanPos = u32;
 pub type SpanLen = u32;
