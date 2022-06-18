@@ -1,6 +1,8 @@
-use crate::{pp::PP, session::Session, span::span::Ident};
+use std::vec::{self, Splice};
 
-use super::ty::Ty;
+use crate::{pp::PP, session::Session, span::span::{Ident, Symbol}};
+
+use super::ty::{Ty, TyError, TyResult};
 
 #[derive(Clone)]
 pub enum CtxItem {
@@ -41,6 +43,7 @@ impl Ctx {
         Self { items: vec![] }
     }
 
+    // Context items //
     pub fn add(&mut self, item: CtxItem) -> &mut Self {
         self.items.push(item);
         self
@@ -59,13 +62,13 @@ impl Ctx {
         self.items.pop()
     }
 
-    pub fn get_item_index(&self, item: &CtxItemName) -> Option<usize> {
+    pub fn get_item_index(&self, item: CtxItemName) -> Option<usize> {
         let index = self.items.iter().position(|it| match (item, it) {
             (CtxItemName::Var(ident1), CtxItem::Var(ident2))
             | (CtxItemName::TypedTerm(ident1), CtxItem::TypedTerm(ident2, _))
             | (CtxItemName::Existential(ident1), CtxItem::Existential(ident2, _))
             | (CtxItemName::Marker(ident1), CtxItem::Marker(ident2))
-                if ident1 == ident2 =>
+                if ident1 == *ident2 =>
             {
                 true
             }
@@ -75,15 +78,53 @@ impl Ctx {
         index
     }
 
-    pub fn contains(&self, item: &CtxItemName) -> bool {
+    pub fn contains(&self, item: CtxItemName) -> bool {
         self.get_item_index(item).is_some()
     }
 
-    pub fn lookup(&self, item: &CtxItemName) -> Option<&CtxItem> {
+    pub fn lookup(&self, item: CtxItemName) -> Option<&CtxItem> {
         match self.get_item_index(item) {
             Some(index) => self.items.get(index),
             None => None,
         }
+    }
+
+    pub fn split(&self, item: CtxItemName) -> Vec<CtxItem> {
+        if let Some(index) = self.get_item_index(item) {
+            self.items.drain(index..).collect()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn replace(&mut self, item: CtxItemName, add_items: Vec<CtxItem>) -> &mut Self {
+        let right = self.split(item);
+        self.add_many(add_items);
+        self.add_many(right);
+        self
+    }
+
+    pub fn enter(&self, marker_name: Ident, items: Vec<CtxItem>) {
+        self.add(CtxItem::Marker(marker_name));
+        self.add_many(items);
+    }
+
+    pub fn leave(&self, marker_name: Ident) {
+        self.split(CtxItemName::Marker(marker_name));
+    }
+
+    pub fn leave_unsolved(&self, item: CtxItemName) -> Vec<Ident> {
+        let right = self.split(item);
+
+        let names = vec![];
+        for item in right {
+            match item {
+                CtxItem::Existential(ident, ty) if ty.is_none() => names.push(ident),
+                _ => {}
+            }
+        }
+
+        names
     }
 
     /// The context is complete if all existentials inside it are solved
@@ -96,5 +137,23 @@ impl Ctx {
         }
 
         true
+    }
+
+    // Types //
+    pub fn is_wf(&self, ty: &Ty) -> TyResult<()> {
+        match ty {
+            Ty::Var(ident) if !self.contains(CtxItemName::Var(*ident)) => Err(TyError()),
+            Ty::Var(_) => Ok(()),
+            Ty::Existential(ident) if !self.contains(CtxItemName::Existential(*ident)) => {
+                Err(TyError())
+            }
+            Ty::Func(param_ty, return_ty) => {
+                self.is_wf(param_ty)?;
+                self.is_wf(return_ty)
+            }
+            Ty::Forall(ident, ty) => {
+                self.enter(Ident::synthetic(), vec![CtxItem::Var(ident)])
+            }
+        }
     }
 }

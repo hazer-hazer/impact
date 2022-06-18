@@ -66,6 +66,17 @@ pub struct Span {
 }
 
 impl Span {
+    pub fn new_error() -> Self {
+        Self {
+            pos: SpanPos::MAX,
+            len: SpanLen::MAX,
+        }
+    }
+
+    pub fn is_error(&self) -> bool {
+        self.pos == SpanPos::MAX && self.len == SpanPos::MAX
+    }
+
     pub fn new(pos: SpanPos, len: SpanLen) -> Self {
         Self { pos, len }
     }
@@ -160,6 +171,13 @@ pub struct Ident {
 }
 
 impl Ident {
+    pub fn synthetic(sym: Symbol) -> Self {
+        Self {
+            span: Span::new_error(),
+            sym,
+        }
+    }
+
     pub fn span(&self) -> Span {
         self.span
     }

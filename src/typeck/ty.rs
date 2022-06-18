@@ -10,6 +10,9 @@ pub enum Ty {
     Forall(Ident, Box<Ty>),
 }
 
+pub struct TyError();
+pub type TyResult<T> = Result<T, TyError>;
+
 impl<'a> PP<'a> for Ty {
     fn ppfmt(&self, sess: &'a crate::session::Session) -> String {
         match self {
@@ -19,6 +22,17 @@ impl<'a> PP<'a> for Ty {
                 format!("{} -> {}", param_ty.ppfmt(sess), return_ty.ppfmt(sess))
             }
             Ty::Forall(ident, ty) => format!("∀{}. {}", ident.ppfmt(sess), ty.ppfmt(sess)),
+        }
+    }
+}
+
+impl Ty {
+    pub fn is_mono(&self) -> bool {
+        match self {
+            Ty::Var(_)
+            | Ty::Existential(_) => true,
+            Ty::Func(param_ty, return_ty) => param_ty.is_mono() && return_ty.is_mono(),
+            Ty::Forall(_, _) => false,
         }
     }
 }
