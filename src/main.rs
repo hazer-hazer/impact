@@ -1,4 +1,4 @@
-extern crate string_interner;
+extern crate lasso;
 
 use parser::{lexer::Lexer, parser::Parser};
 

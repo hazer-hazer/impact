@@ -1,6 +1,6 @@
 use std::vec::{self, Splice};
 
-use crate::{pp::PP, session::Session, span::span::{Ident, Symbol}};
+use crate::{pp::PP, session::Session, span::span::{Ident, Symbol, Kw}};
 
 use super::ty::{Ty, TyError, TyResult};
 
@@ -140,7 +140,7 @@ impl Ctx {
     }
 
     // Types //
-    pub fn is_wf(&self, ty: &Ty) -> TyResult<()> {
+    pub fn ty_wf(&self, ty: &Ty) -> TyResult<()> {
         match ty {
             Ty::Var(ident) if !self.contains(CtxItemName::Var(*ident)) => Err(TyError()),
             Ty::Var(_) => Ok(()),
@@ -148,11 +148,12 @@ impl Ctx {
                 Err(TyError())
             }
             Ty::Func(param_ty, return_ty) => {
-                self.is_wf(param_ty)?;
-                self.is_wf(return_ty)
+                self.ty_wf(param_ty)?;
+                self.ty_wf(return_ty)
             }
             Ty::Forall(ident, ty) => {
-                self.enter(Ident::synthetic(), vec![CtxItem::Var(ident)])
+                self.enter(Ident::synthetic(Symbol::kw(Kw::M)), vec![CtxItem::Var(*ident)]);
+                Ok(())
             }
         }
     }
