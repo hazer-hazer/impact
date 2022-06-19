@@ -4,7 +4,7 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    span::span::{Kw, Span, SpanPos, Symbol, Interner},
+    span::span::{Kw, Span, SpanPos},
 };
 
 /**
@@ -71,7 +71,6 @@ impl SourceLines {
 
 #[derive(Default)]
 pub struct Session {
-    interner: Interner,
     source_lines: SourceLines,
 }
 

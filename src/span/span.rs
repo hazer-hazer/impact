@@ -52,67 +52,6 @@ impl<'a> PP<'a> for Kw {
     }
 }
 
-type SymbolInner = u32;
-
-#[derive(Clone, Copy, PartialEq, Debug, Eq, Hash)]
-pub struct Symbol(SymbolInner);
-
-impl Symbol {
-    pub fn new(sym: SymbolInner) -> Self {
-        Self(sym)
-    }
-
-    pub fn as_inner(&self) -> SymbolInner {
-        self.0
-    }
-
-    pub fn as_kw(self, sess: &Session) -> Option<Kw> {
-        sess.as_kw(self)
-    }
-}
-
-impl<'a> PP<'a> for Symbol {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        format!("{}", sess.get_str(*self))
-    }
-}
-
-#[derive(Default)]
-pub struct Interner {
-    symbols: HashMap<String, Symbol>,
-    strings: Vec<String>,
-}
-
-impl Interner {
-    pub fn intern(&mut self, string: String) -> Symbol {
-        if let Some(sym) = self.symbols.get(&string) {
-            return *sym;
-        }
-
-        let sym = Symbol::new(self.strings.len() as SymbolInner);
-        self.symbols.insert(string.clone(), sym);
-        self.strings.push(string);
-
-        sym
-    }
-
-    pub fn get(&self, sym: Symbol) -> &str {
-        self.strings
-            .get(sym.as_inner() as usize)
-            .expect(format!("Failed to resolve symbol {sym:?}").as_str())
-            .as_str()
-    }
-
-    pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {
-        match self.get(sym) {
-            "let" => Some(Kw::Let),
-            "in" => Some(Kw::In),
-            "m" => Some(Kw::M),
-            _ => None,
-        }
-    }
-}
-
 pub type SpanPos = u32;
 pub type SpanLen = u32;
 
@@ -221,14 +160,14 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     span: Span,
-    sym: Symbol,
+    sym: String,
 }
 
 impl Ident {
-    pub fn synthetic(sym: Symbol) -> Self {
+    pub fn synthetic(sym: String) -> Self {
         Self {
             span: Span::new_error(),
             sym,
@@ -239,7 +178,7 @@ impl Ident {
         self.span
     }
 
-    pub fn name(&self) -> Symbol {
+    pub fn name(&self) -> String {
         self.sym
     }
 }
@@ -251,7 +190,7 @@ impl WithSpan for Ident {
 }
 
 impl Ident {
-    pub fn new(span: Span, sym: Symbol) -> Self {
+    pub fn new(span: Span, sym: String) -> Self {
         Self { span, sym }
     }
 
@@ -263,11 +202,5 @@ impl Ident {
             },
             _ => unreachable!(),
         }
-    }
-}
-
-impl<'a> PP<'a> for Ident {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        format!("{}", self.sym.ppfmt(sess))
     }
 }
