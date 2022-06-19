@@ -1,11 +1,12 @@
-use lasso::{Rodeo, Spur};
-
 use crate::{
     parser::token::{Token, TokenKind},
     pp::PP,
     session::Session,
 };
-use std::{fmt::{Display, Formatter}, collections::HashMap};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kw {
@@ -61,8 +62,8 @@ impl Symbol {
         Self(sym)
     }
 
-    pub fn as_inner(&self) -> &SymbolInner {
-        &self.0
+    pub fn as_inner(&self) -> SymbolInner {
+        self.0
     }
 
     pub fn as_kw(self, sess: &Session) -> Option<Kw> {
@@ -78,25 +79,28 @@ impl<'a> PP<'a> for Symbol {
 
 #[derive(Default)]
 pub struct Interner {
-    symbols: HashMap<&'static str, Symbol>,
-    strings: Vec<&'static str>,
+    symbols: HashMap<String, Symbol>,
+    strings: Vec<String>,
 }
 
 impl Interner {
-    pub fn intern(&mut self, string: &str) -> Symbol {
-        if let Some(sym) = self.symbols.get(string) {
+    pub fn intern(&mut self, string: String) -> Symbol {
+        if let Some(sym) = self.symbols.get(&string) {
             return *sym;
         }
 
         let sym = Symbol::new(self.strings.len() as SymbolInner);
-        self.symbols.insert(string, sym);
+        self.symbols.insert(string.clone(), sym);
         self.strings.push(string);
 
         sym
     }
 
     pub fn get(&self, sym: Symbol) -> &str {
-        
+        self.strings
+            .get(sym.as_inner() as usize)
+            .expect(format!("Failed to resolve symbol {sym:?}").as_str())
+            .as_str()
     }
 
     pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {

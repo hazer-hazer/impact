@@ -1,5 +1,3 @@
-use string_interner::StringInterner;
-
 use crate::{
     message::{
         message::{Message, MessageStorage},
@@ -99,7 +97,7 @@ impl Session {
     }
 
     // Interner API //
-    pub fn intern(&mut self, string: &str) -> Symbol {
+    pub fn intern(&mut self, string: String) -> Symbol {
         self.interner.intern(string)
     }
 

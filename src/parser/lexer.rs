@@ -139,7 +139,7 @@ impl<'a> Lexer<'a> {
         self.advance_offset(len);
     }
 
-    fn add_error(&mut self, msg: &str) {
+    fn add_error(&mut self, msg: String) {
         let span = Span::new(self.token_start_pos, 1);
 
         MessageBuilder::error()
@@ -154,7 +154,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn unexpected_token(&mut self) {
-        self.add_error("Unexpected token");
+        self.add_error("Unexpected token".to_string());
     }
 
     fn get_fragment_to(&self, start: SpanPos, end: SpanPos) -> (&str, SpanLen) {
@@ -170,7 +170,7 @@ impl<'a> Lexer<'a> {
             &self.source[start as usize..self.pos as usize],
             self.pos - start,
         );
-        (self.sess.intern(frag), len)
+        (self.sess.intern(frag.to_string()), len)
     }
 
     fn lex_ident(&mut self) {
@@ -199,7 +199,7 @@ impl<'a> Lexer<'a> {
         }
 
         if self.peek() != quote {
-            self.add_error(format!("Expected closing quote {}", quote).as_str());
+            self.add_error(format!("Expected closing quote {}", quote));
         } else {
             self.advance();
         }
@@ -262,7 +262,7 @@ impl<'a> Lexer<'a> {
             self.add_token(TokenKind::Dedent, 1);
             level = self.indent_levels.pop().unwrap();
             if level < indent_size {
-                self.add_error("Invalid indentation");
+                self.add_error("Invalid indentation".to_string());
             }
         }
     }

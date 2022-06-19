@@ -1,5 +1,3 @@
-extern crate lasso;
-
 use parser::{lexer::Lexer, parser::Parser};
 
 use session::{Session, Stage};
