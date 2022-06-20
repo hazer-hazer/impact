@@ -40,6 +40,10 @@ impl SourceLines {
 
     /// get (line string, line position, line number)
     pub fn find_line(&self, span: Span) -> (&String, SpanPos, usize) {
+        if span.is_error() {
+            panic!()
+        }
+
         for i in 0..self.lines.len() {
             let line_pos = self.positions[i];
             let next_line_pos = *self
@@ -48,11 +52,11 @@ impl SourceLines {
                 .unwrap_or(&(self.source_size as u32));
 
             // We encountered line further than span
-            if span.pos < line_pos {
+            if span.lo() < line_pos {
                 break;
             }
 
-            if span.pos >= line_pos && span.pos < next_line_pos {
+            if span.lo() >= line_pos && span.lo() < next_line_pos {
                 return (&self.lines[i], line_pos, i + 1);
             }
         }

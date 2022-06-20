@@ -96,10 +96,8 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    pub fn try_from_reserved_sym(sess: &Session, sym: Symbol) -> Option<Self> {
-        let string = sess.get_str(sym);
-
-        match string {
+    pub fn try_from_reserved_sym(sym: Symbol) -> Option<Self> {
+        match sym.as_str() {
             "true" => Some(TokenKind::Bool(true)),
             "false" => Some(TokenKind::Bool(false)),
             "not" => Some(TokenKind::Prefix(Prefix::Not)),
@@ -205,31 +203,21 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
 
 impl Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                TokenKind::Eof => "[EOF]",
-                TokenKind::Nl => "[NL]",
-                TokenKind::Int(val)
-                | TokenKind::String(val)
-                | TokenKind::Ident(val)
-                | TokenKind::Error(val) => val,
-                TokenKind::Infix(infix) => format!("{}", infix).as_str(),
-                TokenKind::Bool(val) => {
-                    if *val {
-                        "true"
-                    } else {
-                        "false"
-                    }
-                }
-                TokenKind::Prefix(prefix) => format!("{}", prefix).as_str(),
-                TokenKind::Kw(kw) => format!("{}", kw).as_str(),
-                TokenKind::Indent => "[indent]",
-                TokenKind::Dedent => "[dedent]",
-                TokenKind::Punct(punct) => format!("{}", punct).as_str(),
+        match self {
+            TokenKind::Eof => write!(f, "{}", "[EOF]"),
+            TokenKind::Nl => write!(f, "{}", "[NL]"),
+            TokenKind::Int(val) => write!(f, "{}", val),
+            TokenKind::String(val) | TokenKind::Ident(val) | TokenKind::Error(val) => {
+                write!(f, "{}", val)
             }
-        )
+            TokenKind::Infix(infix) => write!(f, "{}", infix),
+            TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
+            TokenKind::Prefix(prefix) => write!(f, "{}", prefix),
+            TokenKind::Kw(kw) => write!(f, "{}", kw),
+            TokenKind::Indent => write!(f, "{}", "[indent]"),
+            TokenKind::Dedent => write!(f, "{}", "[dedent]"),
+            TokenKind::Punct(punct) => write!(f, "{}", punct),
+        }
     }
 }
 

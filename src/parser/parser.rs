@@ -93,7 +93,7 @@ impl Parser {
                 .text(format!(
                     "Expected {}, got {}",
                     expected,
-                    self.peek().ppfmt(&self.sess)
+                    self.peek()
                 ))
                 .emit(self);
             Err(ErrorNode::new(self.span()))
@@ -112,7 +112,7 @@ impl Parser {
                 .text(format!(
                     "Expected {}, got {}",
                     expected,
-                    self.peek().ppfmt(&self.sess)
+                    self.peek()
                 ))
                 .emit(self);
             Err(ErrorNode::new(self.span()))
@@ -129,7 +129,7 @@ impl Parser {
                 .text(format!(
                     "Expected {}, got {}",
                     expected,
-                    self.peek().ppfmt(&self.sess)
+                    self.peek()
                 ))
                 .emit(self);
         }
@@ -266,7 +266,7 @@ impl Parser {
                 .span(self.span())
                 .text(format!(
                     "Unexpected token {}",
-                    self.peek().ppfmt(&self.sess)
+                    self.peek()
                 ))
                 .emit(self);
             Err(ErrorNode::new(self.advance_tok().span))
@@ -369,7 +369,7 @@ impl Parser {
                     .span(self.span())
                     .text(format!(
                         "Expected expression after {} operator",
-                        op.kind.ppfmt(&self.sess)
+                        op.kind
                     ))
                     .emit(self);
                 Err(ErrorNode::new(self.span()))

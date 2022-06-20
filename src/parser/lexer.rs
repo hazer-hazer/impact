@@ -1,7 +1,6 @@
 use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
 use crate::{parser::token::{Token, TokenKind, TokenStream}};
 use crate::{session::{OkStageResult, Session, Stage, StageResult}};
-use crate::message::MessageEmitter;
 
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
@@ -149,7 +148,7 @@ impl<'a> Lexer<'a> {
 
         self.tokens.push(Token {
             span,
-            kind: TokenKind::Error(self.sess.intern(msg)),
+            kind: TokenKind::Error(Symbol::intern(msg)),
         })
     }
 
@@ -170,7 +169,7 @@ impl<'a> Lexer<'a> {
             &self.source[start as usize..self.pos as usize],
             self.pos - start,
         );
-        (self.sess.intern(frag), len)
+        (Symbol::intern(frag), len)
     }
 
     fn lex_ident(&mut self) {
@@ -181,7 +180,7 @@ impl<'a> Lexer<'a> {
 
         let (sym, len) = self.get_fragment_intern(start);
 
-        let kind = if let Some(reserved) = TokenKind::try_from_reserved_sym(&self.sess, sym) {
+        let kind = if let Some(reserved) = TokenKind::try_from_reserved_sym(sym) {
             reserved
         } else {
             TokenKind::Ident(sym)

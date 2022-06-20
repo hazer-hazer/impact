@@ -1,5 +1,3 @@
-use crate::session::Session;
-
 use self::message::Message;
 
 pub mod debug_emitter;

@@ -8,7 +8,7 @@ use crate::{
 };
 
 mod ast;
-mod dt;
+// mod dt;
 mod hir;
 mod lower;
 mod message;
@@ -16,7 +16,7 @@ mod parser;
 mod pp;
 mod session;
 mod span;
-mod typeck;
+// mod typeck;
 
 fn main() {
     let sess = Session::default();

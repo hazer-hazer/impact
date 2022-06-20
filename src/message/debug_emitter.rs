@@ -1,7 +1,3 @@
-use std::fmt::Debug;
-
-use crate::session::Session;
-
 use super::{message::Message, MessageEmitter};
 
 pub struct DebugEmitter {}

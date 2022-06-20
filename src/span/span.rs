@@ -31,16 +31,6 @@ impl Kw {
             Kw::Unknown => "[UNKNOWN]",
         }
     }
-
-    pub fn try_from_usize(disc: usize) -> Option<Self> {
-        match disc {
-            x if Kw::Let as usize == x => Some(Kw::Let),
-            x if Kw::In as usize == x => Some(Kw::In),
-            x if Kw::M as usize == x => Some(Kw::M),
-            x if Kw::Unknown as usize == x => Some(Kw::Unknown),
-            _ => None,
-        }
-    }
 }
 
 impl Display for Kw {
@@ -63,7 +53,7 @@ impl Symbol {
     }
 
     pub fn as_str(&self) -> &str {
-        INTERNER.read().unwrap().resolve(*self)
+        INTERNER.read().unwrap().resolve(self)
     }
 
     pub fn as_inner(&self) -> SymbolInner {
@@ -118,7 +108,7 @@ impl Interner {
         sym
     }
 
-    fn resolve(&self, sym: Symbol) -> &str {
+    fn resolve(&self, sym: &Symbol) -> &'static str {
         self.strings
             .get(sym.as_inner() as usize)
             .expect(format!("Failed to resolve symbol {sym:?}").as_str())
@@ -156,6 +146,10 @@ impl Span {
 
     pub fn hi(&self) -> SpanPos {
         self.pos + self.len
+    }
+
+    pub fn len(&self) -> SpanLen {
+        self.len
     }
 
     pub fn to(&self, end: Span) -> Self {

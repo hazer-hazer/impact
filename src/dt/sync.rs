@@ -1,7 +1,4 @@
-use std::{
-    borrow::Borrow,
-    cell::{RefCell, RefMut},
-};
+use std::cell::{RefCell, RefMut};
 
 #[derive(Debug)]
 pub struct Lock<T>(RefCell<T>);

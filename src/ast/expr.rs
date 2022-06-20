@@ -2,7 +2,6 @@ use std::fmt::Display;
 
 use crate::{
     parser::token::{Infix, Prefix, Token, TokenKind},
-    session::Session,
     span::span::{Ident, Spanned, Symbol},
 };
 
@@ -110,34 +109,31 @@ pub enum ExprKind {
 
 impl Display for Lit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Lit::Bool(val) => if *val { "true" } else { "false" }.to_string(),
-                Lit::Int(val) => val.to_string(),
-                Lit::String(val) => val,
-            }
-        )
+        match self {
+            Lit::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
+            Lit::Int(val) => write!(f, "{}", val),
+            Lit::String(val) => write!(f, "{}", val),
+        }
     }
 }
 
-impl Display for ExprKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ExprKind::Lit(_) => todo!(),
-                ExprKind::Ident(_) => todo!(),
-                ExprKind::Infix(_, _, _) => todo!(),
-                ExprKind::Prefix(_, _) => todo!(),
-                ExprKind::App(_, _) => todo!(),
-                ExprKind::Block(_) => todo!(),
-                ExprKind::Let(_, _, _) => todo!(),
-                ExprKind::Abs(_, _) => todo!(),
-                ExprKind::Ty(_, _) => todo!(),
-            }
-        )
-    }
-}
+// impl Display for ExprKind {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(
+//             f,
+//             "{}",
+//             match self {
+//                 ExprKind::Lit(_) => todo!(),
+//                 ExprKind::Ident(_) => todo!(),
+//                 ExprKind::Infix(_, _, _) => todo!(),
+//                 ExprKind::Prefix(_, _) => todo!(),
+//                 ExprKind::App(_, _) => todo!(),
+//                 ExprKind::Block(_) => todo!(),
+//                 ExprKind::Let(_, _, _) => todo!(),
+//                 ExprKind::Abs(_, _) => todo!(),
+//                 ExprKind::Ty(_, _) => todo!(),
+//                 _ => ""
+//             }
+//         )
+//     }
+// }

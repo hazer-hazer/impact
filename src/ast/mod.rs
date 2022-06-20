@@ -13,22 +13,6 @@ pub type N<T> = Box<T>;
 
 pub type PR<T> = Result<T, ErrorNode>;
 
-impl<T> Display for PR<T>
-where
-    T: Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Ok(v) => v,
-                Err(_) => "[ERROR]".to_string(),
-            }
-        )
-    }
-}
-
 impl<T> WithSpan for PR<T>
 where
     T: WithSpan,

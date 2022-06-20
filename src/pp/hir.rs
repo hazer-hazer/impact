@@ -57,24 +57,24 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
     }
 
     fn visit_lit_expr(&mut self, lit: &Lit) -> String {
-        lit.ppfmt(self.sess)
+        lit.to_string()
     }
 
     fn visit_ident_expr(&mut self, ident: &Ident) -> String {
-        ident.ppfmt(self.sess)
+        ident.to_string()
     }
 
     fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) -> String {
         format!(
             "{} {} {}",
             self.visit_expr(lhs),
-            op.ppfmt(self.sess),
+            op,
             self.visit_expr(rhs)
         )
     }
 
     fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) -> String {
-        format!("{}{}", op.ppfmt(self.sess), self.visit_expr(rhs))
+        format!("{}{}", op, self.visit_expr(rhs))
     }
 
     fn visit_abs_expr(&mut self, param: &Ident, body: &N<Expr>) -> String {
@@ -137,6 +137,6 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
 
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> String {
-        ident.ppfmt(self.sess)
+        ident.to_string()
     }
 }

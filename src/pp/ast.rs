@@ -61,11 +61,11 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
     }
 
     fn visit_lit_expr(&mut self, lit: &Lit) -> String {
-        format!("{}", lit.ppfmt(self.sess))
+        format!("{}", lit)
     }
 
     fn visit_ident_expr(&mut self, ident: &Ident) -> String {
-        format!("{}", ident.ppfmt(self.sess))
+        format!("{}", ident)
     }
 
     fn visit_infix_expr(
@@ -77,7 +77,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         format!(
             "{} {} {}",
             visit_pr!(self, lhs, visit_expr),
-            op.ppfmt(self.sess),
+            op,
             visit_pr!(self, rhs, visit_expr)
         )
     }
@@ -85,7 +85,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
     fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &PR<N<Expr>>) -> String {
         format!(
             "{}{}",
-            op.ppfmt(self.sess),
+            op,
             visit_pr!(self, rhs, visit_expr)
         )
     }
@@ -172,6 +172,6 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
 
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> String {
-        ident.ppfmt(self.sess)
+        ident.to_string()
     }
 }

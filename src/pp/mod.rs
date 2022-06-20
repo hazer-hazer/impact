@@ -26,6 +26,6 @@ impl<'a> AstLikePP<'a> {
     }
 
     fn cur_indent(&self) -> String {
-        format!("{}", "    ".repeat(self.indent_level as usize))
+        "    ".repeat(self.indent_level as usize)
     }
 }
