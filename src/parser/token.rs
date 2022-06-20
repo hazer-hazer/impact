@@ -3,7 +3,7 @@ use std::fmt::{Display};
 use crate::{
     pp::PP,
     session::Session,
-    span::span::{Kw, Span, WithSpan, SpanLen},
+    span::span::{Kw, Span, Symbol, WithSpan, SpanLen},
 };
 
 #[derive(PartialEq, Debug, Clone, Copy)]

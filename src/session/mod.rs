@@ -4,7 +4,7 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    span::span::{Kw, Span, SpanPos},
+    span::span::{Kw, Span, SpanPos, Symbol, Interner},
 };
 
 /**
@@ -93,19 +93,6 @@ impl Session {
 
     pub fn source_lines_mut(&mut self) -> &mut SourceLines {
         &mut self.source_lines
-    }
-
-    // Interner API //
-    pub fn intern(&mut self, string: String) -> Symbol {
-        self.interner.intern(string)
-    }
-
-    pub fn get_str(&self, sym: Symbol) -> &str {
-        self.interner.get(sym)
-    }
-
-    pub fn as_kw(&self, sym: Symbol) -> Option<Kw> {
-        self.interner.as_kw(sym)
     }
 }
 

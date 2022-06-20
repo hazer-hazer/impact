@@ -1,12 +1,15 @@
+use once_cell::sync::Lazy;
+
 use crate::{
     parser::token::{Token, TokenKind},
-    pp::PP,
-    session::Session,
 };
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
+    sync::RwLock,
 };
+
+static INTERNER: Lazy<RwLock<Interner>> = Lazy::new(|| Default::default());
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kw {
@@ -46,9 +49,73 @@ impl Display for Kw {
     }
 }
 
-impl<'a> PP<'a> for Kw {
-    fn ppfmt(&self, _: &'a Session) -> String {
-        format!("{}", self)
+type SymbolInner = u32;
+
+#[derive(Clone, Copy, PartialEq, Debug, Eq, Hash)]
+pub struct Symbol(SymbolInner);
+
+impl Symbol {
+    // Note: Symbol must not have a public constructor,
+    //  because we treat all constructed symbols as valid, i.e. interned.
+
+    pub fn intern(string: &str) -> Symbol {
+        INTERNER.write().unwrap().intern(string)
+    }
+
+    pub fn as_str(&self) -> &str {
+        INTERNER.read().unwrap().resolve(*self)
+    }
+
+    pub fn as_inner(&self) -> SymbolInner {
+        self.0
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl TryInto<Kw> for Symbol {
+    type Error = ();
+
+    fn try_into(self) -> Result<Kw, Self::Error> {
+        match self.as_str() {
+            "let" => Ok(Kw::Let),
+            "in" => Ok(Kw::In),
+            "m" => Ok(Kw::M),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Default)]
+struct Interner {
+    symbols: HashMap<&'static str, Symbol>,
+    strings: Vec<&'static str>,
+}
+
+impl Interner {
+    fn intern<S: AsRef<str>>(&mut self, string: S) -> Symbol {
+        let string = string.as_ref();
+
+        if let Some(sym) = self.symbols.get(string) {
+            return *sym;
+        }
+
+        // !Leaked
+        let string = Box::leak(string.to_owned().into_boxed_str());
+        let sym = Symbol(self.strings.len() as u32);
+
+        self.symbols.insert(string, sym);
+        self.strings.push(string);
+
+        sym
+    }
+
+    fn resolve(&self, sym: Symbol) -> &str {
+        self.strings
+            .get(sym.as_inner() as usize)
+            .expect(format!("Failed to resolve symbol {sym:?}").as_str())
     }
 }
 
@@ -57,8 +124,8 @@ pub type SpanLen = u32;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Span {
-    pub pos: SpanPos,
-    pub len: SpanLen,
+    pos: SpanPos,
+    len: SpanLen,
 }
 
 impl Span {
@@ -95,12 +162,6 @@ impl std::fmt::Display for Span {
     }
 }
 
-impl<'a> PP<'a> for Span {
-    fn ppfmt(&self, _: &'a Session) -> String {
-        format!("{} [len={}]", self.pos, self.len)
-    }
-}
-
 pub struct Spanned<T> {
     span: Span,
     node: T,
@@ -132,12 +193,12 @@ impl<T> Spanned<T> {
     }
 }
 
-impl<'a, T> PP<'a> for Spanned<T>
+impl<T> Display for Spanned<T>
 where
-    T: PP<'a>,
+    T: Display,
 {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        format!("{}", self.node.ppfmt(sess))
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.node())
     }
 }
 
@@ -160,14 +221,14 @@ where
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Ident {
     span: Span,
-    sym: String,
+    sym: Symbol,
 }
 
 impl Ident {
-    pub fn synthetic(sym: String) -> Self {
+    pub fn synthetic(sym: Symbol) -> Self {
         Self {
             span: Span::new_error(),
             sym,
@@ -178,7 +239,7 @@ impl Ident {
         self.span
     }
 
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> Symbol {
         self.sym
     }
 }
@@ -190,7 +251,7 @@ impl WithSpan for Ident {
 }
 
 impl Ident {
-    pub fn new(span: Span, sym: String) -> Self {
+    pub fn new(span: Span, sym: Symbol) -> Self {
         Self { span, sym }
     }
 
