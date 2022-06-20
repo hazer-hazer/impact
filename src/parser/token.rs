@@ -1,9 +1,8 @@
-use std::fmt::{Display};
+use std::fmt::Display;
 
 use crate::{
-    pp::PP,
     session::Session,
-    span::span::{Kw, Span, Symbol, WithSpan, SpanLen},
+    span::span::{Kw, Span, SpanLen, Symbol, WithSpan},
 };
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -204,29 +203,33 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
     }
 }
 
-impl<'a> PP<'a> for TokenKind {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        match self {
-            TokenKind::Eof => "[EOF]".to_string(),
-            TokenKind::Nl => "[NL]".to_string(),
-            TokenKind::Int(val) => val.to_string(),
-            TokenKind::String(val) | TokenKind::Ident(val) => sess.get_str(*val).to_string(),
-            TokenKind::Infix(infix) => format!("{}", infix).as_str().to_string(),
-            TokenKind::Error(val) => sess.get_str(*val).to_string(),
-            TokenKind::Bool(val) => {
-                if *val {
-                    "true"
-                } else {
-                    "false"
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TokenKind::Eof => "[EOF]",
+                TokenKind::Nl => "[NL]",
+                TokenKind::Int(val)
+                | TokenKind::String(val)
+                | TokenKind::Ident(val)
+                | TokenKind::Error(val) => val,
+                TokenKind::Infix(infix) => format!("{}", infix).as_str(),
+                TokenKind::Bool(val) => {
+                    if *val {
+                        "true"
+                    } else {
+                        "false"
+                    }
                 }
+                TokenKind::Prefix(prefix) => format!("{}", prefix).as_str(),
+                TokenKind::Kw(kw) => format!("{}", kw).as_str(),
+                TokenKind::Indent => "[indent]",
+                TokenKind::Dedent => "[dedent]",
+                TokenKind::Punct(punct) => format!("{}", punct).as_str(),
             }
-            .to_string(),
-            TokenKind::Prefix(prefix) => format!("{}", prefix),
-            TokenKind::Kw(kw) => format!("{}", kw),
-            TokenKind::Indent => "[indent]".to_string(),
-            TokenKind::Dedent => "[dedent]".to_string(),
-            TokenKind::Punct(punct) => format!("{}", punct)
-        }
+        )
     }
 }
 
@@ -242,9 +245,9 @@ impl Token {
     }
 }
 
-impl<'a> PP<'a> for Token {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        format!("{}", self.kind.ppfmt(sess))
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
     }
 }
 
@@ -273,14 +276,16 @@ impl TokenStream {
     }
 }
 
-impl<'a> PP<'a> for TokenStream {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        let mut s = String::new();
+impl Display for TokenStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", {
+            let mut s = String::new();
 
-        for tok in self.0.iter() {
-            s += format!("{}\n", tok.ppfmt(sess)).as_str();
-        }
+            for tok in self.0.iter() {
+                s += format!("{}\n", tok).as_str();
+            }
 
-        s
+            s
+        })
     }
 }

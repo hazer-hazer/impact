@@ -27,6 +27,8 @@ impl Display for LitTy {
     }
 }
 
+pub type Ty = Spanned<TyKind>;
+
 pub enum TyKind {
     Unit,
     Lit(LitTy),
@@ -35,4 +37,18 @@ pub enum TyKind {
     Paren(PR<N<Ty>>),
 }
 
-pub type Ty = Spanned<TyKind>;
+impl Display for TyKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TyKind::Unit => todo!(),
+                TyKind::Lit(_) => todo!(),
+                TyKind::Var(_) => todo!(),
+                TyKind::Func(_, _) => todo!(),
+                TyKind::Paren(_) => todo!(),
+            }
+        )
+    }
+}

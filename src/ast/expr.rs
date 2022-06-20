@@ -1,11 +1,12 @@
+use std::fmt::Display;
+
 use crate::{
     parser::token::{Infix, Prefix, Token, TokenKind},
-    pp::PP,
     session::Session,
     span::span::{Ident, Spanned, Symbol},
 };
 
-use super::{stmt::Stmt, N, PR, ty::Ty};
+use super::{stmt::Stmt, ty::Ty, N, PR};
 
 pub type Expr = Spanned<ExprKind>;
 
@@ -15,6 +16,8 @@ pub enum Lit {
     Int(i64),
     String(Symbol),
 }
+
+pub type InfixOp = Spanned<InfixOpKind>;
 
 #[derive(Clone, Copy)]
 pub enum InfixOpKind {
@@ -43,7 +46,23 @@ impl InfixOpKind {
     }
 }
 
-pub type InfixOp = Spanned<InfixOpKind>;
+impl Display for InfixOpKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                InfixOpKind::Plus => "+",
+                InfixOpKind::Minus => "-",
+                InfixOpKind::Mul => "*",
+                InfixOpKind::Div => "/",
+                InfixOpKind::Mod => "%",
+            }
+        )
+    }
+}
+
+pub type PrefixOp = Spanned<PrefixOpKind>;
 
 #[derive(Clone, Copy)]
 pub enum PrefixOpKind {
@@ -64,7 +83,17 @@ impl PrefixOpKind {
     }
 }
 
-pub type PrefixOp = Spanned<PrefixOpKind>;
+impl Display for PrefixOpKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                PrefixOpKind::Not => "not",
+            }
+        )
+    }
+}
 
 pub enum ExprKind {
     Lit(Lit),
@@ -79,50 +108,36 @@ pub enum ExprKind {
     Ty(PR<N<Expr>>, PR<N<Ty>>),
 }
 
-impl<'a> PP<'a> for InfixOpKind {
-    fn ppfmt(&self, _: &'a Session) -> String {
-        match self {
-            InfixOpKind::Plus => "+",
-            InfixOpKind::Minus => "-",
-            InfixOpKind::Mul => "*",
-            InfixOpKind::Div => "/",
-            InfixOpKind::Mod => "%",
-        }
-        .to_string()
+impl Display for Lit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Lit::Bool(val) => if *val { "true" } else { "false" }.to_string(),
+                Lit::Int(val) => val.to_string(),
+                Lit::String(val) => val,
+            }
+        )
     }
 }
 
-impl<'a> PP<'a> for PrefixOpKind {
-    fn ppfmt(&self, _: &'a Session) -> String {
-        match self {
-            PrefixOpKind::Not => "not",
-        }
-        .to_string()
-    }
-}
-
-impl<'a> PP<'a> for Lit {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        match self {
-            Lit::Bool(val) => if *val { "true" } else { "false" }.to_string(),
-            Lit::Int(val) => val.to_string(),
-            Lit::String(val) => val.ppfmt(sess),
-        }
-    }
-}
-
-impl<'a> PP<'a> for ExprKind {
-    fn ppfmt(&self, _: &'a Session) -> String {
-        match self {
-            ExprKind::Lit(_) => todo!(),
-            ExprKind::Ident(_) => todo!(),
-            ExprKind::Infix(_, _, _) => todo!(),
-            ExprKind::Prefix(_, _) => todo!(),
-            ExprKind::App(_, _) => todo!(),
-            ExprKind::Block(_) => todo!(),
-            ExprKind::Let(_, _, _) => todo!(),
-            ExprKind::Abs(_, _) => todo!(),
-            ExprKind::Ty(_, _) => todo!(),
-        }
+impl Display for ExprKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ExprKind::Lit(_) => todo!(),
+                ExprKind::Ident(_) => todo!(),
+                ExprKind::Infix(_, _, _) => todo!(),
+                ExprKind::Prefix(_, _) => todo!(),
+                ExprKind::App(_, _) => todo!(),
+                ExprKind::Block(_) => todo!(),
+                ExprKind::Let(_, _, _) => todo!(),
+                ExprKind::Abs(_, _) => todo!(),
+                ExprKind::Ty(_, _) => todo!(),
+            }
+        )
     }
 }

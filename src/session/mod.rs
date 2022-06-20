@@ -4,7 +4,7 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    span::span::{Kw, Span, SpanPos, Symbol, Interner},
+    span::span::{Span, SpanPos},
 };
 
 /**

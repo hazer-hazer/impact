@@ -75,6 +75,12 @@ impl Symbol {
     }
 }
 
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl TryInto<Kw> for Symbol {
     type Error = ();
 
@@ -144,21 +150,25 @@ impl Span {
         Self { pos, len }
     }
 
-    pub fn high(&self) -> SpanPos {
+    pub fn lo(&self) -> SpanPos {
+        self.pos
+    }
+
+    pub fn hi(&self) -> SpanPos {
         self.pos + self.len
     }
 
     pub fn to(&self, end: Span) -> Self {
         Span::new(
             std::cmp::min(self.pos, end.pos),
-            std::cmp::max(self.high(), end.high()),
+            std::cmp::max(self.hi(), end.hi()),
         )
     }
 }
 
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}", self.pos, self.pos + self.len)
+        write!(f, "{}-{}", self.lo(), self.hi())
     }
 }
 
@@ -244,12 +254,6 @@ impl Ident {
     }
 }
 
-impl WithSpan for Ident {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
-
 impl Ident {
     pub fn new(span: Span, sym: Symbol) -> Self {
         Self { span, sym }
@@ -263,5 +267,17 @@ impl Ident {
             },
             _ => unreachable!(),
         }
+    }
+}
+
+impl Display for Ident {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl WithSpan for Ident {
+    fn span(&self) -> Span {
+        self.span
     }
 }

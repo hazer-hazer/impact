@@ -6,9 +6,8 @@ use crate::{
         ErrorNode, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    pp::PP,
     session::{OkStageResult, Session, Stage, StageResult},
-    span::span::{Ident, Kw, Span, SpanLen, WithSpan},
+    span::span::{Ident, Kw, Span, WithSpan},
 };
 
 use super::token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream};

@@ -13,7 +13,7 @@ use crate::{
     span::span::Ident,
 };
 
-use super::{AstLikePP, PP};
+use super::{AstLikePP};
 
 macro_rules! visit_each {
     ($self: ident, $nodes: expr, $visitor: ident, $sep: expr) => {

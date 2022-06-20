@@ -6,7 +6,6 @@ use crate::{
         visitor::AstVisitor,
         AST, N, PR,
     },
-    pp::PP,
     span::span::Ident,
 };
 

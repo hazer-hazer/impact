@@ -1,6 +1,9 @@
-use std::vec::{self, Splice};
+use std::fmt::Display;
 
-use crate::{pp::PP, session::Session, span::span::{Ident, Symbol, Kw}};
+use crate::{
+    session::Session,
+    span::span::{Ident, Kw, Symbol},
+};
 
 use super::ty::{Ty, TyError, TyResult};
 
@@ -19,19 +22,20 @@ pub enum CtxItemName {
     Marker(Ident),
 }
 
-impl<'a> PP<'a> for CtxItem {
-    fn ppfmt(&self, sess: &'a Session) -> String {
-        match self {
-            CtxItem::Var(ident) => ident.ppfmt(sess),
-            CtxItem::TypedTerm(ident, ty) => format!("{}: {}", ident.ppfmt(sess), ty.ppfmt(sess)),
+impl Display for CtxItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            CtxItem::Var(ident) => ident,
+            CtxItem::TypedTerm(ident, ty) => format!("{}: {}", ident, ty),
             CtxItem::Existential(ident, solution) => match solution {
-                Some(solved) => format!("{}^ = {}", ident.ppfmt(sess), solved.ppfmt(sess)),
-                None => format!("{}^", ident.ppfmt(sess)),
+                Some(solved) => format!("{}^ = {}", ident, solved),
+                None => format!("{}^", ident),
             },
-            CtxItem::Marker(ident) => format!(">{}", ident.ppfmt(sess)),
-        }
+            CtxItem::Marker(ident) => format!(">{}", ident),
+        })
     }
 }
+
 
 #[derive(Clone)]
 pub struct Ctx {
@@ -152,7 +156,10 @@ impl Ctx {
                 self.ty_wf(return_ty)
             }
             Ty::Forall(ident, ty) => {
-                self.enter(Ident::synthetic(Symbol::kw(Kw::M)), vec![CtxItem::Var(*ident)]);
+                self.enter(
+                    Ident::synthetic(Symbol::kw(Kw::M)),
+                    vec![CtxItem::Var(*ident)],
+                );
                 Ok(())
             }
         }

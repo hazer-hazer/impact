@@ -1,30 +1,28 @@
 use std::fmt::Display;
 
-use crate::{
-    pp::PP,
-    span::span::{Span, WithSpan},
-};
+use crate::span::span::{Span, WithSpan};
 
 use self::stmt::Stmt;
 
 pub mod expr;
 pub mod stmt;
-pub mod visitor;
 pub mod ty;
+pub mod visitor;
 
 pub type N<T> = Box<T>;
 
 pub type PR<T> = Result<T, ErrorNode>;
 
-impl<'a, T> PP<'a> for PR<T>
+impl<T> Display for PR<T>
 where
-    T: PP<'a>,
+    T: Display,
 {
-    fn ppfmt(&self, sess: &'a crate::session::Session) -> String {
-        format!(
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "{}",
             match self {
-                Ok(v) => v.ppfmt(sess),
+                Ok(v) => v,
                 Err(_) => "[ERROR]".to_string(),
             }
         )
