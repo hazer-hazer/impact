@@ -1,8 +1,6 @@
 use once_cell::sync::Lazy;
 
-use crate::{
-    parser::token::{Token, TokenKind},
-};
+use crate::parser::token::{Token, TokenKind};
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -48,6 +46,10 @@ impl Symbol {
     // Note: Symbol must not have a public constructor,
     //  because we treat all constructed symbols as valid, i.e. interned.
 
+    pub fn from_kw(kw: Kw) -> Symbol {
+        Self::try_from(kw).expect("Failed to make a symbol from keyword")
+    }
+
     pub fn intern(string: &str) -> Symbol {
         INTERNER.write().unwrap().intern(string)
     }
@@ -81,6 +83,14 @@ impl TryInto<Kw> for Symbol {
             "m" => Ok(Kw::M),
             _ => Err(()),
         }
+    }
+}
+
+impl TryFrom<Kw> for Symbol {
+    type Error = ();
+
+    fn try_from(kw: Kw) -> Result<Self, Self::Error> {
+        Ok(Self::intern(kw.as_str()))
     }
 }
 

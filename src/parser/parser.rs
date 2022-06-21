@@ -523,7 +523,7 @@ impl Parser {
             }
 
             // TODO: Literal types
-            TokenKind::Ident(sym) => TyKind::Var(self.parse_ident("type name")),
+            TokenKind::Ident(_) => TyKind::Var(self.parse_ident("type name")),
 
             _ => {
                 return None;

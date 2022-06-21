@@ -1,11 +1,12 @@
 use std::fmt::Display;
 
 use crate::{
-    session::Session,
+    ast::{expr::Lit, ty::LitTy},
+    hir::expr::{Expr, ExprKind},
     span::span::{Ident, Kw, Symbol},
 };
 
-use super::ty::{Ty, TyError, TyResult};
+use super::ty::{Ty, TyError, TyKind, TyResult};
 
 #[derive(Clone)]
 pub enum CtxItem {
@@ -24,18 +25,17 @@ pub enum CtxItemName {
 
 impl Display for CtxItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            CtxItem::Var(ident) => ident,
-            CtxItem::TypedTerm(ident, ty) => format!("{}: {}", ident, ty),
+        match self {
+            CtxItem::Var(ident) => write!(f, "{}", ident),
+            CtxItem::TypedTerm(ident, ty) => write!(f, "{}: {}", ident, ty),
             CtxItem::Existential(ident, solution) => match solution {
-                Some(solved) => format!("{}^ = {}", ident, solved),
-                None => format!("{}^", ident),
+                Some(solved) => write!(f, "{}^ = {}", ident, solved),
+                None => write!(f, "{}^", ident),
             },
-            CtxItem::Marker(ident) => format!(">{}", ident),
-        })
+            CtxItem::Marker(ident) => write!(f, ">{}", ident),
+        }
     }
 }
-
 
 #[derive(Clone)]
 pub struct Ctx {
@@ -67,12 +67,12 @@ impl Ctx {
     }
 
     pub fn get_item_index(&self, item: CtxItemName) -> Option<usize> {
-        let index = self.items.iter().position(|it| match (item, it) {
+        let index = self.items.iter().position(|it| match (&item, it) {
             (CtxItemName::Var(ident1), CtxItem::Var(ident2))
             | (CtxItemName::TypedTerm(ident1), CtxItem::TypedTerm(ident2, _))
             | (CtxItemName::Existential(ident1), CtxItem::Existential(ident2, _))
             | (CtxItemName::Marker(ident1), CtxItem::Marker(ident2))
-                if ident1 == *ident2 =>
+                if ident1 == ident2 =>
             {
                 true
             }
@@ -93,7 +93,7 @@ impl Ctx {
         }
     }
 
-    pub fn split(&self, item: CtxItemName) -> Vec<CtxItem> {
+    pub fn split(&mut self, item: CtxItemName) -> Vec<CtxItem> {
         if let Some(index) = self.get_item_index(item) {
             self.items.drain(index..).collect()
         } else {
@@ -108,19 +108,20 @@ impl Ctx {
         self
     }
 
-    pub fn enter(&self, marker_name: Ident, items: Vec<CtxItem>) {
+    pub fn enter(&mut self, marker_name: Ident, items: Vec<CtxItem>) {
         self.add(CtxItem::Marker(marker_name));
         self.add_many(items);
     }
 
-    pub fn leave(&self, marker_name: Ident) {
+    pub fn leave(&mut self, marker_name: Ident) {
         self.split(CtxItemName::Marker(marker_name));
     }
 
-    pub fn leave_unsolved(&self, item: CtxItemName) -> Vec<Ident> {
+    pub fn leave_unsolved(&mut self, item: CtxItemName) -> Vec<Ident> {
         let right = self.split(item);
 
-        let names = vec![];
+        let mut names = vec![];
+
         for item in right {
             match item {
                 CtxItem::Existential(ident, ty) if ty.is_none() => names.push(ident),
@@ -144,24 +145,68 @@ impl Ctx {
     }
 
     // Types //
-    pub fn ty_wf(&self, ty: &Ty) -> TyResult<()> {
-        match ty {
-            Ty::Var(ident) if !self.contains(CtxItemName::Var(*ident)) => Err(TyError()),
-            Ty::Var(_) => Ok(()),
-            Ty::Existential(ident) if !self.contains(CtxItemName::Existential(*ident)) => {
-                Err(TyError())
+    pub fn ty_wf(&mut self, ty: &Ty) -> TyResult<()> {
+        match ty.kind() {
+            TyKind::Var(ident) => {
+                if self.contains(CtxItemName::Var(*ident)) {
+                    Ok(())
+                } else {
+                    Err(TyError())
+                }
             }
-            Ty::Func(param_ty, return_ty) => {
+            TyKind::Existential(ident) => {
+                if self.contains(CtxItemName::Existential(*ident)) {
+                    Ok(())
+                } else {
+                    Err(TyError())
+                }
+            }
+            TyKind::Func(param_ty, return_ty) => {
                 self.ty_wf(param_ty)?;
                 self.ty_wf(return_ty)
             }
-            Ty::Forall(ident, ty) => {
-                self.enter(
-                    Ident::synthetic(Symbol::kw(Kw::M)),
-                    vec![CtxItem::Var(*ident)],
-                );
+            TyKind::Forall(ident, ty) => {
+                let marker_name = Ident::synthetic(Symbol::from_kw(Kw::M));
+                self.enter(marker_name, vec![CtxItem::Var(*ident)]);
+                self.ty_wf(&ty.open_forall(TyKind::Var(*ident)))?;
+                self.leave(marker_name);
                 Ok(())
             }
+            _ => Err(TyError()),
+        }
+    }
+
+    pub fn synth(&self, expr: &Expr) -> TyResult<(Ty, Ctx)> {
+        match expr.node() {
+            ExprKind::Lit(lit) => {
+                let lit_ty = match lit {
+                    Lit::Bool(_) => LitTy::Bool,
+                    Lit::Int(_) => LitTy::Int,
+                    Lit::String(_) => LitTy::String,
+                };
+
+                Ok((Ty::lit(lit_ty), self.clone()))
+            }
+            ExprKind::Ident(ident) => {
+                if let Some(item) = self.lookup(CtxItemName::TypedTerm(*ident)) {
+                    Ok((
+                        match item {
+                            CtxItem::TypedTerm(_, ty) => ty.clone(),
+                            _ => unreachable!(),
+                        },
+                        self.clone(),
+                    ))
+                } else {
+                    Err(TyError())
+                }
+            }
+            ExprKind::Infix(lhs, op, rhs) => todo!(),
+            ExprKind::Prefix(op, rhs) => todo!(),
+            ExprKind::Abs(param, body) => todo!(),
+            ExprKind::App(lhs, arg) => todo!(),
+            ExprKind::Block(stmts) => todo!(),
+            ExprKind::Let(ident, value, body) => todo!(),
+            ExprKind::Ty(expr, ty) => {}
         }
     }
 }
