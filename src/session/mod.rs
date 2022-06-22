@@ -65,12 +65,12 @@ impl SourceLines {
         panic!("No source line found for span {}", span);
     }
 
-    pub fn get_lines(&self) -> &Vec<String> {
-        &self.lines
+    pub fn lines(&self) -> &[String] {
+        self.lines.as_ref()
     }
 
-    pub fn get_positions(&self) -> &Vec<SpanPos> {
-        &self.positions
+    pub fn positions(&self) -> &[u32] {
+        self.positions.as_ref()
     }
 }
 

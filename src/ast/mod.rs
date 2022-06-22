@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::span::span::{Span, WithSpan};
 
-use self::{item::Item};
+use self::item::Item;
 
 pub mod expr;
 pub mod item;
@@ -57,6 +57,7 @@ impl AstMetadata {
     }
 }
 
+#[derive(Debug)]
 pub struct ErrorNode {
     span: Span,
 }

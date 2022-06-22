@@ -21,6 +21,10 @@ impl Expr {
     pub fn kind(&self) -> &ExprKind {
         &self.kind
     }
+
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
 }
 
 impl WithSpan for Expr {

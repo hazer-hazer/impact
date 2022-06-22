@@ -16,6 +16,10 @@ impl Stmt {
     pub fn kind(&self) -> &StmtKind {
         &self.kind
     }
+
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
 }
 
 impl WithSpan for Stmt {

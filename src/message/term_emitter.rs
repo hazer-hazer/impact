@@ -17,7 +17,7 @@ impl<'a> TermEmitter<'a> {
 
     pub fn print_source(&self) {
         println!("=== SOURCE ===");
-        let source_lines = self.sess.source_lines().get_lines();
+        let source_lines = self.sess.source_lines().lines();
         let last_line_num = source_lines.len() + 1;
 
         for (i, line) in source_lines.iter().enumerate() {
@@ -43,7 +43,7 @@ impl<'a> MessageEmitter for TermEmitter<'a> {
         let span = msg.span();
 
         let source_lines = self.sess.source_lines();
-        let lines_count = source_lines.get_lines().len();
+        let lines_count = source_lines.lines().len();
 
         let (line, line_pos, line_num) = if span.is_error() {
             ("[The place my stupid mistakes live]", 0, 0)

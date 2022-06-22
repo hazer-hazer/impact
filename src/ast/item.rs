@@ -20,6 +20,16 @@ impl Item {
     pub fn kind(&self) -> &ItemKind {
         &self.kind
     }
+
+    pub fn name(&self) -> Option<&Ident> {
+        match self.kind() {
+            ItemKind::Type(name, _) => Some(name.as_ref().unwrap()),
+        }
+    }
+
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
 }
 
 impl WithSpan for Item {

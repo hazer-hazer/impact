@@ -13,7 +13,7 @@ mod lower;
 mod message;
 mod parser;
 mod pp;
-// mod resolve;
+mod resolve;
 mod session;
 mod span;
 // mod typeck;

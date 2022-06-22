@@ -42,6 +42,10 @@ impl Ty {
     pub fn kind(&self) -> &TyKind {
         &self.kind
     }
+
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
 }
 
 impl WithSpan for Ty {
