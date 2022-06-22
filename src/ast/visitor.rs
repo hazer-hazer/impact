@@ -2,6 +2,7 @@ use crate::span::span::Ident;
 
 use super::{
     expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
+    item::{Item, ItemKind},
     stmt::{Stmt, StmtKind},
     ty::{LitTy, Ty, TyKind},
     ErrorNode, AST, N, PR,
@@ -35,15 +36,31 @@ pub trait AstVisitor<T> {
     fn visit_err(&self, _: &ErrorNode) -> T;
 
     fn visit_ast(&mut self, ast: &AST) -> T;
+
+    // Statements //
     fn visit_stmt(&mut self, stmt: &Stmt) -> T {
         match stmt.kind() {
             StmtKind::Expr(expr) => self.visit_expr_stmt(expr),
+            StmtKind::Item(item) => self.visit_item_stmt(item),
         }
     }
 
     fn visit_expr_stmt(&mut self, expr: &PR<N<Expr>>) -> T {
         visit_pr!(self, expr, visit_expr)
     }
+
+    fn visit_item_stmt(&mut self, item: &PR<N<Item>>) -> T {
+        visit_pr!(self, item, visit_item)
+    }
+
+    // Items //
+    fn visit_item(&mut self, item: &Item) -> T {
+        match item.kind() {
+            ItemKind::Type(name, ty) => self.visit_type_item(name, ty),
+        }
+    }
+
+    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> T;
 
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr) -> T {
@@ -85,7 +102,10 @@ pub trait AstVisitor<T> {
     fn visit_lit_ty(&mut self, lit_ty: &LitTy) -> T;
     fn visit_var_ty(&mut self, ident: &PR<Ident>) -> T;
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> T;
-    fn visit_paren_ty(&mut self, inner: &PR<N<Ty>>) -> T;
+
+    fn visit_paren_ty(&mut self, inner: &PR<N<Ty>>) -> T {
+        visit_pr!(self, inner, visit_ty)
+    }
 
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> T;

@@ -1,11 +1,30 @@
 use crate::{
     ast::expr::{InfixOp, Lit, PrefixOp},
-    span::span::{Ident, Spanned},
+    span::span::{Ident, Span, WithSpan},
 };
 
-use super::{stmt::Stmt, N, ty::Ty};
+use super::{stmt::Stmt, ty::Ty, N};
 
-pub type Expr = Spanned<ExprKind>;
+pub struct Expr {
+    kind: ExprKind,
+    span: Span,
+}
+
+impl Expr {
+    pub fn new(kind: ExprKind, span: Span) -> Self {
+        Self { kind, span }
+    }
+
+    pub fn kind(&self) -> &ExprKind {
+        &self.kind
+    }
+}
+
+impl WithSpan for Expr {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
 
 pub enum ExprKind {
     Lit(Lit),

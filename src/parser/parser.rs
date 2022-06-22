@@ -1,13 +1,17 @@
 use crate::{
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
+        item::Item,
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         ErrorNode, NodeId, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{OkStageResult, Session, Stage, StageResult},
-    span::span::{Ident, Kw, Span, WithSpan},
+    span::{
+        self,
+        span::{Ident, Kw, Span, WithSpan},
+    },
 };
 
 use super::token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream};
@@ -250,8 +254,16 @@ impl Parser {
         self.expected(skip, expected)
     }
 
+    // Statements //
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
-        if let Some(expr) = self.parse_expr() {
+        if let Some(item) = self.parse_item() {
+            let span = item.span();
+            Ok(Box::new(Stmt::new(
+                self.next_node_id(),
+                StmtKind::Item(item),
+                span,
+            )))
+        } else if let Some(expr) = self.parse_expr() {
             let span = expr.span();
             Ok(Box::new(Stmt::new(
                 self.next_node_id(),
@@ -265,6 +277,11 @@ impl Parser {
                 .emit(self);
             Err(ErrorNode::new(self.advance_tok().span))
         }
+    }
+
+    // Items //
+    fn parse_item(&mut self) -> Option<PR<N<Item>>> {
+        todo!()
     }
 
     // Expressions //
@@ -548,14 +565,16 @@ impl Parser {
     }
 
     fn parse(&mut self) -> AST {
-        let mut stmts = vec![];
+        let mut items = vec![];
 
         self.skip_nls();
         while !self.eof() {
-            stmts.push(self.parse_stmt());
+            let item = self.parse_item();
+            let item = self.expected_pr(item, "item");
+            items.push(item);
         }
 
-        AST::new(stmts)
+        AST::new(items)
     }
 }
 

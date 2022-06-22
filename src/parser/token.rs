@@ -1,9 +1,6 @@
 use std::fmt::Display;
 
-use crate::{
-    session::Session,
-    span::span::{Kw, Span, SpanLen, Symbol, WithSpan},
-};
+use crate::span::span::{Kw, Span, SpanLen, Symbol, WithSpan};
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Infix {

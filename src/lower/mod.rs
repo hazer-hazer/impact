@@ -1,6 +1,7 @@
 use crate::{
     ast::{
         expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
+        item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
         ty::{LitTy, Ty, TyKind},
         AST, N, PR,
@@ -61,16 +62,31 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_ast(&mut self) -> HIR {
-        HIR::new(lower_each_pr_boxed!(self, self.ast.stmts(), lower_stmt))
+        HIR::new(lower_each_pr_boxed!(self, self.ast.items(), lower_item))
     }
 
+    // Statements //
     fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
         match stmt.kind() {
             StmtKind::Expr(expr) => hir::stmt::Stmt::new(
-                stmt.span(),
                 hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
+                stmt.span(),
             ),
+            StmtKind::Item(item) => todo!(),
         }
+    }
+
+    // Items //
+    fn lower_item(&mut self, item: &Item) -> hir::item::Item {
+        match item.kind() {
+            ItemKind::Type(name, ty) => {
+                hir::item::Item::new(self.lower_type_item(name, ty), item.span())
+            }
+        }
+    }
+
+    fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
+        todo!()
     }
 
     // Expressions //
@@ -87,7 +103,7 @@ impl<'a> Lower<'a> {
             ExprKind::Ty(expr, ty) => self.lower_ty_expr(expr, ty),
         };
 
-        hir::expr::Expr::new(expr.span(), kind)
+        hir::expr::Expr::new(kind, expr.span())
     }
 
     fn lower_lit_expr(&mut self, lit: &Lit) -> hir::expr::ExprKind {
@@ -163,7 +179,7 @@ impl<'a> Lower<'a> {
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
         };
 
-        hir::ty::Ty::new(ty.span(), kind)
+        hir::ty::Ty::new(kind, ty.span())
     }
 
     fn lower_unit_ty(&mut self) -> hir::ty::TyKind {

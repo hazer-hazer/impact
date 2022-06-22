@@ -2,9 +2,10 @@ use std::fmt::Display;
 
 use crate::span::span::{Span, WithSpan};
 
-use self::stmt::Stmt;
+use self::{item::Item};
 
 pub mod expr;
+pub mod item;
 pub mod stmt;
 pub mod ty;
 pub mod visitor;
@@ -30,16 +31,16 @@ pub struct NodeId(u32);
 
 #[derive(Default)]
 pub struct AST {
-    stmts: Vec<PR<N<Stmt>>>,
+    items: Vec<PR<N<Item>>>,
 }
 
 impl AST {
-    pub fn new(stmts: Vec<PR<N<Stmt>>>) -> Self {
-        Self { stmts }
+    pub fn new(items: Vec<PR<N<Item>>>) -> Self {
+        Self { items }
     }
 
-    pub fn stmts(&self) -> &Vec<PR<N<Stmt>>> {
-        &self.stmts
+    pub fn items(&self) -> &[PR<N<Item>>] {
+        self.items.as_ref()
     }
 }
 

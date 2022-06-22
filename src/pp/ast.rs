@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        expr::{Expr, ExprKind, Lit, PrefixOp},
+        expr::{Expr, InfixOp, Lit, PrefixOp},
         stmt::{Stmt, StmtKind},
-        ty::{LitTy, Ty, TyKind},
+        ty::{LitTy, Ty},
         visitor::visit_pr,
         visitor::AstVisitor,
         ErrorNode, AST, N, PR,
@@ -28,16 +28,27 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
 
     fn visit_ast(&mut self, ast: &AST) -> String {
         println!("=== AST ===");
-        visit_pr_vec!(self, ast.stmts(), visit_stmt, "\n")
+        visit_pr_vec!(self, ast.items(), visit_item, "\n")
     }
 
+    // Statements //
     fn visit_stmt(&mut self, stmt: &Stmt) -> String {
         format!(
             "{}{}",
             self.cur_indent(),
             match stmt.kind() {
                 StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
+                StmtKind::Item(item) => visit_pr!(self, item, visit_item),
             }
+        )
+    }
+
+    // Items //
+    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> String {
+        format!(
+            "type {} = {}",
+            visit_pr!(self, name, visit_ident),
+            visit_pr!(self, ty, visit_ty)
         )
     }
 
@@ -50,12 +61,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         format!("{}", ident)
     }
 
-    fn visit_infix_expr(
-        &mut self,
-        lhs: &PR<N<Expr>>,
-        op: &crate::ast::expr::InfixOp,
-        rhs: &PR<N<Expr>>,
-    ) -> String {
+    fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, op: &InfixOp, rhs: &PR<N<Expr>>) -> String {
         format!(
             "{} {} {}",
             visit_pr!(self, lhs, visit_expr),

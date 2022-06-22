@@ -1,6 +1,6 @@
 use crate::span::span::{Span, WithSpan};
 
-use super::{expr::Expr, NodeId, N, PR};
+use super::{expr::Expr, item::Item, NodeId, N, PR};
 
 pub struct Stmt {
     id: NodeId,
@@ -26,6 +26,7 @@ impl WithSpan for Stmt {
 
 pub enum StmtKind {
     Expr(PR<N<Expr>>),
+    Item(PR<N<Item>>),
 }
 
 // impl Display for StmtKind {
