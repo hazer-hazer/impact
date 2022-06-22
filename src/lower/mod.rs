@@ -8,7 +8,7 @@ use crate::{
     hir::{self, HIR},
     message::message::MessageStorage,
     session::{OkStageResult, Session, Stage, StageResult},
-    span::span::Ident,
+    span::span::{Ident, WithSpan},
 };
 
 macro_rules! lower_pr_boxed {
@@ -65,7 +65,7 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
-        match stmt.node() {
+        match stmt.kind() {
             StmtKind::Expr(expr) => hir::stmt::Stmt::new(
                 stmt.span(),
                 hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
@@ -75,7 +75,7 @@ impl<'a> Lower<'a> {
 
     // Expressions //
     fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
-        let kind = match expr.node() {
+        let kind = match expr.kind() {
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
             ExprKind::Ident(ident) => self.lower_ident_expr(ident),
             ExprKind::Infix(lhs, op, rhs) => self.lower_infix_expr(lhs, op, rhs),
@@ -155,7 +155,7 @@ impl<'a> Lower<'a> {
 
     // Types //
     fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
-        let kind = match ty.node() {
+        let kind = match ty.kind() {
             TyKind::Unit => self.lower_unit_ty(),
             TyKind::Lit(lit_ty) => self.lower_lit_ty(lit_ty),
             TyKind::Var(ident) => self.lower_var_ty(ident),

@@ -25,6 +25,9 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq)]
+pub struct NodeId(u32);
+
 #[derive(Default)]
 pub struct AST {
     stmts: Vec<PR<N<Stmt>>>,
@@ -37,6 +40,19 @@ impl AST {
 
     pub fn stmts(&self) -> &Vec<PR<N<Stmt>>> {
         &self.stmts
+    }
+}
+
+#[derive(Default)]
+pub struct AstMetadata {
+    last_node_id: u32,
+}
+
+impl AstMetadata {
+    pub fn next_node_id(&mut self) -> NodeId {
+        let id = NodeId(self.last_node_id);
+        self.last_node_id += 1;
+        id
     }
 }
 

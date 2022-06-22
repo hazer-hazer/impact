@@ -39,7 +39,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         format!(
             "{}{}",
             self.cur_indent(),
-            match stmt.node() {
+            match stmt.kind() {
                 StmtKind::Expr(expr) => visit_pr!(self, expr, visit_expr),
             }
         )
@@ -47,7 +47,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
 
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr) -> String {
-        match expr.node() {
+        match expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Ident(ident) => self.visit_ident_expr(ident),
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
@@ -137,7 +137,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
 
     // Types //
     fn visit_ty(&mut self, ty: &Ty) -> String {
-        match ty.node() {
+        match ty.kind() {
             TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
             TyKind::Unit => self.visit_unit_ty(),
             TyKind::Var(ident) => self.visit_var_ty(ident),

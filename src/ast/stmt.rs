@@ -1,10 +1,28 @@
-use std::fmt::Display;
+use crate::span::span::{Span, WithSpan};
 
-use crate::span::span::Spanned;
+use super::{expr::Expr, NodeId, N, PR};
 
-use super::{expr::Expr, N, PR};
+pub struct Stmt {
+    id: NodeId,
+    kind: StmtKind,
+    span: Span,
+}
 
-pub type Stmt = Spanned<StmtKind>;
+impl Stmt {
+    pub fn new(id: NodeId, kind: StmtKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &StmtKind {
+        &self.kind
+    }
+}
+
+impl WithSpan for Stmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
 
 pub enum StmtKind {
     Expr(PR<N<Expr>>),

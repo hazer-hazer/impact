@@ -3,7 +3,7 @@ use crate::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        ErrorNode, AST, N, PR,
+        ErrorNode, NodeId, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{OkStageResult, Session, Stage, StageResult},
@@ -33,6 +33,10 @@ impl Parser {
             pos: 0,
             msg: MessageStorage::default(),
         }
+    }
+
+    fn next_node_id(&mut self) -> NodeId {
+        self.sess.next_node_id()
     }
 
     fn eof(&self) -> bool {
@@ -90,11 +94,7 @@ impl Parser {
         } else {
             MessageBuilder::error()
                 .span(self.span())
-                .text(format!(
-                    "Expected {}, got {}",
-                    expected,
-                    self.peek()
-                ))
+                .text(format!("Expected {}, got {}", expected, self.peek()))
                 .emit(self);
             Err(ErrorNode::new(self.span()))
         }
@@ -109,11 +109,7 @@ impl Parser {
         } else {
             MessageBuilder::error()
                 .span(self.span())
-                .text(format!(
-                    "Expected {}, got {}",
-                    expected,
-                    self.peek()
-                ))
+                .text(format!("Expected {}, got {}", expected, self.peek()))
                 .emit(self);
             Err(ErrorNode::new(self.span()))
         }
@@ -126,11 +122,7 @@ impl Parser {
         if entity.is_none() {
             MessageBuilder::error()
                 .span(self.span())
-                .text(format!(
-                    "Expected {}, got {}",
-                    expected,
-                    self.peek()
-                ))
+                .text(format!("Expected {}, got {}", expected, self.peek()))
                 .emit(self);
         }
     }
@@ -260,14 +252,16 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
         if let Some(expr) = self.parse_expr() {
-            Ok(Box::new(Stmt::new(expr.span(), StmtKind::Expr(expr))))
+            let span = expr.span();
+            Ok(Box::new(Stmt::new(
+                self.next_node_id(),
+                StmtKind::Expr(expr),
+                span,
+            )))
         } else {
             MessageBuilder::error()
                 .span(self.span())
-                .text(format!(
-                    "Unexpected token {}",
-                    self.peek()
-                ))
+                .text(format!("Unexpected token {}", self.peek()))
                 .emit(self);
             Err(ErrorNode::new(self.advance_tok().span))
         }
@@ -304,8 +298,9 @@ impl Parser {
 
         // There might be a better way to slice vector
         Ok(Box::new(Expr::new(
-            lo.to(self.span()),
+            self.next_node_id(),
             ExprKind::Let(name, value, body),
+            lo.to(self.span()),
         )))
     }
 
@@ -334,19 +329,21 @@ impl Parser {
                 let ty = self.parse_ty();
                 let ty = self.expected_pr(ty, "type annotation");
                 lhs = Ok(Box::new(Expr::new(
-                    lo.to(self.span()),
+                    self.next_node_id(),
                     ExprKind::Ty(lhs, ty),
+                    lo.to(self.span()),
                 )));
 
                 // TODO: Allow ascription of ascription?
                 break;
             } else {
                 let rhs = self.parse_prec(prec + 1);
-    
+
                 if let Some(rhs) = rhs {
                     lhs = Ok(Box::new(Expr::new(
-                        lo.to(self.span()),
+                        self.next_node_id(),
                         ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
+                        lo.to(self.span()),
                     )));
                 } else {
                     break;
@@ -367,17 +364,15 @@ impl Parser {
             } else {
                 MessageBuilder::error()
                     .span(self.span())
-                    .text(format!(
-                        "Expected expression after {} operator",
-                        op.kind
-                    ))
+                    .text(format!("Expected expression after {} operator", op.kind))
                     .emit(self);
                 Err(ErrorNode::new(self.span()))
             };
 
             Some(Ok(Box::new(Expr::new(
-                op.span.to(lo),
+                self.next_node_id(),
                 ExprKind::Prefix(PrefixOpKind::from_tok(&op), rhs),
+                op.span.to(lo),
             ))))
         } else {
             self.parse_postfix()
@@ -394,8 +389,9 @@ impl Parser {
 
             if let Some(arg) = arg {
                 Some(Ok(Box::new(Expr::new(
-                    lo.to(self.span()),
+                    self.next_node_id(),
                     ExprKind::App(lhs, arg),
+                    lo.to(self.span()),
                 ))))
             } else {
                 Some(lhs)
@@ -438,7 +434,7 @@ impl Parser {
             self.advance();
         }
 
-        kind.map(|k| k.map(|k| Box::new(Expr::new(span, k))))
+        kind.map(|k| k.map(|k| Box::new(Expr::new(self.next_node_id(), k, span))))
     }
 
     fn parse_block(&mut self) -> Option<PR<N<Expr>>> {
@@ -483,8 +479,9 @@ impl Parser {
         }
 
         Some(Ok(Box::new(Expr::new(
-            lo.to(self.span()),
+            self.next_node_id(),
             ExprKind::Block(stmts),
+            lo.to(self.span()),
         ))))
     }
 
@@ -501,8 +498,9 @@ impl Parser {
         let body = self.expected_pr(body, "lambda body");
 
         Some(Ok(Box::new(Expr::new(
-            lo.to(self.span()),
+            self.next_node_id(),
             ExprKind::Abs(param, body),
+            lo.to(self.span()),
         ))))
     }
 
@@ -530,14 +528,19 @@ impl Parser {
             }
         };
 
-        let ty = Ok(Box::new(Ty::new(lo.to(self.span()), kind)));
+        let ty = Ok(Box::new(Ty::new(
+            self.next_node_id(),
+            kind,
+            lo.to(self.span()),
+        )));
 
         if self.skip_punct(Punct::Arrow).is_some() {
             let return_ty = self.parse_ty();
             let return_ty = self.expected_pr(return_ty, "return type");
             Some(Ok(Box::new(Ty::new(
-                lo.to(self.span()),
+                self.next_node_id(),
                 TyKind::Func(ty, return_ty),
+                lo.to(self.span()),
             ))))
         } else {
             Some(ty)

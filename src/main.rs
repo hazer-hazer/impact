@@ -3,8 +3,8 @@ use parser::{lexer::Lexer, parser::Parser};
 use session::{Session, Stage};
 
 use crate::{
-    ast::visitor::AstVisitor, hir::visitor::HirVisitor, lower::Lower, message::term_emitter::TermEmitter,
-    pp::AstLikePP,
+    ast::visitor::AstVisitor, hir::visitor::HirVisitor, lower::Lower,
+    message::term_emitter::TermEmitter, pp::AstLikePP,
 };
 
 mod ast;
@@ -14,9 +14,10 @@ mod lower;
 mod message;
 mod parser;
 mod pp;
+mod resolve;
 mod session;
 mod span;
-mod typeck;
+// mod typeck;
 
 fn main() {
     let sess = Session::default();

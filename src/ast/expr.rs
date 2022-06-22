@@ -2,12 +2,32 @@ use std::fmt::Display;
 
 use crate::{
     parser::token::{Infix, Prefix, Token, TokenKind},
-    span::span::{Ident, Spanned, Symbol},
+    span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
-use super::{stmt::Stmt, ty::Ty, N, PR};
+use super::{stmt::Stmt, ty::Ty, NodeId, N, PR};
 
-pub type Expr = Spanned<ExprKind>;
+pub struct Expr {
+    id: NodeId,
+    kind: ExprKind,
+    span: Span,
+}
+
+impl Expr {
+    pub fn new(id: NodeId, kind: ExprKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &ExprKind {
+        &self.kind
+    }
+}
+
+impl WithSpan for Expr {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
 
 #[derive(Clone, Copy)]
 pub enum Lit {

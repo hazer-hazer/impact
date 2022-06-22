@@ -1,10 +1,11 @@
 use std::fmt::Display;
 
-use crate::{hir::N, span::span::Ident};
+use crate::{
+    hir::N,
+    span::span::{Ident, Span, WithSpan},
+};
 
-use super::PR;
-
-use crate::span::span::Spanned;
+use super::{NodeId, PR};
 
 #[derive(Clone, Copy)]
 pub enum LitTy {
@@ -27,7 +28,27 @@ impl Display for LitTy {
     }
 }
 
-pub type Ty = Spanned<TyKind>;
+pub struct Ty {
+    id: NodeId,
+    kind: TyKind,
+    span: Span,
+}
+
+impl Ty {
+    pub fn new(id: NodeId, kind: TyKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &TyKind {
+        &self.kind
+    }
+}
+
+impl WithSpan for Ty {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
 
 pub enum TyKind {
     Unit,

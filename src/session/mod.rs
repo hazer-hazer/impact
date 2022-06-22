@@ -1,4 +1,5 @@
 use crate::{
+    ast::{AstMetadata, NodeId},
     message::{
         message::{Message, MessageStorage},
         term_emitter::TermEmitter,
@@ -76,11 +77,7 @@ impl SourceLines {
 #[derive(Default)]
 pub struct Session {
     source_lines: SourceLines,
-}
-
-pub struct WithSession<'a, T> {
-    sess: &'a Session,
-    val: &'a T,
+    ast_metadata: AstMetadata,
 }
 
 impl Session {
@@ -98,6 +95,16 @@ impl Session {
     pub fn source_lines_mut(&mut self) -> &mut SourceLines {
         &mut self.source_lines
     }
+
+    // AST metadata API //
+    pub fn next_node_id(&mut self) -> NodeId {
+        self.ast_metadata.next_node_id()
+    }
+}
+
+pub struct WithSession<'a, T> {
+    sess: &'a Session,
+    val: &'a T,
 }
 
 pub struct StageResult<T> {
