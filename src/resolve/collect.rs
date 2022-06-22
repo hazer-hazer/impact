@@ -6,7 +6,7 @@ use crate::{
         expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
         ty::Ty,
         visitor::{visit_each_pr, visit_pr, AstVisitor},
-        NodeId, N, PR,
+        NodeId, N, PR, item::Item,
     },
     span::span::{Ident, Symbol},
 };
@@ -115,10 +115,16 @@ impl AstVisitor<()> for DefCollector {
     fn visit_err(&self, _: &ast::ErrorNode) {}
 
     fn visit_ast(&mut self, ast: &ast::AST) {
-        visit_each_pr!(self, ast.items(), visit_item)
+        self.enter_module(ModuleKind::Root);
+        visit_each_pr!(self, ast.items(), visit_item);
+        self.exit_module();
     }
 
     // Items //
+    fn visit_item(&mut self, item: &Item) -> () {
+        
+    }
+
     fn visit_type_item(&mut self, _: &PR<Ident>, _: &PR<N<Ty>>) {}
 
     // Expressions //
