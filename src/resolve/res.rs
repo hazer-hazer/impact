@@ -1,8 +1,13 @@
+use crate::ast::NodeId;
+
 use super::def::DefId;
 
+#[derive(Debug, Clone, Copy)]
+pub struct LocalId(NodeId);
+
 pub enum ResKind {
-    Def(DefId),   // Top-level definition, e.g. imported function
-    Local, // Local variable
+    Def(DefId),     // Top-level definition, e.g. imported function
+    Local(LocalId), // Local variable
     Error,
 }
 
@@ -12,5 +17,4 @@ pub enum ResKind {
  */
 pub struct Res {
     kind: ResKind,
-
 }

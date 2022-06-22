@@ -45,13 +45,13 @@ impl AST {
 
 #[derive(Default)]
 pub struct AstMetadata {
-    last_node_id: u32,
+    last_node_index: u32,
 }
 
 impl AstMetadata {
     pub fn next_node_id(&mut self) -> NodeId {
-        let id = NodeId(self.last_node_id);
-        self.last_node_id += 1;
+        let id = NodeId(self.last_node_index);
+        self.last_node_index += 1;
         id
     }
 }

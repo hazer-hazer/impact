@@ -3,22 +3,14 @@ use crate::{
         expr::{Expr, ExprKind, Lit, PrefixOp},
         stmt::{Stmt, StmtKind},
         ty::{LitTy, Ty, TyKind},
+        visitor::visit_pr,
         visitor::AstVisitor,
-        AST, N, PR,
+        ErrorNode, AST, N, PR,
     },
     span::span::Ident,
 };
 
 use super::AstLikePP;
-
-macro_rules! visit_pr {
-    ($self: ident, $pr: expr, $ok_visitor: ident) => {
-        match $pr {
-            Ok(ok) => $self.$ok_visitor(ok),
-            Err(err) => $self.visit_err(err),
-        }
-    };
-}
 
 macro_rules! visit_pr_vec {
     ($self: ident, $prs: expr, $ok_visitor: ident, $sep: expr) => {
@@ -30,6 +22,10 @@ macro_rules! visit_pr_vec {
 }
 
 impl<'a> AstVisitor<String> for AstLikePP<'a> {
+    fn visit_err(&self, _: &ErrorNode) -> String {
+        "[ERROR]".to_string()
+    }
+
     fn visit_ast(&mut self, ast: &AST) -> String {
         println!("=== AST ===");
         visit_pr_vec!(self, ast.stmts(), visit_stmt, "\n")
@@ -46,20 +42,6 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
     }
 
     // Expressions //
-    fn visit_expr(&mut self, expr: &Expr) -> String {
-        match expr.kind() {
-            ExprKind::Lit(lit) => self.visit_lit_expr(lit),
-            ExprKind::Ident(ident) => self.visit_ident_expr(ident),
-            ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
-            ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
-            ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
-            ExprKind::Block(stmts) => self.visit_block_expr(stmts),
-            ExprKind::Let(name, value, body) => self.visit_let_expr(name, value, body),
-            ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
-            ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
-        }
-    }
-
     fn visit_lit_expr(&mut self, lit: &Lit) -> String {
         format!("{}", lit)
     }
@@ -83,11 +65,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
     }
 
     fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &PR<N<Expr>>) -> String {
-        format!(
-            "{}{}",
-            op,
-            visit_pr!(self, rhs, visit_expr)
-        )
+        format!("{}{}", op, visit_pr!(self, rhs, visit_expr))
     }
 
     fn visit_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) -> String {
@@ -136,16 +114,6 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
     }
 
     // Types //
-    fn visit_ty(&mut self, ty: &Ty) -> String {
-        match ty.kind() {
-            TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
-            TyKind::Unit => self.visit_unit_ty(),
-            TyKind::Var(ident) => self.visit_var_ty(ident),
-            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
-            TyKind::Paren(inner) => self.visit_paren_ty(inner),
-        }
-    }
-
     fn visit_unit_ty(&mut self) -> String {
         "()".to_string()
     }
