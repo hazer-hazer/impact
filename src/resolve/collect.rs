@@ -4,84 +4,31 @@ use crate::{
     ast::{
         self,
         expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
+        item::Item,
         ty::Ty,
         visitor::{visit_each_pr, visit_pr, AstVisitor},
-        NodeId, N, PR, item::Item,
+        NodeId, N, PR,
     },
     span::span::{Ident, Symbol},
 };
 
-use super::def::{DefId, PerNS};
-
-enum ModuleKind {
-    Root,
-    Block(NodeId),
-    Def(DefId),
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ModuleId(u32);
-
-struct ModuleArena {
-    modules: Vec<Module>,
-}
-
-impl ModuleArena {
-    pub fn alloc(&mut self, module: Module) -> ModuleId {
-        let id = ModuleId(self.modules.len() as u32);
-        self.modules.push(module);
-        id
-    }
-}
-
-impl std::ops::Index<ModuleId> for ModuleArena {
-    type Output = Module;
-
-    fn index(&self, index: ModuleId) -> &Self::Output {
-        &self.modules[index.0 as usize]
-    }
-}
-
-impl std::ops::IndexMut<ModuleId> for ModuleArena {
-    fn index_mut(&mut self, index: ModuleId) -> &mut Self::Output {
-        &mut self.modules[index.0 as usize]
-    }
-}
-
-/**
- * Module is a scope where items defined.
- */
-struct Module {
-    parent: Option<ModuleId>,
-    kind: ModuleKind,
-    per_ns: PerNS<HashMap<Symbol, DefId>>,
-}
-
-impl Module {
-    fn root() -> Self {
-        Self {
-            parent: None,
-            kind: ModuleKind::Root,
-            per_ns: Default::default(),
-        }
-    }
-
-    fn new(parent: ModuleId, kind: ModuleKind) -> Self {
-        Self {
-            parent: Some(parent),
-            kind,
-            per_ns: Default::default(),
-        }
-    }
-}
+use super::def::{DefId, DefTable, Module, ModuleId, ModuleKind, PerNS, ROOT_DEF_ID};
 
 pub struct DefCollector {
     last_def_index: u32,
     current_module: ModuleId,
-    modules: ModuleArena,
+    def_table: DefTable,
 }
 
 impl DefCollector {
+    pub fn new() -> Self {
+        Self {
+            last_def_index: 0,
+            current_module: ModuleId::Module(ROOT_DEF_ID),
+            def_table: Default::default(),
+        }
+    }
+
     fn next_def_id(&mut self) -> DefId {
         let def_id = DefId(self.last_def_index);
         self.last_def_index += 1;
@@ -89,24 +36,22 @@ impl DefCollector {
     }
 
     fn module(&mut self) -> &mut Module {
-        &mut self.modules[self.current_module]
-    }
-
-    fn enter_module(&mut self, kind: ModuleKind) {
-        self.current_module = self.modules.alloc(Module::new(self.current_module, kind));
+        self.def_table.get_module_mut(self.current_module)
     }
 
     fn enter_def_module(&mut self, def_id: DefId) {
-        self.enter_module(ModuleKind::Def(def_id))
+        self.current_module = self.def_table.add_module(def_id, self.current_module);
     }
 
     fn enter_block_module(&mut self, node_id: NodeId) {
-        self.enter_module(ModuleKind::Block(node_id))
+        self.current_module = self.def_table.add_block(node_id, self.current_module)
     }
 
     fn exit_module(&mut self) {
-        self.current_module = self.modules[self.current_module]
-            .parent
+        self.current_module = self
+            .def_table
+            .get_module(self.current_module)
+            .parent()
             .expect("Tried to exit root module")
     }
 }
@@ -115,15 +60,13 @@ impl AstVisitor<()> for DefCollector {
     fn visit_err(&self, _: &ast::ErrorNode) {}
 
     fn visit_ast(&mut self, ast: &ast::AST) {
-        self.enter_module(ModuleKind::Root);
+        self.def_table.add_root_module();
         visit_each_pr!(self, ast.items(), visit_item);
         self.exit_module();
     }
 
     // Items //
-    fn visit_item(&mut self, item: &Item) -> () {
-        
-    }
+    fn visit_item(&mut self, item: &Item) -> () {}
 
     fn visit_type_item(&mut self, _: &PR<Ident>, _: &PR<N<Ty>>) {}
 
@@ -136,9 +79,9 @@ impl AstVisitor<()> for DefCollector {
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
             ExprKind::Block(stmts) => {
-                self.enter_block_module(expr.id());
+                // self.enter_block_module(expr.id());
                 self.visit_block_expr(stmts);
-                self.exit_module();
+                // self.exit_module();
             }
             ExprKind::Let(name, value, body) => self.visit_let_expr(name, value, body),
             ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),

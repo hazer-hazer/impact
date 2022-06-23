@@ -1,7 +1,24 @@
+use std::collections::HashMap;
+
+use crate::{
+    ast::{NodeId, NodeMap},
+    span::span::Symbol,
+};
+
 pub enum DefKind {}
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct DefId(pub u32);
+
+impl DefId {
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+pub const ROOT_DEF_ID: DefId = DefId(0);
+
+pub type DefMap<T> = HashMap<DefId, T>;
 
 /**
  * Definition of item, e.g. type
@@ -43,5 +60,122 @@ where
         Self {
             ..Default::default()
         }
+    }
+}
+
+pub enum ModuleKind {
+    Root,
+    Block(NodeId),
+    Def(DefId),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ModuleId {
+    Block(NodeId),
+    Module(DefId),
+}
+
+/**
+ * Module is a scope where items defined.
+ */
+pub struct Module {
+    parent: Option<ModuleId>,
+    kind: ModuleKind,
+    per_ns: PerNS<HashMap<Symbol, DefId>>,
+}
+
+impl Module {
+    pub fn root() -> Self {
+        Self {
+            parent: None,
+            kind: ModuleKind::Root,
+            per_ns: Default::default(),
+        }
+    }
+
+    pub fn new(parent: ModuleId, kind: ModuleKind) -> Self {
+        Self {
+            parent: Some(parent),
+            kind,
+            per_ns: Default::default(),
+        }
+    }
+
+    pub fn parent(&self) -> Option<ModuleId> {
+        self.parent
+    }
+
+    pub fn kind(&self) -> &ModuleKind {
+        &self.kind
+    }
+}
+
+#[derive(Default)]
+pub struct DefTable {
+    modules: DefMap<Module>,
+    blocks: NodeMap<Module>,
+    node_id_def_id: HashMap<NodeId, DefId>,
+    def_id_node_id: HashMap<DefId, NodeId>,
+    defs: Vec<Def>,
+}
+
+impl DefTable {
+    pub(super) fn get_module_mut(&mut self, id: ModuleId) -> &mut Module {
+        match id {
+            ModuleId::Block(ref id) => self
+                .blocks
+                .get_mut(id)
+                .expect(format!("No block found by {:?}", id).as_str()),
+            ModuleId::Module(ref def_id) => self
+                .modules
+                .get_mut(def_id)
+                .expect(format!("No module found by {:?}", def_id).as_str()),
+        }
+    }
+
+    pub fn get_module(&self, id: ModuleId) -> &Module {
+        match id {
+            ModuleId::Block(ref id) => self
+                .blocks
+                .get(id)
+                .expect(format!("No block found by {:?}", id).as_str()),
+            ModuleId::Module(ref def_id) => self
+                .modules
+                .get(def_id)
+                .expect(format!("No module found by {:?}", def_id).as_str()),
+        }
+    }
+
+    pub(super) fn add_root_module(&mut self) -> ModuleId {
+        assert!(self.modules.insert(ROOT_DEF_ID, Module::root()).is_none());
+        ModuleId::Module(ROOT_DEF_ID)
+    }
+
+    pub(super) fn add_module(&mut self, def_id: DefId, parent: ModuleId) -> ModuleId {
+        assert!(self
+            .modules
+            .insert(def_id, Module::new(parent, ModuleKind::Def(def_id)))
+            .is_none());
+        ModuleId::Module(def_id)
+    }
+
+    pub(super) fn add_block(&mut self, node_id: NodeId, parent: ModuleId) -> ModuleId {
+        assert!(self
+            .blocks
+            .insert(node_id, Module::new(parent, ModuleKind::Block(node_id)))
+            .is_none());
+        ModuleId::Block(node_id)
+    }
+
+    pub fn get_def(&self, def_id: DefId) -> Option<&Def> {
+        self.defs.get(def_id.as_usize())
+    }
+
+    pub fn get_def_id(&self, node_id: &NodeId) -> Option<&DefId> {
+        self.node_id_def_id.get(node_id)
+    }
+
+    pub fn get_node_id(&self, def_id: &DefId) -> Option<&NodeId> {
+        self.def_id_node_id.get(def_id)
     }
 }

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::span::span::{Span, WithSpan};
 
@@ -26,8 +26,16 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub struct NodeId(u32);
+
+impl NodeId {
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+pub type NodeMap<T> = HashMap<NodeId, T>;
 
 #[derive(Default)]
 pub struct AST {
