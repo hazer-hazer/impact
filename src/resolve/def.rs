@@ -1,11 +1,23 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{NodeId, NodeMap},
-    span::span::Symbol,
+    ast::{item::ItemKind, NodeId, NodeMap},
+    span::span::{Ident, Symbol},
 };
 
-pub enum DefKind {}
+pub enum DefKind {
+    Type,
+    Mod,
+}
+
+impl DefKind {
+    pub fn from_item_kind(kind: &ItemKind) -> DefKind {
+        match kind {
+            ItemKind::Type(_, _) => DefKind::Type,
+            ItemKind::Mod(_, _) => DefKind::Mod,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct DefId(pub u32);
@@ -26,11 +38,16 @@ pub type DefMap<T> = HashMap<DefId, T>;
 pub struct Def {
     def_id: DefId,
     kind: DefKind,
+    ident: Ident,
 }
 
 impl Def {
-    pub fn new(def_id: DefId, kind: DefKind) -> Self {
-        Self { def_id, kind }
+    pub fn new(def_id: DefId, kind: DefKind, ident: Ident) -> Self {
+        Self {
+            def_id,
+            kind,
+            ident,
+        }
     }
 
     pub fn def_id(&self) -> DefId {
@@ -165,6 +182,17 @@ impl DefTable {
             .insert(node_id, Module::new(parent, ModuleKind::Block(node_id)))
             .is_none());
         ModuleId::Block(node_id)
+    }
+
+    // TODO: Add accessibility modifiers?
+    pub(super) fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
+        let def_id = DefId(self.defs.len() as u32);
+        self.defs.push(Def::new(def_id, kind, *ident));
+
+        self.node_id_def_id.insert(node_id, def_id);
+        self.def_id_node_id.insert(def_id, node_id);
+
+        def_id
     }
 
     pub fn get_def(&self, def_id: DefId) -> Option<&Def> {

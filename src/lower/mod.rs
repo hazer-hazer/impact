@@ -78,15 +78,27 @@ impl<'a> Lower<'a> {
 
     // Items //
     fn lower_item(&mut self, item: &Item) -> hir::item::Item {
-        match item.kind() {
-            ItemKind::Type(name, ty) => {
-                hir::item::Item::new(self.lower_type_item(name, ty), item.span())
-            }
-        }
+        let kind = match item.kind() {
+            ItemKind::Type(name, ty) => self.lower_type_item(name, ty),
+            ItemKind::Mod(name, items) => self.lower_mod_item(name, items),
+        };
+
+        hir::item::Item::new(kind, item.span())
     }
 
     fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
         todo!()
+    }
+
+    fn lower_mod_item(
+        &mut self,
+        name: &PR<Ident>,
+        items: &Vec<PR<N<Item>>>,
+    ) -> hir::item::ItemKind {
+        hir::item::ItemKind::Mod(
+            lower_pr!(self, name, lower_ident),
+            lower_each_pr!(self, items, lower_item),
+        )
     }
 
     // Expressions //

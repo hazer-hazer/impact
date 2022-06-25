@@ -57,10 +57,13 @@ pub trait AstVisitor<T> {
     fn visit_item(&mut self, item: &Item) -> T {
         match item.kind() {
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty),
+            ItemKind::Mod(name, items) => self.visit_mod_item(name, items),
         }
     }
 
     fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> T;
+
+    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> T;
 
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr) -> T {

@@ -13,6 +13,8 @@ static INTERNER: Lazy<RwLock<Interner>> = Lazy::new(|| Default::default());
 pub enum Kw {
     Let = 0,
     In,
+    Mod,
+    Type,
 
     // Reserved for typeck //
     M,
@@ -26,6 +28,8 @@ impl Kw {
             Kw::Let => "let",
             Kw::In => "in",
             Kw::M => "m",
+            Kw::Mod => "mod",
+            Kw::Type => "type",
             Kw::Unknown => "[UNKNOWN]",
         }
     }

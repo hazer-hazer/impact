@@ -4,6 +4,7 @@ use super::{ty::Ty, NodeId, N, PR};
 
 pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
+    Mod(PR<Ident>, Vec<PR<N<Item>>>),
 }
 
 pub struct Item {
@@ -23,7 +24,7 @@ impl Item {
 
     pub fn name(&self) -> Option<&Ident> {
         match self.kind() {
-            ItemKind::Type(name, _) => Some(name.as_ref().unwrap()),
+            ItemKind::Type(name, _) | ItemKind::Mod(name, _) => Some(name.as_ref().unwrap()),
         }
     }
 

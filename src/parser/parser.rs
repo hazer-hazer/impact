@@ -1,17 +1,14 @@
 use crate::{
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
-        item::Item,
+        item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         ErrorNode, NodeId, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{OkStageResult, Session, Stage, StageResult},
-    span::{
-        self,
-        span::{Ident, Kw, Span, WithSpan},
-    },
+    span::span::{Ident, Kw, Span, WithSpan},
 };
 
 use super::token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream};
@@ -27,6 +24,46 @@ impl MessageHolder for Parser {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
+}
+
+macro_rules! parse_block_common {
+    ($self: ident, $parse: ident, $parse_inline: expr) => {{
+        let mut entities = vec![];
+
+        if $self.skip_nls() && !$self.eof() && $self.is(TokenCmp::Indent) && !$self.eof() {
+            let skip = $self.skip(TokenCmp::Indent);
+            $self.expect(skip, "indent");
+
+            let mut first = true;
+            while !$self.eof() {
+                if $self.is(TokenCmp::Dedent) {
+                    break;
+                }
+
+                if first {
+                    first = false;
+                } else {
+                    let skip = $self.skip(TokenCmp::Nl);
+                    $self.expect(skip, "line break");
+                }
+
+                if $self.eof() || $self.is(TokenCmp::Dedent) {
+                    break;
+                }
+
+                entities.push($self.$parse());
+            }
+
+            if !$self.eof() {
+                let skip = $self.skip(TokenCmp::Dedent);
+                $self.expect(skip, "dedent");
+            }
+        } else if $parse_inline {
+            entities.push($self.$parse());
+        }
+
+        entities
+    }};
 }
 
 impl Parser {
@@ -256,7 +293,7 @@ impl Parser {
 
     // Statements //
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
-        if let Some(item) = self.parse_item() {
+        if let Some(item) = self.parse_opt_item() {
             let span = item.span();
             Ok(Box::new(Stmt::new(
                 self.next_node_id(),
@@ -280,13 +317,50 @@ impl Parser {
     }
 
     // Items //
-    fn parse_item(&mut self) -> Option<PR<N<Item>>> {
-        todo!()
+    fn parse_item(&mut self) -> PR<N<Item>> {
+        let item = self.parse_opt_item();
+        self.expected_pr(item, "item")
+    }
+
+    fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
+        if self.is(TokenCmp::Kw(Kw::Mod)) {
+            Some(self.parse_mod_item())
+        } else if self.is(TokenCmp::Kw(Kw::Type)) {
+            Some(self.parse_type_item())
+        } else {
+            None
+        }
+    }
+
+    fn parse_mod_item(&mut self) -> PR<N<Item>> {
+        let lo = self.span();
+
+        let skip = self.skip_kw(Kw::Mod);
+        self.expect(skip, "`mod` keyword");
+
+        let name = self.parse_ident("module name");
+
+        let items = parse_block_common!(self, parse_item, false);
+
+        Ok(Box::new(Item::new(
+            self.next_node_id(),
+            ItemKind::Mod(name, items),
+            lo.to(self.span()),
+        )))
+    }
+
+    fn parse_type_item(&mut self) -> PR<N<Item>> {
+        let lo = self.span();
+
+        let skip = self.skip_kw(Kw::Type);
+        self.expect(skip, "`type` keyword");
+
+        let name = self.parse_ident("type name");
     }
 
     // Expressions //
     fn parse_expr(&mut self) -> Option<PR<N<Expr>>> {
-        if TokenCmp::Kw(Kw::Let) == self.peek() {
+        if self.is(TokenCmp::Kw(Kw::Let)) {
             return Some(self.parse_let());
         }
 
@@ -457,43 +531,7 @@ impl Parser {
     fn parse_block(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
-        let mut stmts = vec![];
-
-        if self.skip_nls() {
-            if self.eof() {
-                return None;
-            }
-
-            let skip = self.skip(TokenCmp::Indent);
-            self.expect(skip, "indent");
-
-            let mut first = true;
-            while !self.eof() {
-                if self.eof() || TokenCmp::Dedent == self.peek() {
-                    break;
-                }
-
-                if first {
-                    first = false;
-                } else {
-                    let skip = self.skip(TokenCmp::Nl);
-                    self.expect(skip, "line break");
-                }
-
-                if self.eof() || TokenCmp::Dedent == self.peek() {
-                    break;
-                }
-
-                stmts.push(self.parse_stmt());
-            }
-
-            if !self.eof() {
-                let skip = self.skip(TokenCmp::Dedent);
-                self.expect(skip, "dedent");
-            }
-        } else {
-            stmts = vec![self.parse_stmt()];
-        }
+        let stmts = parse_block_common!(self, parse_stmt, true);
 
         Some(Ok(Box::new(Expr::new(
             self.next_node_id(),
@@ -569,9 +607,7 @@ impl Parser {
 
         self.skip_nls();
         while !self.eof() {
-            let item = self.parse_item();
-            let item = self.expected_pr(item, "item");
-            items.push(item);
+            items.push(self.parse_item());
         }
 
         AST::new(items)

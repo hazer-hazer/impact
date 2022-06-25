@@ -1,6 +1,7 @@
 use crate::{
     ast::{
         expr::{Expr, InfixOp, Lit, PrefixOp},
+        item::Item,
         stmt::{Stmt, StmtKind},
         ty::{LitTy, Ty},
         visitor::visit_pr,
@@ -49,6 +50,14 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
             "type {} = {}",
             visit_pr!(self, name, visit_ident),
             visit_pr!(self, ty, visit_ty)
+        )
+    }
+
+    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> String {
+        format!(
+            "mod {} {{{}}}",
+            visit_pr!(self, name, visit_ident),
+            visit_pr_vec!(self, items, visit_item, "\n")
         )
     }
 

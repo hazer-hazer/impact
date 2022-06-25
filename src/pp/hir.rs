@@ -5,6 +5,7 @@ use crate::{
     },
     hir::{
         expr::Expr,
+        item::Item,
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
@@ -46,6 +47,14 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
     // Items //
     fn visit_type_item(&mut self, name: &Ident, ty: &N<Ty>) -> String {
         format!("type {} = {}", self.visit_ident(name), self.visit_ty(ty))
+    }
+
+    fn visit_mod_item(&mut self, name: &Ident, items: &Vec<Item>) -> String {
+        format!(
+            "mod {} {{{}}}",
+            name,
+            visit_each!(self, items, visit_item, "\n")
+        )
     }
 
     // Expressions //

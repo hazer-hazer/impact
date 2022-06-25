@@ -4,6 +4,7 @@ use super::{ty::Ty, N};
 
 pub enum ItemKind {
     Type(Ident, N<Ty>),
+    Mod(Ident, Vec<Item>),
 }
 
 pub struct Item {

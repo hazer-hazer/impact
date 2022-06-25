@@ -1,4 +1,4 @@
-use crate::span::span::{Span, Spanned, WithSpan};
+use crate::span::span::{Span, WithSpan};
 
 use super::{expr::Expr, item::Item};
 

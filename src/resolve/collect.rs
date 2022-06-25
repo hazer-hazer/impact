@@ -1,21 +1,18 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
 use crate::{
     ast::{
         self,
         expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
-        item::Item,
+        item::{Item, ItemKind},
         ty::Ty,
         visitor::{visit_each_pr, visit_pr, AstVisitor},
         NodeId, N, PR,
     },
-    span::span::{Ident, Symbol},
+    span::span::Ident,
 };
 
-use super::def::{DefId, DefTable, Module, ModuleId, ModuleKind, PerNS, ROOT_DEF_ID};
+use super::def::{DefId, DefKind, DefTable, Module, ModuleId, ROOT_DEF_ID};
 
 pub struct DefCollector {
-    last_def_index: u32,
     current_module: ModuleId,
     def_table: DefTable,
 }
@@ -23,23 +20,17 @@ pub struct DefCollector {
 impl DefCollector {
     pub fn new() -> Self {
         Self {
-            last_def_index: 0,
             current_module: ModuleId::Module(ROOT_DEF_ID),
             def_table: Default::default(),
         }
-    }
-
-    fn next_def_id(&mut self) -> DefId {
-        let def_id = DefId(self.last_def_index);
-        self.last_def_index += 1;
-        def_id
     }
 
     fn module(&mut self) -> &mut Module {
         self.def_table.get_module_mut(self.current_module)
     }
 
-    fn enter_def_module(&mut self, def_id: DefId) {
+    fn enter_def_module(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) {
+        let def_id = self.def_table.define(node_id, kind, &ident);
         self.current_module = self.def_table.add_module(def_id, self.current_module);
     }
 
@@ -66,12 +57,32 @@ impl AstVisitor<()> for DefCollector {
     }
 
     // Items //
-    fn visit_item(&mut self, item: &Item) -> () {}
+    fn visit_item(&mut self, item: &Item) {
+        self.def_table.define(
+            item.id(),
+            DefKind::from_item_kind(item.kind()),
+            item.name()
+                .expect("Cannot define unnamed item. TODO: Synthesize unnamed item name"),
+        );
+
+        match item.kind() {
+            ItemKind::Mod(name, items) => {
+                self.enter_def_module(item.id(), DefKind::Mod, name.as_ref().unwrap());
+                self.visit_mod_item(name, items);
+                self.exit_module();
+            }
+            ItemKind::Type(_, _) => {}
+        }
+    }
 
     fn visit_type_item(&mut self, _: &PR<Ident>, _: &PR<N<Ty>>) {}
 
+    fn visit_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) {
+        visit_each_pr!(self, items, visit_item);
+    }
+
     // Expressions //
-    fn visit_expr(&mut self, expr: &Expr) -> () {
+    fn visit_expr(&mut self, expr: &Expr) {
         match expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Ident(ident) => self.visit_ident_expr(ident),
@@ -79,9 +90,9 @@ impl AstVisitor<()> for DefCollector {
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
             ExprKind::Block(stmts) => {
-                // self.enter_block_module(expr.id());
+                self.enter_block_module(expr.id());
                 self.visit_block_expr(stmts);
-                // self.exit_module();
+                self.exit_module();
             }
             ExprKind::Let(name, value, body) => self.visit_let_expr(name, value, body),
             ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
