@@ -6,6 +6,7 @@ use crate::{
         ty::{Ty, TyKind},
         ErrorNode, NodeId, AST, N, PR,
     },
+    cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
@@ -117,6 +118,14 @@ impl Parser {
             .expect(format!("[BUG] Failed to just skip expected token {}", cmp).as_str())
     }
 
+    fn unexpected_token(&mut self) -> ErrorNode {
+        MessageBuilder::error()
+            .span(self.span())
+            .text(format!("Unexpected token {}", self.peek()))
+            .emit(self);
+        ErrorNode::new(self.advance_tok().span)
+    }
+
     fn expect(&mut self, cmp: TokenCmp) -> PR<()> {
         if self.is(cmp) {
             self.advance();
@@ -174,6 +183,36 @@ impl Parser {
                 .text(format!("Expected {}, got {}", expected, self.peek()))
                 .emit(self);
             Err(ErrorNode::new(self.span()))
+        }
+    }
+
+    fn try_recover_any<T>(&mut self, entity: Option<PR<N<T>>>, expected: &str) -> PR<N<T>>
+    where
+        T: WithSpan,
+    {
+        if let Some(entity) = entity {
+            entity
+        } else {
+            match self.parse_stmt() {
+                Ok(stmt) => {
+                    MessageBuilder::error()
+                        .span(self.span())
+                        .text(format!("Expected {}, got {}", expected, stmt))
+                        .emit(self);
+                    Err(ErrorNode::new(stmt.span()))
+                }
+                Err(err) => {
+                    MessageBuilder::error()
+                        .span(self.span())
+                        .text(format!(
+                            "Unexpected token {}, where {} expected",
+                            self.peek(),
+                            expected
+                        ))
+                        .emit(self);
+                    Err(ErrorNode::new(self.advance_tok().span()))
+                }
+            }
         }
     }
 
@@ -276,18 +315,13 @@ impl Parser {
                 span,
             )))
         } else {
-            MessageBuilder::error()
-                .span(self.span())
-                .text(format!("Unexpected token {}", self.peek()))
-                .emit(self);
-            Err(ErrorNode::new(self.advance_tok().span))
+            Err(self.unexpected_token())
         }
     }
 
     // Items //
     fn parse_item(&mut self) -> PR<N<Item>> {
         let item = self.parse_opt_item();
-        self.expected_pr(item, "item")
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
@@ -587,6 +621,7 @@ impl Parser {
 
         self.skip_nls();
         while !self.eof() {
+            verbose(format!("Parse {:?}", self.peek()));
             items.push(self.parse_item());
         }
 

@@ -14,6 +14,17 @@ pub type N<T> = Box<T>;
 
 pub type PR<T> = Result<T, ErrorNode>;
 
+macro_rules! format_pr {
+    ($pr: expr) => {
+        match $pr {
+            Ok(ok) => format!("{}", ok),
+            Err(_) => format!("[ERROR]"),
+        }
+    };
+}
+
+pub(crate) use format_pr;
+
 impl<T> WithSpan for PR<T>
 where
     T: WithSpan,

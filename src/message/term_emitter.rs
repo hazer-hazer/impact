@@ -36,6 +36,10 @@ impl MessageEmitter for TermEmitter {
         self.got_error = true;
     }
 
+    fn got_error(&self) -> bool {
+        self.got_error
+    }
+
     fn process_msg(&self, sess: &Session, msg: &Message) {
         let span = msg.span();
 

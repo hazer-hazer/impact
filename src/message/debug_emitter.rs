@@ -11,5 +11,10 @@ impl MessageEmitter for DebugEmitter {
         println!("{:?}", msg)
     }
 
+    fn got_error(&self) -> bool {
+        // TODO: ?
+        false
+    }
+
     fn error_appeared(&mut self) {}
 }

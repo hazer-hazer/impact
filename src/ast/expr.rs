@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
-use super::{stmt::Stmt, ty::Ty, NodeId, N, PR};
+use super::{format_pr, stmt::Stmt, ty::Ty, NodeId, N, PR};
 
 pub struct Expr {
     id: NodeId,
@@ -24,6 +24,12 @@ impl Expr {
 
     pub fn id(&self) -> NodeId {
         self.id
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind())
     }
 }
 
@@ -141,23 +147,36 @@ impl Display for Lit {
     }
 }
 
-// impl Display for ExprKind {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(
-//             f,
-//             "{}",
-//             match self {
-//                 ExprKind::Lit(_) => todo!(),
-//                 ExprKind::Ident(_) => todo!(),
-//                 ExprKind::Infix(_, _, _) => todo!(),
-//                 ExprKind::Prefix(_, _) => todo!(),
-//                 ExprKind::App(_, _) => todo!(),
-//                 ExprKind::Block(_) => todo!(),
-//                 ExprKind::Let(_, _, _) => todo!(),
-//                 ExprKind::Abs(_, _) => todo!(),
-//                 ExprKind::Ty(_, _) => todo!(),
-//                 _ => ""
-//             }
-//         )
-//     }
-// }
+impl Display for ExprKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprKind::Lit(lit) => write!(f, "literal {}", lit),
+            ExprKind::Ident(ident) => write!(f, "identifier {}", ident),
+            ExprKind::Infix(lhs, op, rhs) => {
+                write!(f, "{} {} {}", format_pr!(lhs), op, format_pr!(rhs))
+            }
+            ExprKind::Prefix(op, rhs) => write!(f, "{}{}", op, format_pr!(rhs)),
+            ExprKind::Abs(param_name, body) => {
+                write!(f, "{} -> {}", format_pr!(param_name), format_pr!(body))
+            }
+            ExprKind::App(lhs, arg) => write!(f, "{} {}", format_pr!(lhs), format_pr!(arg)),
+            ExprKind::Block(stmts) => write!(
+                f,
+                "{}",
+                stmts
+                    .iter()
+                    .map(|stmt| format!("{}", format_pr!(stmt)))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            ExprKind::Let(name, value, body) => write!(
+                f,
+                "let {} = {} in {}",
+                format_pr!(name),
+                format_pr!(value),
+                format_pr!(body)
+            ),
+            ExprKind::Ty(expr, ty) => write!(f, "{}: {}", format_pr!(expr), format_pr!(ty)),
+        }
+    }
+}

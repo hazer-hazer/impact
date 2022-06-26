@@ -17,12 +17,14 @@ pub trait MessageEmitter {
             self.process_msg(&output.sess, &msg);
         }
 
-        if stop_on_error {
+        if stop_on_error && self.got_error() {
             Err(String::from("Stop due to errors above"))
         } else {
             Ok((output.data, output.sess))
         }
     }
+
+    fn got_error(&self) -> bool;
 
     fn error_appeared(&mut self);
 
