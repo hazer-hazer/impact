@@ -106,15 +106,15 @@ impl TokenKind {
 
     pub fn try_from_chars(char1: char, char2: Option<char>) -> Option<(Self, SpanLen)> {
         match (char1, char2) {
-            ('+', None) => Some((TokenKind::Infix(Infix::Plus), 1)),
-            ('*', None) => Some((TokenKind::Infix(Infix::Mul), 1)),
-            ('/', None) => Some((TokenKind::Infix(Infix::Div), 1)),
-            ('%', None) => Some((TokenKind::Infix(Infix::Mod), 1)),
-            ('=', None) => Some((TokenKind::Punct(Punct::Assign), 1)),
-            ('\\', None) => Some((TokenKind::Punct(Punct::Backslash), 1)),
+            ('+', _) => Some((TokenKind::Infix(Infix::Plus), 1)),
+            ('*', _) => Some((TokenKind::Infix(Infix::Mul), 1)),
+            ('/', _) => Some((TokenKind::Infix(Infix::Div), 1)),
+            ('%', _) => Some((TokenKind::Infix(Infix::Mod), 1)),
+            ('=', _) => Some((TokenKind::Punct(Punct::Assign), 1)),
+            ('\\', _) => Some((TokenKind::Punct(Punct::Backslash), 1)),
 
-            ('-', None) => Some((TokenKind::Infix(Infix::Minus), 1)),
             ('-', Some('>')) => Some((TokenKind::Punct(Punct::Arrow), 2)),
+            ('-', _) => Some((TokenKind::Infix(Infix::Minus), 1)),
 
             _ => None,
         }

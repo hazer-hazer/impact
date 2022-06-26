@@ -154,6 +154,7 @@ impl Lexer {
 
     fn unexpected_token(&mut self) {
         self.add_error("Unexpected token");
+        self.advance();
     }
 
     fn get_fragment_to(&self, start: SpanPos, end: SpanPos) -> (&str, SpanLen) {
