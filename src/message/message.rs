@@ -6,7 +6,7 @@ pub enum MessageKind {
     Warn,
 }
 
-#[derive(Debug)]
+#[derive(Debug,)]
 pub struct Message {
     kind: MessageKind,
     span: Span,

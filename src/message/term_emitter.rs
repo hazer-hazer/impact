@@ -2,56 +2,53 @@ use crate::session::Session;
 
 use super::{message::Message, MessageEmitter};
 
-pub struct TermEmitter<'a> {
-    sess: &'a Session,
+pub struct TermEmitter {
     got_error: bool,
 }
 
-impl<'a> TermEmitter<'a> {
-    pub fn new(sess: &'a Session) -> Self {
-        Self {
-            sess,
-            got_error: false,
-        }
+impl TermEmitter {
+    pub fn new() -> Self {
+        Self { got_error: false }
     }
 
-    pub fn print_source(&self) {
-        println!("=== SOURCE ===");
-        let source_lines = self.sess.source_lines().lines();
-        let last_line_num = source_lines.len() + 1;
+    // TODO: Rewrite
+    // pub fn print_source(&self) {
+    //     println!("=== SOURCE ===");
+    //     let source_lines = self.sess.source_lines().lines();
+    //     let last_line_num = source_lines.len() + 1;
 
-        for (i, line) in source_lines.iter().enumerate() {
-            let line_num = i + 1;
-            println!(
-                "{}{} | {}",
-                " ".repeat(line_num.to_string().len() - last_line_num.to_string().len()),
-                line_num,
-                line
-            );
-        }
+    //     for (i, line) in source_lines.iter().enumerate() {
+    //         let line_num = i + 1;
+    //         println!(
+    //             "{}{} | {}",
+    //             " ".repeat(line_num.to_string().len() - last_line_num.to_string().len()),
+    //             line_num,
+    //             line
+    //         );
+    //     }
 
-        println!("=== SOURCE END ===\n");
-    }
+    //     println!("=== SOURCE END ===\n");
+    // }
 }
 
-impl<'a> MessageEmitter for TermEmitter<'a> {
+impl MessageEmitter for TermEmitter {
     fn error_appeared(&mut self) {
         self.got_error = true;
     }
 
-    fn process_msg(&self, msg: &Message) {
+    fn process_msg(&self, sess: &Session, msg: &Message) {
         let span = msg.span();
 
-        let source_lines = self.sess.source_lines();
-        let lines_count = source_lines.lines().len();
+        let source = sess.source_map.get_source(span.source());
+        let lines_count = source.lines_count();
 
         let (line, line_pos, line_num) = if span.is_error() {
             ("[The place my stupid mistakes live]", 0, 0)
         } else {
-            let (line, line_pos, line_num) = source_lines.find_line(span);
+            let (line, line_pos, line_num) = source.find_line(span);
             assert!(line_pos <= span.lo());
 
-            (line.as_str(), line_pos, line_num)
+            (line, line_pos, line_num)
         };
 
         let line_num_len = line_num.to_string().len();

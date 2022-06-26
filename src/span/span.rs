@@ -1,6 +1,9 @@
 use once_cell::sync::Lazy;
 
-use crate::parser::token::{Token, TokenKind};
+use crate::{
+    parser::token::{Token, TokenKind},
+    session::{SourceId, DUMP_SOURCE_ID},
+};
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -136,6 +139,7 @@ pub type SpanLen = u32;
 pub struct Span {
     pos: SpanPos,
     len: SpanLen,
+    source: SourceId,
 }
 
 impl Span {
@@ -143,6 +147,7 @@ impl Span {
         Self {
             pos: SpanPos::MAX,
             len: SpanLen::MAX,
+            source: DUMP_SOURCE_ID,
         }
     }
 
@@ -150,8 +155,8 @@ impl Span {
         self.pos == SpanPos::MAX && self.len == SpanPos::MAX
     }
 
-    pub fn new(pos: SpanPos, len: SpanLen) -> Self {
-        Self { pos, len }
+    pub fn new(pos: SpanPos, len: SpanLen, source: SourceId) -> Self {
+        Self { pos, len, source }
     }
 
     pub fn lo(&self) -> SpanPos {
@@ -166,10 +171,16 @@ impl Span {
         self.len
     }
 
+    pub fn source(&self) -> SourceId {
+        self.source
+    }
+
     pub fn to(&self, end: Span) -> Self {
+        assert!(self.source() == end.source());
         Span::new(
             std::cmp::min(self.pos, end.pos),
             std::cmp::max(self.hi(), end.hi()),
+            self.source(),
         )
     }
 }

@@ -7,7 +7,7 @@ use crate::{
         ErrorNode, NodeId, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    session::{OkStageResult, Session, Stage, StageResult},
+    session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
 };
 
@@ -31,23 +31,10 @@ macro_rules! parse_block_common {
         let mut entities = vec![];
 
         if $self.skip_nls() && !$self.eof() && $self.is(TokenCmp::Indent) && !$self.eof() {
-            let skip = $self.skip(TokenCmp::Indent);
-            $self.expect(skip, "indent");
+            $self.just_skip(TokenCmp::Indent);
 
-            let mut first = true;
-            while !$self.eof() {
-                if $self.is(TokenCmp::Dedent) {
-                    break;
-                }
-
-                if first {
-                    first = false;
-                } else {
-                    let skip = $self.skip(TokenCmp::Nl);
-                    $self.expect(skip, "line break");
-                }
-
-                if $self.eof() || $self.is(TokenCmp::Dedent) {
+            while !$self.is(TokenCmp::Dedent) {
+                if $self.eof() {
                     break;
                 }
 
@@ -55,8 +42,7 @@ macro_rules! parse_block_common {
             }
 
             if !$self.eof() {
-                let skip = $self.skip(TokenCmp::Dedent);
-                $self.expect(skip, "dedent");
+                $self.just_skip(TokenCmp::Dedent);
             }
         } else if $parse_inline {
             entities.push($self.$parse());
@@ -126,6 +112,41 @@ impl Parser {
         self.advance_offset(1)
     }
 
+    fn just_skip(&mut self, cmp: TokenCmp) {
+        self.expect(cmp)
+            .expect(format!("[BUG] Failed to just skip expected token {}", cmp).as_str())
+    }
+
+    fn expect(&mut self, cmp: TokenCmp) -> PR<()> {
+        if self.is(cmp) {
+            self.advance();
+            Ok(())
+        } else {
+            MessageBuilder::error()
+                .span(self.span())
+                .text(format!("Expected {}, got {}", cmp, self.peek()))
+                .emit(self);
+            Err(ErrorNode::new(self.span()))
+        }
+    }
+
+    fn expect_semi(&mut self) -> PR<()> {
+        // If we encountered EOF don't skip it
+        if self.eof() {
+            Ok(())
+        } else {
+            self.expect(TokenCmp::Nls)
+        }
+    }
+
+    fn expect_kw(&mut self, kw: Kw) -> PR<()> {
+        self.expect(TokenCmp::Kw(kw))
+    }
+
+    fn expect_punct(&mut self, punct: Punct) -> PR<()> {
+        self.expect(TokenCmp::Punct(punct))
+    }
+
     fn expected_pr<'a, T>(&'a mut self, entity: Option<PR<N<T>>>, expected: &str) -> PR<N<T>>
     where
         T: WithSpan,
@@ -153,18 +174,6 @@ impl Parser {
                 .text(format!("Expected {}, got {}", expected, self.peek()))
                 .emit(self);
             Err(ErrorNode::new(self.span()))
-        }
-    }
-
-    fn expect<'a, T>(&'a mut self, entity: Option<T>, expected: &str)
-    where
-        T: WithSpan,
-    {
-        if entity.is_none() {
-            MessageBuilder::error()
-                .span(self.span())
-                .text(format!("Expected {}, got {}", expected, self.peek()))
-                .emit(self);
         }
     }
 
@@ -244,48 +253,6 @@ impl Parser {
         items
     }
 
-    fn parse_delim<T, P>(
-        &mut self,
-        begin: TokenCmp,
-        delim: TokenCmp,
-        end: TokenCmp,
-        mut parser: P,
-    ) -> Vec<T>
-    where
-        P: FnMut() -> T,
-    {
-        let skip = self.skip(begin);
-        self.expect(skip, format!("{}", begin).as_str());
-
-        let mut els = Vec::<T>::new();
-
-        let mut first = true;
-        while !self.eof() {
-            if end == self.peek() {
-                break;
-            }
-
-            if first {
-                first = false;
-            } else {
-                let skip = self.skip(delim);
-                self.expect(skip, format!("{} delimiter", delim).as_str());
-            }
-
-            if end == self.peek() {
-                // TODO: Trailing?
-                break;
-            }
-
-            els.push(parser());
-        }
-
-        let skip = self.skip(end);
-        self.expect(skip, format!("{}", end).as_str());
-
-        els
-    }
-
     fn parse_ident(&mut self, expected: &str) -> PR<Ident> {
         let skip = self.skip(TokenCmp::Ident).map(|tok| Ident::from_token(tok));
         self.expected(skip, expected)
@@ -300,8 +267,9 @@ impl Parser {
                 StmtKind::Item(item),
                 span,
             )))
-        } else if let Some(expr) = self.parse_expr() {
+        } else if let Some(expr) = self.parse_opt_expr() {
             let span = expr.span();
+            self.expect_semi()?;
             Ok(Box::new(Stmt::new(
                 self.next_node_id(),
                 StmtKind::Expr(expr),
@@ -335,8 +303,7 @@ impl Parser {
     fn parse_mod_item(&mut self) -> PR<N<Item>> {
         let lo = self.span();
 
-        let skip = self.skip_kw(Kw::Mod);
-        self.expect(skip, "`mod` keyword");
+        self.expect_kw(Kw::Mod)?;
 
         let name = self.parse_ident("module name");
 
@@ -352,14 +319,30 @@ impl Parser {
     fn parse_type_item(&mut self) -> PR<N<Item>> {
         let lo = self.span();
 
-        let skip = self.skip_kw(Kw::Type);
-        self.expect(skip, "`type` keyword");
+        self.expect_kw(Kw::Type)?;
 
         let name = self.parse_ident("type name");
+
+        self.expect_punct(Punct::Assign)?;
+
+        let ty = self.parse_ty();
+
+        self.expect_semi()?;
+
+        Ok(Box::new(Item::new(
+            self.next_node_id(),
+            ItemKind::Type(name, ty),
+            lo.to(self.span()),
+        )))
     }
 
     // Expressions //
-    fn parse_expr(&mut self) -> Option<PR<N<Expr>>> {
+    fn parse_expr(&mut self) -> PR<N<Expr>> {
+        let expr = self.parse_opt_expr();
+        self.expected_pr(expr, "expression")
+    }
+
+    fn parse_opt_expr(&mut self) -> Option<PR<N<Expr>>> {
         if self.is(TokenCmp::Kw(Kw::Let)) {
             return Some(self.parse_let());
         }
@@ -370,22 +353,17 @@ impl Parser {
     fn parse_let(&mut self) -> PR<N<Expr>> {
         let lo = self.span();
 
-        let skip = self.skip_kw(Kw::Let);
-        self.expect(skip, "`let` keyword");
+        self.expect_kw(Kw::Let)?;
 
         let name = self.parse_ident("variable name");
 
-        let skip = self.skip_punct(Punct::Assign);
-        self.expect(skip, "`=` operator");
+        self.expect_punct(Punct::Assign)?;
 
         let value = self.parse_expr();
-        let value = self.expected_pr(value, "value");
 
-        let skip = self.skip_kw(Kw::In);
-        self.expect(skip, "`in` keyword");
+        self.expect_kw(Kw::In)?;
 
         let body = self.parse_expr();
-        let body = self.expected_pr(body, "body");
 
         // There might be a better way to slice vector
         Ok(Box::new(Expr::new(
@@ -418,7 +396,6 @@ impl Parser {
             if op.kind == TokenKind::Punct(Punct::Colon) {
                 // Parse ascription (type expression)
                 let ty = self.parse_ty();
-                let ty = self.expected_pr(ty, "type annotation");
                 lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
                     ExprKind::Ty(lhs, ty),
@@ -550,7 +527,6 @@ impl Parser {
         self.skip(TokenCmp::Punct(Punct::Arrow));
 
         let body = self.parse_expr();
-        let body = self.expected_pr(body, "lambda body");
 
         Some(Ok(Box::new(Expr::new(
             self.next_node_id(),
@@ -560,13 +536,18 @@ impl Parser {
     }
 
     // Types //
-    fn parse_ty(&mut self) -> Option<PR<N<Ty>>> {
+    fn parse_ty(&mut self) -> PR<N<Ty>> {
+        let ty = self.parse_opt_ty();
+        self.expected_pr(ty, "type")
+    }
+
+    fn parse_opt_ty(&mut self) -> Option<PR<N<Ty>>> {
         let lo = self.span();
 
         let kind = match self.peek() {
             TokenKind::Punct(Punct::LParen) => {
                 self.advance();
-                let inner = self.parse_ty();
+                let inner = self.parse_opt_ty();
                 self.skip(TokenCmp::Punct(Punct::RParen));
 
                 match inner {
@@ -591,7 +572,6 @@ impl Parser {
 
         if self.skip_punct(Punct::Arrow).is_some() {
             let return_ty = self.parse_ty();
-            let return_ty = self.expected_pr(return_ty, "return type");
             Some(Ok(Box::new(Ty::new(
                 self.next_node_id(),
                 TyKind::Func(ty, return_ty),
@@ -615,12 +595,8 @@ impl Parser {
 }
 
 impl<'a> Stage<AST> for Parser {
-    fn run(mut self) -> StageResult<AST> {
+    fn run(mut self) -> StageOutput<AST> {
         let ast = self.parse();
-        StageResult::new(self.sess, ast, self.msg)
-    }
-
-    fn run_and_unwrap(self) -> OkStageResult<AST> {
-        self.run().unwrap()
+        StageOutput::new(self.sess, ast, self.msg)
     }
 }

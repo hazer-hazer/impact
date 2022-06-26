@@ -10,7 +10,7 @@ use crate::{
     span::span::Ident,
 };
 
-use super::def::{DefId, DefKind, DefTable, Module, ModuleId, ROOT_DEF_ID};
+use super::def::{DefKind, DefTable, Module, ModuleId, ROOT_DEF_ID};
 
 pub struct DefCollector {
     current_module: ModuleId,

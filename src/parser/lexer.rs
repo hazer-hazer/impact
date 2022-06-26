@@ -1,22 +1,9 @@
 use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
-use crate::{parser::token::{Token, TokenKind, TokenStream}};
-use crate::{session::{OkStageResult, Session, Stage, StageResult}};
+use crate::parser::token::{Token, TokenKind, TokenStream};
+use crate::session::SourceId;
+use crate::session::{Session, Stage, StageOutput};
 
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
-
-
-
-pub struct Lexer<'a> {
-    source: &'a str,
-    pos: SpanPos,
-    token_start_pos: SpanPos,
-    tokens: Vec<Token>,
-    msg: MessageStorage,
-    sess: Session,
-    last_char: char,
-    indent_levels: Vec<usize>,
-    last_line_begin: SpanPos,
-}
 
 enum TokenStartMatch {
     Ident,
@@ -75,33 +62,47 @@ impl LexerCharCheck for char {
     }
 }
 
-impl<'a> MessageHolder for Lexer<'a> {
+impl MessageHolder for Lexer {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str, sess: Session) -> Self {
+pub struct Lexer {
+    source_id: SourceId,
+    pos: SpanPos,
+    token_start_pos: SpanPos,
+    tokens: Vec<Token>,
+    msg: MessageStorage,
+    sess: Session,
+    indent_levels: Vec<usize>,
+    last_line_begin: SpanPos,
+}
+
+impl Lexer {
+    pub fn new(source_id: SourceId, sess: Session) -> Self {
         Self {
-            source,
+            source_id,
             pos: 0,
             token_start_pos: 0,
             tokens: Vec::default(),
             msg: MessageStorage::default(),
             sess,
-            last_char: source.chars().nth(0).unwrap_or('\0'),
             indent_levels: Default::default(),
             last_line_begin: 0,
         }
     }
 
+    fn source(&self) -> &str {
+        self.sess.source_map.get_source(self.source_id).source()
+    }
+
     fn eof(&self) -> bool {
-        self.pos as usize >= self.source.len()
+        self.pos as usize >= self.source().len()
     }
 
     fn peek_by_pos(&self, pos: SpanPos) -> char {
-        self.source
+        self.source()
             .chars()
             .nth(pos as usize)
             .expect(format!("Failed to get char from source by index {}", self.pos).as_str())
@@ -112,12 +113,11 @@ impl<'a> Lexer<'a> {
     }
 
     fn lookup(&self) -> Option<char> {
-        self.source.chars().nth((self.pos + 1) as usize)
+        self.source().chars().nth((self.pos + 1) as usize)
     }
 
     fn advance_offset(&mut self, offset: SpanLen) -> char {
         let last = self.pos;
-        self.last_char = self.peek();
         self.pos += offset;
         self.peek_by_pos(last)
     }
@@ -128,7 +128,7 @@ impl<'a> Lexer<'a> {
 
     fn add_token(&mut self, kind: TokenKind, len: SpanLen) {
         self.tokens.push(Token {
-            span: Span::new(self.token_start_pos, len),
+            span: Span::new(self.token_start_pos, len, self.source_id),
             kind,
         });
     }
@@ -139,7 +139,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn add_error(&mut self, msg: &str) {
-        let span = Span::new(self.token_start_pos, 1);
+        let span = Span::new(self.token_start_pos, 1, self.source_id);
 
         MessageBuilder::error()
             .span(span)
@@ -157,7 +157,10 @@ impl<'a> Lexer<'a> {
     }
 
     fn get_fragment_to(&self, start: SpanPos, end: SpanPos) -> (&str, SpanLen) {
-        (&self.source[start as usize..end as usize], self.pos - start)
+        (
+            &self.source()[start as usize..end as usize],
+            self.pos - start,
+        )
     }
 
     fn get_fragment(&self, start: SpanPos) -> (&str, SpanLen) {
@@ -166,7 +169,7 @@ impl<'a> Lexer<'a> {
 
     fn get_fragment_intern(&mut self, start: SpanPos) -> (Symbol, SpanLen) {
         let (frag, len) = (
-            &self.source[start as usize..self.pos as usize],
+            &self.source()[start as usize..self.pos as usize],
             self.pos - start,
         );
         (Symbol::intern(frag), len)
@@ -214,21 +217,16 @@ impl<'a> Lexer<'a> {
         }
 
         let (frag, len) = self.get_fragment(start);
-        self.add_token(
-            TokenKind::Int(frag.parse().expect("TODO: Check integer lexing")),
-            len,
-        );
+        let kind = TokenKind::Int(frag.parse().expect("TODO: Check integer lexing"));
+        self.add_token(kind, len);
     }
 
     fn save_source_line(&mut self) {
         // FIXME: Save NL or not to save 🤔
-        let line = self
-            .get_fragment_to(self.last_line_begin, self.pos - 1)
-            .0
-            .to_string();
         self.sess
-            .source_lines_mut()
-            .add_line(line, self.last_line_begin);
+            .source_map
+            .get_source_mut(self.source_id)
+            .add_line(self.last_line_begin);
         self.last_line_begin = self.pos;
     }
 
@@ -267,12 +265,8 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Stage<TokenStream> for Lexer<'a> {
-    fn run(mut self) -> StageResult<TokenStream> {
-        self.sess
-            .source_lines_mut()
-            .set_source_size(self.source.len());
-
+impl Stage<TokenStream> for Lexer {
+    fn run(mut self) -> StageOutput<TokenStream> {
         while !self.eof() {
             self.token_start_pos = self.pos as SpanPos;
             match self.peek().match_first() {
@@ -299,10 +293,6 @@ impl<'a> Stage<TokenStream> for Lexer<'a> {
 
         self.add_token(TokenKind::Eof, 1);
 
-        StageResult::new(self.sess, TokenStream::new(self.tokens), self.msg)
-    }
-
-    fn run_and_unwrap(self) -> OkStageResult<TokenStream> {
-        self.run().unwrap()
+        StageOutput::new(self.sess, TokenStream::new(self.tokens), self.msg)
     }
 }

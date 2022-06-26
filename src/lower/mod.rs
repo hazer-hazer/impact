@@ -8,7 +8,7 @@ use crate::{
     },
     hir::{self, HIR},
     message::message::MessageStorage,
-    session::{OkStageResult, Session, Stage, StageResult},
+    session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
 };
 
@@ -220,12 +220,8 @@ impl<'a> Lower<'a> {
 }
 
 impl<'a> Stage<HIR> for Lower<'a> {
-    fn run(mut self) -> StageResult<HIR> {
+    fn run(mut self) -> StageOutput<HIR> {
         let hir = self.lower_ast();
-        StageResult::new(self.sess, hir, self.msg)
-    }
-
-    fn run_and_unwrap(self) -> OkStageResult<HIR> {
-        self.run().unwrap()
+        StageOutput::new(self.sess, hir, self.msg)
     }
 }

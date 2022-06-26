@@ -1,14 +1,11 @@
-use parser::{lexer::Lexer, parser::Parser};
-
-use session::{Session, Stage};
-
-use crate::{
-    ast::visitor::AstVisitor, hir::visitor::HirVisitor, lower::Lower,
-    message::term_emitter::TermEmitter, pp::AstLikePP,
-};
+use config::config::{Config, PPStages, StageName};
+use interface::interface::Interface;
 
 mod ast;
+mod cli;
+mod config;
 mod hir;
+mod interface;
 mod lower;
 mod message;
 mod parser;
@@ -19,24 +16,15 @@ mod span;
 // mod typeck;
 
 fn main() {
-    let sess = Session::default();
+    let config = Config {
+        compilation_depth: StageName::Unset,
+        pp_stages: PPStages::All,
+    };
+    let interface = Interface::new(config);
 
-    let source = "let a = 123 in a";
+    let result = interface.compile_single_source("let a = 123 in a");
 
-    let (tokens, sess) = Lexer::new(source, sess).run_and_unwrap();
-
-    let term_emitter = TermEmitter::new(&sess);
-    term_emitter.print_source();
-
-    // println!("{}", tokens.ppfmt(&sess));
-
-    let (ast, sess) = Parser::new(sess, tokens).run_and_unwrap();
-
-    let mut pp = AstLikePP::new(&sess);
-    println!("{}", pp.visit_ast(&ast));
-
-    let (hir, sess) = Lower::new(sess, &ast).run_and_unwrap();
-
-    let mut pp = AstLikePP::new(&sess);
-    println!("{}", pp.visit_hir(&hir));
+    if let Err(err) = result {
+        println!("{}", err)
+    }
 }
