@@ -1,3 +1,5 @@
+use std::intrinsics::unreachable;
+
 use crate::{
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
@@ -226,6 +228,23 @@ impl Parser {
         self.skip_if(|kind| TokenCmp::Punct(punct) == kind)
     }
 
+    fn parse_many(&mut self, cmp: TokenCmp) -> PR<Vec<PR<Token>>> {
+        let tokens = vec![];
+        while self.is(cmp) {
+            tokens.push(Ok(self.peek_tok()));
+        }
+        Ok(tokens)
+    }
+
+    fn parse_many1(&mut self, cmp: TokenCmp) -> PR<Vec<PR<Token>>> {
+        let tokens = self.parse_many(cmp)?;
+        if tokens.is_empty() {
+            Err(ErrorNode::new(self.span()))
+        } else {
+            Ok(tokens)
+        }
+    }
+
     fn parse_ident(&mut self, expected: &str) -> PR<Ident> {
         let skip = self.skip(TokenCmp::Ident).map(|tok| Ident::from_token(tok));
         self.expected(skip, expected)
@@ -264,6 +283,8 @@ impl Parser {
             Some(self.parse_mod_item())
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
             Some(self.parse_type_item())
+        } else if self.is(TokenCmp::Ident) {
+            Some(self.parse_term_item())
         } else {
             None
         }
@@ -301,6 +322,38 @@ impl Parser {
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Type(name, ty),
+            lo.to(self.span()),
+        )))
+    }
+
+    fn parse_term_item(&mut self) -> PR<N<Item>> {
+        let lo = self.span();
+
+        let idents = self
+            .parse_many1(TokenCmp::Ident)?
+            .iter()
+            .map(|t| {
+                t.map(|t| match t.kind {
+                    TokenKind::Ident(_) => Ident::from_token(t),
+                    _ => unreachable!(),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let name = idents[0];
+        let params = if idents.len() == 1 {
+            vec![]
+        } else {
+            idents[1..].to_vec()
+        };
+
+        self.skip_punct(Punct::Assign);
+
+        let body = self.parse_expr();
+
+        Ok(Box::new(Item::new(
+            self.next_node_id(),
+            ItemKind::Decl(name, params, body),
             lo.to(self.span()),
         )))
     }

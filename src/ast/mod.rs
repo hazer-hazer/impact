@@ -85,7 +85,7 @@ impl AstMetadata {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ErrorNode {
     span: Span,
 }

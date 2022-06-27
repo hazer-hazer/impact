@@ -38,12 +38,15 @@ pub trait HirVisitor<T> {
         match item.kind() {
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty),
             ItemKind::Mod(name, items) => self.visit_mod_item(name, items),
+            ItemKind::Term(name, params, body) => self.visit_term_item(name, params, body),
         }
     }
 
     fn visit_type_item(&mut self, name: &Ident, ty: &N<Ty>) -> T;
 
     fn visit_mod_item(&mut self, name: &Ident, items: &Vec<Item>) -> T;
+
+    fn visit_term_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) -> T;
 
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr) -> T {

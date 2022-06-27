@@ -61,6 +61,20 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         )
     }
 
+    fn visit_term_item(
+        &mut self,
+        name: &PR<Ident>,
+        params: &Vec<PR<N<Ident>>>,
+        body: &PR<N<Expr>>,
+    ) -> String {
+        format!(
+            "{} {} = {}",
+            visit_pr!(self, name, visit_ident),
+            visit_pr_vec!(self, params, visit_ident, " "),
+            visit_pr!(self, body, visit_expr)
+        )
+    }
+
     // Expressions //
     fn visit_lit_expr(&mut self, lit: &Lit) -> String {
         format!("{}", lit)

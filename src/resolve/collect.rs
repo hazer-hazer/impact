@@ -72,6 +72,7 @@ impl AstVisitor<()> for DefCollector {
                 self.exit_module();
             }
             ItemKind::Type(_, _) => {}
+            ItemKind::Decl(name, params, body) => self.visit_term_item(name, params, body),
         }
     }
 
@@ -79,6 +80,10 @@ impl AstVisitor<()> for DefCollector {
 
     fn visit_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) {
         visit_each_pr!(self, items, visit_item);
+    }
+
+    fn visit_term_item(&mut self, _: &PR<Ident>, _: &Vec<PR<N<Ident>>>, body: &PR<N<Expr>>) -> () {
+        visit_pr!(self, body, visit_expr)
     }
 
     // Expressions //

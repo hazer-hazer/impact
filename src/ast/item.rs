@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::{pr_display, ty::Ty, NodeId, NodeKindStr, N, PR};
+use super::{expr::Expr, pr_display, ty::Ty, NodeId, NodeKindStr, N, PR};
 
 pub struct Item {
     id: NodeId,
@@ -25,6 +25,7 @@ impl NodeKindStr for Item {
 pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
+    Decl(PR<Ident>, Vec<PR<Ident>>, PR<N<Expr>>),
 }
 
 impl Display for ItemKind {
@@ -41,6 +42,17 @@ impl Display for ItemKind {
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
+            ItemKind::Decl(name, params, body) => write!(
+                f,
+                "{} {} = {}",
+                pr_display(name),
+                params
+                    .iter()
+                    .map(|param| pr_display(param))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                pr_display(body)
+            ),
         }
     }
 }
@@ -48,10 +60,10 @@ impl Display for ItemKind {
 impl NodeKindStr for ItemKind {
     fn kind_str(&self) -> String {
         match self {
-            ItemKind::Type(_, _) => "type alias",
-            ItemKind::Mod(_, _) => "module",
+            ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
+            ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
+            ItemKind::Decl(name, _, _) => format!("term {}", pr_display(name)),
         }
-        .to_string()
     }
 }
 
@@ -66,7 +78,9 @@ impl Item {
 
     pub fn name(&self) -> Option<&Ident> {
         match self.kind() {
-            ItemKind::Type(name, _) | ItemKind::Mod(name, _) => Some(name.as_ref().unwrap()),
+            ItemKind::Type(name, _) | ItemKind::Mod(name, _) | ItemKind::Decl(name, _, _) => {
+                Some(name.as_ref().unwrap())
+            }
         }
     }
 

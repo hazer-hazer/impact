@@ -1,10 +1,11 @@
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::{ty::Ty, N};
+use super::{expr::Expr, ty::Ty, N};
 
 pub enum ItemKind {
     Type(Ident, N<Ty>),
     Mod(Ident, Vec<Item>),
+    Term(Ident, Vec<Ident>, Expr),
 }
 
 pub struct Item {

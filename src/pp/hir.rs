@@ -57,6 +57,15 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         )
     }
 
+    fn visit_term_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) -> String {
+        format!(
+            "{} {} = {}",
+            self.visit_ident(name),
+            visit_each!(self, params, visit_ident, " "),
+            self.visit_expr(body)
+        )
+    }
+
     // Expressions //
     fn visit_lit_expr(&mut self, lit: &Lit) -> String {
         lit.to_string()
