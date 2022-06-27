@@ -1,6 +1,12 @@
 pub mod cli;
 
-#[cfg(feature = "verbose_debug")]
-pub fn verbose(msg: String) {
-    println!("{}", msg)
+macro_rules! verbose {
+    ($msg: expr) => {{
+        if cfg!(feature = "verbose_debug") {
+            println!("{}", $msg)
+        } else {
+        }
+    }};
 }
+
+pub(crate) use verbose;

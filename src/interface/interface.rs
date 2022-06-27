@@ -23,7 +23,7 @@ impl Interface {
         let mut sess = Session::new(self.config.clone());
 
         // Lexing //
-        verbose(format!("=== Lexing ==="));
+        verbose!(format!("=== Lexing ==="));
         let stage = StageName::Lexer;
 
         let (tokens, sess) = Lexer::new(sess.source_map.add_source(String::from(source)), sess)
@@ -44,7 +44,7 @@ impl Interface {
         self.should_stop(stage)?;
 
         // Parsing //
-        verbose(format!("=== Parsing ==="));
+        verbose!(format!("=== Parsing ==="));
         let stage = StageName::Parser;
         let (ast, sess) = Parser::new(sess, tokens).run_and_emit(true)?;
 

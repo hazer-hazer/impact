@@ -196,22 +196,12 @@ impl Parser {
             match self.parse_stmt() {
                 Ok(stmt) => {
                     MessageBuilder::error()
-                        .span(self.span())
-                        .text(format!("Expected {}, got {}", expected, stmt))
+                        .span(stmt.span())
+                        .text(format!("Expected {}, got `{}`", expected, stmt))
                         .emit(self);
                     Err(ErrorNode::new(stmt.span()))
                 }
-                Err(err) => {
-                    MessageBuilder::error()
-                        .span(self.span())
-                        .text(format!(
-                            "Unexpected token {}, where {} expected",
-                            self.peek(),
-                            expected
-                        ))
-                        .emit(self);
-                    Err(ErrorNode::new(self.advance_tok().span()))
-                }
+                Err(err) => Err(err),
             }
         }
     }
@@ -322,6 +312,7 @@ impl Parser {
     // Items //
     fn parse_item(&mut self) -> PR<N<Item>> {
         let item = self.parse_opt_item();
+        self.try_recover_any(item, "item")
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
@@ -373,7 +364,7 @@ impl Parser {
     // Expressions //
     fn parse_expr(&mut self) -> PR<N<Expr>> {
         let expr = self.parse_opt_expr();
-        self.expected_pr(expr, "expression")
+        self.try_recover_any(expr, "expression")
     }
 
     fn parse_opt_expr(&mut self) -> Option<PR<N<Expr>>> {
@@ -572,7 +563,7 @@ impl Parser {
     // Types //
     fn parse_ty(&mut self) -> PR<N<Ty>> {
         let ty = self.parse_opt_ty();
-        self.expected_pr(ty, "type")
+        self.try_recover_any(ty, "type")
     }
 
     fn parse_opt_ty(&mut self) -> Option<PR<N<Ty>>> {
@@ -621,7 +612,7 @@ impl Parser {
 
         self.skip_nls();
         while !self.eof() {
-            verbose(format!("Parse {:?}", self.peek()));
+            verbose!(format!("Parse {:?}", self.peek()));
             items.push(self.parse_item());
         }
 

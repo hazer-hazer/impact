@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{NodeId, PR};
+use super::{pr_display, NodeId, PR};
 
 #[derive(Clone, Copy)]
 pub enum LitTy {
@@ -48,6 +48,12 @@ impl Ty {
     }
 }
 
+impl Display for Ty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind())
+    }
+}
+
 impl WithSpan for Ty {
     fn span(&self) -> Span {
         self.span
@@ -62,14 +68,16 @@ pub enum TyKind {
     Paren(PR<N<Ty>>),
 }
 
-// impl Display for TyKind {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             TyKind::Unit => write!(f, "()"),
-//             TyKind::Lit(lit_ty) => write!(f, "{}", lit_ty),
-//             TyKind::Var(ident) => write!(f, "{}", ident),
-//             TyKind::Func(param_ty, return_ty) => write!(f, "{} -> {}", param_ty, return_ty),
-//             TyKind::Paren(inner) => write!(f, "{}", inner),
-//         }
-//     }
-// }
+impl Display for TyKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TyKind::Unit => write!(f, "()"),
+            TyKind::Lit(lit_ty) => write!(f, "{}", lit_ty),
+            TyKind::Var(ident) => write!(f, "{}", pr_display(ident)),
+            TyKind::Func(param_ty, return_ty) => {
+                write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
+            }
+            TyKind::Paren(inner) => write!(f, "{}", pr_display(inner)),
+        }
+    }
+}

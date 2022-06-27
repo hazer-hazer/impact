@@ -1,6 +1,6 @@
 use crate::{
     ast::ty::LitTy,
-    span::span::{Ident, Span, Spanned, WithSpan},
+    span::span::{Ident, Span, WithSpan},
 };
 
 use super::N;

@@ -14,16 +14,15 @@ pub type N<T> = Box<T>;
 
 pub type PR<T> = Result<T, ErrorNode>;
 
-macro_rules! format_pr {
-    ($pr: expr) => {
-        match $pr {
-            Ok(ok) => format!("{}", ok),
-            Err(_) => format!("[ERROR]"),
-        }
-    };
+pub fn pr_display<T>(pr: &PR<T>) -> String
+where
+    T: Display,
+{
+    match pr {
+        Ok(ok) => format!("{}", ok),
+        Err(err) => format!("{}", err),
+    }
 }
-
-pub(crate) use format_pr;
 
 impl<T> WithSpan for PR<T>
 where
@@ -89,6 +88,6 @@ impl ErrorNode {
 
 impl Display for ErrorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.span)
+        write!(f, "[ERROR]")
     }
 }

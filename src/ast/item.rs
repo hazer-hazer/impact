@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::{ty::Ty, NodeId, N, PR};
+use super::{pr_display, ty::Ty, NodeId, N, PR};
 
 pub struct Item {
     id: NodeId,
@@ -24,8 +24,17 @@ pub enum ItemKind {
 impl Display for ItemKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ItemKind::Type(name, ty) => write!(),
-            ItemKind::Mod(name, items) => todo!(),
+            ItemKind::Type(name, ty) => write!(f, "type {} = {}", pr_display(name), pr_display(ty)),
+            ItemKind::Mod(name, items) => write!(
+                f,
+                "mod {} {{{}}}",
+                pr_display(name),
+                items
+                    .iter()
+                    .map(|item| pr_display(item))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
         }
     }
 }

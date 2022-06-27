@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::span::span::{Span, WithSpan};
 
-use super::{expr::Expr, item::Item, NodeId, N, PR, format_pr};
+use super::{expr::Expr, item::Item, pr_display, NodeId, N, PR};
 
 pub struct Stmt {
     id: NodeId,
@@ -44,8 +44,8 @@ pub enum StmtKind {
 impl Display for StmtKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StmtKind::Expr(expr) => write!(f, "{}", format_pr!(expr)),
-            StmtKind::Item(item) => write!(f, "{}", format_pr!(item)),
+            StmtKind::Expr(expr) => write!(f, "{}", pr_display(expr)),
+            StmtKind::Item(item) => write!(f, "{}", pr_display(item)),
         }
     }
 }

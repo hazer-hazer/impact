@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
-use super::{format_pr, stmt::Stmt, ty::Ty, NodeId, N, PR};
+use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, N, PR};
 
 pub struct Expr {
     id: NodeId,
@@ -150,33 +150,33 @@ impl Display for Lit {
 impl Display for ExprKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExprKind::Lit(lit) => write!(f, "literal {}", lit),
-            ExprKind::Ident(ident) => write!(f, "identifier {}", ident),
+            ExprKind::Lit(lit) => write!(f, "{}", lit),
+            ExprKind::Ident(ident) => write!(f, "{}", ident),
             ExprKind::Infix(lhs, op, rhs) => {
-                write!(f, "{} {} {}", format_pr!(lhs), op, format_pr!(rhs))
+                write!(f, "{} {} {}", pr_display(lhs), op, pr_display(rhs))
             }
-            ExprKind::Prefix(op, rhs) => write!(f, "{}{}", op, format_pr!(rhs)),
+            ExprKind::Prefix(op, rhs) => write!(f, "{}{}", op, pr_display(rhs)),
             ExprKind::Abs(param_name, body) => {
-                write!(f, "{} -> {}", format_pr!(param_name), format_pr!(body))
+                write!(f, "{} -> {}", pr_display(param_name), pr_display(body))
             }
-            ExprKind::App(lhs, arg) => write!(f, "{} {}", format_pr!(lhs), format_pr!(arg)),
+            ExprKind::App(lhs, arg) => write!(f, "{} {}", pr_display(lhs), pr_display(arg)),
             ExprKind::Block(stmts) => write!(
                 f,
                 "{}",
                 stmts
                     .iter()
-                    .map(|stmt| format!("{}", format_pr!(stmt)))
+                    .map(|stmt| format!("{}", pr_display(stmt)))
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
             ExprKind::Let(name, value, body) => write!(
                 f,
                 "let {} = {} in {}",
-                format_pr!(name),
-                format_pr!(value),
-                format_pr!(body)
+                pr_display(name),
+                pr_display(value),
+                pr_display(body)
             ),
-            ExprKind::Ty(expr, ty) => write!(f, "{}: {}", format_pr!(expr), format_pr!(ty)),
+            ExprKind::Ty(expr, ty) => write!(f, "{}: {}", pr_display(expr), pr_display(ty)),
         }
     }
 }
