@@ -24,6 +24,16 @@ where
     }
 }
 
+pub fn pr_node_kind_str<T>(pr: &PR<T>) -> String
+where
+    T: NodeKindStr,
+{
+    match pr {
+        Ok(ok) => ok.kind_str(),
+        Err(err) => "I don't what is that...".to_string(),
+    }
+}
+
 impl<T> WithSpan for PR<T>
 where
     T: WithSpan,
@@ -89,5 +99,19 @@ impl ErrorNode {
 impl Display for ErrorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[ERROR]")
+    }
+}
+
+/// Give some pretty name for node-like structure in errors 😺
+pub trait NodeKindStr {
+    fn kind_str(&self) -> String;
+}
+
+impl<T> NodeKindStr for Box<T>
+where
+    T: NodeKindStr,
+{
+    fn kind_str(&self) -> String {
+        (**self).kind_str()
     }
 }

@@ -1,5 +1,7 @@
+use cli::color::Colorize;
 use config::config::{Config, PPStages, StageName};
 use interface::interface::Interface;
+use message::message::MessageKind;
 
 mod ast;
 mod cli;
@@ -25,6 +27,6 @@ fn main() {
     let result = interface.compile_single_source("let a = 123 in a");
 
     if let Err(err) = result {
-        println!("{}", err)
+        println!("{}", err.fg_color(MessageKind::Error.color()))
     }
 }

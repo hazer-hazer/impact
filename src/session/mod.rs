@@ -1,11 +1,12 @@
 use crate::{
     ast::{AstMetadata, NodeId},
+    config::config::Config,
     message::{
         message::{Message, MessageStorage},
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    span::span::{Span, SpanPos}, config::config::Config,
+    span::span::{Span, SpanPos},
 };
 
 /**
@@ -15,27 +16,40 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SourceId(u32);
 
-pub const DUMP_SOURCE_ID: SourceId = SourceId(u32::MAX);
+pub const DUMMY_SOURCE_ID: SourceId = SourceId(u32::MAX);
 
 impl SourceId {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
 
-    pub fn is_dumb(&self) -> bool {
-        *self == DUMP_SOURCE_ID
+    pub fn is_dummy(&self) -> bool {
+        *self == DUMMY_SOURCE_ID
     }
+}
+
+/// Computed information about line, use not for storage but as a helper
+pub struct SpanSourceInfo<'a> {
+    pub line: &'a str,
+    pub line_pos: SpanPos,
+    pub line_size: usize,
+    pub line_num: usize,
+    pub line_num_len: usize,
+    pub line_num_indent: usize,
+    pub pos_in_line: SpanPos,
 }
 
 /// Some source, e.g. source file
 pub struct Source {
+    filename: String,
     source: String,
     lines_positions: Vec<SpanPos>,
 }
 
 impl Source {
-    pub fn new(source: String) -> Self {
+    pub fn new(filename: String, source: String) -> Self {
         Self {
+            filename,
             source,
             lines_positions: vec![],
         }
@@ -55,6 +69,10 @@ impl Source {
 
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    pub fn filename(&self) -> &str {
+        self.filename.as_ref()
     }
 
     /// get (line string, line position, line number)
@@ -86,6 +104,36 @@ impl Source {
 
         panic!("No source line found for span {}", span);
     }
+
+    pub fn get_line_info<'a>(&self, sess: &'a Session, span: Span) -> SpanSourceInfo<'a> {
+        let source = sess.source_map.get_source(span.source());
+
+        let lines_count = source.lines_count();
+
+        let (line, line_pos, line_num) = if span.is_error() {
+            ("[The place my stupid mistakes live]", 0, 0)
+        } else {
+            let (line, pos, num) = source.find_line(span);
+            assert!(pos <= span.lo());
+
+            (line, pos, num)
+        };
+
+        // FIXME: Optimize
+        let line_num_len = line_num.to_string().len();
+
+        let line_num_indent = line_num_len - (lines_count + 1).to_string().len();
+
+        SpanSourceInfo {
+            line,
+            line_pos,
+            line_size: line.len(),
+            line_num,
+            line_num_len,
+            line_num_indent,
+            pos_in_line: span.lo() - line_pos,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -94,9 +142,9 @@ pub struct SourceMap {
 }
 
 impl SourceMap {
-    pub fn add_source(&mut self, source: String) -> SourceId {
+    pub fn add_source(&mut self, source: Source) -> SourceId {
         let source_id = SourceId(self.sources.len() as u32);
-        self.sources.push(Source::new(source));
+        self.sources.push(source);
         source_id
     }
 

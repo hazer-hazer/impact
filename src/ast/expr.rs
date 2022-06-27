@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
-use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, N, PR};
+use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, N, PR};
 
 pub struct Expr {
     id: NodeId,
@@ -36,6 +36,12 @@ impl Display for Expr {
 impl WithSpan for Expr {
     fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl NodeKindStr for Expr {
+    fn kind_str(&self) -> String {
+        self.kind().kind_str()
     }
 }
 
@@ -178,5 +184,22 @@ impl Display for ExprKind {
             ),
             ExprKind::Ty(expr, ty) => write!(f, "{}: {}", pr_display(expr), pr_display(ty)),
         }
+    }
+}
+
+impl NodeKindStr for ExprKind {
+    fn kind_str(&self) -> String {
+        match self {
+            ExprKind::Lit(_) => "literal",
+            ExprKind::Ident(_) => "identifier",
+            ExprKind::Abs(_, _) => "lambda",
+            ExprKind::App(_, _) => "function call",
+            ExprKind::Block(_) => "block expression",
+            ExprKind::Let(_, _, _) => "let expression",
+            ExprKind::Ty(_, _) => "type ascription",
+            ExprKind::Infix(_, _, _) => "infix expression",
+            ExprKind::Prefix(_, _) => "prefix expression",
+        }
+        .to_string()
     }
 }

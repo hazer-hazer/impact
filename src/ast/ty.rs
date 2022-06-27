@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{pr_display, NodeId, PR};
+use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, PR};
 
 #[derive(Clone, Copy)]
 pub enum LitTy {
@@ -34,6 +34,24 @@ pub struct Ty {
     span: Span,
 }
 
+impl Display for Ty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind())
+    }
+}
+
+impl WithSpan for Ty {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl NodeKindStr for Ty {
+    fn kind_str(&self) -> String {
+        self.kind().kind_str()
+    }
+}
+
 impl Ty {
     pub fn new(id: NodeId, kind: TyKind, span: Span) -> Self {
         Self { id, kind, span }
@@ -45,18 +63,6 @@ impl Ty {
 
     pub fn id(&self) -> NodeId {
         self.id
-    }
-}
-
-impl Display for Ty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind())
-    }
-}
-
-impl WithSpan for Ty {
-    fn span(&self) -> Span {
-        self.span
     }
 }
 
@@ -78,6 +84,20 @@ impl Display for TyKind {
                 write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
             }
             TyKind::Paren(inner) => write!(f, "{}", pr_display(inner)),
+        }
+    }
+}
+
+impl NodeKindStr for TyKind {
+    fn kind_str(&self) -> String {
+        match self {
+            TyKind::Unit => "unit type".to_string(),
+            TyKind::Lit(_) => "literal type".to_string(),
+            TyKind::Var(ident) => format!("type {}", pr_display(ident)),
+            TyKind::Func(_, _) => "function type".to_string(),
+
+            // I just thought this format would look funny 😐
+            TyKind::Paren(inner) => format!("{{{}}}", pr_node_kind_str(inner)),
         }
     }
 }

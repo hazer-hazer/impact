@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::{pr_display, ty::Ty, NodeId, N, PR};
+use super::{pr_display, ty::Ty, NodeId, NodeKindStr, N, PR};
 
 pub struct Item {
     id: NodeId,
@@ -13,6 +13,12 @@ pub struct Item {
 impl Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.kind())
+    }
+}
+
+impl NodeKindStr for Item {
+    fn kind_str(&self) -> String {
+        self.kind().kind_str()
     }
 }
 
@@ -36,6 +42,16 @@ impl Display for ItemKind {
                     .join("\n")
             ),
         }
+    }
+}
+
+impl NodeKindStr for ItemKind {
+    fn kind_str(&self) -> String {
+        match self {
+            ItemKind::Type(_, _) => "type alias",
+            ItemKind::Mod(_, _) => "module",
+        }
+        .to_string()
     }
 }
 

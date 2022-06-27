@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 
 use crate::{
     parser::token::{Token, TokenKind},
-    session::{SourceId, DUMP_SOURCE_ID},
+    session::{SourceId, DUMMY_SOURCE_ID},
 };
 use std::{
     collections::HashMap,
@@ -147,7 +147,7 @@ impl Span {
         Self {
             pos: SpanPos::MAX,
             len: SpanLen::MAX,
-            source: DUMP_SOURCE_ID,
+            source: DUMMY_SOURCE_ID,
         }
     }
 

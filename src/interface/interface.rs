@@ -1,11 +1,12 @@
 use crate::{
     ast::visitor::AstVisitor,
+    cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::AstLikePP,
-    session::{Session, Stage}, cli::verbose,
+    session::{Session, Source, Stage},
 };
 
 pub struct Interface {
@@ -22,12 +23,14 @@ impl Interface {
     pub fn compile_single_source(self, source: &str) -> InterruptResult {
         let mut sess = Session::new(self.config.clone());
 
+        let source = Source::new("?".to_string(), String::from(source));
+
         // Lexing //
         verbose!(format!("=== Lexing ==="));
         let stage = StageName::Lexer;
 
-        let (tokens, sess) = Lexer::new(sess.source_map.add_source(String::from(source)), sess)
-            .run_and_emit(true)?;
+        let (tokens, sess) =
+            Lexer::new(sess.source_map.add_source(source), sess).run_and_emit(true)?;
 
         if self.config.check_pp_stage(stage) {
             println!(

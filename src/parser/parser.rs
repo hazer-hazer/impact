@@ -4,7 +4,7 @@ use crate::{
         item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        ErrorNode, NodeId, AST, N, PR,
+        ErrorNode, NodeId, NodeKindStr, AST, N, PR,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -12,7 +12,7 @@ use crate::{
     span::span::{Ident, Kw, Span, WithSpan},
 };
 
-use super::token::{Infix, Prefix, Punct, Token, TokenCmp, TokenKind, TokenStream};
+use super::token::{Infix, Punct, Token, TokenCmp, TokenKind, TokenStream};
 
 pub struct Parser {
     sess: Session,
@@ -122,6 +122,7 @@ impl Parser {
         MessageBuilder::error()
             .span(self.span())
             .text(format!("Unexpected token {}", self.peek()))
+            .label(self.span(), "Unexpected token".to_string())
             .emit(self);
         ErrorNode::new(self.advance_tok().span)
     }
@@ -134,7 +135,7 @@ impl Parser {
             MessageBuilder::error()
                 .span(self.span())
                 .text(format!("Expected {}, got {}", cmp, self.peek()))
-                .emit(self);
+                .emit_single_label(self);
             Err(ErrorNode::new(self.span()))
         }
     }
@@ -156,21 +157,6 @@ impl Parser {
         self.expect(TokenCmp::Punct(punct))
     }
 
-    fn expected_pr<'a, T>(&'a mut self, entity: Option<PR<N<T>>>, expected: &str) -> PR<N<T>>
-    where
-        T: WithSpan,
-    {
-        if let Some(entity) = entity {
-            entity
-        } else {
-            MessageBuilder::error()
-                .span(self.span())
-                .text(format!("Expected {}, got {}", expected, self.peek()))
-                .emit(self);
-            Err(ErrorNode::new(self.span()))
-        }
-    }
-
     fn expected<'a, T>(&'a mut self, entity: Option<T>, expected: &str) -> PR<T>
     where
         T: WithSpan,
@@ -181,7 +167,7 @@ impl Parser {
             MessageBuilder::error()
                 .span(self.span())
                 .text(format!("Expected {}, got {}", expected, self.peek()))
-                .emit(self);
+                .emit_single_label(self);
             Err(ErrorNode::new(self.span()))
         }
     }
@@ -198,6 +184,7 @@ impl Parser {
                     MessageBuilder::error()
                         .span(stmt.span())
                         .text(format!("Expected {}, got `{}`", expected, stmt))
+                        .label(stmt.span(), format!("Unexpected {}", stmt.kind_str()))
                         .emit(self);
                     Err(ErrorNode::new(stmt.span()))
                 }
@@ -219,29 +206,8 @@ impl Parser {
         }
     }
 
-    fn skip_many_if<F>(&mut self, pred: F) -> Option<Vec<Token>>
-    where
-        F: Fn(TokenKind) -> bool,
-    {
-        let mut tokens = Vec::<Token>::new();
-
-        while pred(self.peek()) {
-            tokens.push(self.advance_tok());
-        }
-
-        if tokens.is_empty() {
-            None
-        } else {
-            Some(tokens)
-        }
-    }
-
     fn skip(&mut self, cmp: TokenCmp) -> Option<Token> {
         self.skip_if(|kind| cmp == kind)
-    }
-
-    fn skip_many(&mut self, cmp: TokenCmp) -> Option<Vec<Token>> {
-        self.skip_many_if(|kind| cmp == kind)
     }
 
     fn skip_any(&mut self, cmp: &[TokenCmp]) -> Option<Token> {
@@ -256,30 +222,8 @@ impl Parser {
         nl
     }
 
-    fn skip_prefix(&mut self, prefix: Prefix) -> Option<Token> {
-        self.skip_if(|kind| TokenCmp::Prefix(prefix) == kind)
-    }
-
-    fn skip_kw(&mut self, kw: Kw) -> Option<Token> {
-        self.skip_if(|kind| TokenCmp::Kw(kw) == kind)
-    }
-
     fn skip_punct(&mut self, punct: Punct) -> Option<Token> {
         self.skip_if(|kind| TokenCmp::Punct(punct) == kind)
-    }
-
-    fn parse_multiple(&mut self, cmp: TokenCmp) -> Vec<Token> {
-        let mut items: Vec<Token> = Default::default();
-
-        while !self.eof() {
-            if self.is(cmp) {
-                items.push(self.advance_tok());
-            } else {
-                break;
-            }
-        }
-
-        items
     }
 
     fn parse_ident(&mut self, expected: &str) -> PR<Ident> {
@@ -458,7 +402,7 @@ impl Parser {
                 MessageBuilder::error()
                     .span(self.span())
                     .text(format!("Expected expression after {} operator", op.kind))
-                    .emit(self);
+                    .emit_single_label(self);
                 Err(ErrorNode::new(self.span()))
             };
 

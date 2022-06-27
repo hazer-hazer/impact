@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod color;
 
 macro_rules! verbose {
     ($msg: expr) => {{
