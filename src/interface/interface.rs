@@ -20,10 +20,8 @@ impl Interface {
         Self { config }
     }
 
-    pub fn compile_single_source(self, source: &str) -> InterruptResult {
+    pub fn compile_single_source(self, source: Source) -> InterruptResult {
         let mut sess = Session::new(self.config.clone());
-
-        let source = Source::new("?".to_string(), String::from(source));
 
         // Lexing //
         verbose!(format!("=== Lexing ==="));

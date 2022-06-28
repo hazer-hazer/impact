@@ -57,7 +57,7 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         )
     }
 
-    fn visit_term_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) -> String {
+    fn visit_decl_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) -> String {
         format!(
             "{} {} = {}",
             self.visit_ident(name),

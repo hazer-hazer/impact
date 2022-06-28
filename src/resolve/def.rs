@@ -8,7 +8,7 @@ use crate::{
 pub enum DefKind {
     Type,
     Mod,
-    Term,
+    Decl,
 }
 
 impl DefKind {
@@ -16,7 +16,7 @@ impl DefKind {
         match kind {
             ItemKind::Type(_, _) => DefKind::Type,
             ItemKind::Mod(_, _) => DefKind::Mod,
-            ItemKind::Decl(_, _, _) => DefKind::Term,
+            ItemKind::Decl(_, _, _) => DefKind::Decl,
         }
     }
 }

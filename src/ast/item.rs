@@ -62,7 +62,7 @@ impl NodeKindStr for ItemKind {
         match self {
             ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
             ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
-            ItemKind::Decl(name, _, _) => format!("term {}", pr_display(name)),
+            ItemKind::Decl(name, _, _) => format!("{} declaration", pr_display(name)),
         }
     }
 }

@@ -58,7 +58,7 @@ pub trait AstVisitor<T> {
         match item.kind() {
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty),
             ItemKind::Mod(name, items) => self.visit_mod_item(name, items),
-            ItemKind::Decl(name, params, body) => self.visit_term_item(name, params, body),
+            ItemKind::Decl(name, params, body) => self.visit_decl_item(name, params, body),
         }
     }
 
@@ -66,10 +66,10 @@ pub trait AstVisitor<T> {
 
     fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> T;
 
-    fn visit_term_item(
+    fn visit_decl_item(
         &mut self,
         name: &PR<Ident>,
-        params: &Vec<PR<N<Ident>>>,
+        params: &Vec<PR<Ident>>,
         body: &PR<N<Expr>>,
     ) -> T;
 

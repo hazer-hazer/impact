@@ -5,7 +5,7 @@ use super::{expr::Expr, ty::Ty, N};
 pub enum ItemKind {
     Type(Ident, N<Ty>),
     Mod(Ident, Vec<Item>),
-    Term(Ident, Vec<Ident>, Expr),
+    Decl(Ident, Vec<Ident>, Expr),
 }
 
 pub struct Item {

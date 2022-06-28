@@ -1,5 +1,3 @@
-use std::intrinsics::unreachable;
-
 use crate::{
     ast::{
         expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
@@ -95,6 +93,13 @@ impl Parser {
 
     fn is(&self, cmp: TokenCmp) -> bool {
         cmp == self.peek()
+    }
+
+    fn next_is(&self, cmp: TokenCmp) -> bool {
+        self.tokens
+            .0
+            .get(self.pos + 1)
+            .map_or(false, |t| cmp == t.kind)
     }
 
     fn advance_offset_tok(&mut self, offset: usize) -> Token {
@@ -229,7 +234,7 @@ impl Parser {
     }
 
     fn parse_many(&mut self, cmp: TokenCmp) -> PR<Vec<PR<Token>>> {
-        let tokens = vec![];
+        let mut tokens = vec![];
         while self.is(cmp) {
             tokens.push(Ok(self.peek_tok()));
         }
@@ -284,7 +289,7 @@ impl Parser {
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
             Some(self.parse_type_item())
         } else if self.is(TokenCmp::Ident) {
-            Some(self.parse_term_item())
+            Some(self.parse_decl_item())
         } else {
             None
         }
@@ -326,26 +331,23 @@ impl Parser {
         )))
     }
 
-    fn parse_term_item(&mut self) -> PR<N<Item>> {
+    fn parse_decl_item(&mut self) -> PR<N<Item>> {
         let lo = self.span();
 
-        let idents = self
+        // TODO: Rewrite this scary hell
+        let mut idents = self
             .parse_many1(TokenCmp::Ident)?
             .iter()
             .map(|t| {
-                t.map(|t| match t.kind {
+                t.clone().map(|t| match t.kind {
                     TokenKind::Ident(_) => Ident::from_token(t),
                     _ => unreachable!(),
                 })
             })
             .collect::<Vec<_>>();
 
-        let name = idents[0];
-        let params = if idents.len() == 1 {
-            vec![]
-        } else {
-            idents[1..].to_vec()
-        };
+        let name = idents.remove(0);
+        let params = idents;
 
         self.skip_punct(Punct::Assign);
 
@@ -499,11 +501,11 @@ impl Parser {
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
         let Token { kind, span } = self.peek_tok();
 
-        if TokenCmp::Nl == self.peek() {
+        if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
             return self.parse_block();
         }
 
-        if TokenCmp::Punct(Punct::Backslash) == self.peek() {
+        if self.is(TokenCmp::Punct(Punct::Backslash)) {
             return self.parse_abs();
         }
 

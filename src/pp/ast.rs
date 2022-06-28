@@ -61,10 +61,10 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         )
     }
 
-    fn visit_term_item(
+    fn visit_decl_item(
         &mut self,
         name: &PR<Ident>,
-        params: &Vec<PR<N<Ident>>>,
+        params: &Vec<PR<Ident>>,
         body: &PR<N<Expr>>,
     ) -> String {
         format!(
