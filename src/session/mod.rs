@@ -95,7 +95,7 @@ impl Source {
 
             if span.lo() >= line_pos && span.lo() < next_line_pos {
                 return (
-                    &self.source[line_pos as usize..next_line_pos as usize],
+                    &self.source[line_pos as usize..(next_line_pos - 1) as usize],
                     line_pos,
                     i + 1,
                 );

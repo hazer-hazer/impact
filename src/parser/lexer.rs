@@ -234,12 +234,15 @@ impl Lexer {
 
     fn lex_indent(&mut self) {
         let pos = self.pos;
-        let mut lines = vec![];
+
         while self.peek().is_indent_precursor() {
             self.save_source_line();
-            lines.push(self.pos);
+
+            self.advance();
+            self.last_line_begin = self.pos;
 
             if self.eof() {
+                self.save_source_line();
                 return;
             }
         }

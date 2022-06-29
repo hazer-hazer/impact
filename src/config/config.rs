@@ -10,7 +10,7 @@ pub enum StageName {
     Unset,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PPStages {
     None,
     Some(Vec<StageName>),

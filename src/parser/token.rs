@@ -100,6 +100,8 @@ impl TokenKind {
             "not" => Some(TokenKind::Prefix(Prefix::Not)),
             "let" => Some(TokenKind::Kw(Kw::Let)),
             "in" => Some(TokenKind::Kw(Kw::In)),
+            "mod" => Some(TokenKind::Kw(Kw::Mod)),
+            "type" => Some(TokenKind::Kw(Kw::Type)),
             _ => None,
         }
     }
