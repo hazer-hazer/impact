@@ -30,7 +30,7 @@ where
 {
     match pr {
         Ok(ok) => ok.kind_str(),
-        Err(err) => "I don't what is that...".to_string(),
+        Err(_) => "I don't what is that...".to_string(),
     }
 }
 
@@ -49,11 +49,7 @@ where
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub struct NodeId(u32);
 
-impl NodeId {
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
+impl NodeId {}
 
 pub type NodeMap<T> = HashMap<NodeId, T>;
 

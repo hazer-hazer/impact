@@ -5,60 +5,87 @@ use crate::{
         item::{Item, ItemKind},
         ty::Ty,
         visitor::{visit_each_pr, visit_pr, AstVisitor},
-        NodeId, N, PR,
+        ErrorNode, NodeId, AST, N, PR,
     },
+    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    session::{Session, Stage, StageOutput},
     span::span::Ident,
 };
 
-use super::def::{DefKind, DefTable, Module, ModuleId, ROOT_DEF_ID};
+use super::def::{DefKind, Module, ModuleId, ROOT_DEF_ID};
 
-pub struct DefCollector {
+pub struct DefCollector<'a> {
+    sess: Session,
+    ast: &'a AST,
     current_module: ModuleId,
-    def_table: DefTable,
+    msg: MessageStorage,
 }
 
-impl DefCollector {
-    pub fn new() -> Self {
+impl<'a> MessageHolder for DefCollector<'a> {
+    fn save(&mut self, msg: Message) {
+        self.msg.add_message(msg)
+    }
+}
+
+impl<'a> DefCollector<'a> {
+    pub fn new(sess: Session, ast: &'a AST) -> Self {
         Self {
+            sess,
+            ast,
             current_module: ModuleId::Module(ROOT_DEF_ID),
-            def_table: Default::default(),
+            msg: Default::default(),
         }
     }
 
     fn module(&mut self) -> &mut Module {
-        self.def_table.get_module_mut(self.current_module)
+        self.sess.def_table.get_module_mut(self.current_module)
     }
 
     fn enter_def_module(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) {
-        let def_id = self.def_table.define(node_id, kind, &ident);
-        self.current_module = self.def_table.add_module(def_id, self.current_module);
+        let def_id = self.sess.def_table.define(node_id, kind, &ident);
+        self.current_module = self.sess.def_table.add_module(def_id, self.current_module);
     }
 
     fn enter_block_module(&mut self, node_id: NodeId) {
-        self.current_module = self.def_table.add_block(node_id, self.current_module)
+        self.current_module = self.sess.def_table.add_block(node_id, self.current_module)
     }
 
     fn exit_module(&mut self) {
         self.current_module = self
+            .sess
             .def_table
             .get_module(self.current_module)
             .parent()
             .expect("Tried to exit root module")
     }
+
+    fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) {
+        let def_id = self.sess.def_table.define(node_id, kind, ident);
+        let old_def = self.module().define(kind.namespace(), ident.name(), def_id);
+
+        if let Some(old_def) = old_def {
+            let old_def = self.sess.def_table.get_def(old_def).unwrap();
+            MessageBuilder::error()
+                .span(ident.span())
+                .text(format!("Tried to redefine `{}`", ident.name()))
+                .label(old_def.name().span(), "Previously defined here".to_string())
+                .label(ident.span(), "Redefined here".to_string())
+                .emit(self);
+        }
+    }
 }
 
-impl AstVisitor<()> for DefCollector {
-    fn visit_err(&self, _: &ast::ErrorNode) {}
+impl<'a> AstVisitor<()> for DefCollector<'a> {
+    fn visit_err(&self, _: &ErrorNode) {}
 
-    fn visit_ast(&mut self, ast: &ast::AST) {
-        self.def_table.add_root_module();
+    fn visit_ast(&mut self, ast: &AST) {
+        self.sess.def_table.add_root_module();
         visit_each_pr!(self, ast.items(), visit_item);
-        self.exit_module();
     }
 
     // Items //
     fn visit_item(&mut self, item: &Item) {
-        self.def_table.define(
+        self.define(
             item.id(),
             DefKind::from_item_kind(item.kind()),
             item.name()
@@ -159,5 +186,12 @@ impl AstVisitor<()> for DefCollector {
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) {
         visit_pr!(self, param_ty, visit_ty);
         visit_pr!(self, return_ty, visit_ty);
+    }
+}
+
+impl<'a> Stage<()> for DefCollector<'a> {
+    fn run(mut self) -> StageOutput<()> {
+        self.visit_ast(self.ast);
+        StageOutput::new(self.sess, (), self.msg)
     }
 }

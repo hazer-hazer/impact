@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap},
-    span::span::{Ident, Symbol},
+    span::span::{Ident, Span, Symbol},
 };
 
+#[derive(Clone, Copy)]
 pub enum DefKind {
     Type,
     Mod,
@@ -18,6 +19,28 @@ impl DefKind {
             ItemKind::Mod(_, _) => DefKind::Mod,
             ItemKind::Decl(_, _, _) => DefKind::Decl,
         }
+    }
+
+    pub fn namespace(&self) -> Namespace {
+        match self {
+            DefKind::Type => Namespace::Type,
+            DefKind::Mod => Namespace::Type,
+            DefKind::Decl => Namespace::Value,
+        }
+    }
+}
+
+impl Display for DefKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                DefKind::Type => "type alias",
+                DefKind::Mod => "module",
+                DefKind::Decl => "term declaration",
+            }
+        )
     }
 }
 
@@ -40,16 +63,12 @@ pub type DefMap<T> = HashMap<DefId, T>;
 pub struct Def {
     def_id: DefId,
     kind: DefKind,
-    ident: Ident,
+    name: Ident,
 }
 
 impl Def {
-    pub fn new(def_id: DefId, kind: DefKind, ident: Ident) -> Self {
-        Self {
-            def_id,
-            kind,
-            ident,
-        }
+    pub fn new(def_id: DefId, kind: DefKind, name: Ident) -> Self {
+        Self { def_id, kind, name }
     }
 
     pub fn def_id(&self) -> DefId {
@@ -58,6 +77,10 @@ impl Def {
 
     pub fn kind(&self) -> &DefKind {
         &self.kind
+    }
+
+    pub fn name(&self) -> Ident {
+        self.name
     }
 }
 
@@ -71,13 +94,30 @@ pub struct PerNS<T> {
     ty: T,
 }
 
+impl<T> PerNS<T> {
+    pub fn get(&self, ns: Namespace) -> &T {
+        match ns {
+            Namespace::Value => &self.value,
+            Namespace::Type => &self.ty,
+        }
+    }
+
+    pub fn get_mut(&mut self, ns: Namespace) -> &mut T {
+        match ns {
+            Namespace::Value => &mut self.value,
+            Namespace::Type => &mut self.ty,
+        }
+    }
+}
+
 impl<T> Default for PerNS<T>
 where
     T: Default,
 {
     fn default() -> Self {
         Self {
-            ..Default::default()
+            value: Default::default(),
+            ty: Default::default(),
         }
     }
 }
@@ -127,6 +167,11 @@ impl Module {
     pub fn kind(&self) -> &ModuleKind {
         &self.kind
     }
+
+    /// Binds name to definition, returns old definitions if tried to redefine
+    pub fn define(&mut self, ns: Namespace, sym: Symbol, def_id: DefId) -> Option<DefId> {
+        self.per_ns.get_mut(ns).insert(sym, def_id)
+    }
 }
 
 #[derive(Default)]
@@ -135,6 +180,7 @@ pub struct DefTable {
     blocks: NodeMap<Module>,
     node_id_def_id: HashMap<NodeId, DefId>,
     def_id_node_id: HashMap<DefId, NodeId>,
+    def_id_span: HashMap<DefId, Span>,
     defs: Vec<Def>,
 }
 

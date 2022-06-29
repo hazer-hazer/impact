@@ -4,13 +4,14 @@ use std::fmt::Display;
 pub enum StageName {
     Lexer,
     Parser,
+    DefCollect,
     NameRes,
     Lower,
     Typeck,
     Unset,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PPStages {
     None,
     Some(Vec<StageName>),
@@ -25,6 +26,7 @@ impl Display for StageName {
             match self {
                 StageName::Lexer => "lexing",
                 StageName::Parser => "parsing",
+                StageName::DefCollect => "definition collection",
                 StageName::NameRes => "name resolution",
                 StageName::Lower => "lowering",
                 StageName::Typeck => "type checking",

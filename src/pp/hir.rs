@@ -16,6 +16,19 @@ use crate::{
 
 use super::AstLikePP;
 
+macro_rules! visit_block {
+    ($self: ident, $nodes: expr, $visitor: ident) => {{
+        $self.indent();
+        let string = $nodes
+            .iter()
+            .map(|node| format!("{}{}", $self.cur_indent(), $self.$visitor(node)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        $self.dedent();
+        string
+    }};
+}
+
 macro_rules! visit_each {
     ($self: ident, $nodes: expr, $visitor: ident, $sep: expr) => {
         $nodes
@@ -50,11 +63,7 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
     }
 
     fn visit_mod_item(&mut self, name: &Ident, items: &Vec<Item>) -> String {
-        format!(
-            "mod {} {{{}}}",
-            name,
-            visit_each!(self, items, visit_item, "\n")
-        )
+        format!("mod {}\n{}", name, visit_block!(self, items, visit_item))
     }
 
     fn visit_decl_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) -> String {
@@ -92,10 +101,7 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
     }
 
     fn visit_block_expr(&mut self, stmts: &Vec<Stmt>) -> String {
-        self.indent();
-        let output = visit_each!(self, stmts, visit_stmt, "\n");
-        self.dedent();
-        output
+        visit_block!(self, stmts, visit_stmt)
     }
 
     fn visit_let_expr(&mut self, name: &Ident, value: &N<Expr>, body: &N<Expr>) -> String {

@@ -75,6 +75,18 @@ impl Parser {
         self.tokens[pos]
     }
 
+    fn prev_tok(&self) -> Token {
+        self.peek_tok_at(self.pos - 1)
+    }
+
+    fn prev_tok_span(&self) -> Span {
+        self.prev_tok().span()
+    }
+
+    fn close_span(&self, span: Span) -> Span {
+        span.to(self.prev_tok_span())
+    }
+
     fn peek_tok(&self) -> Token {
         self.peek_tok_at(self.pos)
     }
@@ -307,7 +319,7 @@ impl Parser {
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Mod(name, items),
-            lo.to(self.span()),
+            self.close_span(lo),
         )))
     }
 
@@ -327,7 +339,7 @@ impl Parser {
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Type(name, ty),
-            lo.to(self.span()),
+            self.close_span(lo),
         )))
     }
 
@@ -356,7 +368,7 @@ impl Parser {
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Decl(name, params, body),
-            lo.to(self.span()),
+            self.close_span(lo),
         )))
     }
 
@@ -393,7 +405,7 @@ impl Parser {
         Ok(Box::new(Expr::new(
             self.next_node_id(),
             ExprKind::Let(name, value, body),
-            lo.to(self.span()),
+            self.close_span(lo),
         )))
     }
 
@@ -423,7 +435,7 @@ impl Parser {
                 lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
                     ExprKind::Ty(lhs, ty),
-                    lo.to(self.span()),
+                    self.close_span(lo),
                 )));
 
                 // TODO: Allow ascription of ascription?
@@ -435,7 +447,7 @@ impl Parser {
                     lhs = Ok(Box::new(Expr::new(
                         self.next_node_id(),
                         ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
-                        lo.to(self.span()),
+                        self.close_span(lo),
                     )));
                 } else {
                     break;
@@ -483,7 +495,7 @@ impl Parser {
                 Some(Ok(Box::new(Expr::new(
                     self.next_node_id(),
                     ExprKind::App(lhs, arg),
-                    lo.to(self.span()),
+                    self.close_span(lo),
                 ))))
             } else {
                 Some(lhs)
@@ -537,7 +549,7 @@ impl Parser {
         Some(Ok(Box::new(Expr::new(
             self.next_node_id(),
             ExprKind::Block(stmts),
-            lo.to(self.span()),
+            self.close_span(lo),
         ))))
     }
 
@@ -555,7 +567,7 @@ impl Parser {
         Some(Ok(Box::new(Expr::new(
             self.next_node_id(),
             ExprKind::Abs(param, body),
-            lo.to(self.span()),
+            self.close_span(lo),
         ))))
     }
 
@@ -591,7 +603,7 @@ impl Parser {
         let ty = Ok(Box::new(Ty::new(
             self.next_node_id(),
             kind,
-            lo.to(self.span()),
+            self.close_span(lo),
         )));
 
         if self.skip_punct(Punct::Arrow).is_some() {
@@ -599,7 +611,7 @@ impl Parser {
             Some(Ok(Box::new(Ty::new(
                 self.next_node_id(),
                 TyKind::Func(ty, return_ty),
-                lo.to(self.span()),
+                self.close_span(lo),
             ))))
         } else {
             Some(ty)

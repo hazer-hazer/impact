@@ -13,6 +13,25 @@ use crate::{
 
 use super::AstLikePP;
 
+macro_rules! visit_block {
+    ($self: ident, $prs: expr, $ok_visitor: ident) => {{
+        $self.indent();
+        let string = $prs
+            .iter()
+            .map(|pr| {
+                format!(
+                    "{}{}",
+                    $self.cur_indent(),
+                    visit_pr!($self, pr, $ok_visitor)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        $self.dedent();
+        string
+    }};
+}
+
 macro_rules! visit_pr_vec {
     ($self: ident, $prs: expr, $ok_visitor: ident, $sep: expr) => {
         $prs.iter()
@@ -55,9 +74,9 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
 
     fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> String {
         format!(
-            "mod {} {{{}}}",
+            "mod {}\n{}",
             visit_pr!(self, name, visit_ident),
-            visit_pr_vec!(self, items, visit_item, "\n")
+            visit_block!(self, items, visit_item)
         )
     }
 
@@ -114,10 +133,7 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
     }
 
     fn visit_block_expr(&mut self, stmts: &Vec<PR<N<Stmt>>>) -> String {
-        self.indent();
-        let output = visit_pr_vec!(self, stmts, visit_stmt, "\n");
-        self.dedent();
-        output
+        visit_block!(self, stmts, visit_stmt)
     }
 
     fn visit_let_expr(

@@ -6,6 +6,7 @@ use crate::{
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::AstLikePP,
+    resolve::collect::DefCollector,
     session::{Session, Source, Stage},
     span::span::Span,
 };
@@ -25,7 +26,7 @@ impl Interface {
         let mut sess = Session::new(self.config.clone());
 
         // Lexing //
-        verbose!(format!("=== Lexing ==="));
+        verbose!("=== Lexing ===");
         let stage = StageName::Lexer;
 
         let source_id = sess.source_map.add_source(source);
@@ -62,13 +63,25 @@ impl Interface {
         self.should_stop(stage)?;
 
         // Parsing //
-        verbose!(format!("=== Parsing ==="));
+        verbose!("=== Parsing ===");
         let stage = StageName::Parser;
         let (ast, sess) = Parser::new(sess, tokens).run_and_emit(true)?;
 
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess);
             println!("Printing AST after parsing\n{}", pp.visit_ast(&ast));
+        }
+
+        self.should_stop(stage)?;
+
+        // Def collection //
+        verbose!("=== Definition collection ===");
+        let stage = StageName::DefCollect;
+
+        let (_, sess) = DefCollector::new(sess, &ast).run_and_emit(true)?;
+
+        if self.config.check_pp_stage(stage) {
+            println!("TODO: PP Definitions");
         }
 
         self.should_stop(stage)?;

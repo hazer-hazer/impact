@@ -235,10 +235,13 @@ impl Lexer {
         let pos = self.pos;
 
         while self.peek().is_indent_precursor() {
-            self.add_token_adv(TokenKind::Nl, 1);
             self.save_source_line();
 
+            self.advance();
+            self.last_line_begin = self.pos;
+
             if self.eof() {
+                self.save_source_line();
                 return;
             }
         }
