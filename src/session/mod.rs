@@ -6,6 +6,7 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
+    resolve::def::DefTable,
     span::span::{Span, SpanPos},
 };
 
@@ -163,6 +164,7 @@ pub struct Session {
     config: Config,
     pub source_map: SourceMap,
     ast_metadata: AstMetadata,
+    pub def_table: DefTable,
 }
 
 impl Session {
@@ -171,6 +173,7 @@ impl Session {
             config,
             source_map: Default::default(),
             ast_metadata: Default::default(),
+            def_table: Default::default(),
         }
     }
 
