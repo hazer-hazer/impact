@@ -143,12 +143,12 @@ impl Source {
             .map(|(index, pos)| {
                 let pos = *pos as usize;
                 let next_pos = if let Some(next_pos) = self.lines_positions.get(index + 1) {
-                    *next_pos as usize
+                    *next_pos as usize - 1
                 } else {
                     self.source_size()
                 };
 
-                &self.source()[pos..(next_pos - 1)]
+                &self.source()[pos..next_pos]
             })
             .collect::<Vec<_>>()
     }

@@ -246,6 +246,8 @@ impl Lexer {
             }
         }
 
+        self.add_token_adv(TokenKind::Nl, 1);
+
         // Check that we actually skipped some new-lines
         assert_ne!(pos, self.pos);
 
