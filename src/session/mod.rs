@@ -134,6 +134,27 @@ impl Source {
             pos_in_line: span.lo() - line_pos,
         }
     }
+
+    pub fn get_lines(&self) -> Vec<&str> {
+        self.lines_positions
+            .iter()
+            .enumerate()
+            .map(|(index, pos)| {
+                let pos = *pos as usize;
+                let next_pos = if let Some(next_pos) = self.lines_positions.get(index + 1) {
+                    *next_pos as usize
+                } else {
+                    self.source_size()
+                };
+
+                &self.source()[pos..(next_pos - 1)]
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn lines_positions(&self) -> &[u32] {
+        self.lines_positions.as_ref()
+    }
 }
 
 #[derive(Default)]

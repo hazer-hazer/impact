@@ -224,7 +224,6 @@ impl Lexer {
 
     fn save_source_line(&mut self) {
         dbg!(&self.source()[self.last_line_begin as usize..self.pos as usize]);
-        // FIXME: Save NL or not to save 🤔
         self.sess
             .source_map
             .get_source_mut(self.source_id)
@@ -234,18 +233,17 @@ impl Lexer {
 
     fn lex_indent(&mut self) {
         let pos = self.pos;
-        let mut lines = vec![];
+
         while self.peek().is_indent_precursor() {
+            self.add_token_adv(TokenKind::Nl, 1);
             self.save_source_line();
-            lines.push(self.pos);
 
             if self.eof() {
                 return;
             }
         }
 
-        self.add_token(TokenKind::Nl, 1);
-
+        // Check that we actually skipped some new-lines
         assert_ne!(pos, self.pos);
 
         let mut indent_size = 0;
@@ -293,6 +291,8 @@ impl Stage<TokenStream> for Lexer {
                 }
             };
         }
+
+        dbg!(self.last_line_begin);
 
         if self.last_line_begin == 0 {
             self.save_source_line();

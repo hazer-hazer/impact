@@ -89,8 +89,8 @@ impl TermEmitter {
         } = source.get_line_info(sess, span);
 
         println!("{}{} | {}", " ".repeat(line_num_indent), line_num, line);
-        print!(
-            "{}{}--- {}\n",
+        println!(
+            "{}{}--- {}",
             // Indent of span pos in line + indent before number + number length + 3 for ` | `
             " ".repeat(pos_in_line as usize + line_num_indent + line_num_len + 3),
             "^".repeat(span.len() as usize),

@@ -7,6 +7,7 @@ use crate::{
     parser::{lexer::Lexer, parser::Parser},
     pp::AstLikePP,
     session::{Session, Source, Stage},
+    span::span::Span,
 };
 
 pub struct Interface {
@@ -27,8 +28,24 @@ impl Interface {
         verbose!(format!("=== Lexing ==="));
         let stage = StageName::Lexer;
 
-        let (tokens, sess) =
-            Lexer::new(sess.source_map.add_source(source), sess).run_and_emit(true)?;
+        let source_id = sess.source_map.add_source(source);
+
+        let (tokens, sess) = Lexer::new(source_id, sess).run_and_emit(true)?;
+
+        if cfg!(feature = "pp_lines") {
+            println!(
+                "=== SOURCE LINES ===\n{}\nPosition: {:?}\n",
+                sess.source_map
+                    .get_source(source_id)
+                    .get_lines()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, line)| { format!("   {} | {}", index + 1, line) })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                sess.source_map.get_source(source_id).lines_positions()
+            );
+        }
 
         if self.config.check_pp_stage(stage) {
             println!(
