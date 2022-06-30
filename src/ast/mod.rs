@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::span::span::{Span, WithSpan};
+use crate::{
+    cli::color::Colorize,
+    span::span::{Span, WithSpan},
+};
 
 use self::item::Item;
 
@@ -49,7 +52,19 @@ where
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub struct NodeId(u32);
 
-impl NodeId {}
+impl NodeId {
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+pub const DUMMY_NODE_ID: NodeId = NodeId(u32::MAX);
+
+impl Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("#{}", self.as_usize()).blue())
+    }
+}
 
 pub type NodeMap<T> = HashMap<NodeId, T>;
 

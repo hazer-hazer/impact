@@ -1,8 +1,9 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{array, collections::HashMap, fmt::Display, slice};
 
 use crate::{
-    ast::{item::ItemKind, NodeId, NodeMap},
-    span::span::{Ident, Span, Symbol},
+    ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID},
+    cli::color::{Color, Colorize},
+    span::span::{Ident, Kw, Span, Symbol},
 };
 
 #[derive(Clone, Copy)]
@@ -53,6 +54,12 @@ impl DefId {
     }
 }
 
+impl Display for DefId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("#{}", self.as_usize()).magenta())
+    }
+}
+
 pub const ROOT_DEF_ID: DefId = DefId(0);
 
 pub type DefMap<T> = HashMap<DefId, T>;
@@ -61,9 +68,9 @@ pub type DefMap<T> = HashMap<DefId, T>;
  * Definition of item, e.g. type
  */
 pub struct Def {
-    def_id: DefId,
-    kind: DefKind,
-    name: Ident,
+    pub def_id: DefId,
+    pub kind: DefKind,
+    pub name: Ident,
 }
 
 impl Def {
@@ -84,9 +91,36 @@ impl Def {
     }
 }
 
+impl Display for Def {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} `{}`{}", self.kind(), self.name(), self.def_id())
+    }
+}
+
+#[derive(Clone, Copy)]
 pub enum Namespace {
     Value, // Value namespace used for locals
     Type,  // Type namespace used for types and modules
+}
+
+impl Namespace {
+    pub fn each(f: impl Fn(Namespace)) {
+        f(Self::Value);
+        f(Self::Type);
+    }
+}
+
+impl Display for Namespace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Namespace::Value => "value",
+                Namespace::Type => "type",
+            }
+        )
+    }
 }
 
 pub struct PerNS<T> {
@@ -107,6 +141,10 @@ impl<T> PerNS<T> {
             Namespace::Value => &mut self.value,
             Namespace::Type => &mut self.ty,
         }
+    }
+
+    pub fn iter(&self) -> array::IntoIter<&T, 2> {
+        [&self.value, &self.ty].into_iter()
     }
 }
 
@@ -134,13 +172,28 @@ pub enum ModuleId {
     Module(DefId),
 }
 
+impl Display for ModuleId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "module{}",
+            match self {
+                ModuleId::Block(node_id) => format!("{}", node_id),
+                ModuleId::Module(def_id) => format!("{}", def_id),
+            }
+        )
+    }
+}
+
+type ModuleNamespace = HashMap<Symbol, DefId>;
+
 /**
  * Module is a scope where items defined.
  */
 pub struct Module {
     parent: Option<ModuleId>,
     kind: ModuleKind,
-    per_ns: PerNS<HashMap<Symbol, DefId>>,
+    per_ns: PerNS<ModuleNamespace>,
 }
 
 impl Module {
@@ -168,6 +221,10 @@ impl Module {
         &self.kind
     }
 
+    pub fn namespaces(&self) -> &PerNS<ModuleNamespace> {
+        &self.per_ns
+    }
+
     /// Binds name to definition, returns old definitions if tried to redefine
     pub fn define(&mut self, ns: Namespace, sym: Symbol, def_id: DefId) -> Option<DefId> {
         self.per_ns.get_mut(ns).insert(sym, def_id)
@@ -190,28 +247,35 @@ impl DefTable {
             ModuleId::Block(ref id) => self
                 .blocks
                 .get_mut(id)
-                .expect(format!("No block found by {:?}", id).as_str()),
+                .expect(format!("No block found by {}", id).as_str()),
             ModuleId::Module(ref def_id) => self
                 .modules
                 .get_mut(def_id)
-                .expect(format!("No module found by {:?}", def_id).as_str()),
+                .expect(format!("No module found by {}", def_id).as_str()),
         }
     }
 
-    pub fn get_module(&self, id: ModuleId) -> &Module {
-        match id {
+    pub fn get_module(&self, module_id: ModuleId) -> &Module {
+        match module_id {
             ModuleId::Block(ref id) => self
                 .blocks
                 .get(id)
-                .expect(format!("No block found by {:?}", id).as_str()),
+                .expect(format!("No block found by {}", id).as_str()),
             ModuleId::Module(ref def_id) => self
                 .modules
                 .get(def_id)
-                .expect(format!("No module found by {:?}", def_id).as_str()),
+                .expect(format!("No module found by {}", def_id).as_str()),
         }
     }
 
     pub(super) fn add_root_module(&mut self) -> ModuleId {
+        assert!(self.defs.is_empty());
+        // FIXME: Review usage of DUMMY_NODE_ID for root module
+        self.define(
+            DUMMY_NODE_ID,
+            DefKind::Mod,
+            &Ident::synthetic(Symbol::from_kw(Kw::Root)),
+        );
         assert!(self.modules.insert(ROOT_DEF_ID, Module::root()).is_none());
         ModuleId::Module(ROOT_DEF_ID)
     }
@@ -253,5 +317,9 @@ impl DefTable {
 
     pub fn get_node_id(&self, def_id: &DefId) -> Option<&NodeId> {
         self.def_id_node_id.get(def_id)
+    }
+
+    pub fn defs(&self) -> &[Def] {
+        self.defs.as_ref()
     }
 }

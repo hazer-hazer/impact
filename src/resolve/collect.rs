@@ -12,7 +12,7 @@ use crate::{
     span::span::Ident,
 };
 
-use super::def::{DefKind, Module, ModuleId, ROOT_DEF_ID};
+use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};
 
 pub struct DefCollector<'a> {
     sess: Session,
@@ -41,8 +41,7 @@ impl<'a> DefCollector<'a> {
         self.sess.def_table.get_module_mut(self.current_module)
     }
 
-    fn enter_def_module(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) {
-        let def_id = self.sess.def_table.define(node_id, kind, &ident);
+    fn enter_def_module(&mut self, def_id: DefId) {
         self.current_module = self.sess.def_table.add_module(def_id, self.current_module);
     }
 
@@ -59,7 +58,7 @@ impl<'a> DefCollector<'a> {
             .expect("Tried to exit root module")
     }
 
-    fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) {
+    fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
         let def_id = self.sess.def_table.define(node_id, kind, ident);
         let old_def = self.module().define(kind.namespace(), ident.name(), def_id);
 
@@ -72,6 +71,8 @@ impl<'a> DefCollector<'a> {
                 .label(ident.span(), "Redefined here".to_string())
                 .emit(self);
         }
+
+        def_id
     }
 }
 
@@ -85,7 +86,7 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
 
     // Items //
     fn visit_item(&mut self, item: &Item) {
-        self.define(
+        let def_id = self.define(
             item.id(),
             DefKind::from_item_kind(item.kind()),
             item.name()
@@ -94,7 +95,7 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
 
         match item.kind() {
             ItemKind::Mod(name, items) => {
-                self.enter_def_module(item.id(), DefKind::Mod, name.as_ref().unwrap());
+                self.enter_def_module(def_id);
                 self.visit_mod_item(name, items);
                 self.exit_module();
             }

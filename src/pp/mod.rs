@@ -2,6 +2,7 @@ use crate::session::Session;
 
 pub mod ast;
 pub mod hir;
+pub mod defs;
 
 pub struct AstLikePP<'a> {
     indent_level: u32,

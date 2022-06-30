@@ -5,10 +5,9 @@ use crate::{
     hir::visitor::HirVisitor,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
-    pp::AstLikePP,
+    pp::{defs::DefPrinter, AstLikePP},
     resolve::collect::DefCollector,
     session::{Session, Source, Stage},
-    span::span::Span,
 };
 
 pub struct Interface {
@@ -41,7 +40,7 @@ impl Interface {
                     .get_lines()
                     .iter()
                     .enumerate()
-                    .map(|(index, line)| { format!("   {} | {}", index + 1, line) })
+                    .map(|(index, line)| format!("   {} | {}", index + 1, line))
                     .collect::<Vec<_>>()
                     .join("\n"),
                 sess.source_map.get_source(source_id).lines_positions()
@@ -81,7 +80,8 @@ impl Interface {
         let (_, sess) = DefCollector::new(sess, &ast).run_and_emit(true)?;
 
         if self.config.check_pp_stage(stage) {
-            println!("TODO: PP Definitions");
+            let mut pp = AstLikePP::new(&sess);
+            println!("{}", pp.pp_defs());
         }
 
         self.should_stop(stage)?;

@@ -19,6 +19,9 @@ pub enum Kw {
     Mod,
     Type,
 
+    // Reserved for name resolution //
+    Root,
+
     // Reserved for typeck //
     M,
 
@@ -33,6 +36,7 @@ impl Kw {
             Kw::M => "m",
             Kw::Mod => "mod",
             Kw::Type => "type",
+            Kw::Root => "[root]",
             Kw::Unknown => "[UNKNOWN]",
         }
     }
