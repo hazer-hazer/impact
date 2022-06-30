@@ -60,13 +60,13 @@ impl<'a> DefCollector<'a> {
 
     fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
         let def_id = self.sess.def_table.define(node_id, kind, ident);
-        let old_def = self.module().define(kind.namespace(), ident.name(), def_id);
+        let old_def = self.module().define(kind.namespace(), ident.sym(), def_id);
 
         if let Some(old_def) = old_def {
             let old_def = self.sess.def_table.get_def(old_def).unwrap();
             MessageBuilder::error()
                 .span(ident.span())
-                .text(format!("Tried to redefine `{}`", ident.name()))
+                .text(format!("Tried to redefine `{}`", ident.sym()))
                 .label(old_def.name().span(), "Previously defined here".to_string())
                 .label(ident.span(), "Redefined here".to_string())
                 .emit(self);
@@ -110,7 +110,7 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
         visit_each_pr!(self, items, visit_item);
     }
 
-    fn visit_decl_item(&mut self, _: &PR<Ident>, _: &Vec<PR<Ident>>, body: &PR<N<Expr>>) -> () {
+    fn visit_decl_item(&mut self, _: &PR<Ident>, _: &Vec<PR<Ident>>, body: &PR<N<Expr>>) {
         visit_pr!(self, body, visit_expr)
     }
 
@@ -118,7 +118,7 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
     fn visit_expr(&mut self, expr: &Expr) {
         match expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
-            ExprKind::Ident(ident) => self.visit_ident_expr(ident),
+            ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
@@ -176,18 +176,12 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
 
     fn visit_lit_ty(&mut self, _: &ast::ty::LitTy) {}
 
-    fn visit_ident_expr(&mut self, ident: &Ident) {
-        self.visit_ident(ident)
-    }
-
-    fn visit_var_ty(&mut self, ident: &PR<Ident>) {
-        visit_pr!(self, ident, visit_ident);
-    }
-
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) {
         visit_pr!(self, param_ty, visit_ty);
         visit_pr!(self, return_ty, visit_ty);
     }
+
+    fn visit_path(&mut self, _: &ast::Path) {}
 }
 
 impl<'a> Stage<()> for DefCollector<'a> {

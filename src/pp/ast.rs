@@ -6,7 +6,7 @@ use crate::{
         ty::{LitTy, Ty},
         visitor::visit_pr,
         visitor::AstVisitor,
-        ErrorNode, AST, N, PR,
+        ErrorNode, Path, AST, N, PR,
     },
     span::span::Ident,
 };
@@ -99,10 +99,6 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         format!("{}", lit)
     }
 
-    fn visit_ident_expr(&mut self, ident: &Ident) -> String {
-        format!("{}", ident)
-    }
-
     fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, op: &InfixOp, rhs: &PR<N<Expr>>) -> String {
         format!(
             "{} {} {}",
@@ -167,10 +163,6 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         format!("{}", lit_ty)
     }
 
-    fn visit_var_ty(&mut self, ident: &PR<Ident>) -> String {
-        visit_pr!(self, ident, visit_ident)
-    }
-
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> String {
         format!(
             "{} -> {}",
@@ -186,5 +178,16 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> String {
         ident.to_string()
+    }
+
+    fn visit_path(&mut self, path: &Path) -> String {
+        format!(
+            "{}",
+            path.segments()
+                .iter()
+                .map(|seg| format!("{}", seg))
+                .collect::<Vec<_>>()
+                .join(".")
+        )
     }
 }

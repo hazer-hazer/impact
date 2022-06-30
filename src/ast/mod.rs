@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     cli::color::Colorize,
-    span::span::{Span, WithSpan},
+    span::span::{Ident, Span, WithSpan},
 };
 
 use self::item::Item;
@@ -124,5 +124,33 @@ where
 {
     fn kind_str(&self) -> String {
         (**self).kind_str()
+    }
+}
+
+pub struct Path {
+    segments: Vec<Ident>,
+}
+
+impl Path {
+    pub fn new(segments: Vec<Ident>) -> Self {
+        Self { segments }
+    }
+
+    pub fn segments(&self) -> &Vec<Ident> {
+        &self.segments
+    }
+}
+
+impl Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.segments()
+                .iter()
+                .map(|seg| format!("{}", seg))
+                .collect::<Vec<_>>()
+                .join(".")
+        )
     }
 }

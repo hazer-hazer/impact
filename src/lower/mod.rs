@@ -4,7 +4,7 @@ use crate::{
         item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
         ty::{LitTy, Ty, TyKind},
-        AST, N, PR,
+        Path, AST, N, PR,
     },
     hir::{self, HIR},
     message::message::MessageStorage,
@@ -119,7 +119,7 @@ impl<'a> Lower<'a> {
     fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
         let kind = match expr.kind() {
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
-            ExprKind::Ident(ident) => self.lower_ident_expr(ident),
+            ExprKind::Path(path) => self.lower_path_expr(path),
             ExprKind::Infix(lhs, op, rhs) => self.lower_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.lower_prefix_expr(op, rhs),
             ExprKind::Abs(param, body) => self.lower_abs_expr(param, body),
@@ -136,8 +136,8 @@ impl<'a> Lower<'a> {
         hir::expr::ExprKind::Lit(*lit)
     }
 
-    fn lower_ident_expr(&mut self, ident: &Ident) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Ident(*ident)
+    fn lower_path_expr(&mut self, path: &PR<Path>) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Path(lower_pr!(self, path, lower_path))
     }
 
     fn lower_infix_expr(
@@ -200,7 +200,7 @@ impl<'a> Lower<'a> {
         let kind = match ty.kind() {
             TyKind::Unit => self.lower_unit_ty(),
             TyKind::Lit(lit_ty) => self.lower_lit_ty(lit_ty),
-            TyKind::Var(ident) => self.lower_var_ty(ident),
+            TyKind::Path(path) => self.lower_path_ty(path),
             TyKind::Func(param_ty, return_ty) => self.lower_func_ty(param_ty, return_ty),
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
         };
@@ -216,8 +216,8 @@ impl<'a> Lower<'a> {
         hir::ty::TyKind::Lit(*lit_ty)
     }
 
-    fn lower_var_ty(&mut self, ident: &PR<Ident>) -> hir::ty::TyKind {
-        hir::ty::TyKind::Var(lower_pr!(self, ident, lower_ident))
+    fn lower_path_ty(&mut self, path: &PR<Path>) -> hir::ty::TyKind {
+        hir::ty::TyKind::Path(lower_pr!(self, path, lower_path))
     }
 
     fn lower_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> hir::ty::TyKind {
@@ -230,6 +230,10 @@ impl<'a> Lower<'a> {
     // Fragments //
     fn lower_ident(&mut self, ident: &Ident) -> Ident {
         *ident
+    }
+
+    fn lower_path(&mut self, path: &Path) -> hir::Path {
+        hir::Path::new(path.segments().clone())
     }
 }
 

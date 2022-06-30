@@ -10,8 +10,8 @@ use super::{
     expr::{Expr, ExprKind},
     item::{Item, ItemKind},
     stmt::{Stmt, StmtKind},
-    ty::Ty,
-    HIR, N,
+    ty::{Ty, TyKind},
+    Path, HIR, N,
 };
 
 pub trait HirVisitor<T> {
@@ -52,7 +52,7 @@ pub trait HirVisitor<T> {
     fn visit_expr(&mut self, expr: &Expr) -> T {
         match expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
-            ExprKind::Ident(ident) => self.visit_ident_expr(ident),
+            ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
@@ -64,7 +64,9 @@ pub trait HirVisitor<T> {
     }
 
     fn visit_lit_expr(&mut self, lit: &Lit) -> T;
-    fn visit_ident_expr(&mut self, ident: &Ident) -> T;
+    fn visit_path_expr(&mut self, path: &Path) -> T {
+        self.visit_path(path)
+    }
     fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) -> T;
     fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) -> T;
     fn visit_app_expr(&mut self, lhs: &N<Expr>, arg: &N<Expr>) -> T;
@@ -74,12 +76,22 @@ pub trait HirVisitor<T> {
     fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) -> T;
 
     // Types //
-    fn visit_ty(&mut self, ty: &Ty) -> T;
+    fn visit_ty(&mut self, ty: &Ty) -> T {
+        match ty.kind() {
+            TyKind::Unit => self.visit_unit_ty(),
+            TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
+            TyKind::Path(path) => self.visit_path_ty(path),
+            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+        }
+    }
     fn visit_unit_ty(&mut self) -> T;
     fn visit_lit_ty(&mut self, lit_ty: &LitTy) -> T;
-    fn visit_var_ty(&mut self, ident: &Ident) -> T;
+    fn visit_path_ty(&mut self, path: &Path) -> T {
+        self.visit_path(path)
+    }
     fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) -> T;
 
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> T;
+    fn visit_path(&mut self, path: &Path) -> T;
 }

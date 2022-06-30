@@ -3,7 +3,7 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{stmt::Stmt, ty::Ty, N};
+use super::{stmt::Stmt, ty::Ty, N, Path};
 
 pub struct Expr {
     kind: ExprKind,
@@ -28,7 +28,7 @@ impl WithSpan for Expr {
 
 pub enum ExprKind {
     Lit(Lit),
-    Ident(Ident),
+    Path(Path),
     Infix(N<Expr>, InfixOp, N<Expr>),
     Prefix(PrefixOp, N<Expr>),
     Abs(Ident, N<Expr>),

@@ -50,6 +50,7 @@ pub enum Punct {
     Backslash,
     Arrow,
     Colon,
+    Dot,
     LParen,
     RParen,
 }
@@ -64,6 +65,7 @@ impl Display for Punct {
                 Punct::Backslash => "\\",
                 Punct::Arrow => "->",
                 Punct::Colon => ":",
+                Punct::Dot => ".",
                 Punct::LParen => "(",
                 Punct::RParen => ")",
             }
@@ -114,6 +116,10 @@ impl TokenKind {
             ('%', _) => Some((TokenKind::Infix(Infix::Mod), 1)),
             ('=', _) => Some((TokenKind::Punct(Punct::Assign), 1)),
             ('\\', _) => Some((TokenKind::Punct(Punct::Backslash), 1)),
+            (':', _) => Some((TokenKind::Punct(Punct::Colon), 1)),
+            ('.', _) => Some((TokenKind::Punct(Punct::Dot), 1)),
+            ('(', _) => Some((TokenKind::Punct(Punct::LParen), 1)),
+            (')', _) => Some((TokenKind::Punct(Punct::RParen), 1)),
 
             ('-', Some('>')) => Some((TokenKind::Punct(Punct::Arrow), 2)),
             ('-', _) => Some((TokenKind::Infix(Infix::Minus), 1)),

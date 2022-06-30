@@ -4,7 +4,7 @@ use crate::{
         item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        ErrorNode, NodeId, NodeKindStr, AST, N, PR,
+        ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -525,7 +525,9 @@ impl Parser {
             TokenKind::Bool(val) => Some(Ok(ExprKind::Lit(Lit::Bool(val)))),
             TokenKind::Int(val) => Some(Ok(ExprKind::Lit(Lit::Int(val)))),
             TokenKind::String(sym) => Some(Ok(ExprKind::Lit(Lit::String(sym)))),
-            TokenKind::Ident(sym) => Some(Ok(ExprKind::Ident(Ident::new(span, sym)))),
+            TokenKind::Ident(sym) => Some(Ok(ExprKind::Path(
+                self.parse_path("[BUG] First identifier in path expression"),
+            ))),
 
             // Error token is an error on lexing stage
             //  so don't emit one more error for it, just add error stub
@@ -539,6 +541,16 @@ impl Parser {
         }
 
         kind.map(|k| k.map(|k| Box::new(Expr::new(self.next_node_id(), k, span))))
+    }
+
+    fn parse_path(&mut self, expected: &str) -> PR<Path> {
+        // If no first identifier present then it's "expected path" error, not "expected identifier"
+        let mut segments = vec![self.parse_ident(expected)?];
+        while self.skip(TokenCmp::Punct(Punct::Dot)).is_some() {
+            segments.push(self.parse_ident("path segment (identifier)")?);
+        }
+
+        Ok(Path::new(segments))
     }
 
     fn parse_block(&mut self) -> Option<PR<N<Expr>>> {
@@ -592,8 +604,7 @@ impl Parser {
                 }
             }
 
-            // TODO: Literal types
-            TokenKind::Ident(_) => TyKind::Var(self.parse_ident("type name")),
+            TokenKind::Ident(_) => TyKind::Path(self.parse_path("type path")),
 
             _ => {
                 return None;

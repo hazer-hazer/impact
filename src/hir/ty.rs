@@ -1,9 +1,9 @@
 use crate::{
     ast::ty::LitTy,
-    span::span::{Ident, Span, WithSpan},
+    span::span::{Span, WithSpan},
 };
 
-use super::N;
+use super::{Path, N};
 
 pub struct Ty {
     kind: TyKind,
@@ -29,6 +29,6 @@ impl WithSpan for Ty {
 pub enum TyKind {
     Unit,
     Lit(LitTy),
-    Var(Ident),
+    Path(Path),
     Func(N<Ty>, N<Ty>),
 }

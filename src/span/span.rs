@@ -260,6 +260,12 @@ pub struct Ident {
     sym: Symbol,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum IdentKind {
+    Var, // Lower-case identifiers are used for variables
+    Ty,  // Capitalized identifiers are used for types and modules
+}
+
 impl Ident {
     pub fn synthetic(sym: Symbol) -> Self {
         Self {
@@ -272,8 +278,24 @@ impl Ident {
         self.span
     }
 
-    pub fn name(&self) -> Symbol {
+    pub fn sym(&self) -> Symbol {
         self.sym
+    }
+
+    pub fn kind(&self) -> IdentKind {
+        match self.sym().to_string().chars().nth(0) {
+            Some(first) if first.is_uppercase() => IdentKind::Ty,
+            Some(first) if first.is_lowercase() => IdentKind::Var,
+            _ => panic!(),
+        }
+    }
+
+    pub fn is_var(&self) -> bool {
+        self.kind() == IdentKind::Var
+    }
+
+    pub fn is_ty(&self) -> bool {
+        self.kind() == IdentKind::Ty
     }
 }
 
@@ -295,7 +317,7 @@ impl Ident {
 
 impl Display for Ident {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        write!(f, "{}", self.sym())
     }
 }
 

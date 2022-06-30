@@ -1,3 +1,5 @@
+use crate::span::span::Ident;
+
 use self::item::Item;
 
 /**
@@ -22,5 +24,19 @@ impl HIR {
 
     pub fn items(&self) -> &[N<Item>] {
         self.items.as_ref()
+    }
+}
+
+pub struct Path {
+    segments: Vec<Ident>,
+}
+
+impl Path {
+    pub fn new(segments: Vec<Ident>) -> Self {
+        Self { segments }
+    }
+
+    pub fn segments(&self) -> &[Ident] {
+        self.segments.as_ref()
     }
 }

@@ -7,9 +7,9 @@ use crate::{
         expr::Expr,
         item::Item,
         stmt::{Stmt, StmtKind},
-        ty::{Ty, TyKind},
+        ty::Ty,
         visitor::HirVisitor,
-        HIR, N,
+        Path, HIR, N,
     },
     span::span::Ident,
 };
@@ -80,10 +80,6 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         lit.to_string()
     }
 
-    fn visit_ident_expr(&mut self, ident: &Ident) -> String {
-        ident.to_string()
-    }
-
     fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) -> String {
         format!("{} {} {}", self.visit_expr(lhs), op, self.visit_expr(rhs))
     }
@@ -118,25 +114,12 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
     }
 
     // Types //
-    fn visit_ty(&mut self, ty: &Ty) -> String {
-        match ty.kind() {
-            TyKind::Unit => self.visit_unit_ty(),
-            TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
-            TyKind::Var(ident) => self.visit_var_ty(ident),
-            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
-        }
-    }
-
     fn visit_unit_ty(&mut self) -> String {
         "()".to_string()
     }
 
     fn visit_lit_ty(&mut self, lit_ty: &LitTy) -> String {
         format!("{}", lit_ty)
-    }
-
-    fn visit_var_ty(&mut self, ident: &Ident) -> String {
-        self.visit_ident(ident)
     }
 
     fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) -> String {
@@ -150,5 +133,16 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> String {
         ident.to_string()
+    }
+
+    fn visit_path(&mut self, path: &Path) -> String {
+        format!(
+            "{}",
+            path.segments()
+                .iter()
+                .map(|seg| format!("{}", seg))
+                .collect::<Vec<_>>()
+                .join(".")
+        )
     }
 }
