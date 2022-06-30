@@ -11,14 +11,18 @@ pub trait MessageEmitter {
         let messages = output.messages;
 
         if cfg!(feature = "verbose_debug") {
-            println!(
-                "Printing messages as are\n{}",
-                messages
-                    .iter()
-                    .map(|m| format!("{m:?}"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            );
+            if messages.is_empty() {
+                println!("Got no messages");
+            } else {
+                println!(
+                    "Printing messages as are\n{}",
+                    messages
+                        .iter()
+                        .map(|m| format!("{m:?}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+            }
         }
 
         for msg in messages.iter() {

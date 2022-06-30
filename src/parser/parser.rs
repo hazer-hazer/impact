@@ -623,7 +623,6 @@ impl Parser {
 
         self.skip_nls();
         while !self.eof() {
-            verbose!(format!("Parse {:?}", self.peek()));
             items.push(self.parse_item());
         }
 
