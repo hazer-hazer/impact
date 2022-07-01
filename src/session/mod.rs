@@ -229,11 +229,11 @@ pub struct StageOutput<T> {
 pub type StageResult<T> = Result<(T, Session), String>;
 
 impl<T> StageOutput<T> {
-    pub fn new(sess: Session, data: T, message_holder: MessageStorage) -> Self {
+    pub fn new(sess: Session, data: T, messages: MessageStorage) -> Self {
         Self {
             sess,
             data,
-            messages: message_holder.extract(),
+            messages: messages.extract(),
         }
     }
 

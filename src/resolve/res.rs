@@ -1,13 +1,15 @@
+use std::collections::HashMap;
+
 use crate::ast::NodeId;
 
 use super::def::DefId;
 
-#[derive(Debug, Clone, Copy)]
-pub struct LocalId(NodeId);
+// #[derive(Debug, Clone, Copy)]
+// pub struct LocalId(NodeId);
 
 pub enum ResKind {
-    Def(DefId),     // Top-level definition, e.g. imported function
-    Local(LocalId), // Local variable
+    Def(DefId),    // Top-level definition, e.g. imported function
+    Local(NodeId), // Local variable
     Error,
 }
 
@@ -17,4 +19,48 @@ pub enum ResKind {
  */
 pub struct Res {
     kind: ResKind,
+}
+
+impl Res {
+    pub fn def(def_id: DefId) -> Self {
+        Self {
+            kind: ResKind::Def(def_id),
+        }
+    }
+
+    pub fn local(node_id: NodeId) -> Self {
+        Self {
+            kind: ResKind::Local(node_id),
+        }
+    }
+
+    pub fn error() -> Self {
+        Self {
+            kind: ResKind::Error,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct NamePath {
+    node_id: NodeId,
+}
+
+#[derive(Default)]
+pub struct Resolutions {
+    resolutions: HashMap<NamePath, Res>,
+}
+
+impl Resolutions {
+    pub fn set(&mut self, path: NamePath, res: Res) {
+        assert!(self.resolutions.insert(path, res).is_none());
+    }
+
+    pub fn get(&self, path: &NamePath) -> Option<&Res> {
+        self.resolutions.get(path)
+    }
+
+    pub fn get_resolutions(&self) -> &HashMap<NamePath, Res> {
+        &self.resolutions
+    }
 }

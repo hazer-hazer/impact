@@ -1,11 +1,11 @@
-use std::{fmt::Display};
+use std::fmt::Display;
 
 use crate::{
     parser::token::{Infix, Prefix, Token, TokenKind},
     span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
-use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, N, PR, Path};
+use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, N, PR};
 
 pub struct Expr {
     id: NodeId,
@@ -155,7 +155,7 @@ impl Display for Lit {
 
 impl Display for ExprKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
+        match self {
             ExprKind::Lit(lit) => write!(f, "{}", lit),
             ExprKind::Path(path) => write!(f, "{}", pr_display(path)),
             ExprKind::Infix(lhs, op, rhs) => {
@@ -189,17 +189,16 @@ impl Display for ExprKind {
 
 impl NodeKindStr for ExprKind {
     fn kind_str(&self) -> String {
-        match &self {
-            ExprKind::Lit(_) => "literal",
-            ExprKind::Path(ident) => "path",
-            ExprKind::Abs(_, _) => "lambda",
-            ExprKind::App(_, _) => "function call",
-            ExprKind::Block(_) => "block expression",
-            ExprKind::Let(_, _, _) => "let expression",
-            ExprKind::Ty(_, _) => "type ascription",
-            ExprKind::Infix(_, _, _) => "infix expression",
-            ExprKind::Prefix(_, _) => "prefix expression",
+        match self {
+            ExprKind::Lit(_) => "literal".to_string(),
+            ExprKind::Path(_) => "path".to_string(),
+            ExprKind::Abs(_, _) => "lambda".to_string(),
+            ExprKind::App(_, _) => "function call".to_string(),
+            ExprKind::Block(_) => "block expression".to_string(),
+            ExprKind::Let(_, _, _) => "let expression".to_string(),
+            ExprKind::Ty(_, _) => "type ascription".to_string(),
+            ExprKind::Infix(_, _, _) => "infix expression".to_string(),
+            ExprKind::Prefix(_, _) => "prefix expression".to_string(),
         }
-        .to_string()
     }
 }

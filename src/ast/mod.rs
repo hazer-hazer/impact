@@ -139,6 +139,22 @@ impl Path {
     pub fn segments(&self) -> &Vec<Ident> {
         &self.segments
     }
+
+    pub fn prefix_str(&self, to: usize) -> String {
+        self.segments()[0..to]
+            .iter()
+            .map(|seg| format!("{}", seg))
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    pub fn prefix_span(&self, to: usize) -> Span {
+        self.segments()[0..to]
+            .iter()
+            .map(|seg| seg.span())
+            .reduce(|prefix, seg| prefix.to(seg))
+            .unwrap()
+    }
 }
 
 impl Display for Path {

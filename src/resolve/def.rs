@@ -1,9 +1,9 @@
-use std::{array, collections::HashMap, fmt::Display, slice};
+use std::{array, collections::HashMap, fmt::Display};
 
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID},
-    cli::color::{Color, Colorize},
-    span::span::{Ident, Kw, Span, Symbol},
+    cli::color::Colorize,
+    span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 
 #[derive(Clone, Copy)]
@@ -107,6 +107,13 @@ impl Namespace {
     pub fn each(f: impl Fn(Namespace)) {
         f(Self::Value);
         f(Self::Type);
+    }
+
+    pub fn from_ident(ident: &Ident) -> Self {
+        match ident.kind() {
+            IdentKind::Var => Namespace::Value,
+            IdentKind::Ty => Namespace::Type,
+        }
     }
 }
 
@@ -229,6 +236,12 @@ impl Module {
     pub fn define(&mut self, ns: Namespace, sym: Symbol, def_id: DefId) -> Option<DefId> {
         self.per_ns.get_mut(ns).insert(sym, def_id)
     }
+
+    pub fn get_by_ident(&self, ident: &Ident) -> Option<&DefId> {
+        self.per_ns
+            .get(Namespace::from_ident(ident))
+            .get(&ident.sym())
+    }
 }
 
 #[derive(Default)]
@@ -237,6 +250,8 @@ pub struct DefTable {
     blocks: NodeMap<Module>,
     node_id_def_id: HashMap<NodeId, DefId>,
     def_id_node_id: HashMap<DefId, NodeId>,
+
+    /// Span of definition name
     def_id_span: HashMap<DefId, Span>,
     defs: Vec<Def>,
 }
