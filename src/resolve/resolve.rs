@@ -5,7 +5,7 @@ use crate::{
         expr::Expr,
         item::Item,
         ty::Ty,
-        visitor::{visit_each_pr, visit_pr, AstVisitor},
+        visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, NodeId, Path, AST, N, PR, NodeMap,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -73,7 +73,7 @@ impl<'a> NameResolver<'a> {
 
     fn define_local(&self, sym: Symbol, node_id: NodeId) {
         if let Some(old) = self.rib().define(sym, node_id) {
-            let 
+            
         }
     }
 
@@ -141,15 +141,15 @@ impl<'a> MessageHolder for NameResolver<'a> {
     }
 }
 
-impl<'a> AstVisitor<()> for NameResolver<'a> {
+impl<'a> AstVisitor for NameResolver<'a> {
     fn visit_err(&self, _: &ErrorNode) {}
 
     fn visit_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> () {
-        visit_pr!(self, ty, visit_ty);
+        walk_pr!(self, ty, visit_ty);
     }
 
     fn visit_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> () {
-        visit_each_pr!(self, items, visit_item)
+        walk_each_pr!(self, items, visit_item)
     }
 
     fn visit_decl_item(

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::span::span::Ident;
 
 use self::item::Item;
@@ -38,5 +40,19 @@ impl Path {
 
     pub fn segments(&self) -> &[Ident] {
         self.segments.as_ref()
+    }
+}
+
+impl Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.segments()
+                .iter()
+                .map(|seg| format!("{}", seg))
+                .collect::<Vec<_>>()
+                .join(".")
+        )
     }
 }

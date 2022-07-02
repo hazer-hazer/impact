@@ -4,7 +4,7 @@ use crate::{
         expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
         item::{Item, ItemKind},
         ty::Ty,
-        visitor::{visit_each_pr, visit_pr, AstVisitor},
+        visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, NodeId, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -76,15 +76,14 @@ impl<'a> DefCollector<'a> {
     }
 }
 
-impl<'a> AstVisitor<()> for DefCollector<'a> {
+impl<'a> AstVisitor for DefCollector<'a> {
     fn visit_err(&self, _: &ErrorNode) {}
 
     fn visit_ast(&mut self, ast: &AST) {
         self.sess.def_table.add_root_module();
-        visit_each_pr!(self, ast.items(), visit_item);
+        walk_each_pr!(self, ast.items(), visit_item);
     }
 
-    // Items //
     fn visit_item(&mut self, item: &Item) {
         let def_id = self.define(
             item.id(),
@@ -104,78 +103,10 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
         }
     }
 
-    fn visit_type_item(&mut self, _: &PR<Ident>, _: &PR<N<Ty>>) {}
-
-    fn visit_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) {
-        visit_each_pr!(self, items, visit_item);
-    }
-
-    fn visit_decl_item(&mut self, _: &PR<Ident>, _: &Vec<PR<Ident>>, body: &PR<N<Expr>>) {
-        visit_pr!(self, body, visit_expr)
-    }
-
-    // Expressions //
-    fn visit_expr(&mut self, expr: &Expr) {
-        match expr.kind() {
-            ExprKind::Lit(lit) => self.visit_lit_expr(lit),
-            ExprKind::Path(path) => self.visit_path_expr(path),
-            ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
-            ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
-            ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
-            ExprKind::Let(block) => self.visit_let_expr(block),
-            ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
-            ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
-        }
-    }
-
-    fn visit_lit_expr(&mut self, _: &Lit) {}
-
-    fn visit_ident(&mut self, _: &Ident) {}
-
-    fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, _: &InfixOp, rhs: &PR<N<Expr>>) {
-        visit_pr!(self, lhs, visit_expr);
-        visit_pr!(self, rhs, visit_expr);
-    }
-
-    fn visit_prefix_expr(&mut self, _: &PrefixOp, rhs: &PR<N<Expr>>) {
-        visit_pr!(self, rhs, visit_expr);
-    }
-
-    fn visit_app_expr(&mut self, lhs: &PR<N<Expr>>, arg: &PR<N<Expr>>) {
-        visit_pr!(self, lhs, visit_expr);
-        visit_pr!(self, arg, visit_expr);
-    }
-
-    fn visit_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) {
-        visit_pr!(self, param, visit_ident);
-        visit_pr!(self, body, visit_expr);
-    }
-
-    fn visit_let_expr(&mut self, block: &PR<Block>) {
-        visit_pr!(self, block, visit_block);
-    }
-
-    fn visit_type_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) {
-        visit_pr!(self, expr, visit_expr);
-        visit_pr!(self, ty, visit_ty);
-    }
-
-    // Types //
-    fn visit_unit_ty(&mut self) {}
-
-    fn visit_lit_ty(&mut self, _: &ast::ty::LitTy) {}
-
-    fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) {
-        visit_pr!(self, param_ty, visit_ty);
-        visit_pr!(self, return_ty, visit_ty);
-    }
-
-    fn visit_path(&mut self, _: &ast::Path) {}
-
     fn visit_block(&mut self, block: &ast::expr::Block) -> () {
         self.enter_block_module(block.id());
-        visit_each_pr!(self, block.stmts(), visit_stmt);
-        visit_pr!(self, block.expr(), visit_expr);
+        walk_each_pr!(self, block.stmts(), visit_stmt);
+        walk_pr!(self, block.expr(), visit_expr);
         self.exit_module();
     }
 }

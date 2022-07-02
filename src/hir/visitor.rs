@@ -14,27 +14,37 @@ use super::{
     Path, HIR, N,
 };
 
-pub trait HirVisitor<T> {
-    fn visit_hir(&mut self, hir: &HIR) -> T;
+macro_rules! walk_each {
+    ($self: ident, $els: expr, $visitor: ident) => {
+        for el in $els {
+            $self.$visitor(el);
+        }
+    };
+}
+
+pub trait HirVisitor {
+    fn visit_hir(&mut self, hir: &HIR) {
+        walk_each!(self, hir.items(), visit_item);
+    }
 
     // Statements //
-    fn visit_stmt(&mut self, stmt: &Stmt) -> T {
+    fn visit_stmt(&mut self, stmt: &Stmt) {
         match stmt.kind() {
             StmtKind::Expr(expr) => self.visit_expr_stmt(expr),
             StmtKind::Item(item) => self.visit_item_stmt(item),
         }
     }
 
-    fn visit_expr_stmt(&mut self, expr: &Expr) -> T {
+    fn visit_expr_stmt(&mut self, expr: &Expr) {
         self.visit_expr(expr)
     }
 
-    fn visit_item_stmt(&mut self, item: &Item) -> T {
+    fn visit_item_stmt(&mut self, item: &Item) {
         self.visit_item(item)
     }
 
     // Items //
-    fn visit_item(&mut self, item: &Item) -> T {
+    fn visit_item(&mut self, item: &Item) {
         match item.kind() {
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty),
             ItemKind::Mod(name, items) => self.visit_mod_item(name, items),
@@ -42,14 +52,24 @@ pub trait HirVisitor<T> {
         }
     }
 
-    fn visit_type_item(&mut self, name: &Ident, ty: &N<Ty>) -> T;
+    fn visit_type_item(&mut self, name: &Ident, ty: &N<Ty>) {
+        self.visit_ident(name);
+        self.visit_ty(ty);
+    }
 
-    fn visit_mod_item(&mut self, name: &Ident, items: &Vec<Item>) -> T;
+    fn visit_mod_item(&mut self, name: &Ident, items: &Vec<Item>) {
+        self.visit_ident(name);
+        walk_each!(self, items, visit_item);
+    }
 
-    fn visit_decl_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) -> T;
+    fn visit_decl_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) {
+        self.visit_ident(name);
+        walk_each!(self, params, visit_ident);
+        self.visit_expr(body);
+    }
 
     // Expressions //
-    fn visit_expr(&mut self, expr: &Expr) -> T {
+    fn visit_expr(&mut self, expr: &Expr) {
         match expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Path(path) => self.visit_path_expr(path),
@@ -62,19 +82,42 @@ pub trait HirVisitor<T> {
         }
     }
 
-    fn visit_lit_expr(&mut self, lit: &Lit) -> T;
-    fn visit_path_expr(&mut self, path: &Path) -> T {
+    fn visit_lit_expr(&mut self, lit: &Lit) {}
+
+    fn visit_path_expr(&mut self, path: &Path) {
         self.visit_path(path)
     }
-    fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) -> T;
-    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) -> T;
-    fn visit_app_expr(&mut self, lhs: &N<Expr>, arg: &N<Expr>) -> T;
-    fn visit_abs_expr(&mut self, param: &Ident, body: &N<Expr>) -> T;
-    fn visit_let_expr(&mut self, block: &Block) -> T;
-    fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) -> T;
+
+    fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) {
+        self.visit_expr(lhs);
+        self.visit_expr(rhs);
+    }
+
+    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) {
+        self.visit_expr(rhs);
+    }
+
+    fn visit_app_expr(&mut self, lhs: &N<Expr>, arg: &N<Expr>) {
+        self.visit_expr(lhs);
+        self.visit_expr(arg);
+    }
+
+    fn visit_abs_expr(&mut self, param: &Ident, body: &N<Expr>) {
+        self.visit_ident(param);
+        self.visit_expr(body);
+    }
+
+    fn visit_let_expr(&mut self, block: &Block) {
+        self.visit_block(block);
+    }
+
+    fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) {
+        self.visit_expr(expr);
+        self.visit_ty(ty);
+    }
 
     // Types //
-    fn visit_ty(&mut self, ty: &Ty) -> T {
+    fn visit_ty(&mut self, ty: &Ty) {
         match ty.kind() {
             TyKind::Unit => self.visit_unit_ty(),
             TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
@@ -82,15 +125,25 @@ pub trait HirVisitor<T> {
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
         }
     }
-    fn visit_unit_ty(&mut self) -> T;
-    fn visit_lit_ty(&mut self, lit_ty: &LitTy) -> T;
-    fn visit_path_ty(&mut self, path: &Path) -> T {
+    fn visit_unit_ty(&mut self) {}
+
+    fn visit_lit_ty(&mut self, lit_ty: &LitTy) {}
+
+    fn visit_path_ty(&mut self, path: &Path) {
         self.visit_path(path)
     }
-    fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) -> T;
+
+    fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) {
+        self.visit_ty(param_ty);
+        self.visit_ty(return_ty);
+    }
 
     // Fragments //
-    fn visit_ident(&mut self, ident: &Ident) -> T;
-    fn visit_path(&mut self, path: &Path) -> T;
-    fn visit_block(&mut self, block: &Block) -> T;
+    fn visit_ident(&mut self, name: &Ident) {}
+
+    fn visit_path(&mut self, path: &Path) {}
+
+    fn visit_block(&mut self, block: &Block) {
+        walk_each!(self, block.stmts(), visit_stmt);
+    }
 }
