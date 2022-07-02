@@ -31,6 +31,10 @@ impl Stmt {
         &self.kind
     }
 
+    pub fn take_kind(self) -> StmtKind {
+        self.kind
+    }
+
     pub fn id(&self) -> NodeId {
         self.id
     }

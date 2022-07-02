@@ -39,7 +39,7 @@ pub(crate) use walk_each_pr;
 ///  for all nodes.
 /// So keep in mind implementing all visitors you need or
 pub trait AstVisitor {
-    fn visit_err(&self, _: &ErrorNode);
+    fn visit_err(&mut self, _: &ErrorNode);
 
     fn visit_ast(&mut self, ast: &AST) {
         walk_each_pr!(self, ast.items(), visit_item);

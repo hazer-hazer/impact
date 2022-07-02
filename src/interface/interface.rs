@@ -68,7 +68,8 @@ impl Interface {
 
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess);
-            println!("Printing AST after parsing\n{}", pp.visit_ast(&ast));
+            pp.visit_ast(&ast);
+            println!("Printing AST after parsing\n{}", pp.get_string());
         }
 
         self.should_stop(stage)?;
@@ -98,7 +99,8 @@ impl Interface {
 
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess);
-            println!("Printing HIR after parsing\n{}", pp.visit_hir(&hir));
+            pp.visit_hir(&hir);
+            println!("Printing HIR after parsing\n{}", pp.get_string());
         }
 
         self.should_stop(stage)?;

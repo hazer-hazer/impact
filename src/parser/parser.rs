@@ -543,21 +543,24 @@ impl Parser {
     fn parse_block(&mut self) -> PR<Block> {
         let lo = self.span();
 
-        let stmts = parse_block_common!(self, parse_stmt, true);
+        let mut stmts = parse_block_common!(self, parse_stmt, true);
 
-        let expr = if let Some(Ok(last_stmt)) = stmts.last() {
-            if let StmtKind::Expr(expr) = last_stmt.kind() {
-                *expr
-            } else {
-                MessageBuilder::error()
-                    .span(last_stmt.span())
-                    .text(format!("Expected expression, got {}", last_stmt))
-                    .emit(self);
-                Err(ErrorNode::new(last_stmt.span()))
+        let expr = match stmts.pop() {
+            Some(Ok(stmt)) => {
+                let span = stmt.span();
+                match stmt.take_kind() {
+                    StmtKind::Expr(expr) => expr,
+                    kind @ StmtKind::Item(Ok(_)) => {
+                        MessageBuilder::error()
+                            .span(span)
+                            .text(format!("Expected expression, got {}", kind))
+                            .emit(self);
+                        Err(ErrorNode::new(span))
+                    }
+                    _ => Err(ErrorNode::new(span)),
+                }
             }
-        } else {
-            // I'm not sure what to do if no statement in the block or it is an error statement
-            Err(ErrorNode::new(self.span()))
+            _ => Err(ErrorNode::new(self.span())),
         };
 
         Ok(Block::new(

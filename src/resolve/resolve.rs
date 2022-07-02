@@ -6,11 +6,11 @@ use crate::{
         item::Item,
         ty::Ty,
         visitor::{walk_each_pr, walk_pr, AstVisitor},
-        ErrorNode, NodeId, Path, AST, N, PR, NodeMap,
+        ErrorNode, NodeId, NodeMap, Path, AST, N, PR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Symbol, Span},
+    span::span::{Ident, Span, Symbol},
 };
 
 use super::{
@@ -30,18 +30,24 @@ struct Rib {
 
 impl Rib {
     pub fn new_module(module_id: ModuleId) -> Self {
-        Self { locals: Default::default(), kind: RibKind::Module(module_id) }
+        Self {
+            locals: Default::default(),
+            kind: RibKind::Module(module_id),
+        }
     }
 
     pub fn new_block() -> Self {
-        Self { locals: Default::default(), kind: RibKind::Block }
+        Self {
+            locals: Default::default(),
+            kind: RibKind::Block,
+        }
     }
 
     pub fn get(&self, sym: Symbol) -> Option<&NodeId> {
         self.locals.get(&sym)
     }
 
-    pub fn define(&self, sym: Symbol, node_id: NodeId) -> Option<NodeId> {
+    pub fn define(&mut self, sym: Symbol, node_id: NodeId) -> Option<NodeId> {
         self.locals.insert(sym, node_id)
     }
 }
@@ -67,14 +73,12 @@ impl<'a> NameResolver<'a> {
         }
     }
 
-    fn rib(&self) -> &Rib {
-        &self.ribs.last().unwrap()
+    fn rib(&mut self) -> &mut Rib {
+        self.ribs.last_mut().unwrap()
     }
 
-    fn define_local(&self, sym: Symbol, node_id: NodeId) {
-        if let Some(old) = self.rib().define(sym, node_id) {
-            
-        }
+    fn define_local(&mut self, sym: Symbol, node_id: NodeId) {
+        if let Some(old) = self.rib().define(sym, node_id) {}
     }
 
     fn resolve_path(&mut self, path: &Path) -> Res {
@@ -142,7 +146,7 @@ impl<'a> MessageHolder for NameResolver<'a> {
 }
 
 impl<'a> AstVisitor for NameResolver<'a> {
-    fn visit_err(&self, _: &ErrorNode) {}
+    fn visit_err(&mut self, _: &ErrorNode) {}
 
     fn visit_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> () {
         walk_pr!(self, ty, visit_ty);

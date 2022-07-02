@@ -24,6 +24,10 @@ impl<'a> AstLikePP<'a> {
         }
     }
 
+    pub fn get_string(self) -> String {
+        self.out
+    }
+
     fn indent(&mut self) {
         self.indent_level += 1;
     }
@@ -33,11 +37,11 @@ impl<'a> AstLikePP<'a> {
         self.indent_level -= 1;
     }
 
-    fn cur_indent(&self) -> &str {
-        &"    ".repeat(self.indent_level as usize)
+    fn cur_indent(&self) -> String {
+        "    ".repeat(self.indent_level as usize)
     }
 
-    fn out_indent(&self) {
+    fn out_indent(&mut self) {
         self.out.push_str(&self.cur_indent())
     }
 

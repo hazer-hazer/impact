@@ -77,7 +77,7 @@ impl<'a> DefCollector<'a> {
 }
 
 impl<'a> AstVisitor for DefCollector<'a> {
-    fn visit_err(&self, _: &ErrorNode) {}
+    fn visit_err(&mut self, _: &ErrorNode) {}
 
     fn visit_ast(&mut self, ast: &AST) {
         self.sess.def_table.add_root_module();
