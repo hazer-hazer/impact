@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
+        expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
         item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
         ty::{LitTy, Ty, TyKind},
@@ -124,8 +124,7 @@ impl<'a> Lower<'a> {
             ExprKind::Prefix(op, rhs) => self.lower_prefix_expr(op, rhs),
             ExprKind::Abs(param, body) => self.lower_abs_expr(param, body),
             ExprKind::App(lhs, arg) => self.lower_app_expr(lhs, arg),
-            ExprKind::Block(stmts) => self.lower_block_expr(stmts),
-            ExprKind::Let(name, value, body) => self.lower_let_expr(name, value, body),
+            ExprKind::Let(block) => self.lower_let_expr(block),
             ExprKind::Ty(expr, ty) => self.lower_ty_expr(expr, ty),
         };
 
@@ -171,21 +170,8 @@ impl<'a> Lower<'a> {
         )
     }
 
-    fn lower_block_expr(&mut self, stmts: &Vec<PR<N<Stmt>>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Block(lower_each_pr!(self, stmts, lower_stmt))
-    }
-
-    fn lower_let_expr(
-        &mut self,
-        name: &PR<Ident>,
-        value: &PR<N<Expr>>,
-        body: &PR<N<Expr>>,
-    ) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Let(
-            lower_pr!(self, name, lower_ident),
-            lower_pr_boxed!(self, value, lower_expr),
-            lower_pr_boxed!(self, body, lower_expr),
-        )
+    fn lower_let_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Let(lower_pr!(self, block, lower_block))
     }
 
     fn lower_ty_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) -> hir::expr::ExprKind {
@@ -234,6 +220,13 @@ impl<'a> Lower<'a> {
 
     fn lower_path(&mut self, path: &Path) -> hir::Path {
         hir::Path::new(path.segments().clone())
+    }
+
+    fn lower_block(&mut self, block: &Block) -> hir::expr::Block {
+        hir::expr::Block::new(
+            lower_each_pr!(self, block.stmts(), lower_stmt),
+            lower_pr_boxed!(self, block.expr(), lower_expr),
+        )
     }
 }
 

@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    expr::{Expr, ExprKind},
+    expr::{Block, Expr, ExprKind},
     item::{Item, ItemKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind},
@@ -56,8 +56,7 @@ pub trait HirVisitor<T> {
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
-            ExprKind::Block(stmts) => self.visit_block_expr(stmts),
-            ExprKind::Let(name, value, body) => self.visit_let_expr(name, value, body),
+            ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
             ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
         }
@@ -71,8 +70,7 @@ pub trait HirVisitor<T> {
     fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) -> T;
     fn visit_app_expr(&mut self, lhs: &N<Expr>, arg: &N<Expr>) -> T;
     fn visit_abs_expr(&mut self, param: &Ident, body: &N<Expr>) -> T;
-    fn visit_block_expr(&mut self, stmts: &Vec<Stmt>) -> T;
-    fn visit_let_expr(&mut self, name: &Ident, value: &N<Expr>, body: &N<Expr>) -> T;
+    fn visit_let_expr(&mut self, block: &Block) -> T;
     fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) -> T;
 
     // Types //
@@ -94,4 +92,5 @@ pub trait HirVisitor<T> {
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> T;
     fn visit_path(&mut self, path: &Path) -> T;
+    fn visit_block(&mut self, block: &Block) -> T;
 }

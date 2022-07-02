@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         self,
-        expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
+        expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
         item::{Item, ItemKind},
         ty::Ty,
         visitor::{visit_each_pr, visit_pr, AstVisitor},
@@ -122,12 +122,7 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
-            ExprKind::Block(stmts) => {
-                self.enter_block_module(expr.id());
-                self.visit_block_expr(stmts);
-                self.exit_module();
-            }
-            ExprKind::Let(name, value, body) => self.visit_let_expr(name, value, body),
+            ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
             ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
         }
@@ -156,14 +151,8 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
         visit_pr!(self, body, visit_expr);
     }
 
-    fn visit_block_expr(&mut self, stmts: &Vec<PR<N<ast::stmt::Stmt>>>) {
-        visit_each_pr!(self, stmts, visit_stmt);
-    }
-
-    fn visit_let_expr(&mut self, name: &PR<Ident>, value: &PR<N<Expr>>, body: &PR<N<Expr>>) {
-        visit_pr!(self, name, visit_ident);
-        visit_pr!(self, value, visit_expr);
-        visit_pr!(self, body, visit_expr);
+    fn visit_let_expr(&mut self, block: &PR<Block>) {
+        visit_pr!(self, block, visit_block);
     }
 
     fn visit_type_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) {
@@ -182,6 +171,13 @@ impl<'a> AstVisitor<()> for DefCollector<'a> {
     }
 
     fn visit_path(&mut self, _: &ast::Path) {}
+
+    fn visit_block(&mut self, block: &ast::expr::Block) -> () {
+        self.enter_block_module(block.id());
+        visit_each_pr!(self, block.stmts(), visit_stmt);
+        visit_pr!(self, block.expr(), visit_expr);
+        self.exit_module();
+    }
 }
 
 impl<'a> Stage<()> for DefCollector<'a> {

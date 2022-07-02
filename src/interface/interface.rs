@@ -6,7 +6,7 @@ use crate::{
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::{defs::DefPrinter, AstLikePP},
-    resolve::collect::DefCollector,
+    resolve::{collect::DefCollector, resolve::NameResolver},
     session::{Session, Source, Stage},
 };
 
@@ -85,6 +85,12 @@ impl Interface {
         }
 
         self.should_stop(stage)?;
+
+        // Name resolution //
+        verbose!("=== Name resolution ===");
+        let stage = StageName::NameRes;
+
+        // let (_, sess) = NameResolver:
 
         // Lowering //
         let stage = StageName::Lower;

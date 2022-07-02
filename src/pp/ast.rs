@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Expr, InfixOp, Lit, PrefixOp},
+        expr::{Block, Expr, InfixOp, Lit, PrefixOp},
         item::Item,
         stmt::{Stmt, StmtKind},
         ty::{LitTy, Ty},
@@ -128,22 +128,8 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
         )
     }
 
-    fn visit_block_expr(&mut self, stmts: &Vec<PR<N<Stmt>>>) -> String {
-        visit_block!(self, stmts, visit_stmt)
-    }
-
-    fn visit_let_expr(
-        &mut self,
-        name: &PR<Ident>,
-        value: &PR<N<Expr>>,
-        body: &PR<N<Expr>>,
-    ) -> String {
-        format!(
-            "let {} = {} in {}",
-            visit_pr!(self, name, visit_ident),
-            visit_pr!(self, value, visit_expr),
-            visit_pr!(self, body, visit_expr)
-        )
+    fn visit_let_expr(&mut self, block: &PR<Block>) -> String {
+        format!("let {}", visit_pr!(self, block, visit_block))
     }
 
     fn visit_type_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) -> String {
@@ -188,6 +174,14 @@ impl<'a> AstVisitor<String> for AstLikePP<'a> {
                 .map(|seg| format!("{}", seg))
                 .collect::<Vec<_>>()
                 .join(".")
+        )
+    }
+
+    fn visit_block(&mut self, block: &Block) -> String {
+        format!(
+            "{}\n{}",
+            visit_block!(self, block.stmts(), visit_stmt),
+            visit_pr!(self, block.expr(), visit_expr)
         )
     }
 }

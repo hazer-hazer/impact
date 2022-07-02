@@ -4,7 +4,7 @@ use crate::{
         ty::LitTy,
     },
     hir::{
-        expr::Expr,
+        expr::{Block, Expr},
         item::Item,
         stmt::{Stmt, StmtKind},
         ty::Ty,
@@ -96,17 +96,8 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
         format!("{} {}", self.visit_expr(lhs), self.visit_expr(arg))
     }
 
-    fn visit_block_expr(&mut self, stmts: &Vec<Stmt>) -> String {
-        visit_block!(self, stmts, visit_stmt)
-    }
-
-    fn visit_let_expr(&mut self, name: &Ident, value: &N<Expr>, body: &N<Expr>) -> String {
-        format!(
-            "let {} = {} in {}",
-            self.visit_ident(name),
-            self.visit_expr(value),
-            self.visit_expr(body)
-        )
+    fn visit_let_expr(&mut self, block: &Block) -> String {
+        format!("let {}", self.visit_block(block))
     }
 
     fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) -> String {
@@ -143,6 +134,14 @@ impl<'a> HirVisitor<String> for AstLikePP<'a> {
                 .map(|seg| format!("{}", seg))
                 .collect::<Vec<_>>()
                 .join(".")
+        )
+    }
+
+    fn visit_block(&mut self, block: &Block) -> String {
+        format!(
+            "{}\n{}",
+            visit_each!(self, block.stmts(), visit_stmt, "\n"),
+            self.visit_expr(block.expr())
         )
     }
 }

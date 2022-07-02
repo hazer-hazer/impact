@@ -130,16 +130,65 @@ impl Display for PrefixOpKind {
     }
 }
 
+pub struct Block {
+    id: NodeId,
+    stmts: Vec<PR<N<Stmt>>>,
+    expr: PR<N<Expr>>,
+    span: Span,
+}
+
+impl Block {
+    pub fn new(id: NodeId, stmts: Vec<PR<N<Stmt>>>, expr: PR<N<Expr>>, span: Span) -> Self {
+        Self {
+            id,
+            stmts,
+            expr,
+            span,
+        }
+    }
+
+    pub fn stmts(&self) -> &[PR<N<Stmt>>] {
+        self.stmts.as_ref()
+    }
+
+    pub fn expr(&self) -> &PR<N<Expr>> {
+        &self.expr
+    }
+
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
+impl WithSpan for Block {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Display for Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{}",
+            self.stmts
+                .iter()
+                .map(|stmt| format!("{}", pr_display(stmt)))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            pr_display(&self.expr)
+        )
+    }
+}
+
 pub enum ExprKind {
     Lit(Lit),
     Path(PR<Path>),
     Infix(PR<N<Expr>>, InfixOp, PR<N<Expr>>),
     Prefix(PrefixOp, PR<N<Expr>>),
     Abs(PR<Ident>, PR<N<Expr>>),
-    // App(PR<N<Expr>>, Vec<PR<N<Expr>>>),
     App(PR<N<Expr>>, PR<N<Expr>>),
-    Block(Vec<PR<N<Stmt>>>),
-    Let(PR<Ident>, PR<N<Expr>>, PR<N<Expr>>),
+    Let(PR<Block>),
     Ty(PR<N<Expr>>, PR<N<Ty>>),
 }
 
@@ -166,22 +215,7 @@ impl Display for ExprKind {
                 write!(f, "{} -> {}", pr_display(param_name), pr_display(body))
             }
             ExprKind::App(lhs, arg) => write!(f, "{} {}", pr_display(lhs), pr_display(arg)),
-            ExprKind::Block(stmts) => write!(
-                f,
-                "{}",
-                stmts
-                    .iter()
-                    .map(|stmt| format!("{}", pr_display(stmt)))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
-            ExprKind::Let(name, value, body) => write!(
-                f,
-                "let {} = {} in {}",
-                pr_display(name),
-                pr_display(value),
-                pr_display(body)
-            ),
+            ExprKind::Let(block) => write!(f, "{}", pr_display(block)),
             ExprKind::Ty(expr, ty) => write!(f, "{}: {}", pr_display(expr), pr_display(ty)),
         }
     }
@@ -194,8 +228,7 @@ impl NodeKindStr for ExprKind {
             ExprKind::Path(_) => "path".to_string(),
             ExprKind::Abs(_, _) => "lambda".to_string(),
             ExprKind::App(_, _) => "function call".to_string(),
-            ExprKind::Block(_) => "block expression".to_string(),
-            ExprKind::Let(_, _, _) => "let expression".to_string(),
+            ExprKind::Let(_) => "let expression".to_string(),
             ExprKind::Ty(_, _) => "type ascription".to_string(),
             ExprKind::Infix(_, _, _) => "infix expression".to_string(),
             ExprKind::Prefix(_, _) => "prefix expression".to_string(),

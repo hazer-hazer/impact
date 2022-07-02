@@ -1,12 +1,11 @@
 use crate::{
     ast::{
-        expr::{Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
+        expr::{Block, Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         item::{Item, ItemKind},
-        stmt::{Stmt, StmtKind},
+        stmt::{self, Stmt, StmtKind},
         ty::{Ty, TyKind},
         ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
     },
-    cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
@@ -391,20 +390,12 @@ impl Parser {
 
         self.expect_kw(Kw::Let)?;
 
-        let name = self.parse_ident("variable name");
-
-        self.expect_punct(Punct::Assign)?;
-
-        let value = self.parse_expr();
-
-        self.expect_kw(Kw::In)?;
-
-        let body = self.parse_expr();
+        let block = self.parse_block();
 
         // There might be a better way to slice vector
         Ok(Box::new(Expr::new(
             self.next_node_id(),
-            ExprKind::Let(name, value, body),
+            ExprKind::Let(block),
             self.close_span(lo),
         )))
     }
@@ -513,10 +504,6 @@ impl Parser {
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
         let Token { kind, span } = self.peek_tok();
 
-        if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
-            return self.parse_block();
-        }
-
         if self.is(TokenCmp::Punct(Punct::Backslash)) {
             return self.parse_abs();
         }
@@ -525,7 +512,7 @@ impl Parser {
             TokenKind::Bool(val) => Some(Ok(ExprKind::Lit(Lit::Bool(val)))),
             TokenKind::Int(val) => Some(Ok(ExprKind::Lit(Lit::Int(val)))),
             TokenKind::String(sym) => Some(Ok(ExprKind::Lit(Lit::String(sym)))),
-            TokenKind::Ident(sym) => Some(Ok(ExprKind::Path(
+            TokenKind::Ident(_) => Some(Ok(ExprKind::Path(
                 self.parse_path("[BUG] First identifier in path expression"),
             ))),
 
@@ -553,16 +540,32 @@ impl Parser {
         Ok(Path::new(segments))
     }
 
-    fn parse_block(&mut self) -> Option<PR<N<Expr>>> {
+    fn parse_block(&mut self) -> PR<Block> {
         let lo = self.span();
 
         let stmts = parse_block_common!(self, parse_stmt, true);
 
-        Some(Ok(Box::new(Expr::new(
+        let expr = if let Some(Ok(last_stmt)) = stmts.last() {
+            if let StmtKind::Expr(expr) = last_stmt.kind() {
+                *expr
+            } else {
+                MessageBuilder::error()
+                    .span(last_stmt.span())
+                    .text(format!("Expected expression, got {}", last_stmt))
+                    .emit(self);
+                Err(ErrorNode::new(last_stmt.span()))
+            }
+        } else {
+            // I'm not sure what to do if no statement in the block or it is an error statement
+            Err(ErrorNode::new(self.span()))
+        };
+
+        Ok(Block::new(
             self.next_node_id(),
-            ExprKind::Block(stmts),
+            stmts,
+            expr,
             self.close_span(lo),
-        ))))
+        ))
     }
 
     fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {

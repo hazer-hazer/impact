@@ -1,39 +1,80 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{NodeId, Path},
+    ast::{
+        expr::Expr,
+        item::Item,
+        ty::Ty,
+        visitor::{visit_each_pr, visit_pr, AstVisitor},
+        ErrorNode, NodeId, Path, AST, N, PR, NodeMap,
+    },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    resolve::res::ResKind,
     session::{Session, Stage, StageOutput},
-    span::span::Symbol,
+    span::span::{Ident, Symbol, Span},
 };
 
-use super::{def::ModuleId, res::Res};
+use super::{
+    def::{ModuleId, ROOT_DEF_ID},
+    res::Res,
+};
+
+enum RibKind {
+    Block,
+    Module(ModuleId),
+}
 
 struct Rib {
     locals: HashMap<Symbol, NodeId>,
-    bound_module: Option<ModuleId>,
+    kind: RibKind,
 }
 
 impl Rib {
-    pub fn new(bound_module: Option<ModuleId>) -> Self {
-        Self {
-            locals: Default::default(),
-            bound_module,
-        }
+    pub fn new_module(module_id: ModuleId) -> Self {
+        Self { locals: Default::default(), kind: RibKind::Module(module_id) }
+    }
+
+    pub fn new_block() -> Self {
+        Self { locals: Default::default(), kind: RibKind::Block }
+    }
+
+    pub fn get(&self, sym: Symbol) -> Option<&NodeId> {
+        self.locals.get(&sym)
+    }
+
+    pub fn define(&self, sym: Symbol, node_id: NodeId) -> Option<NodeId> {
+        self.locals.insert(sym, node_id)
     }
 }
 
-pub struct NameResolver {
+pub struct NameResolver<'a> {
+    ast: &'a AST,
     ribs: Vec<Rib>,
     nearest_mod: ModuleId,
+    locals_span: NodeMap<Span>,
     msg: MessageStorage,
     sess: Session,
 }
 
-impl NameResolver {
+impl<'a> NameResolver<'a> {
+    pub fn new(sess: Session, ast: &'a AST) -> Self {
+        Self {
+            ast,
+            ribs: Default::default(),
+            nearest_mod: ModuleId::Module(ROOT_DEF_ID),
+            locals_span: Default::default(),
+            msg: Default::default(),
+            sess,
+        }
+    }
+
     fn rib(&self) -> &Rib {
         &self.ribs.last().unwrap()
+    }
+
+    fn define_local(&self, sym: Symbol, node_id: NodeId) {
+        if let Some(old) = self.rib().define(sym, node_id) {
+            let 
+        }
     }
 
     fn resolve_path(&mut self, path: &Path) -> Res {
@@ -41,7 +82,7 @@ impl NameResolver {
 
         if segments.get(0).unwrap().is_var() && segments.len() == 0 {
             let seg = segments.get(0).unwrap();
-            if let Some(local) = self.rib().locals.get(&seg.sym()) {
+            if let Some(local) = self.rib().get(seg.sym()) {
                 return Res::local(*local);
             }
         }
@@ -94,13 +135,33 @@ impl NameResolver {
     }
 }
 
-impl MessageHolder for NameResolver {
+impl<'a> MessageHolder for NameResolver<'a> {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl Stage<()> for NameResolver {
+impl<'a> AstVisitor<()> for NameResolver<'a> {
+    fn visit_err(&self, _: &ErrorNode) {}
+
+    fn visit_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> () {
+        visit_pr!(self, ty, visit_ty);
+    }
+
+    fn visit_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> () {
+        visit_each_pr!(self, items, visit_item)
+    }
+
+    fn visit_decl_item(
+        &mut self,
+        name: &PR<Ident>,
+        params: &Vec<PR<Ident>>,
+        body: &PR<N<Expr>>,
+    ) -> () {
+    }
+}
+
+impl<'a> Stage<()> for NameResolver<'a> {
     fn run(self) -> StageOutput<()> {
         StageOutput::new(self.sess, (), self.msg)
     }

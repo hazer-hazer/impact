@@ -1,7 +1,7 @@
 use crate::span::span::Ident;
 
 use super::{
-    expr::{Expr, ExprKind, InfixOp, Lit, PrefixOp},
+    expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
     item::{Item, ItemKind},
     stmt::{Stmt, StmtKind},
     ty::{LitTy, Ty, TyKind},
@@ -81,8 +81,7 @@ pub trait AstVisitor<T> {
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
-            ExprKind::Block(stmts) => self.visit_block_expr(stmts),
-            ExprKind::Let(name, value, body) => self.visit_let_expr(name, value, body),
+            ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
             ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
         }
@@ -96,8 +95,7 @@ pub trait AstVisitor<T> {
     fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &PR<N<Expr>>) -> T;
     fn visit_app_expr(&mut self, lhs: &PR<N<Expr>>, arg: &PR<N<Expr>>) -> T;
     fn visit_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) -> T;
-    fn visit_block_expr(&mut self, stmts: &Vec<PR<N<Stmt>>>) -> T;
-    fn visit_let_expr(&mut self, name: &PR<Ident>, value: &PR<N<Expr>>, body: &PR<N<Expr>>) -> T;
+    fn visit_let_expr(&mut self, block: &PR<Block>) -> T;
     fn visit_type_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) -> T;
 
     // Types //
@@ -125,4 +123,5 @@ pub trait AstVisitor<T> {
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) -> T;
     fn visit_path(&mut self, path: &Path) -> T;
+    fn visit_block(&mut self, block: &Block) -> T;
 }

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     hir::N,
-    span::span::{Ident, Span, WithSpan},
+    span::span::{Span, WithSpan},
 };
 
 use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, PR};
@@ -68,7 +68,7 @@ impl Ty {
 
 pub enum TyKind {
     Unit,
-    Lit(LitTy),
+    Lit(LitTy), // TODO: REMOVE
     Path(PR<Path>),
     Func(PR<N<Ty>>, PR<N<Ty>>),
     Paren(PR<N<Ty>>),
