@@ -31,13 +31,18 @@ impl SourceId {
 
 /// Computed information about line, use not for storage but as a helper
 pub struct SpanSourceInfo<'a> {
-    pub line: &'a str,
-    pub line_pos: SpanPos,
-    pub line_size: usize,
-    pub line_num: usize,
-    pub line_num_len: usize,
-    pub line_num_indent: usize,
+    pub line: LineInfo<'a>,
     pub pos_in_line: SpanPos,
+}
+
+pub struct LineInfo<'a> {
+    pub str: &'a str,
+    pub index: usize,                   // Line index in Source.lines_positions
+    pub prev_line_index: Option<usize>, // Index of previous line
+    pub pos: SpanPos,                   // Lines absolute source position
+    pub num: usize,                     // Line number (starts with 1)
+    pub num_len: usize,                 // Length of line number as string
+    pub num_indent: usize, // Calculated indent for line number to align with source lines
 }
 
 /// Some source, e.g. source file
@@ -76,8 +81,8 @@ impl Source {
         self.filename.as_ref()
     }
 
-    /// get (line string, line position, line number)
-    pub fn find_line(&self, span: Span) -> (&str, SpanPos, usize) {
+    /// Find line index by span
+    fn find_span_line(&self, span: Span) -> usize {
         if span.is_error() {
             panic!()
         }
@@ -95,43 +100,47 @@ impl Source {
             }
 
             if span.lo() >= line_pos && span.lo() < next_line_pos {
-                return (
-                    &self.source[line_pos as usize..(next_line_pos - 1) as usize],
-                    line_pos,
-                    i + 1,
-                );
+                return i;
             }
         }
 
         panic!("No source line found for span {}", span);
     }
 
-    pub fn get_line_info<'a>(&self, sess: &'a Session, span: Span) -> SpanSourceInfo<'a> {
-        let source = sess.source_map.get_source(span.source());
+    pub fn get_line_info<'a>(&'a self, index: usize) -> LineInfo<'a> {
+        let lines_count = self.lines_count();
 
-        let lines_count = source.lines_count();
+        let prev_line_index = if index > 0 { Some(index - 1) } else { None };
 
-        let (line, line_pos, line_num) = if span.is_error() {
-            ("[The place my stupid mistakes live]", 0, 0)
-        } else {
-            let (line, pos, num) = source.find_line(span);
-            assert!(pos <= span.lo());
+        let next_line_pos = *self
+            .lines_positions
+            .get(index + 1)
+            .unwrap_or(&(self.source_size() as SpanPos));
 
-            (line, pos, num)
-        };
+        let pos = *self.lines_positions.get(index).unwrap();
+        let line = &self.source[pos as usize..(next_line_pos - 1) as usize];
+        let num = index + 1;
+        let num_len = num.to_string().len();
+        let num_indent = num_len - (lines_count + 1).to_string().len();
 
-        // FIXME: Optimize
-        let line_num_len = line_num.to_string().len();
+        LineInfo {
+            str: line,
+            prev_line_index,
+            index,
+            pos,
+            num,
+            num_len,
+            num_indent,
+        }
+    }
 
-        let line_num_indent = line_num_len - (lines_count + 1).to_string().len();
+    pub fn get_span_info<'a>(&'a self, span: Span) -> SpanSourceInfo<'a> {
+        let line = self.get_line_info(self.find_span_line(span));
+
+        let line_pos = line.pos;
 
         SpanSourceInfo {
             line,
-            line_pos,
-            line_size: line.len(),
-            line_num,
-            line_num_len,
-            line_num_indent,
             pos_in_line: span.lo() - line_pos,
         }
     }

@@ -1,6 +1,6 @@
 use crate::{
     cli::color::Colorize,
-    session::{Session, SpanSourceInfo},
+    session::{LineInfo, Session, SpanSourceInfo},
 };
 
 use super::{
@@ -50,18 +50,29 @@ impl MessageEmitter for TermEmitter {
         let source = sess.source_map.get_source(msg.span().source());
 
         let SpanSourceInfo {
-            line_num_indent,
-            line_num,
+            line:
+                LineInfo {
+                    num_indent,
+                    num,
+                    prev_line_index,
+                    ..
+                },
             pos_in_line,
             ..
-        } = source.get_line_info(sess, msg.span());
+        } = source.get_span_info(msg.span());
 
+        // Header line `error: Message`
         println!(
-            "{}\n{}--> {}:{}:{}",
-            format!("{}: {}", msg.kind(), msg.text()).fg_color(msg.kind().color()),
-            " ".repeat(line_num_indent),
+            "{}",
+            format!("{}: {}", msg.kind(), msg.text()).fg_color(msg.kind().color())
+        );
+
+        // Source-pointing line `[indent]--> file:line:col`
+        println!(
+            "{}--> {}:{}:{}",
+            " ".repeat(num_indent),
             source.filename(),
-            line_num,
+            num,
             pos_in_line + 1
         );
 
@@ -74,25 +85,43 @@ impl MessageEmitter for TermEmitter {
 }
 
 impl TermEmitter {
+    fn print_line(
+        &self,
+        LineInfo {
+            str,
+            num_indent,
+            num,
+            ..
+        }: LineInfo,
+    ) {
+        println!("{}{} | {}", " ".repeat(num_indent), num, str);
+    }
+
     fn process_label(&self, sess: &Session, label: &Label) {
         let span = label.span();
 
         let source = sess.source_map.get_source(span.source());
 
         let SpanSourceInfo {
-            line,
-            line_num,
-            line_num_len,
-            line_num_indent,
+            line:
+                line @ LineInfo {
+                    num_len,
+                    num_indent,
+                    prev_line_index,
+                    ..
+                },
             pos_in_line,
-            ..
-        } = source.get_line_info(sess, span);
+        } = source.get_span_info(span);
 
-        println!("{}{} | {}", " ".repeat(line_num_indent), line_num, line);
+        if let Some(index) = prev_line_index {
+            self.print_line(source.get_line_info(index));
+        }
+
+        self.print_line(line);
         println!(
             "{}{}--- {}",
             // Indent of span pos in line + indent before number + number length + 3 for ` | `
-            " ".repeat(pos_in_line as usize + line_num_indent + line_num_len + 3),
+            " ".repeat(pos_in_line as usize + num_indent + num_len + 3),
             "^".repeat(span.len() as usize),
             label.text()
         );
