@@ -82,7 +82,8 @@ impl Interface {
 
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess);
-            println!("{}", pp.pp_defs());
+            pp.pp_defs();
+            println!("{}", pp.get_string());
         }
 
         self.should_stop(stage)?;

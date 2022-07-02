@@ -6,6 +6,7 @@ use crate::{
         ty::{Ty, TyKind},
         ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
     },
+    cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
@@ -247,7 +248,7 @@ impl Parser {
     fn parse_many(&mut self, cmp: TokenCmp) -> PR<Vec<PR<Token>>> {
         let mut tokens = vec![];
         while self.is(cmp) {
-            tokens.push(Ok(self.peek_tok()));
+            tokens.push(Ok(self.advance_tok()));
         }
         Ok(tokens)
     }
@@ -268,6 +269,7 @@ impl Parser {
 
     // Statements //
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
+        verbose!("Parse stmt {}", self.peek());
         if let Some(item) = self.parse_opt_item() {
             let span = item.span();
             Ok(Box::new(Stmt::new(
@@ -307,6 +309,8 @@ impl Parser {
     }
 
     fn parse_mod_item(&mut self) -> PR<N<Item>> {
+        verbose!("Parse mod {}", self.peek());
+
         let lo = self.span();
 
         self.expect_kw(Kw::Mod)?;
@@ -323,6 +327,8 @@ impl Parser {
     }
 
     fn parse_type_item(&mut self) -> PR<N<Item>> {
+        verbose!("Parse type alias {}", self.peek());
+
         let lo = self.span();
 
         self.expect_kw(Kw::Type)?;
@@ -343,6 +349,8 @@ impl Parser {
     }
 
     fn parse_decl_item(&mut self) -> PR<N<Item>> {
+        verbose!("Parse decl {}", self.peek());
+
         let lo = self.span();
 
         // TODO: Rewrite this scary hell
@@ -386,6 +394,8 @@ impl Parser {
     }
 
     fn parse_let(&mut self) -> PR<N<Expr>> {
+        verbose!("Parse let {}", self.peek());
+
         let lo = self.span();
 
         self.expect_kw(Kw::Let)?;
@@ -401,6 +411,8 @@ impl Parser {
     }
 
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
+        verbose!("Parse prec {}", prec);
+
         const PREC_TABLE: &[&[TokenCmp]] = &[
             &[TokenCmp::Punct(Punct::Colon)],
             &[TokenCmp::Infix(Infix::Plus), TokenCmp::Infix(Infix::Minus)],
@@ -450,6 +462,8 @@ impl Parser {
     }
 
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
+        verbose!("Parse prefix {}", self.peek());
+
         let lo = self.span();
         if let Some(op) = self.skip(TokenCmp::SomePrefix) {
             let rhs = self.parse_postfix();
@@ -475,6 +489,8 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {
+        verbose!("Parse postfix {}", self.peek());
+
         let lo = self.span();
 
         let lhs = self.parse_primary();
@@ -502,6 +518,8 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
+        verbose!("Parse primary {}", self.peek());
+
         let Token { kind, span } = self.peek_tok();
 
         if self.is(TokenCmp::Punct(Punct::Backslash)) {
@@ -531,6 +549,8 @@ impl Parser {
     }
 
     fn parse_path(&mut self, expected: &str) -> PR<Path> {
+        verbose!("Parse path {}", self.peek());
+
         // If no first identifier present then it's "expected path" error, not "expected identifier"
         let mut segments = vec![self.parse_ident(expected)?];
         while self.skip(TokenCmp::Punct(Punct::Dot)).is_some() {
@@ -541,6 +561,8 @@ impl Parser {
     }
 
     fn parse_block(&mut self) -> PR<Block> {
+        verbose!("Parse block {}", self.peek());
+
         let lo = self.span();
 
         let mut stmts = parse_block_common!(self, parse_stmt, true);
@@ -572,6 +594,8 @@ impl Parser {
     }
 
     fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {
+        verbose!("Parse abs {}", self.peek());
+
         let lo = self.span();
 
         self.skip(TokenCmp::Punct(Punct::Backslash));
@@ -596,6 +620,8 @@ impl Parser {
     }
 
     fn parse_opt_ty(&mut self) -> Option<PR<N<Ty>>> {
+        verbose!("Parse opt ty {}", self.peek());
+
         let lo = self.span();
 
         let kind = match self.peek() {

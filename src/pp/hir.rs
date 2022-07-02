@@ -34,7 +34,7 @@ macro_rules! walk_each_delim {
         $nodes.iter().enumerate().for_each(|(index, node)| {
             $self.$visitor(node);
             if index < $nodes.len() - 1 {
-                $self.word($sep);
+                $self.str($sep);
             }
         })
     };
@@ -65,6 +65,7 @@ impl<'a> HirVisitor for AstLikePP<'a> {
     fn visit_mod_item(&mut self, name: &Ident, items: &Vec<Item>) {
         self.kw(Kw::Mod);
         self.visit_ident(name);
+        self.nl();
         walk_block!(self, items, visit_item);
     }
 
@@ -78,7 +79,7 @@ impl<'a> HirVisitor for AstLikePP<'a> {
 
     // Expressions //
     fn visit_lit_expr(&mut self, lit: &Lit) {
-        self.word(&lit.to_string());
+        self.string(lit);
     }
 
     fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) {
@@ -118,11 +119,11 @@ impl<'a> HirVisitor for AstLikePP<'a> {
 
     // Types //
     fn visit_unit_ty(&mut self) {
-        self.word("()");
+        self.str("()");
     }
 
     fn visit_lit_ty(&mut self, lit_ty: &LitTy) {
-        self.word(&lit_ty.to_string());
+        self.string(lit_ty);
     }
 
     fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) {
@@ -133,11 +134,11 @@ impl<'a> HirVisitor for AstLikePP<'a> {
 
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) {
-        self.word(&ident.to_string())
+        self.string(ident);
     }
 
     fn visit_path(&mut self, path: &Path) {
-        self.word(&path.to_string());
+        self.string(path);
     }
 
     fn visit_block(&mut self, block: &Block) {

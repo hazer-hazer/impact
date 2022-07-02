@@ -1,1 +1,6 @@
-a b = 123
+mod a
+    a x = 123
+    
+    mod b
+        mod c
+        mod d

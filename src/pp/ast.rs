@@ -32,7 +32,7 @@ macro_rules! walk_each_pr_delim {
         $prs.iter().enumerate().for_each(|(index, pr)| {
             walk_pr!($self, pr, $ok_visitor);
             if index < $prs.len() - 1 {
-                $self.word($sep);
+                $self.str($sep);
             }
         })
     };
@@ -67,6 +67,7 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>) {
         self.kw(Kw::Mod);
         walk_pr!(self, name, visit_ident);
+        self.nl();
         walk_block!(self, items, visit_item);
     }
 
@@ -80,7 +81,7 @@ impl<'a> AstVisitor for AstLikePP<'a> {
 
     // Expressions //
     fn visit_lit_expr(&mut self, lit: &Lit) {
-        self.word(&lit.to_string());
+        self.string(lit);
     }
 
     fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, op: &InfixOp, rhs: &PR<N<Expr>>) {
@@ -120,11 +121,11 @@ impl<'a> AstVisitor for AstLikePP<'a> {
 
     // Types //
     fn visit_unit_ty(&mut self) {
-        self.word("()");
+        self.str("()");
     }
 
     fn visit_lit_ty(&mut self, lit_ty: &LitTy) {
-        self.word(&lit_ty.to_string());
+        self.string(lit_ty);
     }
 
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) {
@@ -141,11 +142,11 @@ impl<'a> AstVisitor for AstLikePP<'a> {
 
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident) {
-        self.word(&ident.to_string())
+        self.string(ident);
     }
 
     fn visit_path(&mut self, path: &Path) {
-        self.word(&path.to_string());
+        self.string(path);
     }
 
     fn visit_block(&mut self, block: &Block) {

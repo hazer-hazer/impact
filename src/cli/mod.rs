@@ -2,9 +2,9 @@ pub mod cli;
 pub mod color;
 
 macro_rules! verbose {
-    ($msg: expr) => {{
+    ($($arg:tt)*) => {{
         if cfg!(feature = "verbose_debug") {
-            println!("{}", $msg)
+            println!($($arg)*)
         } else {
         }
     }};

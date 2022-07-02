@@ -28,6 +28,32 @@ impl<'a> AstLikePP<'a> {
         self.out
     }
 
+    fn ch(&mut self, ch: char) -> &mut Self {
+        self.out.push(ch);
+        self
+    }
+
+    fn sp(&mut self) -> &mut Self {
+        self.ch(' ')
+    }
+
+    fn nl(&mut self) -> &mut Self {
+        self.ch('\n')
+    }
+
+    fn str(&mut self, str: &str) -> &mut Self {
+        self.out.push_str(str);
+        self
+    }
+
+    fn string<T>(&mut self, value: T) -> &mut Self
+    where
+        T: ToString,
+    {
+        self.str(&value.to_string());
+        self
+    }
+
     fn indent(&mut self) {
         self.indent_level += 1;
     }
@@ -41,48 +67,41 @@ impl<'a> AstLikePP<'a> {
         "    ".repeat(self.indent_level as usize)
     }
 
-    fn out_indent(&mut self) {
-        self.out.push_str(&self.cur_indent())
+    fn out_indent(&mut self) -> &mut Self {
+        self.str(&self.cur_indent())
     }
 
-    fn word(&mut self, str: &str) {
+    fn line(&mut self, str: &str) -> &mut Self {
         self.out.push_str(str);
+        self.nl()
     }
 
-    fn sword(&mut self, string: String) {
-        self.out += &string;
-    }
-
-    fn kw(&mut self, kw: Kw) {
+    fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
             Kw::Let | Kw::Type => ("", "\n"),
             Kw::In => (" ", " "),
-            Kw::Mod => ("", "\n"),
+            Kw::Mod => ("", " "),
             Kw::Root | Kw::M | Kw::Unknown => ("", ""),
         };
 
-        self.out.push_str(pre);
-        self.out.push_str(&kw.to_string());
-        self.out.push_str(post);
+        self.str(pre);
+        self.str(&kw.to_string());
+        self.str(post)
     }
 
-    fn punct(&mut self, punct: Punct) {
+    fn punct(&mut self, punct: Punct) -> &mut Self {
         let (pre, post) = match punct {
             Punct::Assign | Punct::Arrow => (" ", " "),
             Punct::Colon => ("", " "),
             Punct::Dot | Punct::LParen | Punct::RParen | Punct::Backslash => ("", ""),
         };
+
+        self.str(pre);
+        self.str(&punct.to_string());
+        self.str(post)
     }
 
-    fn sp(&mut self) {
-        self.out.push(' ');
-    }
-
-    fn nl(&mut self) {
-        self.out.push('\n');
-    }
-
-    fn infix(&mut self, infix: &InfixOp) {
+    fn infix(&mut self, infix: &InfixOp) -> &mut Self {
         let (pre, post) = match infix.node() {
             InfixOpKind::Plus
             | InfixOpKind::Minus
@@ -91,17 +110,17 @@ impl<'a> AstLikePP<'a> {
             | InfixOpKind::Mod => (" ", " "),
         };
 
-        self.out.push_str(pre);
-        self.out.push_str(&infix.node().to_string());
-        self.out.push_str(post);
+        self.str(pre);
+        self.str(&infix.node().to_string());
+        self.str(post)
     }
 
-    fn prefix(&mut self, prefix: &PrefixOp) {
+    fn prefix(&mut self, prefix: &PrefixOp) -> &mut Self {
         let post = match prefix.node() {
             PrefixOpKind::Not => "",
         };
 
-        self.out.push_str(&prefix.node().to_string());
-        self.out.push_str(post);
+        self.str(&prefix.node().to_string());
+        self.str(post)
     }
 }
