@@ -151,7 +151,5 @@ impl<'a> AstVisitor for AstLikePP<'a> {
 
     fn visit_block(&mut self, block: &Block) {
         walk_block!(self, block.stmts(), visit_stmt);
-        self.nl();
-        walk_pr!(self, block.expr(), visit_expr);
     }
 }

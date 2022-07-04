@@ -143,7 +143,5 @@ impl<'a> HirVisitor for AstLikePP<'a> {
 
     fn visit_block(&mut self, block: &Block) {
         walk_block!(self, block.stmts(), visit_stmt);
-        self.nl();
-        self.visit_expr(block.expr());
     }
 }

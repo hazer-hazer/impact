@@ -31,20 +31,15 @@ impl WithSpan for Expr {
 
 pub struct Block {
     stmts: Vec<Stmt>,
-    expr: N<Expr>,
 }
 
 impl Block {
-    pub fn new(stmts: Vec<Stmt>, expr: N<Expr>) -> Self {
-        Self { stmts, expr }
+    pub fn new(stmts: Vec<Stmt>) -> Self {
+        Self { stmts }
     }
 
     pub fn stmts(&self) -> &[Stmt] {
         self.stmts.as_ref()
-    }
-
-    pub fn expr(&self) -> &Expr {
-        self.expr.as_ref()
     }
 }
 

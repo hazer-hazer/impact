@@ -228,10 +228,7 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_block(&mut self, block: &Block) -> hir::expr::Block {
-        hir::expr::Block::new(
-            lower_each_pr!(self, block.stmts(), lower_stmt),
-            lower_pr_boxed!(self, block.expr(), lower_expr),
-        )
+        hir::expr::Block::new(lower_each_pr!(self, block.stmts(), lower_stmt))
     }
 }
 

@@ -277,6 +277,9 @@ impl Parser {
     // Statements //
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
         verbose!("Parse stmt {}", self.peek());
+
+        self.skip_nls();
+
         if let Some(item) = self.parse_opt_item() {
             let span = item.span();
             Ok(Box::new(Stmt::new(
@@ -285,6 +288,8 @@ impl Parser {
                 span,
             )))
         } else if let Some(expr) = self.parse_opt_expr() {
+            self.expect_semi()?;
+
             let span = expr.span();
             Ok(Box::new(Stmt::new(
                 self.next_node_id(),
@@ -303,6 +308,8 @@ impl Parser {
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
+        self.skip_nls();
+
         if self.is(TokenCmp::Kw(Kw::Mod)) {
             Some(self.parse_mod_item())
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
@@ -353,7 +360,7 @@ impl Parser {
     }
 
     fn parse_decl_item(&mut self) -> PR<N<Item>> {
-        verbose!("Parse decl {}", self.peek());
+        verbose!("Parse decl {} at {}", self.peek(), self.span());
 
         let lo = self.span();
 
@@ -396,7 +403,7 @@ impl Parser {
             return Some(self.parse_let());
         }
 
-        if self.is(TokenCmp::Indent) {
+        if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
             return Some(self.parse_block_expr());
         }
 
@@ -497,6 +504,7 @@ impl Parser {
             let rhs = if let Some(rhs) = rhs {
                 rhs
             } else {
+                verbose!("[parse_prefix] expected expression error {}", self.peek());
                 MessageBuilder::error()
                     .span(self.span())
                     .text(format!("Expected expression after {} operator", op.kind))
@@ -592,32 +600,9 @@ impl Parser {
 
         let lo = self.span();
 
-        let mut stmts = parse_block_common!(self, parse_stmt, true);
+        let stmts = parse_block_common!(self, parse_stmt, true);
 
-        let expr = match stmts.pop() {
-            Some(Ok(stmt)) => {
-                let span = stmt.kind().span();
-                match stmt.take_kind() {
-                    StmtKind::Expr(expr) => expr,
-                    kind @ StmtKind::Item(Ok(_)) => {
-                        MessageBuilder::error()
-                            .span(span)
-                            .text(format!("Expected expression, got {}", kind))
-                            .emit_single_label(self);
-                        Err(ErrorNode::new(span))
-                    }
-                    _ => Err(ErrorNode::new(span)),
-                }
-            }
-            _ => Err(ErrorNode::new(self.span())),
-        };
-
-        Ok(Block::new(
-            self.next_node_id(),
-            stmts,
-            expr,
-            self.close_span(lo),
-        ))
+        Ok(Block::new(self.next_node_id(), stmts, self.close_span(lo)))
     }
 
     fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {

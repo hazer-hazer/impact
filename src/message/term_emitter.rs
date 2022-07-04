@@ -148,8 +148,8 @@ impl TermEmitter {
 
             if span.lo() != *pos {
                 println!(
-                    "{}v-- from here",
-                    " ".repeat(pos_in_line as usize + num_indent + num_len + 4)
+                    "...{}v-- from here",
+                    " ".repeat(pos_in_line as usize + num_indent + num_len + 1)
                 );
             }
 

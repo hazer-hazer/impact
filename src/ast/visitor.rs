@@ -174,6 +174,5 @@ pub trait AstVisitor {
 
     fn visit_block(&mut self, block: &Block) {
         walk_each_pr!(self, block.stmts(), visit_stmt);
-        walk_pr!(self, block.expr(), visit_expr)
     }
 }

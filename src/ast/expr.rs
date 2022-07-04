@@ -135,26 +135,16 @@ impl Display for PrefixOpKind {
 pub struct Block {
     id: NodeId,
     stmts: Vec<PR<N<Stmt>>>,
-    expr: PR<N<Expr>>,
     span: Span,
 }
 
 impl Block {
-    pub fn new(id: NodeId, stmts: Vec<PR<N<Stmt>>>, expr: PR<N<Expr>>, span: Span) -> Self {
-        Self {
-            id,
-            stmts,
-            expr,
-            span,
-        }
+    pub fn new(id: NodeId, stmts: Vec<PR<N<Stmt>>>, span: Span) -> Self {
+        Self { id, stmts, span }
     }
 
     pub fn stmts(&self) -> &[PR<N<Stmt>>] {
         self.stmts.as_ref()
-    }
-
-    pub fn expr(&self) -> &PR<N<Expr>> {
-        &self.expr
     }
 }
 
@@ -174,13 +164,12 @@ impl Display for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{}",
+            "{}",
             self.stmts
                 .iter()
                 .map(|stmt| format!("{}", pr_display(stmt)))
                 .collect::<Vec<_>>()
-                .join("\n"),
-            pr_display(&self.expr)
+                .join("\n")
         )
     }
 }
