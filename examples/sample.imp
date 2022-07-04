@@ -1,6 +1,4 @@
-mod a
-    a x = 123
-    
-    mod b
-        mod c
-        mod d
+a x = x
+
+main =
+    a = 123

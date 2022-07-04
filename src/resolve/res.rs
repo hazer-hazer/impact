@@ -46,6 +46,12 @@ pub struct NamePath {
     node_id: NodeId,
 }
 
+impl NamePath {
+    pub fn new(node_id: NodeId) -> Self {
+        Self { node_id }
+    }
+}
+
 #[derive(Default)]
 pub struct Resolutions {
     resolutions: HashMap<NamePath, Res>,

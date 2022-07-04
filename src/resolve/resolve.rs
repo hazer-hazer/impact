@@ -1,13 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{
-        expr::Expr,
-        item::Item,
-        ty::Ty,
-        visitor::{walk_each_pr, walk_pr, AstVisitor},
-        ErrorNode, NodeId, NodeMap, Path, AST, N, PR,
-    },
+    ast::{visitor::AstVisitor, ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Span, Symbol},
@@ -15,31 +9,31 @@ use crate::{
 
 use super::{
     def::{ModuleId, ROOT_DEF_ID},
-    res::Res,
+    res::{NamePath, Res},
 };
 
-enum RibKind {
+enum ScopeKind {
     Block,
     Module(ModuleId),
 }
 
-struct Rib {
+struct Scope {
     locals: HashMap<Symbol, NodeId>,
-    kind: RibKind,
+    kind: ScopeKind,
 }
 
-impl Rib {
+impl Scope {
     pub fn new_module(module_id: ModuleId) -> Self {
         Self {
             locals: Default::default(),
-            kind: RibKind::Module(module_id),
+            kind: ScopeKind::Module(module_id),
         }
     }
 
     pub fn new_block() -> Self {
         Self {
             locals: Default::default(),
-            kind: RibKind::Block,
+            kind: ScopeKind::Block,
         }
     }
 
@@ -54,9 +48,9 @@ impl Rib {
 
 pub struct NameResolver<'a> {
     ast: &'a AST,
-    ribs: Vec<Rib>,
+    scopes: Vec<Scope>,
     nearest_mod: ModuleId,
-    locals_span: NodeMap<Span>,
+    locals_spans: NodeMap<Span>,
     msg: MessageStorage,
     sess: Session,
 }
@@ -65,20 +59,28 @@ impl<'a> NameResolver<'a> {
     pub fn new(sess: Session, ast: &'a AST) -> Self {
         Self {
             ast,
-            ribs: Default::default(),
+            scopes: Default::default(),
             nearest_mod: ModuleId::Module(ROOT_DEF_ID),
-            locals_span: Default::default(),
+            locals_spans: Default::default(),
             msg: Default::default(),
             sess,
         }
     }
 
-    fn rib(&mut self) -> &mut Rib {
-        self.ribs.last_mut().unwrap()
+    fn scope(&mut self) -> &mut Scope {
+        self.scopes.last_mut().unwrap()
     }
 
-    fn define_local(&mut self, sym: Symbol, node_id: NodeId) {
-        if let Some(old) = self.rib().define(sym, node_id) {}
+    fn define_local(&mut self, ident: Ident, node_id: NodeId) {
+        let defined = self.scope().define(ident.sym(), node_id);
+        if let Some(old) = defined {
+            MessageBuilder::error()
+                .span(self.locals_spans[&old])
+                .text(format!("{} is already defined", ident))
+                .emit(self);
+        } else {
+            self.locals_spans.insert(node_id, ident.span());
+        }
     }
 
     fn resolve_path(&mut self, path: &Path) -> Res {
@@ -86,7 +88,7 @@ impl<'a> NameResolver<'a> {
 
         if segments.get(0).unwrap().is_var() && segments.len() == 0 {
             let seg = segments.get(0).unwrap();
-            if let Some(local) = self.rib().get(seg.sym()) {
+            if let Some(local) = self.scope().get(seg.sym()) {
                 return Res::local(*local);
             }
         }
@@ -148,20 +150,11 @@ impl<'a> MessageHolder for NameResolver<'a> {
 impl<'a> AstVisitor for NameResolver<'a> {
     fn visit_err(&mut self, _: &ErrorNode) {}
 
-    fn visit_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> () {
-        walk_pr!(self, ty, visit_ty);
-    }
+    // visit_let: We don't have locals for now
 
-    fn visit_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> () {
-        walk_each_pr!(self, items, visit_item)
-    }
-
-    fn visit_decl_item(
-        &mut self,
-        name: &PR<Ident>,
-        params: &Vec<PR<Ident>>,
-        body: &PR<N<Expr>>,
-    ) -> () {
+    fn visit_path(&mut self, path: &Path) {
+        let res = self.resolve_path(path);
+        self.sess.res.set(NamePath::new(path.id()), res);
     }
 }
 

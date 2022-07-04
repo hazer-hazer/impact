@@ -120,6 +120,7 @@ impl<'a> Lower<'a> {
         let kind = match expr.kind() {
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
             ExprKind::Path(path) => self.lower_path_expr(path),
+            ExprKind::Block(block) => self.lower_block_expr(block),
             ExprKind::Infix(lhs, op, rhs) => self.lower_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.lower_prefix_expr(op, rhs),
             ExprKind::Abs(param, body) => self.lower_abs_expr(param, body),
@@ -137,6 +138,10 @@ impl<'a> Lower<'a> {
 
     fn lower_path_expr(&mut self, path: &PR<Path>) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Path(lower_pr!(self, path, lower_path))
+    }
+
+    fn lower_block_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Block(lower_pr!(self, block, lower_block))
     }
 
     fn lower_infix_expr(

@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
-use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, N, PR};
+use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, WithNodeId, N, PR};
 
 pub struct Expr {
     id: NodeId,
@@ -21,8 +21,10 @@ impl Expr {
     pub fn kind(&self) -> &ExprKind {
         &self.kind
     }
+}
 
-    pub fn id(&self) -> NodeId {
+impl WithNodeId for Expr {
+    fn id(&self) -> NodeId {
         self.id
     }
 }
@@ -154,8 +156,10 @@ impl Block {
     pub fn expr(&self) -> &PR<N<Expr>> {
         &self.expr
     }
+}
 
-    pub fn id(&self) -> NodeId {
+impl WithNodeId for Block {
+    fn id(&self) -> NodeId {
         self.id
     }
 }
@@ -184,6 +188,7 @@ impl Display for Block {
 pub enum ExprKind {
     Lit(Lit),
     Path(PR<Path>),
+    Block(PR<Block>),
     Infix(PR<N<Expr>>, InfixOp, PR<N<Expr>>),
     Prefix(PrefixOp, PR<N<Expr>>),
     Abs(PR<Ident>, PR<N<Expr>>),
@@ -207,6 +212,7 @@ impl Display for ExprKind {
         match self {
             ExprKind::Lit(lit) => write!(f, "{}", lit),
             ExprKind::Path(path) => write!(f, "{}", pr_display(path)),
+            ExprKind::Block(block) => write!(f, "{}", pr_display(block)),
             ExprKind::Infix(lhs, op, rhs) => {
                 write!(f, "{} {} {}", pr_display(lhs), op, pr_display(rhs))
             }
@@ -225,6 +231,7 @@ impl NodeKindStr for ExprKind {
     fn kind_str(&self) -> String {
         match self {
             ExprKind::Lit(_) => "literal".to_string(),
+            ExprKind::Block(_) => "block expression".to_string(),
             ExprKind::Path(_) => "path".to_string(),
             ExprKind::Abs(_, _) => "lambda".to_string(),
             ExprKind::App(_, _) => "function call".to_string(),

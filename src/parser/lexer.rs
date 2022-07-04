@@ -1,3 +1,4 @@
+use crate::cli::verbose;
 use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
 use crate::parser::token::{Token, TokenKind, TokenStream};
 use crate::session::SourceId;
@@ -131,11 +132,12 @@ impl Lexer {
             span: Span::new(self.token_start_pos, len, self.source_id),
             kind,
         });
+        self.token_start_pos = self.pos;
     }
 
     fn add_token_adv(&mut self, kind: TokenKind, len: SpanLen) {
-        self.add_token(kind, len);
         self.advance_offset(len);
+        self.add_token(kind, len);
     }
 
     fn add_error(&mut self, msg: &str) {
@@ -177,6 +179,8 @@ impl Lexer {
     }
 
     fn lex_ident(&mut self) {
+        verbose!("Lex ident {}", self.peek());
+
         let start = self.pos;
         while !self.eof() && self.peek().is_ident_next() {
             self.advance();
@@ -246,7 +250,7 @@ impl Lexer {
             }
         }
 
-        self.add_token_adv(TokenKind::Nl, 1);
+        self.add_token(TokenKind::Nl, 1);
 
         // Check that we actually skipped some new-lines
         assert_ne!(pos, self.pos);
@@ -261,7 +265,7 @@ impl Lexer {
         let mut level = *self.indent_levels.last().unwrap_or(&0);
 
         if indent_size > level {
-            self.add_token(TokenKind::Indent, 1);
+            self.add_token(TokenKind::Indent, indent_size as SpanLen);
             self.indent_levels.push(indent_size);
         }
 
@@ -278,7 +282,6 @@ impl Lexer {
 impl Stage<TokenStream> for Lexer {
     fn run(mut self) -> StageOutput<TokenStream> {
         while !self.eof() {
-            self.token_start_pos = self.pos as SpanPos;
             match self.peek().match_first() {
                 TokenStartMatch::Skip => {
                     self.advance();

@@ -73,6 +73,7 @@ pub trait HirVisitor {
         match expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Path(path) => self.visit_path_expr(path),
+            ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
@@ -86,6 +87,10 @@ pub trait HirVisitor {
 
     fn visit_path_expr(&mut self, path: &Path) {
         self.visit_path(path)
+    }
+
+    fn visit_block_expr(&mut self, block: &Block) {
+        self.visit_block(block)
     }
 
     fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) {

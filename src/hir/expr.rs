@@ -51,6 +51,7 @@ impl Block {
 pub enum ExprKind {
     Lit(Lit),
     Path(Path),
+    Block(Block),
     Infix(N<Expr>, InfixOp, N<Expr>),
     Prefix(PrefixOp, N<Expr>),
     Abs(Ident, N<Expr>),

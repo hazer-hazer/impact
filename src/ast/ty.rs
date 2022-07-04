@@ -5,7 +5,7 @@ use crate::{
     span::span::{Span, WithSpan},
 };
 
-use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, PR};
+use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, PR};
 
 #[derive(Clone, Copy)]
 pub enum LitTy {
@@ -34,6 +34,22 @@ pub struct Ty {
     span: Span,
 }
 
+impl Ty {
+    pub fn new(id: NodeId, kind: TyKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &TyKind {
+        &self.kind
+    }
+}
+
+impl WithNodeId for Ty {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.kind())
@@ -49,20 +65,6 @@ impl WithSpan for Ty {
 impl NodeKindStr for Ty {
     fn kind_str(&self) -> String {
         self.kind().kind_str()
-    }
-}
-
-impl Ty {
-    pub fn new(id: NodeId, kind: TyKind, span: Span) -> Self {
-        Self { id, kind, span }
-    }
-
-    pub fn kind(&self) -> &TyKind {
-        &self.kind
-    }
-
-    pub fn id(&self) -> NodeId {
-        self.id
     }
 }
 

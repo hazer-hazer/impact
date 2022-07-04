@@ -2,12 +2,42 @@ use std::fmt::Display;
 
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::{expr::Expr, pr_display, ty::Ty, NodeId, NodeKindStr, N, PR};
+use super::{expr::Expr, pr_display, ty::Ty, NodeId, NodeKindStr, WithNodeId, N, PR};
 
 pub struct Item {
     id: NodeId,
     kind: ItemKind,
     span: Span,
+}
+
+impl Item {
+    pub fn new(id: NodeId, kind: ItemKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &ItemKind {
+        &self.kind
+    }
+
+    pub fn name(&self) -> Option<&Ident> {
+        match self.kind() {
+            ItemKind::Type(name, _) | ItemKind::Mod(name, _) | ItemKind::Decl(name, _, _) => {
+                Some(name.as_ref().unwrap())
+            }
+        }
+    }
+}
+
+impl WithNodeId for Item {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
+impl WithSpan for Item {
+    fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl Display for Item {
@@ -64,33 +94,5 @@ impl NodeKindStr for ItemKind {
             ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
             ItemKind::Decl(name, _, _) => format!("{} declaration", pr_display(name)),
         }
-    }
-}
-
-impl Item {
-    pub fn new(id: NodeId, kind: ItemKind, span: Span) -> Self {
-        Self { id, kind, span }
-    }
-
-    pub fn kind(&self) -> &ItemKind {
-        &self.kind
-    }
-
-    pub fn name(&self) -> Option<&Ident> {
-        match self.kind() {
-            ItemKind::Type(name, _) | ItemKind::Mod(name, _) | ItemKind::Decl(name, _, _) => {
-                Some(name.as_ref().unwrap())
-            }
-        }
-    }
-
-    pub fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
-impl WithSpan for Item {
-    fn span(&self) -> Span {
-        self.span
     }
 }

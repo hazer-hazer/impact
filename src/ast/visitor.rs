@@ -91,6 +91,7 @@ pub trait AstVisitor {
         match expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Path(path) => self.visit_path_expr(path),
+            ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
             ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
@@ -104,6 +105,10 @@ pub trait AstVisitor {
 
     fn visit_path_expr(&mut self, path: &PR<Path>) {
         walk_pr!(self, path, visit_path)
+    }
+
+    fn visit_block_expr(&mut self, block: &PR<Block>) {
+        walk_pr!(self, block, visit_block)
     }
 
     fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, op: &InfixOp, rhs: &PR<N<Expr>>) {

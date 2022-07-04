@@ -171,6 +171,7 @@ impl MessageBuilder {
     }
 
     pub fn emit(self, holder: &mut impl MessageHolder) {
+        assert!(!self.labels.is_empty());
         holder.save(self.build());
     }
 }

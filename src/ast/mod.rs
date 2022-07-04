@@ -60,6 +60,10 @@ impl NodeId {
 
 pub const DUMMY_NODE_ID: NodeId = NodeId(u32::MAX);
 
+pub trait WithNodeId {
+    fn id(&self) -> NodeId;
+}
+
 impl Display for NodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", format!("#{}", self.as_usize()).blue())
@@ -128,12 +132,13 @@ where
 }
 
 pub struct Path {
+    id: NodeId,
     segments: Vec<Ident>,
 }
 
 impl Path {
-    pub fn new(segments: Vec<Ident>) -> Self {
-        Self { segments }
+    pub fn new(id: NodeId, segments: Vec<Ident>) -> Self {
+        Self { id, segments }
     }
 
     pub fn segments(&self) -> &Vec<Ident> {
@@ -154,6 +159,12 @@ impl Path {
             .map(|seg| seg.span())
             .reduce(|prefix, seg| prefix.to(seg))
             .unwrap()
+    }
+}
+
+impl WithNodeId for Path {
+    fn id(&self) -> NodeId {
+        self.id
     }
 }
 

@@ -1,11 +1,9 @@
 use crate::{
     ast::{
         self,
-        expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
         item::{Item, ItemKind},
-        ty::Ty,
         visitor::{walk_each_pr, walk_pr, AstVisitor},
-        ErrorNode, NodeId, AST, N, PR,
+        ErrorNode, NodeId, AST, WithNodeId,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},

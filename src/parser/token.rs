@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::span::span::{Kw, Span, SpanLen, Symbol, WithSpan};
 
@@ -210,7 +210,7 @@ impl Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TokenKind::Eof => write!(f, "{}", "[EOF]"),
-            TokenKind::Nl => write!(f, "{}", "[NL]"),
+            TokenKind::Nl => write!(f, "{}", "new-line"),
             TokenKind::Int(val) => write!(f, "{}", val),
             TokenKind::String(val) | TokenKind::Ident(val) | TokenKind::Error(val) => {
                 write!(f, "{}", val)
@@ -219,14 +219,14 @@ impl Display for TokenKind {
             TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
             TokenKind::Prefix(prefix) => write!(f, "{}", prefix),
             TokenKind::Kw(kw) => write!(f, "{}", kw),
-            TokenKind::Indent => write!(f, "{}", "[indent]"),
-            TokenKind::Dedent => write!(f, "{}", "[dedent]"),
+            TokenKind::Indent => write!(f, "{}", "indent"),
+            TokenKind::Dedent => write!(f, "{}", "dedent"),
             TokenKind::Punct(punct) => write!(f, "{}", punct),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Token {
     pub span: Span,
     pub kind: TokenKind,
@@ -241,6 +241,12 @@ impl Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.kind)
+    }
+}
+
+impl Debug for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "`{}` --> {}", self.kind, self.span)
     }
 }
 

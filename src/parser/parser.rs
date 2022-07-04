@@ -2,7 +2,7 @@ use crate::{
     ast::{
         expr::{Block, Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         item::{Item, ItemKind},
-        stmt::{self, Stmt, StmtKind},
+        stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
     },
@@ -40,6 +40,8 @@ macro_rules! parse_block_common {
                 }
 
                 entities.push($self.$parse());
+
+                $self.skip_nls();
             }
 
             if !$self.eof() {
@@ -138,10 +140,11 @@ impl Parser {
     }
 
     fn unexpected_token(&mut self) -> ErrorNode {
+        verbose!("[unexpected_token] Unexpected token error");
         MessageBuilder::error()
             .span(self.span())
             .text(format!("Unexpected token {}", self.peek()))
-            .label(self.span(), "Unexpected token".to_string())
+            .label(self.span(), format!("Unexpected {}", self.peek()))
             .emit(self);
         ErrorNode::new(self.advance_tok().span)
     }
@@ -151,6 +154,7 @@ impl Parser {
             self.advance();
             Ok(())
         } else {
+            verbose!("[expect] Expected {} error", cmp);
             MessageBuilder::error()
                 .span(self.span())
                 .text(format!("Expected {}, got {}", cmp, self.peek()))
@@ -183,6 +187,7 @@ impl Parser {
         if let Some(entity) = entity {
             Ok(entity)
         } else {
+            verbose!("[expected] Expected {} error", expected);
             MessageBuilder::error()
                 .span(self.span())
                 .text(format!("Expected {}, got {}", expected, self.peek()))
@@ -200,9 +205,10 @@ impl Parser {
         } else {
             match self.parse_stmt() {
                 Ok(stmt) => {
+                    verbose!("[try_recover_any] Expected {} error", expected);
                     MessageBuilder::error()
                         .span(stmt.span())
-                        .text(format!("Expected {}, got `{}`", expected, stmt))
+                        .text(format!("Expected {}, got {}", expected, stmt.kind_str()))
                         .label(stmt.span(), format!("Unexpected {}", stmt.kind_str()))
                         .emit(self);
                     Err(ErrorNode::new(stmt.span()))
@@ -372,6 +378,8 @@ impl Parser {
 
         let body = self.parse_expr();
 
+        self.expect_semi()?;
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Decl(name, params, body),
@@ -381,13 +389,22 @@ impl Parser {
 
     // Expressions //
     fn parse_expr(&mut self) -> PR<N<Expr>> {
+        verbose!("Parse expr {}", self.peek());
+
         let expr = self.parse_opt_expr();
         self.try_recover_any(expr, "expression")
     }
 
     fn parse_opt_expr(&mut self) -> Option<PR<N<Expr>>> {
+        // FIXME: Won't it break some parsers?
+        self.skip_nls();
+
         if self.is(TokenCmp::Kw(Kw::Let)) {
             return Some(self.parse_let());
+        }
+
+        if self.is(TokenCmp::Indent) {
+            return Some(self.parse_block_expr());
         }
 
         self.parse_prec(0)
@@ -408,6 +425,22 @@ impl Parser {
             ExprKind::Let(block),
             self.close_span(lo),
         )))
+    }
+
+    fn parse_block_expr(&mut self) -> PR<N<Expr>> {
+        verbose!("Parse block expr {}", self.peek());
+
+        let lo = self.span();
+
+        self.expect(TokenCmp::Indent)?;
+
+        let block = self.parse_block();
+
+        return Ok(Box::new(Expr::new(
+            self.next_node_id(),
+            ExprKind::Block(block),
+            self.close_span(lo),
+        )));
     }
 
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
@@ -557,7 +590,7 @@ impl Parser {
             segments.push(self.parse_ident("path segment (identifier)")?);
         }
 
-        Ok(Path::new(segments))
+        Ok(Path::new(self.next_node_id(), segments))
     }
 
     fn parse_block(&mut self) -> PR<Block> {
@@ -569,14 +602,14 @@ impl Parser {
 
         let expr = match stmts.pop() {
             Some(Ok(stmt)) => {
-                let span = stmt.span();
+                let span = stmt.kind().span();
                 match stmt.take_kind() {
                     StmtKind::Expr(expr) => expr,
                     kind @ StmtKind::Item(Ok(_)) => {
                         MessageBuilder::error()
                             .span(span)
                             .text(format!("Expected expression, got {}", kind))
-                            .emit(self);
+                            .emit_single_label(self);
                         Err(ErrorNode::new(span))
                     }
                     _ => Err(ErrorNode::new(span)),
