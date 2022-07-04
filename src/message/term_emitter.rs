@@ -50,22 +50,29 @@ impl MessageEmitter for TermEmitter {
         let source = sess.source_map.get_source(msg.span().source());
 
         let SpanSourceInfo {
-            line:
-                LineInfo {
-                    num_indent,
-                    num,
-                    prev_line_index,
-                    ..
-                },
-            pos_in_line,
-            ..
+            lines, pos_in_line, ..
         } = source.get_span_info(msg.span());
 
-        // Header line `error: Message`
+        // Header line `error: Message
         println!(
             "{}",
             format!("{}: {}", msg.kind(), msg.text()).fg_color(msg.kind().color())
         );
+
+        let num_indent = lines.last().unwrap().num_indent;
+
+        // TODO: Range for column too or just the start?
+        // let num = if lines.len() == 1 {
+        //     lines.first().unwrap().num.to_string()
+        // } else {
+        //     format!(
+        //         "{}-{}",
+        //         lines.first().unwrap().num,
+        //         lines.last().unwrap().num
+        //     )
+        // };
+
+        let num = lines.first().unwrap().num;
 
         // Source-pointing line `[indent]--> file:line:col`
         println!(
@@ -80,21 +87,28 @@ impl MessageEmitter for TermEmitter {
             .iter()
             .for_each(|label| self.process_label(sess, label));
 
-        println!()
+        println!();
     }
 }
 
 impl TermEmitter {
     fn print_line(
         &self,
+        prefix: Option<&str>,
         LineInfo {
             str,
             num_indent,
             num,
             ..
-        }: LineInfo,
+        }: &LineInfo,
     ) {
-        println!("{}{} | {}", " ".repeat(num_indent), num, str);
+        println!(
+            "{}{} |{} {}",
+            " ".repeat(*num_indent),
+            num,
+            prefix.unwrap_or(""),
+            str
+        );
     }
 
     fn process_label(&self, sess: &Session, label: &Label) {
@@ -102,28 +116,52 @@ impl TermEmitter {
 
         let source = sess.source_map.get_source(span.source());
 
-        let SpanSourceInfo {
-            line:
-                line @ LineInfo {
-                    num_len,
-                    num_indent,
-                    prev_line_index,
-                    ..
-                },
-            pos_in_line,
-        } = source.get_span_info(span);
+        let SpanSourceInfo { lines, pos_in_line } = source.get_span_info(span);
 
-        if let Some(index) = prev_line_index {
-            self.print_line(source.get_line_info(index));
+        // Always print previous line before span for convenience
+        if let Some(index) = lines.first().unwrap().prev_line_index {
+            self.print_line(None, &source.get_line_info(index));
         }
 
-        self.print_line(line);
-        println!(
-            "{}{}--- {}",
-            // Indent of span pos in line + indent before number + number length + 3 for ` | `
-            " ".repeat(pos_in_line as usize + num_indent + num_len + 3),
-            "^".repeat(span.len() as usize),
-            label.text()
-        );
+        if lines.len() == 1 {
+            let line @ LineInfo {
+                num_len,
+                num_indent,
+                ..
+            } = lines.first().unwrap();
+
+            self.print_line(None, line);
+            println!(
+                "{}{}--- {}",
+                // Indent of span pos in line + indent before number + number length + 3 for ` | `
+                " ".repeat(pos_in_line as usize + num_indent + num_len + 3),
+                "^".repeat(span.len() as usize),
+                label.text()
+            );
+        } else {
+            let LineInfo {
+                num_len,
+                num_indent,
+                pos,
+                ..
+            } = lines.first().unwrap();
+
+            if span.lo() != *pos {
+                println!(
+                    "{}v-- from here",
+                    " ".repeat(pos_in_line as usize + num_indent + num_len + 4)
+                );
+            }
+
+            lines.iter().for_each(|line| {
+                self.print_line(Some(" >"), line);
+            });
+
+            println!(
+                "{}\\--- {}",
+                " ".repeat(num_indent + num_len + 3),
+                label.text()
+            );
+        }
     }
 }

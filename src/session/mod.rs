@@ -30,16 +30,18 @@ impl SourceId {
 }
 
 /// Computed information about line, use not for storage but as a helper
+#[derive(Debug)]
 pub struct SpanSourceInfo<'a> {
-    pub line: LineInfo<'a>,
+    pub lines: Vec<LineInfo<'a>>,
     pub pos_in_line: SpanPos,
 }
 
+#[derive(Debug)]
 pub struct LineInfo<'a> {
     pub str: &'a str,
     pub index: usize,                   // Line index in Source.lines_positions
     pub prev_line_index: Option<usize>, // Index of previous line
-    pub pos: SpanPos,                   // Lines absolute source position
+    pub pos: SpanPos,                   // Line absolute source position
     pub num: usize,                     // Line number (starts with 1)
     pub num_len: usize,                 // Length of line number as string
     pub num_indent: usize, // Calculated indent for line number to align with source lines
@@ -82,10 +84,12 @@ impl Source {
     }
 
     /// Find line index by span
-    fn find_span_line(&self, span: Span) -> usize {
+    fn find_span_lines(&self, span: Span) -> Vec<usize> {
         if span.is_error() {
             panic!()
         }
+
+        let mut indices = vec![];
 
         for i in 0..self.lines_positions.len() {
             let line_pos = self.lines_positions[i];
@@ -99,12 +103,16 @@ impl Source {
                 break;
             }
 
-            if span.lo() >= line_pos && span.lo() < next_line_pos {
-                return i;
+            let line_range = line_pos..=next_line_pos;
+
+            if line_range.contains(&span.lo()) || line_range.contains(&span.hi()) {
+                indices.push(i);
             }
         }
 
-        panic!("No source line found for span {}", span);
+        assert!(!indices.is_empty());
+
+        indices
     }
 
     pub fn get_line_info<'a>(&'a self, index: usize) -> LineInfo<'a> {
@@ -135,12 +143,16 @@ impl Source {
     }
 
     pub fn get_span_info<'a>(&'a self, span: Span) -> SpanSourceInfo<'a> {
-        let line = self.get_line_info(self.find_span_line(span));
+        let lines = self
+            .find_span_lines(span)
+            .iter()
+            .map(|index| self.get_line_info(*index))
+            .collect::<Vec<_>>();
 
-        let line_pos = line.pos;
+        let line_pos = lines.first().unwrap().pos;
 
         SpanSourceInfo {
-            line,
+            lines,
             pos_in_line: span.lo() - line_pos,
         }
     }

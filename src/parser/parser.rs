@@ -141,6 +141,7 @@ impl Parser {
 
     fn unexpected_token(&mut self) -> ErrorNode {
         verbose!("[unexpected_token] Unexpected token error");
+
         MessageBuilder::error()
             .span(self.span())
             .text(format!("Unexpected token {}", self.peek()))
@@ -203,9 +204,9 @@ impl Parser {
         if let Some(entity) = entity {
             entity
         } else {
+            verbose!("[try_recover_any] Expected {} error", expected);
             match self.parse_stmt() {
                 Ok(stmt) => {
-                    verbose!("[try_recover_any] Expected {} error", expected);
                     MessageBuilder::error()
                         .span(stmt.span())
                         .text(format!("Expected {}, got {}", expected, stmt.kind_str()))
@@ -285,7 +286,6 @@ impl Parser {
             )))
         } else if let Some(expr) = self.parse_opt_expr() {
             let span = expr.span();
-            self.expect_semi()?;
             Ok(Box::new(Stmt::new(
                 self.next_node_id(),
                 StmtKind::Expr(expr),
@@ -345,8 +345,6 @@ impl Parser {
 
         let ty = self.parse_ty();
 
-        self.expect_semi()?;
-
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Type(name, ty),
@@ -378,8 +376,6 @@ impl Parser {
 
         let body = self.parse_expr();
 
-        self.expect_semi()?;
-
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Decl(name, params, body),
@@ -396,9 +392,6 @@ impl Parser {
     }
 
     fn parse_opt_expr(&mut self) -> Option<PR<N<Expr>>> {
-        // FIXME: Won't it break some parsers?
-        self.skip_nls();
-
         if self.is(TokenCmp::Kw(Kw::Let)) {
             return Some(self.parse_let());
         }
@@ -444,8 +437,6 @@ impl Parser {
     }
 
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
-        verbose!("Parse prec {}", prec);
-
         const PREC_TABLE: &[&[TokenCmp]] = &[
             &[TokenCmp::Punct(Punct::Colon)],
             &[TokenCmp::Infix(Infix::Plus), TokenCmp::Infix(Infix::Minus)],
@@ -465,6 +456,8 @@ impl Parser {
         let mut lhs = self.parse_prec(prec + 1)?;
 
         while let Some(op) = self.skip_any(&PREC_TABLE[prec as usize]) {
+            verbose!("Parse prec {}", prec);
+
             if op.kind == TokenKind::Punct(Punct::Colon) {
                 // Parse ascription (type expression)
                 let ty = self.parse_ty();
@@ -495,10 +488,10 @@ impl Parser {
     }
 
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
-        verbose!("Parse prefix {}", self.peek());
-
         let lo = self.span();
         if let Some(op) = self.skip(TokenCmp::SomePrefix) {
+            verbose!("Parse prefix {}", self.peek());
+
             let rhs = self.parse_postfix();
 
             let rhs = if let Some(rhs) = rhs {
@@ -522,8 +515,6 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {
-        verbose!("Parse postfix {}", self.peek());
-
         let lo = self.span();
 
         let lhs = self.parse_primary();
@@ -559,22 +550,25 @@ impl Parser {
             return self.parse_abs();
         }
 
-        let kind = match kind {
-            TokenKind::Bool(val) => Some(Ok(ExprKind::Lit(Lit::Bool(val)))),
-            TokenKind::Int(val) => Some(Ok(ExprKind::Lit(Lit::Int(val)))),
-            TokenKind::String(sym) => Some(Ok(ExprKind::Lit(Lit::String(sym)))),
-            TokenKind::Ident(_) => Some(Ok(ExprKind::Path(
-                self.parse_path("[BUG] First identifier in path expression"),
-            ))),
+        let (kind, advance) = match kind {
+            TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val)))), true),
+            TokenKind::Int(val) => (Some(Ok(ExprKind::Lit(Lit::Int(val)))), true),
+            TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
+            TokenKind::Ident(_) => (
+                Some(Ok(ExprKind::Path(
+                    self.parse_path("[BUG] First identifier in path expression"),
+                ))),
+                false,
+            ),
 
             // Error token is an error on lexing stage
             //  so don't emit one more error for it, just add error stub
-            TokenKind::Error(_) => Some(Err(ErrorNode::new(span))),
+            TokenKind::Error(_) => (Some(Err(ErrorNode::new(span))), false),
 
-            _ => None,
+            _ => (None, false),
         };
 
-        if let Some(_) = kind {
+        if advance {
             self.advance();
         }
 

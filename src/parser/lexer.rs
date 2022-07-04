@@ -245,6 +245,7 @@ impl Lexer {
             self.last_line_begin = self.pos;
 
             if self.eof() {
+                self.add_token(TokenKind::Nl, 1);
                 self.save_source_line();
                 return;
             }
