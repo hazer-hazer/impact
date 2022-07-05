@@ -106,6 +106,13 @@ impl Source {
             let line_range = line_pos..=next_line_pos;
 
             if line_range.contains(&span.lo()) || line_range.contains(&span.hi()) {
+                dbg!(
+                    line_pos / self.lines_positions.len() as u32 + 1,
+                    span.lo(),
+                    line_range.contains(&span.lo()),
+                    span.hi(),
+                    line_range.contains(&span.hi())
+                );
                 indices.push(i);
             }
         }

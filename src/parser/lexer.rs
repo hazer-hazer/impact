@@ -245,12 +245,14 @@ impl Lexer {
             self.last_line_begin = self.pos;
 
             if self.eof() {
+                verbose!("Add new-line before eof");
                 self.add_token(TokenKind::Nl, 1);
                 self.save_source_line();
                 return;
             }
         }
 
+        verbose!("Add new-line");
         self.add_token(TokenKind::Nl, 1);
 
         // Check that we actually skipped some new-lines

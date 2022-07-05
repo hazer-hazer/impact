@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     ast::{
         expr::{Block, Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
@@ -43,7 +45,7 @@ macro_rules! parse_block_common {
             if first {
                 first = false;
             } else {
-                $self.expect_semi()?;
+                $self.expect_semis()?;
             }
 
             if $self.eof() {
@@ -140,18 +142,19 @@ impl Parser {
         self.advance_offset(1)
     }
 
-    fn just_skip(&mut self, cmp: TokenCmp) {
-        self.expect(cmp)
-            .expect(format!("[BUG] Failed to just skip expected token {}", cmp).as_str())
-    }
-
-    fn skip_opt_nl(&mut self) {
-        self.skip(TokenCmp::Nl);
+    fn expected_error<E, G>(&mut self, expected: E, got: G) -> PR<()>
+    where
+        E: Display,
+        G: Display,
+    {
+        MessageBuilder::error()
+            .span(self.span())
+            .text(format!("Expected {}, got {}", expected, got))
+            .emit_single_label(self);
+        Err(ErrorNode::new(self.span()))
     }
 
     fn unexpected_token(&mut self) -> ErrorNode {
-        verbose!("[unexpected_token] Unexpected token error");
-
         MessageBuilder::error()
             .span(self.span())
             .text(format!("Unexpected token {}", self.peek()))
@@ -165,21 +168,18 @@ impl Parser {
             self.advance();
             Ok(())
         } else {
-            verbose!("[expect] Expected {} error", cmp);
-            MessageBuilder::error()
-                .span(self.span())
-                .text(format!("Expected {}, got {}", cmp, self.peek()))
-                .emit_single_label(self);
+            self.expected_error(cmp, self.peek());
             Err(ErrorNode::new(self.span()))
         }
     }
 
-    fn expect_semi(&mut self) -> PR<()> {
+    fn expect_semis(&mut self) -> PR<()> {
         // If we encountered EOF don't skip it
-        if self.eof() {
+        // Note: Keep order
+        if self.eof() || self.skip_opt_nls() {
             Ok(())
         } else {
-            self.expect(TokenCmp::Nl)
+            self.expected_error("semi", self.peek())
         }
     }
 
@@ -198,11 +198,7 @@ impl Parser {
         if let Some(entity) = entity {
             Ok(entity)
         } else {
-            verbose!("[expected] Expected {} error", expected);
-            MessageBuilder::error()
-                .span(self.span())
-                .text(format!("Expected {}, got {}", expected, self.peek()))
-                .emit_single_label(self);
+            self.expected_error(expected, self.peek());
             Err(ErrorNode::new(self.span()))
         }
     }
@@ -214,7 +210,6 @@ impl Parser {
         if let Some(entity) = entity {
             entity
         } else {
-            verbose!("[try_recover_any] Expected {} error", expected);
             match self.parse_stmt() {
                 Ok(stmt) => {
                     MessageBuilder::error()
@@ -254,6 +249,23 @@ impl Parser {
         self.skip_if(|kind| TokenCmp::Punct(punct) == kind)
     }
 
+    fn just_skip(&mut self, cmp: TokenCmp) {
+        self.expect(cmp)
+            .expect(format!("[BUG] Failed to just skip expected token {}", cmp).as_str())
+    }
+
+    fn skip_opt_nls(&mut self) -> bool {
+        self.skip_many(TokenCmp::Nl)
+    }
+
+    fn skip_many(&mut self, cmp: TokenCmp) -> bool {
+        let mut got = false;
+        while let Some(_) = self.skip(cmp) {
+            got = true;
+        }
+        got
+    }
+
     fn parse_many(&mut self, cmp: TokenCmp) -> PR<Vec<PR<Token>>> {
         let mut tokens = vec![];
         while self.is(cmp) {
@@ -288,7 +300,7 @@ impl Parser {
                 span,
             )))
         } else if let Some(expr) = self.parse_opt_expr() {
-            self.expect_semi()?;
+            self.expect_semis()?;
 
             let span = expr.span();
             Ok(Box::new(Stmt::new(
@@ -303,10 +315,10 @@ impl Parser {
 
     // Items //
     fn parse_item(&mut self) -> PR<N<Item>> {
-        self.skip_opt_nl();
+        self.skip_opt_nls();
 
         let item = self.parse_opt_item();
-        self.expect_semi()?;
+        self.expect_semis()?;
 
         self.try_recover_any(item, "item")
     }
