@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Block, Expr, InfixOp, Lit, PrefixOp},
+        expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
         item::Item,
         stmt::{Stmt, StmtKind},
         ty::{LitTy, Ty},
@@ -73,7 +73,9 @@ impl<'a> AstVisitor for AstLikePP<'a> {
 
     fn visit_decl_item(&mut self, name: &PR<Ident>, params: &Vec<PR<Ident>>, body: &PR<N<Expr>>) {
         walk_pr!(self, name, visit_ident);
-        self.sp();
+        if !params.is_empty() {
+            self.sp();
+        }
         walk_each_pr_delim!(self, params, visit_ident, " ");
         self.punct(Punct::Assign);
         walk_pr!(self, body, visit_expr);
@@ -150,6 +152,7 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     fn visit_block(&mut self, block: &Block) {
+        self.nl();
         walk_block!(self, block.stmts(), visit_stmt);
     }
 }

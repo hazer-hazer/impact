@@ -72,7 +72,10 @@ impl<'a> Lower<'a> {
                 hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
                 stmt.span(),
             ),
-            StmtKind::Item(item) => todo!(),
+            StmtKind::Item(item) => hir::stmt::Stmt::new(
+                hir::stmt::StmtKind::Item(lower_pr!(self, item, lower_item)),
+                stmt.span(),
+            ),
         }
     }
 

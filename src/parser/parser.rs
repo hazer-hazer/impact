@@ -28,27 +28,33 @@ impl MessageHolder for Parser {
 }
 
 macro_rules! parse_block_common {
-    ($self: ident, $parse: ident, $parse_inline: expr) => {{
+    ($self: ident, $parse: ident) => {{
         let mut entities = vec![];
 
-        if $self.skip_nls() && !$self.eof() && $self.is(TokenCmp::Indent) && !$self.eof() {
-            $self.just_skip(TokenCmp::Indent);
+        $self.expect(TokenCmp::Nl)?;
+        $self.expect(TokenCmp::Indent)?;
 
-            while !$self.is(TokenCmp::Dedent) {
-                if $self.eof() {
-                    break;
-                }
-
-                entities.push($self.$parse());
-
-                $self.skip_nls();
+        let mut first = true;
+        while !$self.is(TokenCmp::Dedent) {
+            if $self.eof() {
+                break;
             }
 
-            if !$self.eof() {
-                $self.just_skip(TokenCmp::Dedent);
+            if first {
+                first = false;
+            } else {
+                $self.expect_semi()?;
             }
-        } else if $parse_inline {
+
+            if $self.eof() {
+                break;
+            }
+
             entities.push($self.$parse());
+        }
+
+        if !$self.eof() {
+            $self.just_skip(TokenCmp::Dedent);
         }
 
         entities
@@ -139,6 +145,10 @@ impl Parser {
             .expect(format!("[BUG] Failed to just skip expected token {}", cmp).as_str())
     }
 
+    fn skip_opt_nl(&mut self) {
+        self.skip(TokenCmp::Nl);
+    }
+
     fn unexpected_token(&mut self) -> ErrorNode {
         verbose!("[unexpected_token] Unexpected token error");
 
@@ -169,7 +179,7 @@ impl Parser {
         if self.eof() {
             Ok(())
         } else {
-            self.expect(TokenCmp::Nls)
+            self.expect(TokenCmp::Nl)
         }
     }
 
@@ -240,14 +250,6 @@ impl Parser {
         self.skip_if(|kind| cmp.iter().any(|cmp| *cmp == kind))
     }
 
-    fn skip_nls(&mut self) -> bool {
-        let mut nl = false;
-        while let Some(_) = self.skip_if(|kind| kind == TokenKind::Nl) {
-            nl = true;
-        }
-        nl
-    }
-
     fn skip_punct(&mut self, punct: Punct) -> Option<Token> {
         self.skip_if(|kind| TokenCmp::Punct(punct) == kind)
     }
@@ -278,8 +280,6 @@ impl Parser {
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
         verbose!("Parse stmt {}", self.peek());
 
-        self.skip_nls();
-
         if let Some(item) = self.parse_opt_item() {
             let span = item.span();
             Ok(Box::new(Stmt::new(
@@ -303,13 +303,15 @@ impl Parser {
 
     // Items //
     fn parse_item(&mut self) -> PR<N<Item>> {
+        self.skip_opt_nl();
+
         let item = self.parse_opt_item();
+        self.expect_semi()?;
+
         self.try_recover_any(item, "item")
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
-        self.skip_nls();
-
         if self.is(TokenCmp::Kw(Kw::Mod)) {
             Some(self.parse_mod_item())
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
@@ -330,7 +332,7 @@ impl Parser {
 
         let name = self.parse_ident("module name");
 
-        let items = parse_block_common!(self, parse_item, false);
+        let items = parse_block_common!(self, parse_item);
 
         Ok(Box::new(Item::new(
             self.next_node_id(),
@@ -381,7 +383,7 @@ impl Parser {
 
         self.skip_punct(Punct::Assign);
 
-        let body = self.parse_expr();
+        let body = self.parse_body();
 
         Ok(Box::new(Item::new(
             self.next_node_id(),
@@ -401,10 +403,6 @@ impl Parser {
     fn parse_opt_expr(&mut self) -> Option<PR<N<Expr>>> {
         if self.is(TokenCmp::Kw(Kw::Let)) {
             return Some(self.parse_let());
-        }
-
-        if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
-            return Some(self.parse_block_expr());
         }
 
         self.parse_prec(0)
@@ -431,9 +429,6 @@ impl Parser {
         verbose!("Parse block expr {}", self.peek());
 
         let lo = self.span();
-
-        self.expect(TokenCmp::Indent)?;
-
         let block = self.parse_block();
 
         return Ok(Box::new(Expr::new(
@@ -600,9 +595,19 @@ impl Parser {
 
         let lo = self.span();
 
-        let stmts = parse_block_common!(self, parse_stmt, true);
+        let stmts = parse_block_common!(self, parse_stmt);
 
         Ok(Block::new(self.next_node_id(), stmts, self.close_span(lo)))
+    }
+
+    fn parse_body(&mut self) -> PR<N<Expr>> {
+        verbose!("Parse body {}", self.peek());
+
+        if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
+            return self.parse_block_expr();
+        }
+
+        return self.parse_expr();
     }
 
     fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {
@@ -676,7 +681,6 @@ impl Parser {
     fn parse(&mut self) -> AST {
         let mut items = vec![];
 
-        self.skip_nls();
         while !self.eof() {
             items.push(self.parse_item());
         }

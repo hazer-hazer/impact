@@ -71,7 +71,9 @@ impl<'a> HirVisitor for AstLikePP<'a> {
 
     fn visit_decl_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) {
         self.visit_ident(name);
-        self.sp();
+        if !params.is_empty() {
+            self.sp();
+        }
         walk_each_delim!(self, params, visit_ident, " ");
         self.punct(Punct::Assign);
         self.visit_expr(body);
@@ -142,6 +144,7 @@ impl<'a> HirVisitor for AstLikePP<'a> {
     }
 
     fn visit_block(&mut self, block: &Block) {
+        self.nl();
         walk_block!(self, block.stmts(), visit_stmt);
     }
 }

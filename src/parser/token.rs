@@ -133,7 +133,6 @@ impl TokenKind {
 pub enum TokenCmp {
     Eof,
     Nl,
-    Nls,
     Bool,
     Int,
     String,
@@ -148,15 +147,6 @@ pub enum TokenCmp {
     Error,
 }
 
-impl TokenCmp {
-    pub fn is_many(&self) -> bool {
-        match self {
-            TokenCmp::Nls => true,
-            _ => false,
-        }
-    }
-}
-
 impl Display for TokenCmp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -165,7 +155,6 @@ impl Display for TokenCmp {
             match self {
                 TokenCmp::Eof => "[EOF]".to_string(),
                 TokenCmp::Nl => "[NL]".to_string(),
-                TokenCmp::Nls => "[NL*]".to_string(),
                 TokenCmp::Bool => "bool".to_string(),
                 TokenCmp::Int => "int".to_string(),
                 TokenCmp::String => "string".to_string(),
@@ -188,7 +177,6 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
         match (other, self) {
             (TokenKind::Eof, TokenCmp::Eof)
             | (TokenKind::Nl, TokenCmp::Nl)
-            | (TokenKind::Nl, TokenCmp::Nls)
             | (TokenKind::Bool(_), TokenCmp::Bool)
             | (TokenKind::Int(_), TokenCmp::Int)
             | (TokenKind::String(_), TokenCmp::String)
