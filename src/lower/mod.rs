@@ -91,7 +91,10 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
-        todo!()
+        hir::item::ItemKind::Type(
+            lower_pr!(self, name, lower_ident),
+            lower_pr_boxed!(self, ty, lower_ty),
+        )
     }
 
     fn lower_mod_item(

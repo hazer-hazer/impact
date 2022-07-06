@@ -64,7 +64,7 @@ impl<'a> AstLikePP<'a> {
     }
 
     fn cur_indent(&self) -> String {
-        "    ".repeat(self.indent_level as usize)
+        "  ".repeat(self.indent_level as usize)
     }
 
     fn out_indent(&mut self) -> &mut Self {
@@ -78,10 +78,9 @@ impl<'a> AstLikePP<'a> {
 
     fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
-            Kw::Let | Kw::Type => ("", "\n"),
             Kw::In => (" ", " "),
             Kw::Mod => ("", " "),
-            Kw::Root | Kw::M | Kw::Unknown => ("", ""),
+            Kw::Let | Kw::Type | Kw::Root | Kw::M | Kw::Unknown => ("", ""),
         };
 
         self.str(pre);

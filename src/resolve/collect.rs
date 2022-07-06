@@ -2,7 +2,7 @@ use crate::{
     ast::{
         self,
         item::{Item, ItemKind},
-        visitor::{walk_each_pr, walk_pr, AstVisitor},
+        visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, WithNodeId, AST,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},

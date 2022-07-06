@@ -18,7 +18,7 @@ use crate::{
 pub struct SourceId(u32);
 
 pub const DUMMY_SOURCE_ID: SourceId = SourceId(u32::MAX);
-
+ 
 impl SourceId {
     pub fn as_usize(&self) -> usize {
         self.0 as usize

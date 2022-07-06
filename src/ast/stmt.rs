@@ -20,10 +20,6 @@ impl Stmt {
     pub fn kind(&self) -> &StmtKind {
         &self.kind
     }
-
-    pub fn take_kind(self) -> StmtKind {
-        self.kind
-    }
 }
 
 impl WithNodeId for Stmt {

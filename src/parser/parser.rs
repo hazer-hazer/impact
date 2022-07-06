@@ -113,6 +113,10 @@ impl Parser {
         self.peek_tok().span
     }
 
+    fn backtrack(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
     fn is(&self, cmp: TokenCmp) -> bool {
         cmp == self.peek()
     }
@@ -122,6 +126,22 @@ impl Parser {
             .0
             .get(self.pos + 1)
             .map_or(false, |t| cmp == t.kind)
+    }
+
+    fn lookup_after_many1(&mut self, after: TokenCmp, cmp: TokenCmp) -> bool {
+        let start = self.pos;
+        while self.is(after) {
+            self.advance();
+        }
+
+        let mut got = false;
+        if self.pos != start && self.is(cmp) {
+            got = true;
+        }
+
+        self.backtrack(start);
+
+        got
     }
 
     fn advance_offset_tok(&mut self, offset: usize) -> Token {
@@ -328,7 +348,7 @@ impl Parser {
             Some(self.parse_mod_item())
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
             Some(self.parse_type_item())
-        } else if self.is(TokenCmp::Ident) {
+        } else if self.lookup_after_many1(TokenCmp::Ident, TokenCmp::Punct(Punct::Assign)) {
             Some(self.parse_decl_item())
         } else {
             None

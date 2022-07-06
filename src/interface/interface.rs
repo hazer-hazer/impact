@@ -6,7 +6,7 @@ use crate::{
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::{defs::DefPrinter, AstLikePP},
-    resolve::{collect::DefCollector, resolve::NameResolver},
+    resolve::{collect::DefCollector},
     session::{Session, Source, Stage},
 };
 

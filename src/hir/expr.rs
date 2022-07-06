@@ -1,8 +1,5 @@
 use crate::{
-    ast::{
-        expr::{InfixOp, Lit, PrefixOp},
-        NodeId,
-    },
+    ast::expr::{InfixOp, Lit, PrefixOp},
     span::span::{Ident, Span, WithSpan},
 };
 

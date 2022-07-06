@@ -101,7 +101,7 @@ pub trait AstVisitor {
         }
     }
 
-    fn visit_lit_expr(&mut self, lit: &Lit) {}
+    fn visit_lit_expr(&mut self, _: &Lit) {}
 
     fn visit_path_expr(&mut self, path: &PR<Path>) {
         walk_pr!(self, path, visit_path)
@@ -111,12 +111,12 @@ pub trait AstVisitor {
         walk_pr!(self, block, visit_block)
     }
 
-    fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, op: &InfixOp, rhs: &PR<N<Expr>>) {
+    fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, _: &InfixOp, rhs: &PR<N<Expr>>) {
         walk_pr!(self, lhs, visit_expr);
         walk_pr!(self, rhs, visit_expr);
     }
 
-    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &PR<N<Expr>>) {
+    fn visit_prefix_expr(&mut self, _: &PrefixOp, rhs: &PR<N<Expr>>) {
         walk_pr!(self, rhs, visit_expr);
     }
 
@@ -152,7 +152,7 @@ pub trait AstVisitor {
 
     fn visit_unit_ty(&mut self) {}
 
-    fn visit_lit_ty(&mut self, lit_ty: &LitTy) {}
+    fn visit_lit_ty(&mut self, _: &LitTy) {}
 
     fn visit_path_ty(&mut self, path: &PR<Path>) {
         walk_pr!(self, path, visit_path)
@@ -168,9 +168,9 @@ pub trait AstVisitor {
     }
 
     // Fragments //
-    fn visit_ident(&mut self, ident: &Ident) {}
+    fn visit_ident(&mut self, _: &Ident) {}
 
-    fn visit_path(&mut self, path: &Path) {}
+    fn visit_path(&mut self, _: &Path) {}
 
     fn visit_block(&mut self, block: &Block) {
         walk_each_pr!(self, block.stmts(), visit_stmt);
