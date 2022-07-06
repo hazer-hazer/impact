@@ -1,5 +1,4 @@
-a x = x
-
 main =
-    a = 123
-    
+    let
+        a = 123
+        a

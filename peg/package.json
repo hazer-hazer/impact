@@ -1,0 +1,30 @@
+{
+  "name": "impact-peg",
+  "version": "0.1.0",
+  "description": "PEG parser for simplified Impact grammar",
+  "main": "repl.js",
+  "scripts": {
+    "dev": "node_modules/.bin/nodemon --ext js,pegjs",
+    "start": "node ./repl.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hazer-hazer/impact.git"
+  },
+  "keywords": [
+    "peg",
+    "impact"
+  ],
+  "author": "hazer-hazer",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hazer-hazer/impact/issues"
+  },
+  "homepage": "https://github.com/hazer-hazer/impact#readme",
+  "dependencies": {
+    "peggy": "^2.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.19"
+  }
+}

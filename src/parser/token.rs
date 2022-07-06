@@ -129,6 +129,12 @@ impl TokenKind {
     }
 }
 
+impl PartialEq<TokenCmp> for TokenKind {
+    fn eq(&self, other: &TokenCmp) -> bool {
+        self == other
+    }
+}
+
 #[derive(PartialEq, Clone, Copy)]
 pub enum TokenCmp {
     Eof,

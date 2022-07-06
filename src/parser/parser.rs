@@ -168,7 +168,7 @@ impl Parser {
             self.advance();
             Ok(())
         } else {
-            self.expected_error(cmp, self.peek());
+            self.expected_error(cmp, self.peek())?;
             Err(ErrorNode::new(self.span()))
         }
     }
@@ -198,7 +198,7 @@ impl Parser {
         if let Some(entity) = entity {
             Ok(entity)
         } else {
-            self.expected_error(expected, self.peek());
+            self.expected_error(expected, self.peek())?;
             Err(ErrorNode::new(self.span()))
         }
     }
@@ -535,7 +535,7 @@ impl Parser {
         let lhs = self.parse_primary();
 
         if let Some(lhs) = lhs {
-            let arg = self.parse_primary();
+            let arg = self.parse_postfix();
 
             if let Some(arg) = arg {
                 Some(Ok(Box::new(Expr::new(
