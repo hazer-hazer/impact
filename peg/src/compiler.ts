@@ -1,0 +1,74 @@
+import { readFileSync } from "fs"
+import { generate, GrammarError, Parser, parser } from "peggy"
+import { Context, createContext, runInContext } from "vm"
+import { prelude } from "./prelude"
+
+export type Options = {
+    printJS?: boolean
+}
+
+const defaultOptions: Options = {
+    printJS: false
+}
+
+export class Compiler {
+    private grammar: string
+    private parser: Parser
+    private ctx: Context
+    private options: Options
+
+    constructor(options: Options) {
+        this.grammar = readFileSync('./peggy-js.pegjs', 'utf-8')
+        this.parser = generate(this.grammar, {
+            allowedStartRules: ['program'],
+        })
+
+        this.ctx = createContext(prelude)
+
+        this.options = { ...defaultOptions, ...options }
+    }
+
+    private resetContext() {
+        this.ctx = createContext(prelude)
+    }
+
+    runCommand(command: string, args: string[]): any | undefined {
+        switch (command) {
+            case 'run': {
+                return this.exec(`${args[0]}(${args.slice(1).join(', ')})`)
+            }
+            case 'reset': {
+                this.resetContext()
+                process.stdout.write('\u001B[2J\u001B[0;0f')
+                return;
+            }
+            default: {
+                throw new Error(`Unknown command ${command}`)
+            }
+        }
+    }
+
+    exec(code: string): any | undefined {
+        return runInContext(code, this.ctx);
+    }
+
+    run(code: string): any | undefined {
+        try {
+            const transpiled = this.parser.parse(code);
+
+            if (this.options.printJS) {
+                console.log(`JS code: \`${transpiled}\``);
+            }
+
+            return this.exec(transpiled);
+        } catch (e: any) {
+            if (e instanceof parser.SyntaxError || e instanceof GrammarError) {
+                throw new Error(e.format([
+                    { source: this.grammar, text: code },
+                ]))
+            } else {
+                throw e
+            }
+        }
+    }
+}

@@ -5,6 +5,16 @@
         return cur_ind();
     }
 
+    function indent_pred() {
+        indent();
+        return true;
+    }
+
+    function dedent_pred() {
+        dedent();
+        return true;
+    }
+
     function cur_ind() {
         return '    '.repeat(ind);
     }
@@ -14,14 +24,14 @@
         return cur_ind();
     }
 
-    function block(els, delim) {
-        return `(function() {\n${indent()}${els.map(el => `${cur_ind()}${el}`).join(delim)}${dedent()}})`
-    }
+    // function block(els, delim) {
+    //     return `(function() {\n${cur_ind()}${els.map(el => `${cur_ind()}${el}`).join(delim)}${dedent()}})`
+    // }
 }
 
 program =
-    _ items:(@item _)* {
-        return items.join('\n')
+    _ stmts:(@stmt _)* {
+        return stmts.join('\n')
     }
 
 stmt 'statement' =
@@ -30,8 +40,12 @@ stmt 'statement' =
     / semi
 
 item 'item' =
-	name:var_id params:(__ @var_id)* _ '=' _ body:(block / expr) {
-    	return `function ${name}(${params.join(', ')}) {\n${indent()}return ${body};\n${dedent()}}`
+	name:var_id params:(__ @var_id)* _ '=' _ &{return indent_pred();} body:(block / expr) &{return dedent_pred();} {
+        if (params.length) {
+    	    return `function ${name}(${params.join(', ')}) {\n${indent()}return ${body};\n${dedent()}}`
+        } else {
+            return `const ${name} = ${body}`
+        }
     }
 
 expr 'expression' =
@@ -64,7 +78,7 @@ call 'application' =
 	/ primary
 
 primary 'primary expression' =
-	int:[0-9]+ {return int}
+	int:$([0-9]+) {return int}
     / '\'' str:.* '\'' {return `'${str}'`;}
     / name:var_id {
     	return name;
@@ -77,8 +91,15 @@ block =
     '{' _ '}' {
         return 'undefined';
     }
-    / '{' _ first:stmt stmts:(semi @stmt)* return_expr:(semi @expr)? _ '}' {
-        return `(function() {\n${indent()}${[first, ...stmts].map(stmt => `${cur_ind()}${stmt}`).join(';\n')};\n${return_expr ? `return ${return_expr};` : ''}${dedent()}\n}())`
+    / '{' _ &{return indent_pred();} first:stmt stmts:(semi @stmt)* return_expr:(semi @expr)? _ &{return dedent_pred();} '}' {
+        indent();
+        return `(function() {\n${
+            [first, ...stmts].map(stmt => `${cur_ind()}${stmt}`).join(';\n')
+        };${
+            return_expr ? `\n${cur_ind()}return ${return_expr};` : ''
+        }\n${
+            dedent()
+        }}())`
     }
 
 ty 'type' =

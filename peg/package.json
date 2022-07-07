@@ -2,10 +2,11 @@
   "name": "impact-peg",
   "version": "0.1.0",
   "description": "PEG parser for simplified Impact grammar",
-  "main": "repl.js",
+  "main": "./dist/index.js",
   "scripts": {
-    "dev": "node_modules/.bin/nodemon --ext js,pegjs",
-    "start": "node ./repl.js"
+    "dev": "node_modules/.bin/nodemon .",
+    "compile": "tsc",
+    "start": "node ./dist/index.js"
   },
   "repository": {
     "type": "git",
@@ -25,6 +26,7 @@
     "peggy": "^2.0.1"
   },
   "devDependencies": {
+    "@types/node": "^18.0.3",
     "nodemon": "^2.0.19"
   }
 }

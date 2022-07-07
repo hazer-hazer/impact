@@ -1,0 +1,9 @@
+{
+    "watch": [
+        "./src/**/*.ts",
+        "./peggy-js.pegjs",
+        "./tsconfig.json"
+    ],
+    "ext": "ts,json,env,pegjs",
+    "exec": "npm run compile && npm start"
+}
