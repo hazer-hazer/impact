@@ -77,11 +77,6 @@ impl<'a> DefCollector<'a> {
 impl<'a> AstVisitor for DefCollector<'a> {
     fn visit_err(&mut self, _: &ErrorNode) {}
 
-    fn visit_ast(&mut self, ast: &AST) {
-        self.sess.def_table.add_root_module();
-        walk_each_pr!(self, ast.items(), visit_item);
-    }
-
     fn visit_item(&mut self, item: &Item) {
         let def_id = self.define(
             item.id(),
@@ -110,6 +105,7 @@ impl<'a> AstVisitor for DefCollector<'a> {
 
 impl<'a> Stage<()> for DefCollector<'a> {
     fn run(mut self) -> StageOutput<()> {
+        self.sess.def_table.add_root_module();
         self.visit_ast(self.ast);
         StageOutput::new(self.sess, (), self.msg)
     }

@@ -326,12 +326,12 @@ impl DefTable {
         self.defs.get(def_id.as_usize())
     }
 
-    pub fn get_def_id(&self, node_id: &NodeId) -> Option<&DefId> {
-        self.node_id_def_id.get(node_id)
+    pub fn get_def_id(&self, node_id: NodeId) -> Option<DefId> {
+        self.node_id_def_id.get(&node_id).copied()
     }
 
-    pub fn get_node_id(&self, def_id: &DefId) -> Option<&NodeId> {
-        self.def_id_node_id.get(def_id)
+    pub fn get_node_id(&self, def_id: DefId) -> Option<NodeId> {
+        self.def_id_node_id.get(&def_id).copied()
     }
 
     pub fn defs(&self) -> &[Def] {

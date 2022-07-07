@@ -8,6 +8,7 @@ use crate::{
 pub mod ast;
 pub mod defs;
 pub mod hir;
+pub mod res;
 
 pub struct AstLikePP<'a> {
     out: String,

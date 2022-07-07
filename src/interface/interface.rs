@@ -5,8 +5,8 @@ use crate::{
     hir::visitor::HirVisitor,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
-    pp::{defs::DefPrinter, AstLikePP},
-    resolve::{collect::DefCollector},
+    pp::{defs::DefPrinter, res::ResPrinter, AstLikePP},
+    resolve::{collect::DefCollector, resolve::NameResolver},
     session::{Session, Source, Stage},
 };
 
@@ -92,9 +92,18 @@ impl Interface {
         verbose!("=== Name resolution ===");
         let stage = StageName::NameRes;
 
-        // let (_, sess) = NameResolver:
+        let (_, sess) = NameResolver::new(sess, &ast).run_and_emit(true)?;
+
+        if self.config.check_pp_stage(stage) {
+            let pp = AstLikePP::new(&sess);
+            let mut res_pp = ResPrinter::new(pp);
+            res_pp.visit_ast(&ast);
+        }
+
+        self.should_stop(stage)?;
 
         // Lowering //
+        verbose!("=== Lowering ===");
         let stage = StageName::Lower;
         let (hir, sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 

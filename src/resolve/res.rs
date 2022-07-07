@@ -39,9 +39,13 @@ impl Res {
             kind: ResKind::Error,
         }
     }
+
+    pub fn kind(&self) -> &ResKind {
+        &self.kind
+    }
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct NamePath {
     node_id: NodeId,
 }
@@ -62,8 +66,8 @@ impl Resolutions {
         assert!(self.resolutions.insert(path, res).is_none());
     }
 
-    pub fn get(&self, path: &NamePath) -> Option<&Res> {
-        self.resolutions.get(path)
+    pub fn get(&self, path: NamePath) -> Option<&Res> {
+        self.resolutions.get(&path)
     }
 
     pub fn get_resolutions(&self) -> &HashMap<NamePath, Res> {

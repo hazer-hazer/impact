@@ -1,7 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{visitor::AstVisitor, ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST},
+    ast::{
+        expr::Block,
+        item::{Item, ItemKind},
+        visitor::{walk_each_pr, AstVisitor},
+        ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST,
+    },
+    cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Span, Symbol},
@@ -49,7 +55,7 @@ impl Scope {
 pub struct NameResolver<'a> {
     ast: &'a AST,
     scopes: Vec<Scope>,
-    nearest_mod: ModuleId,
+    nearest_mod: ModuleId, // Nearest `mod` item
     locals_spans: NodeMap<Span>,
     msg: MessageStorage,
     sess: Session,
@@ -65,6 +71,14 @@ impl<'a> NameResolver<'a> {
             msg: Default::default(),
             sess,
         }
+    }
+
+    fn enter_scope(&mut self, scope: Scope) {
+        self.scopes.push(scope);
+    }
+
+    fn exit_scope(&mut self) {
+        self.scopes.pop();
     }
 
     fn scope(&mut self) -> &mut Scope {
@@ -86,10 +100,12 @@ impl<'a> NameResolver<'a> {
     fn resolve_path(&mut self, path: &Path) -> Res {
         let segments = path.segments();
 
-        if segments.get(0).unwrap().is_var() && segments.len() == 0 {
+        if segments.get(0).unwrap().is_var() && segments.len() == 1 {
             let seg = segments.get(0).unwrap();
             if let Some(local) = self.scope().get(seg.sym()) {
                 return Res::local(*local);
+            } else {
+                return Res::error();
             }
         }
 
@@ -152,14 +168,38 @@ impl<'a> AstVisitor for NameResolver<'a> {
 
     // visit_let: We don't have locals for now
 
+    fn visit_item(&mut self, item: &Item) {
+        match item.kind() {
+            ItemKind::Mod(name, items) => {
+                let module_id =
+                    ModuleId::Module(self.sess.def_table.get_def_id(item.id()).unwrap());
+                self.nearest_mod = module_id;
+                self.enter_scope(Scope::new_module(module_id));
+                self.visit_mod_item(name, items);
+                self.exit_scope();
+            }
+            ItemKind::Type(_, _) => {}
+            ItemKind::Decl(name, params, body) => self.visit_decl_item(name, params, body),
+        }
+    }
+
+    fn visit_block(&mut self, block: &Block) {
+        self.enter_scope(Scope::new_block());
+        walk_each_pr!(self, block.stmts(), visit_stmt);
+        self.exit_scope();
+    }
+
     fn visit_path(&mut self, path: &Path) {
+        verbose!("Resolve path `{}`", path);
+
         let res = self.resolve_path(path);
         self.sess.res.set(NamePath::new(path.id()), res);
     }
 }
 
 impl<'a> Stage<()> for NameResolver<'a> {
-    fn run(self) -> StageOutput<()> {
+    fn run(mut self) -> StageOutput<()> {
+        self.visit_ast(self.ast);
         StageOutput::new(self.sess, (), self.msg)
     }
 }
