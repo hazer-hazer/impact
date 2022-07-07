@@ -10,5 +10,3 @@ Cargo.lock
 **/*.rs.bk
 
 src/typeck/bidir.md
-
-node_modules/

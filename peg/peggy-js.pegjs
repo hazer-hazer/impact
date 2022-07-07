@@ -1,32 +1,6 @@
 {
-    let ind = 0;
-    function indent() {
-        ind++;
-        return cur_ind();
-    }
-
-    function indent_pred() {
-        indent();
-        return true;
-    }
-
-    function dedent_pred() {
-        dedent();
-        return true;
-    }
-
-    function cur_ind() {
-        return '    '.repeat(ind);
-    }
-
-    function dedent() {
-        ind--;
-        return cur_ind();
-    }
-
-    // function block(els, delim) {
-    //     return `(function() {\n${cur_ind()}${els.map(el => `${cur_ind()}${el}`).join(delim)}${dedent()}})`
-    // }
+    const gen = options.jsGen
+    const ctx = options.parserCtx
 }
 
 program =
@@ -34,76 +8,53 @@ program =
         return stmts.join('\n')
     }
 
-stmt 'statement' =
-    item
-    / expr
-    / semi
+stmt 'statement' = SAMEINDENT (@item / @expr / @semi) EOL?
 
 item 'item' =
-	name:var_id params:(__ @var_id)* _ '=' _ &{return indent_pred();} body:(block / expr) &{return dedent_pred();} {
-        if (params.length) {
-    	    return `function ${name}(${params.join(', ')}) {\n${indent()}return ${body};\n${dedent()}}`
-        } else {
-            return `const ${name} = ${body}`
-        }
+	name:var_id params:(__ @var_id)* _ '=' _ &{return gen.indent_pred();} body:(block / expr) &{return gen.dedent_pred()} {
+        return gen.letItem(name, params, body)
     }
 
 expr 'expression' =
     ascription
 
 ascription 'type ascription' =
-	e:add _ ':' _ ty {return e;}
+	e:add _ ':' _ ty {return e}
     / add
 
 add =
 	lhs:mult _ op:[+-] _ rhs:add {
-    	switch (op) {
-        case '+': return lhs + rhs;
-        case '-': return lhs - rhs;
-        }
+        return gen.infix(lhs, op, rhs)
     }
 	/ mult
 
 mult =
 	lhs:call _ op:[\*\/] _ rhs:mult {
-    	switch (op) {
-        case '*': return lhs * rhs;
-        case '/': return lhs / rhs;
-        }
+        return gen.infix(lhs, op, rhs)
     }
 	/ call
 
 call 'application' =
-	lhs:primary __ rhs:call { return lhs(rhs); }
+	lhs:primary __ arg:call { return gen.call(lhs, arg) }
 	/ primary
 
 primary 'primary expression' =
 	int:$([0-9]+) {return int}
-    / '\'' str:.* '\'' {return `'${str}'`;}
+    / '\'' str:([^\n\r\'\\] / '\\' .)* '\'' {return `'${str.join('')}'`}
     / name:var_id {
-    	return name;
+    	return name
     }
     / 'let' _ body:block {
-        return body;
+        return body
     }
 
 block =
-    '{' _ '}' {
-        return 'undefined';
-    }
-    / '{' _ &{return indent_pred();} first:stmt stmts:(semi @stmt)* return_expr:(semi @expr)? _ &{return dedent_pred();} '}' {
-        indent();
-        return `(function() {\n${
-            [first, ...stmts].map(stmt => `${cur_ind()}${stmt}`).join(';\n')
-        };${
-            return_expr ? `\n${cur_ind()}return ${return_expr};` : ''
-        }\n${
-            dedent()
-        }}())`
+    INDENT &{return gen.indent_pred();} first:stmt stmts:(semi @stmt)* return_expr:(semi @expr)? &{return gen.dedent_pred()} DEDENT {
+        return gen.block([first, ...stmts], return_expr)
     }
 
 ty 'type' =
-    simple_ty ('->' ty)*
+    simple_ty (_ '->' _ ty)*
 
 simple_ty =
 	ty_id
@@ -114,5 +65,25 @@ ty_id 'type name' = $([A-Z][A-z0-9]*)
 
 semi 'semi' = [;\n]+
 
-_ = [ \t\n\r]*
-__ 'white-space' = [ \t]+
+_ = [ \t]*
+__ "whitespace" = [ \t]+
+NL "new-line" = (_ EOL)+
+EOL "end of line" = '\r\n' / '\n' / '\r'
+
+
+// For the same indent we allow no whitespaces as it may be top-level indentation
+SAMEINDENT = spaces:$(_) &{
+    return ctx.isSameIndent(spaces)
+}
+
+INDENT = &(
+    spaces:$(__) &{
+        return ctx.isIndent()
+    } {
+        ctx.pushIndent(spaces)
+    }
+)
+
+DEDENT = &{
+    return ctx.popIndent()
+} {}

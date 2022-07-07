@@ -1,6 +1,8 @@
 import { readFileSync } from "fs"
 import { generate, GrammarError, Parser, parser } from "peggy"
 import { Context, createContext, runInContext } from "vm"
+import { JSGen } from "./js-gen"
+import { ParserCtx } from "./parser-ctx"
 import { prelude } from "./prelude"
 
 export type Options = {
@@ -16,6 +18,8 @@ export class Compiler {
     private parser: Parser
     private ctx: Context
     private options: Options
+    private jsGen: JSGen
+    private parserCtx: ParserCtx
 
     constructor(options: Options) {
         this.grammar = readFileSync('./peggy-js.pegjs', 'utf-8')
@@ -23,13 +27,16 @@ export class Compiler {
             allowedStartRules: ['program'],
         })
 
-        this.ctx = createContext(prelude)
+        this.ctx = createContext({ ...prelude })
+
+        this.jsGen = new JSGen()
+        this.parserCtx = new ParserCtx()
 
         this.options = { ...defaultOptions, ...options }
     }
 
     private resetContext() {
-        this.ctx = createContext(prelude)
+        this.ctx = createContext({ ...prelude })
     }
 
     runCommand(command: string, args: string[]): any | undefined {
@@ -40,6 +47,10 @@ export class Compiler {
             case 'reset': {
                 this.resetContext()
                 process.stdout.write('\u001B[2J\u001B[0;0f')
+                return;
+            }
+            case 'ctx': {
+                console.log(this.ctx);
                 return;
             }
             default: {
@@ -54,7 +65,10 @@ export class Compiler {
 
     run(code: string): any | undefined {
         try {
-            const transpiled = this.parser.parse(code);
+            const transpiled = this.parser.parse(code, {
+                jsGen: this.jsGen,
+                parserCtx: this.parserCtx
+            });
 
             if (this.options.printJS) {
                 console.log(`JS code: \`${transpiled}\``);
