@@ -23,4 +23,10 @@ export class ParserCtx {
     public isSameIndent(spaces: string): boolean {
         return spaces === this.indent
     }
+
+    public reset(): this {
+        this.indentStack = []
+        this.indent = ''
+        return this
+    }
 }

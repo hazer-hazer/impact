@@ -1,17 +1,19 @@
 {
     const gen = options.jsGen
-    const ctx = options.parserCtx
+    const ctx = options.parserCtx.reset()
 }
 
 program =
-    _ stmts:(@stmt _)* {
+    NL? stmts:(@stmt _)* {
         return stmts.join('\n')
     }
 
-stmt 'statement' = SAMEINDENT (@item / @expr / @semi) EOL?
+stmt 'statement' = SAMEINDENT node:(item / expr / semi {return ''}) NL? {
+    return node;
+}
 
 item 'item' =
-	name:var_id params:(__ @var_id)* _ '=' _ &{return gen.indent_pred();} body:(block / expr) &{return gen.dedent_pred()} {
+	name:var_id params:(__ @var_id)* _ '=' _ &{return gen.indent_pred();} body:body &{return gen.dedent_pred()} {
         return gen.letItem(name, params, body)
     }
 
@@ -44,13 +46,15 @@ primary 'primary expression' =
     / name:var_id {
     	return name
     }
-    / 'let' _ body:block {
+    / 'let' body:body {
         return body
     }
 
+body = (@expr / NL @block)
+
 block =
-    INDENT &{return gen.indent_pred();} first:stmt stmts:(semi @stmt)* return_expr:(semi @expr)? &{return gen.dedent_pred()} DEDENT {
-        return gen.block([first, ...stmts], return_expr)
+    INDENT &{return gen.indent_pred();} first:stmt stmts:(semi @stmt)* &{return gen.dedent_pred()} DEDENT {
+        return gen.block([first, ...stmts])
     }
 
 ty 'type' =
@@ -63,7 +67,7 @@ simple_ty =
 var_id 'variable name' = $([a-z][A-z0-9]*)
 ty_id 'type name' = $([A-Z][A-z0-9]*)
 
-semi 'semi' = [;\n]+
+semi 'semi' = (EOL / ';')+
 
 _ = [ \t]*
 __ "whitespace" = [ \t]+
@@ -74,15 +78,15 @@ EOL "end of line" = '\r\n' / '\n' / '\r'
 // For the same indent we allow no whitespaces as it may be top-level indentation
 SAMEINDENT = spaces:$(_) &{
     return ctx.isSameIndent(spaces)
-}
+} {}
 
 INDENT = &(
     spaces:$(__) &{
-        return ctx.isIndent()
+        return ctx.isIndent(spaces)
     } {
         ctx.pushIndent(spaces)
     }
-)
+) {}
 
 DEDENT = &{
     return ctx.popIndent()

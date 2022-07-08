@@ -3,7 +3,10 @@ import { Compiler } from "./compiler"
 
 const continueChars = ['=']
 
-const compiler = new Compiler({})
+const compiler = new Compiler({
+    // printJS: true,
+    // printSource: true,
+})
 
 start({
     prompt: '> ',
@@ -31,7 +34,7 @@ start({
                 if (!command) {
                     throw new Error('Expected command name after `:`')
                 }
-    
+
                 return cb(null, compiler.runCommand(command, args.slice(1)))
             }
 

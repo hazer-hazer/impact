@@ -7,10 +7,12 @@ import { prelude } from "./prelude"
 
 export type Options = {
     printJS?: boolean
+    printSource?: boolean
 }
 
 const defaultOptions: Options = {
-    printJS: false
+    printJS: false,
+    printSource: false
 }
 
 export class Compiler {
@@ -65,6 +67,10 @@ export class Compiler {
 
     run(code: string): any | undefined {
         try {
+            if (this.options.printSource) {
+                console.log(`Source:\n\`${code}\``);
+            }
+
             const transpiled = this.parser.parse(code, {
                 jsGen: this.jsGen,
                 parserCtx: this.parserCtx

@@ -66,7 +66,9 @@ ${this.dedent()}}`.trim()
         return `${lhs} ${op} ${rhs}`
     }
 
-    block(stmts: string[], return_expr?: string): string {
+    block(stmts: string[]): string {
+        let return_expr = stmts.pop();
+
         this.indent();
         return `
 (function() {
