@@ -130,6 +130,7 @@ impl Display for Namespace {
     }
 }
 
+#[derive(Debug)]
 pub struct PerNS<T> {
     value: T,
     ty: T,
@@ -167,6 +168,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum ModuleKind {
     Root,
     Block(NodeId),
@@ -197,6 +199,7 @@ type ModuleNamespace = HashMap<Symbol, DefId>;
 /**
  * Module is a scope where items defined.
  */
+#[derive(Debug)]
 pub struct Module {
     parent: Option<ModuleId>,
     kind: ModuleKind,

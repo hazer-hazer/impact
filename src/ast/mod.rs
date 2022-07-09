@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    cli::color::Colorize,
+    cli::{color::Colorize, verbose},
     span::span::{Ident, Span, WithSpan},
 };
 
@@ -146,15 +146,21 @@ impl Path {
     }
 
     pub fn prefix_str(&self, to: usize) -> String {
-        self.segments()[0..to]
+        let prefix = self.segments()[0..to]
             .iter()
             .map(|seg| format!("{}", seg))
             .collect::<Vec<_>>()
-            .join(".")
+            .join(".");
+
+        if prefix.is_empty() {
+            "current scope".to_string()
+        } else {
+            prefix
+        }
     }
 
     pub fn prefix_span(&self, to: usize) -> Span {
-        self.segments()[0..to]
+        self.segments()[0..=to]
             .iter()
             .map(|seg| seg.span())
             .reduce(|prefix, seg| prefix.to(seg))

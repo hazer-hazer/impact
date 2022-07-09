@@ -5,7 +5,7 @@ use crate::{
     hir::visitor::HirVisitor,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
-    pp::{defs::DefPrinter, res::ResPrinter, AstLikePP},
+    pp::{defs::DefPrinter, AstLikePP, AstPPMode},
     resolve::{collect::DefCollector, resolve::NameResolver},
     session::{Session, Source, Stage},
 };
@@ -67,7 +67,7 @@ impl Interface {
         let (ast, sess) = Parser::new(sess, tokens).run_and_emit(true)?;
 
         if self.config.check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(&sess);
+            let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.visit_ast(&ast);
             println!("Printing AST after parsing\n{}", pp.get_string());
         }
@@ -81,7 +81,7 @@ impl Interface {
         let (_, sess) = DefCollector::new(sess, &ast).run_and_emit(true)?;
 
         if self.config.check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(&sess);
+            let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.pp_defs();
             println!("{}", pp.get_string());
         }
@@ -95,9 +95,9 @@ impl Interface {
         let (_, sess) = NameResolver::new(sess, &ast).run_and_emit(true)?;
 
         if self.config.check_pp_stage(stage) {
-            let pp = AstLikePP::new(&sess);
-            let mut res_pp = ResPrinter::new(pp);
-            res_pp.visit_ast(&ast);
+            let mut pp = AstLikePP::new(&sess, AstPPMode::NameHighlighter);
+            pp.visit_ast(&ast);
+            println!("{}", pp.get_string());
         }
 
         self.should_stop(stage)?;
@@ -108,7 +108,7 @@ impl Interface {
         let (hir, sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
         if self.config.check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(&sess);
+            let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.visit_hir(&hir);
             println!("Printing HIR after parsing\n{}", pp.get_string());
         }

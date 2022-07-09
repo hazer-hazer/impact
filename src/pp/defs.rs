@@ -12,7 +12,7 @@ pub trait DefPrinter {
 
 impl<'a> DefPrinter for AstLikePP<'a> {
     fn pp_defs(&mut self) {
-        self.line("= Definitions =");
+        self.line("== Definitions ==");
         self.sess
             .def_table
             .defs()
@@ -21,7 +21,7 @@ impl<'a> DefPrinter for AstLikePP<'a> {
                 self.string(format!("{def_id}: {kind} {name}")).nl();
             });
 
-        self.line("= Module tree =");
+        self.line("== Module tree ==");
         self.pp_mod(ModuleId::Module(ROOT_DEF_ID));
     }
 

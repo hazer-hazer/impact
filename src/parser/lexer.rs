@@ -179,8 +179,6 @@ impl Lexer {
     }
 
     fn lex_ident(&mut self) {
-        verbose!("Lex ident {}", self.peek());
-
         let start = self.pos;
         while !self.eof() && self.peek().is_ident_next() {
             self.advance();
@@ -227,7 +225,6 @@ impl Lexer {
     }
 
     fn save_source_line(&mut self) {
-        dbg!(&self.source()[self.last_line_begin as usize..self.pos as usize]);
         self.sess
             .source_map
             .get_source_mut(self.source_id)
@@ -243,17 +240,13 @@ impl Lexer {
 
             self.advance();
             self.last_line_begin = self.pos;
-
-            if self.eof() {
-                verbose!("Add new-line before eof");
-                self.add_token(TokenKind::Nl, 1);
-                self.save_source_line();
-                return;
-            }
         }
 
-        verbose!("Add new-line");
         self.add_token(TokenKind::Nl, 1);
+
+        if self.eof() {
+            return;
+        }
 
         // Check that we actually skipped some new-lines
         assert_ne!(pos, self.pos);
@@ -285,6 +278,7 @@ impl Lexer {
 impl Stage<TokenStream> for Lexer {
     fn run(mut self) -> StageOutput<TokenStream> {
         while !self.eof() {
+            self.token_start_pos = self.pos;
             match self.peek().match_first() {
                 TokenStartMatch::Skip => {
                     self.advance();
@@ -303,12 +297,11 @@ impl Stage<TokenStream> for Lexer {
             };
         }
 
-        dbg!(self.last_line_begin);
-
         if self.last_line_begin == 0 {
             self.save_source_line();
         }
 
+        self.save_source_line();
         self.add_token(TokenKind::Eof, 1);
 
         StageOutput::new(self.sess, TokenStream::new(self.tokens), self.msg)

@@ -18,7 +18,7 @@ use crate::{
 pub struct SourceId(u32);
 
 pub const DUMMY_SOURCE_ID: SourceId = SourceId(u32::MAX);
- 
+
 impl SourceId {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
@@ -106,13 +106,6 @@ impl Source {
             let line_range = line_pos..=next_line_pos;
 
             if line_range.contains(&span.lo()) || line_range.contains(&span.hi()) {
-                dbg!(
-                    line_pos / self.lines_positions.len() as u32 + 1,
-                    span.lo(),
-                    line_range.contains(&span.lo()),
-                    span.hi(),
-                    line_range.contains(&span.hi())
-                );
                 indices.push(i);
             }
         }
@@ -130,7 +123,8 @@ impl Source {
         let next_line_pos = *self
             .lines_positions
             .get(index + 1)
-            .unwrap_or(&(self.source_size() as SpanPos));
+            // Note: Add 1 as we subtract 1 in range
+            .unwrap_or(&(self.source_size() as SpanPos + 1));
 
         let pos = *self.lines_positions.get(index).unwrap();
         let line = &self.source[pos as usize..(next_line_pos - 1) as usize];

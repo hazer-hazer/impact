@@ -5,13 +5,17 @@ use super::{
     item::{Item, ItemKind},
     stmt::{Stmt, StmtKind},
     ty::{LitTy, Ty, TyKind},
-    ErrorNode, Path, AST, N, PR,
+    ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
 };
 
 macro_rules! walk_pr {
     ($self: ident, $pr: expr, $ok_visitor: ident) => {
+        walk_pr!($self, $pr, $ok_visitor,)
+    };
+
+    ($self: ident, $pr: expr, $ok_visitor: ident, $($args: expr)*) => {
         match $pr {
-            Ok(ok) => $self.$ok_visitor(ok),
+            Ok(ok) => $self.$ok_visitor(ok, $($args),*),
             Err(err) => $self.visit_err(err),
         }
     };
@@ -64,23 +68,31 @@ pub trait AstVisitor {
     // Items //
     fn visit_item(&mut self, item: &Item) {
         match item.kind() {
-            ItemKind::Type(name, ty) => self.visit_type_item(name, ty),
-            ItemKind::Mod(name, items) => self.visit_mod_item(name, items),
-            ItemKind::Decl(name, params, body) => self.visit_decl_item(name, params, body),
+            ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
+            ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
+            ItemKind::Decl(name, params, body) => {
+                self.visit_decl_item(name, params, body, item.id())
+            }
         }
     }
 
-    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) {
+    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>, id: NodeId) {
         walk_pr!(self, name, visit_ident);
         walk_pr!(self, ty, visit_ty);
     }
 
-    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>) {
+    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>, id: NodeId) {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, items, visit_item);
     }
 
-    fn visit_decl_item(&mut self, name: &PR<Ident>, params: &Vec<PR<Ident>>, body: &PR<N<Expr>>) {
+    fn visit_decl_item(
+        &mut self,
+        name: &PR<Ident>,
+        params: &Vec<PR<Ident>>,
+        body: &PR<N<Expr>>,
+        id: NodeId,
+    ) {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, params, visit_ident);
         walk_pr!(self, body, visit_expr);

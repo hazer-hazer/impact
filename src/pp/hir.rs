@@ -42,7 +42,7 @@ macro_rules! walk_each_delim {
 
 impl<'a> HirVisitor for AstLikePP<'a> {
     fn visit_hir(&mut self, hir: &HIR) {
-        println!("=== HIR ===");
+        println!("== HIR ==");
         walk_each_delim!(self, hir.items(), visit_item, "\n")
     }
 

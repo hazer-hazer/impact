@@ -6,7 +6,7 @@ use crate::{
         ty::{LitTy, Ty},
         visitor::walk_pr,
         visitor::AstVisitor,
-        ErrorNode, Path, AST, N, PR,
+        ErrorNode, NodeId, Path, AST, N, PR,
     },
     parser::token::Punct,
     span::span::{Ident, Kw},
@@ -44,7 +44,7 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     fn visit_ast(&mut self, ast: &AST) {
-        println!("=== AST ===");
+        println!("== AST ==");
         walk_each_pr_delim!(self, ast.items(), visit_item, "\n")
     }
 
@@ -57,22 +57,28 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     // Items //
-    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) {
+    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>, id: NodeId) {
         self.kw(Kw::Type);
-        walk_pr!(self, name, visit_ident);
+        walk_pr!(self, name, def_name, id);
         self.punct(Punct::Assign);
         walk_pr!(self, ty, visit_ty);
     }
 
-    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>) {
+    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>, id: NodeId) {
         self.kw(Kw::Mod);
-        walk_pr!(self, name, visit_ident);
+        walk_pr!(self, name, def_name, id);
         self.nl();
         walk_block!(self, items, visit_item);
     }
 
-    fn visit_decl_item(&mut self, name: &PR<Ident>, params: &Vec<PR<Ident>>, body: &PR<N<Expr>>) {
-        walk_pr!(self, name, visit_ident);
+    fn visit_decl_item(
+        &mut self,
+        name: &PR<Ident>,
+        params: &Vec<PR<Ident>>,
+        body: &PR<N<Expr>>,
+        id: NodeId,
+    ) {
+        walk_pr!(self, name, def_name, id);
         if !params.is_empty() {
             self.sp();
         }
@@ -148,7 +154,7 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     fn visit_path(&mut self, path: &Path) {
-        self.string(path);
+        self.path(path)
     }
 
     fn visit_block(&mut self, block: &Block) {

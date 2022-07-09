@@ -88,11 +88,13 @@ impl<'a> AstVisitor for DefCollector<'a> {
         match item.kind() {
             ItemKind::Mod(name, items) => {
                 self.enter_def_module(def_id);
-                self.visit_mod_item(name, items);
+                self.visit_mod_item(name, items, item.id());
                 self.exit_module();
             }
             ItemKind::Type(_, _) => {}
-            ItemKind::Decl(name, params, body) => self.visit_decl_item(name, params, body),
+            ItemKind::Decl(name, params, body) => {
+                self.visit_decl_item(name, params, body, item.id())
+            }
         }
     }
 

@@ -9,6 +9,7 @@ use crate::{
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    resolve::def::Namespace,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Span, Symbol},
 };
@@ -18,11 +19,12 @@ use super::{
     res::{NamePath, Res},
 };
 
+#[derive(Debug)]
 enum ScopeKind {
-    Block,
     Module(ModuleId),
 }
 
+#[derive(Debug)]
 struct Scope {
     locals: HashMap<Symbol, NodeId>,
     kind: ScopeKind,
@@ -36,13 +38,6 @@ impl Scope {
         }
     }
 
-    pub fn new_block() -> Self {
-        Self {
-            locals: Default::default(),
-            kind: ScopeKind::Block,
-        }
-    }
-
     pub fn get(&self, sym: Symbol) -> Option<&NodeId> {
         self.locals.get(&sym)
     }
@@ -50,12 +45,16 @@ impl Scope {
     pub fn define(&mut self, sym: Symbol, node_id: NodeId) -> Option<NodeId> {
         self.locals.insert(sym, node_id)
     }
+
+    fn kind(&self) -> &ScopeKind {
+        &self.kind
+    }
 }
 
 pub struct NameResolver<'a> {
     ast: &'a AST,
     scopes: Vec<Scope>,
-    nearest_mod: ModuleId, // Nearest `mod` item
+    module: ModuleId, // Nearest `mod` item
     locals_spans: NodeMap<Span>,
     msg: MessageStorage,
     sess: Session,
@@ -66,7 +65,7 @@ impl<'a> NameResolver<'a> {
         Self {
             ast,
             scopes: Default::default(),
-            nearest_mod: ModuleId::Module(ROOT_DEF_ID),
+            module: ModuleId::Module(ROOT_DEF_ID),
             locals_spans: Default::default(),
             msg: Default::default(),
             sess,
@@ -74,6 +73,12 @@ impl<'a> NameResolver<'a> {
     }
 
     fn enter_scope(&mut self, scope: Scope) {
+        verbose!("Enter scope {:?}", scope);
+
+        match scope.kind() {
+            ScopeKind::Module(module_id) => self.module = *module_id,
+        }
+
         self.scopes.push(scope);
     }
 
@@ -98,27 +103,25 @@ impl<'a> NameResolver<'a> {
     }
 
     fn resolve_path(&mut self, path: &Path) -> Res {
+        verbose!("Path segments {:?}", path.segments());
+
         let segments = path.segments();
 
         if segments.get(0).unwrap().is_var() && segments.len() == 1 {
             let seg = segments.get(0).unwrap();
             if let Some(local) = self.scope().get(seg.sym()) {
                 return Res::local(*local);
-            } else {
-                return Res::error();
             }
         }
 
-        // Path is not a path if it is not a path ☝️
-        assert!(segments.get(0).unwrap().is_ty());
-
-        let mut search_mod = self.sess.def_table.get_module(self.nearest_mod);
+        let mut search_mod = self.sess.def_table.get_module(self.module);
 
         for seg_index in 0..segments.len() {
             let seg = segments[seg_index];
             let seg_name = seg.sym();
             let is_target = seg_index == segments.len() - 1;
 
+            // Path prefix segments must be type identifiers
             if !is_target && !seg.is_ty() {
                 MessageBuilder::error()
                     .span(path.prefix_span(seg_index))
@@ -134,14 +137,15 @@ impl<'a> NameResolver<'a> {
             let def = match search_mod.get_by_ident(&seg) {
                 Some(def) => def,
                 None => {
+                    let prefix = path.prefix_str(seg_index);
                     MessageBuilder::error()
                         .span(path.prefix_span(seg_index))
-                        .text(format!(
-                            "Cannot find {} in {}",
-                            seg_name,
-                            path.prefix_str(seg_index)
-                        ))
-                        .emit_single_label(self);
+                        .text(format!("Cannot find `{}` in {}", seg_name, prefix))
+                        .label(
+                            seg.span(),
+                            format!("`{}` is not defined in {}", seg_name, prefix),
+                        )
+                        .emit(self);
                     return Res::error();
                 }
             };
@@ -173,18 +177,20 @@ impl<'a> AstVisitor for NameResolver<'a> {
             ItemKind::Mod(name, items) => {
                 let module_id =
                     ModuleId::Module(self.sess.def_table.get_def_id(item.id()).unwrap());
-                self.nearest_mod = module_id;
+                self.module = module_id;
                 self.enter_scope(Scope::new_module(module_id));
-                self.visit_mod_item(name, items);
+                self.visit_mod_item(name, items, item.id());
                 self.exit_scope();
             }
-            ItemKind::Type(_, _) => {}
-            ItemKind::Decl(name, params, body) => self.visit_decl_item(name, params, body),
+            ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
+            ItemKind::Decl(name, params, body) => {
+                self.visit_decl_item(name, params, body, item.id())
+            }
         }
     }
 
     fn visit_block(&mut self, block: &Block) {
-        self.enter_scope(Scope::new_block());
+        self.enter_scope(Scope::new_module(ModuleId::Block(block.id())));
         walk_each_pr!(self, block.stmts(), visit_stmt);
         self.exit_scope();
     }
@@ -199,6 +205,7 @@ impl<'a> AstVisitor for NameResolver<'a> {
 
 impl<'a> Stage<()> for NameResolver<'a> {
     fn run(mut self) -> StageOutput<()> {
+        self.enter_scope(Scope::new_module(ModuleId::Module(ROOT_DEF_ID)));
         self.visit_ast(self.ast);
         StageOutput::new(self.sess, (), self.msg)
     }
