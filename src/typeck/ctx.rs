@@ -1,18 +1,22 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::{expr::Lit, ty::LitTy},
-    hir::expr::{Expr, ExprKind},
-    span::span::{Ident, Kw, Symbol},
+    ast::expr::Lit,
+    hir::expr::{Expr, ExprKind, Block},
+    span::span::{Ident, Kw, Symbol, WithSpan},
 };
 
-use super::ty::{Ty, TyError, TyKind, TyResult};
+use super::ty::{LitTy, Ty, TyError, TyKind, TyResult};
 
 #[derive(Clone)]
 pub enum CtxItem {
+    /// Type variable
     Var(Ident),
+    /// Under context Ψ, variable χ has type Α
     TypedTerm(Ident, Ty),
+    /// Possible solved (if type is Some) existential variable
     Existential(Ident, Option<Ty>),
+    /// Type marker, in CETC it's ‣α^
     Marker(Ident),
 }
 
@@ -168,7 +172,7 @@ impl Ctx {
             TyKind::Forall(ident, ty) => {
                 let marker_name = Ident::synthetic(Symbol::from_kw(Kw::M));
                 self.enter(marker_name, vec![CtxItem::Var(*ident)]);
-                self.ty_wf(&ty.open_forall(TyKind::Var(*ident)))?;
+                self.ty_wf(&ty.open_forall(Ty::new(TyKind::Var(*ident))))?;
                 self.leave(marker_name);
                 Ok(())
             }
@@ -176,8 +180,10 @@ impl Ctx {
         }
     }
 
+    // Synthesis //
     pub fn synth(&self, expr: &Expr) -> TyResult<(Ty, Ctx)> {
-        match expr.node() {
+        match expr.kind() {
+            ExprKind::Unit => Ok((Ty::new(TyKind::Unit), self.clone())),
             ExprKind::Lit(lit) => {
                 let lit_ty = match lit {
                     Lit::Bool(_) => LitTy::Bool,
@@ -187,8 +193,8 @@ impl Ctx {
 
                 Ok((Ty::lit(lit_ty), self.clone()))
             }
-            ExprKind::Ident(ident) => {
-                if let Some(item) = self.lookup(CtxItemName::TypedTerm(*ident)) {
+            ExprKind::Path(path) => {
+                if let Some(item) = self.lookup(CtxItemName::TypedTerm(path.target_name())) {
                     Ok((
                         match item {
                             CtxItem::TypedTerm(_, ty) => ty.clone(),
@@ -205,8 +211,12 @@ impl Ctx {
             ExprKind::Abs(param, body) => todo!(),
             ExprKind::App(lhs, arg) => todo!(),
             ExprKind::Block(stmts) => todo!(),
-            ExprKind::Let(ident, value, body) => todo!(),
+            ExprKind::Let(block) => todo!(),
             ExprKind::Ty(expr, ty) => {}
         }
+    }
+
+    fn synth_block(&self, block: Block) -> TyResult<(Ty, Ctx)> {
+        
     }
 }

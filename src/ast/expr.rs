@@ -175,6 +175,7 @@ impl Display for Block {
 }
 
 pub enum ExprKind {
+    Unit,
     Lit(Lit),
     Path(PR<Path>),
     Block(PR<Block>),
@@ -199,6 +200,7 @@ impl Display for Lit {
 impl Display for ExprKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExprKind::Unit => write!(f, "()"),
             ExprKind::Lit(lit) => write!(f, "{}", lit),
             ExprKind::Path(path) => write!(f, "{}", pr_display(path)),
             ExprKind::Block(block) => write!(f, "{}", pr_display(block)),
@@ -219,15 +221,17 @@ impl Display for ExprKind {
 impl NodeKindStr for ExprKind {
     fn kind_str(&self) -> String {
         match self {
-            ExprKind::Lit(_) => "literal".to_string(),
-            ExprKind::Block(_) => "block expression".to_string(),
-            ExprKind::Path(_) => "path".to_string(),
-            ExprKind::Abs(_, _) => "lambda".to_string(),
-            ExprKind::App(_, _) => "function call".to_string(),
-            ExprKind::Let(_) => "let expression".to_string(),
-            ExprKind::Ty(_, _) => "type ascription".to_string(),
-            ExprKind::Infix(_, _, _) => "infix expression".to_string(),
-            ExprKind::Prefix(_, _) => "prefix expression".to_string(),
+            ExprKind::Unit => "unit expression ()",
+            ExprKind::Lit(_) => "literal",
+            ExprKind::Block(_) => "block expression",
+            ExprKind::Path(_) => "path",
+            ExprKind::Abs(_, _) => "lambda",
+            ExprKind::App(_, _) => "function call",
+            ExprKind::Let(_) => "let expression",
+            ExprKind::Ty(_, _) => "type ascription",
+            ExprKind::Infix(_, _, _) => "infix expression",
+            ExprKind::Prefix(_, _) => "prefix expression",
         }
+        .to_string()
     }
 }

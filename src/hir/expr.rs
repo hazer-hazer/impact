@@ -28,19 +28,25 @@ impl WithSpan for Expr {
 
 pub struct Block {
     stmts: Vec<Stmt>,
+    expr: Option<N<Expr>>,
 }
 
 impl Block {
-    pub fn new(stmts: Vec<Stmt>) -> Self {
-        Self { stmts }
+    pub fn new(stmts: Vec<Stmt>, expr: Option<N<Expr>>) -> Self {
+        Self { stmts, expr }
     }
 
     pub fn stmts(&self) -> &[Stmt] {
         self.stmts.as_ref()
     }
+
+    pub fn expr(&self) -> Option<&N<Expr>> {
+        self.expr.as_ref()
+    }
 }
 
 pub enum ExprKind {
+    Unit,
     Lit(Lit),
     Path(Path),
     Block(Block),

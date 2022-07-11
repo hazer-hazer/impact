@@ -4,7 +4,7 @@ use super::{
     expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
     item::{Item, ItemKind},
     stmt::{Stmt, StmtKind},
-    ty::{LitTy, Ty, TyKind},
+    ty::{Ty, TyKind},
     ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
 };
 
@@ -76,12 +76,12 @@ pub trait AstVisitor {
         }
     }
 
-    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>, id: NodeId) {
+    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>, _: NodeId) {
         walk_pr!(self, name, visit_ident);
         walk_pr!(self, ty, visit_ty);
     }
 
-    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>, id: NodeId) {
+    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>, _: NodeId) {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, items, visit_item);
     }
@@ -91,7 +91,7 @@ pub trait AstVisitor {
         name: &PR<Ident>,
         params: &Vec<PR<Ident>>,
         body: &PR<N<Expr>>,
-        id: NodeId,
+        _: NodeId,
     ) {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, params, visit_ident);
@@ -101,6 +101,7 @@ pub trait AstVisitor {
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr) {
         match expr.kind() {
+            ExprKind::Unit => self.visit_unit_expr(),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
@@ -112,6 +113,8 @@ pub trait AstVisitor {
             ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
         }
     }
+
+    fn visit_unit_expr(&mut self) {}
 
     fn visit_lit_expr(&mut self, _: &Lit) {}
 
@@ -154,7 +157,6 @@ pub trait AstVisitor {
     // Types //
     fn visit_ty(&mut self, ty: &Ty) {
         match ty.kind() {
-            TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
             TyKind::Unit => self.visit_unit_ty(),
             TyKind::Path(path) => self.visit_path_ty(path),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
@@ -163,8 +165,6 @@ pub trait AstVisitor {
     }
 
     fn visit_unit_ty(&mut self) {}
-
-    fn visit_lit_ty(&mut self, _: &LitTy) {}
 
     fn visit_path_ty(&mut self, path: &PR<Path>) {
         walk_pr!(self, path, visit_path)

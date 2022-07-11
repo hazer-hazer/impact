@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    cli::{color::Colorize, verbose},
+    cli::{color::Colorize},
     span::span::{Ident, Span, WithSpan},
 };
 

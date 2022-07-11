@@ -3,7 +3,7 @@ use crate::{
         expr::{Block, Expr, InfixOp, Lit, PrefixOp},
         item::Item,
         stmt::{Stmt, StmtKind},
-        ty::{LitTy, Ty},
+        ty::Ty,
         visitor::walk_pr,
         visitor::AstVisitor,
         ErrorNode, NodeId, Path, AST, N, PR,
@@ -88,6 +88,10 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     // Expressions //
+    fn visit_unit_expr(&mut self) {
+        self.str("()");
+    }
+
     fn visit_lit_expr(&mut self, lit: &Lit) {
         self.string(lit);
     }
@@ -130,10 +134,6 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     // Types //
     fn visit_unit_ty(&mut self) {
         self.str("()");
-    }
-
-    fn visit_lit_ty(&mut self, lit_ty: &LitTy) {
-        self.string(lit_ty);
     }
 
     fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) {

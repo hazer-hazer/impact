@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{InfixOp, Lit, PrefixOp},
-        ty::LitTy,
+        visitor::walk_pr,
     },
     span::span::Ident,
 };
@@ -71,6 +71,7 @@ pub trait HirVisitor {
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr) {
         match expr.kind() {
+            ExprKind::Unit => self.visit_unit_expr(),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
@@ -83,7 +84,9 @@ pub trait HirVisitor {
         }
     }
 
-    fn visit_lit_expr(&mut self, lit: &Lit) {}
+    fn visit_unit_expr(&mut self) {}
+
+    fn visit_lit_expr(&mut self, _: &Lit) {}
 
     fn visit_path_expr(&mut self, path: &Path) {
         self.visit_path(path)
@@ -93,12 +96,12 @@ pub trait HirVisitor {
         self.visit_block(block)
     }
 
-    fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) {
+    fn visit_infix_expr(&mut self, lhs: &N<Expr>, _: &InfixOp, rhs: &N<Expr>) {
         self.visit_expr(lhs);
         self.visit_expr(rhs);
     }
 
-    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) {
+    fn visit_prefix_expr(&mut self, _: &PrefixOp, rhs: &N<Expr>) {
         self.visit_expr(rhs);
     }
 
@@ -125,14 +128,12 @@ pub trait HirVisitor {
     fn visit_ty(&mut self, ty: &Ty) {
         match ty.kind() {
             TyKind::Unit => self.visit_unit_ty(),
-            TyKind::Lit(lit_ty) => self.visit_lit_ty(lit_ty),
             TyKind::Path(path) => self.visit_path_ty(path),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
         }
     }
-    fn visit_unit_ty(&mut self) {}
 
-    fn visit_lit_ty(&mut self, lit_ty: &LitTy) {}
+    fn visit_unit_ty(&mut self) {}
 
     fn visit_path_ty(&mut self, path: &Path) {
         self.visit_path(path)
@@ -144,11 +145,13 @@ pub trait HirVisitor {
     }
 
     // Fragments //
-    fn visit_ident(&mut self, name: &Ident) {}
+    fn visit_ident(&mut self, _: &Ident) {}
 
-    fn visit_path(&mut self, path: &Path) {}
+    fn visit_path(&mut self, _: &Path) {}
 
     fn visit_block(&mut self, block: &Block) {
         walk_each!(self, block.stmts(), visit_stmt);
+
+        block.expr().map(|expr| self.visit_expr(expr));
     }
 }

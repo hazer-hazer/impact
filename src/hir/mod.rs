@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::span::span::Ident;
+use crate::{
+    resolve::res::Res,
+    span::span::{Ident, Span, WithSpan},
+};
 
 use self::item::Item;
 
@@ -30,16 +33,31 @@ impl HIR {
 }
 
 pub struct Path {
+    res: Res,
     segments: Vec<Ident>,
 }
 
 impl Path {
-    pub fn new(segments: Vec<Ident>) -> Self {
-        Self { segments }
+    pub fn new(res: Res, segments: Vec<Ident>) -> Self {
+        Self { res, segments }
     }
 
     pub fn segments(&self) -> &[Ident] {
         self.segments.as_ref()
+    }
+
+    pub fn target_name(&self) -> Ident {
+        self.segments().last().copied().unwrap()
+    }
+}
+
+impl WithSpan for Path {
+    fn span(&self) -> Span {
+        self.segments()
+            .iter()
+            .map(|seg| seg.span())
+            .reduce(|prefix, seg| prefix.to(seg))
+            .unwrap()
     }
 }
 

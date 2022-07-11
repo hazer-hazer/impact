@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{InfixOp, Lit, PrefixOp},
-        ty::LitTy,
+        visitor::walk_pr,
     },
     hir::{
         expr::{Block, Expr},
@@ -80,6 +80,10 @@ impl<'a> HirVisitor for AstLikePP<'a> {
     }
 
     // Expressions //
+    fn visit_unit_expr(&mut self) {
+        self.str("()");
+    }
+
     fn visit_lit_expr(&mut self, lit: &Lit) {
         self.string(lit);
     }
@@ -124,10 +128,6 @@ impl<'a> HirVisitor for AstLikePP<'a> {
         self.str("()");
     }
 
-    fn visit_lit_ty(&mut self, lit_ty: &LitTy) {
-        self.string(lit_ty);
-    }
-
     fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) {
         self.visit_ty(param_ty);
         self.punct(Punct::Arrow);
@@ -146,5 +146,7 @@ impl<'a> HirVisitor for AstLikePP<'a> {
     fn visit_block(&mut self, block: &Block) {
         self.nl();
         walk_block!(self, block.stmts(), visit_stmt);
+        self.nl();
+        block.expr().map(|expr| self.visit_expr(expr));
     }
 }

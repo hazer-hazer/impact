@@ -7,27 +7,6 @@ use crate::{
 
 use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, PR};
 
-#[derive(Clone, Copy)]
-pub enum LitTy {
-    Bool,
-    Int,
-    String,
-}
-
-impl Display for LitTy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                LitTy::Bool => "bool",
-                LitTy::Int => "int",
-                LitTy::String => "string",
-            }
-        )
-    }
-}
-
 pub struct Ty {
     id: NodeId,
     kind: TyKind,
@@ -70,7 +49,6 @@ impl NodeKindStr for Ty {
 
 pub enum TyKind {
     Unit,
-    Lit(LitTy), // TODO: REMOVE
     Path(PR<Path>),
     Func(PR<N<Ty>>, PR<N<Ty>>),
     Paren(PR<N<Ty>>),
@@ -80,7 +58,6 @@ impl Display for TyKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
             TyKind::Unit => write!(f, "()"),
-            TyKind::Lit(lit_ty) => write!(f, "{}", lit_ty),
             TyKind::Path(path) => write!(f, "{}", pr_display(path)),
             TyKind::Func(param_ty, return_ty) => {
                 write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
@@ -94,7 +71,6 @@ impl NodeKindStr for TyKind {
     fn kind_str(&self) -> String {
         match &self {
             TyKind::Unit => "unit type".to_string(),
-            TyKind::Lit(_) => "literal type".to_string(),
             TyKind::Path(path) => format!("type {}", pr_display(path)),
             TyKind::Func(_, _) => "function type".to_string(),
 

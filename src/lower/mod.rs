@@ -3,11 +3,12 @@ use crate::{
         expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
         item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
-        ty::{LitTy, Ty, TyKind},
-        Path, AST, N, PR,
+        ty::{Ty, TyKind},
+        Path, WithNodeId, AST, N, PR,
     },
     hir::{self, HIR},
-    message::message::MessageStorage,
+    message::message::{Message, MessageBuilder, MessageStorage},
+    resolve::res::NamePath,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
 };
@@ -124,6 +125,7 @@ impl<'a> Lower<'a> {
     // Expressions //
     fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
         let kind = match expr.kind() {
+            ExprKind::Unit => hir::expr::ExprKind::Unit,
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
             ExprKind::Path(path) => self.lower_path_expr(path),
             ExprKind::Block(block) => self.lower_block_expr(block),
@@ -196,7 +198,6 @@ impl<'a> Lower<'a> {
     fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
         let kind = match ty.kind() {
             TyKind::Unit => self.lower_unit_ty(),
-            TyKind::Lit(lit_ty) => self.lower_lit_ty(lit_ty),
             TyKind::Path(path) => self.lower_path_ty(path),
             TyKind::Func(param_ty, return_ty) => self.lower_func_ty(param_ty, return_ty),
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
@@ -207,10 +208,6 @@ impl<'a> Lower<'a> {
 
     fn lower_unit_ty(&mut self) -> hir::ty::TyKind {
         hir::ty::TyKind::Unit
-    }
-
-    fn lower_lit_ty(&mut self, lit_ty: &LitTy) -> hir::ty::TyKind {
-        hir::ty::TyKind::Lit(*lit_ty)
     }
 
     fn lower_path_ty(&mut self, path: &PR<Path>) -> hir::ty::TyKind {
@@ -230,11 +227,23 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_path(&mut self, path: &Path) -> hir::Path {
-        hir::Path::new(path.segments().clone())
+        hir::Path::new(
+            self.sess.res.get(NamePath::new(path.id())).unwrap(),
+            path.segments().clone(),
+        )
     }
 
     fn lower_block(&mut self, block: &Block) -> hir::expr::Block {
-        hir::expr::Block::new(lower_each_pr!(self, block.stmts(), lower_stmt))
+        assert!(!block.stmts().is_empty());
+
+        let stmts = lower_each_pr!(self, block.stmts()[0..block.stmts().len() - 1], lower_stmt);
+
+        let expr = match block.stmts().last().unwrap().as_ref().unwrap().kind() {
+            StmtKind::Expr(expr) => Some(lower_pr_boxed!(self, expr, lower_expr)),
+            StmtKind::Item(_) => None,
+        };
+
+        hir::expr::Block::new(stmts, expr)
     }
 }
 

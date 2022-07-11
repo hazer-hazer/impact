@@ -9,7 +9,6 @@ use crate::{
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    resolve::def::Namespace,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Span, Symbol},
 };

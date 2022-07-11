@@ -267,6 +267,20 @@ pub enum IdentKind {
 }
 
 impl Ident {
+    pub fn new(span: Span, sym: Symbol) -> Self {
+        Self { span, sym }
+    }
+
+    pub fn from_token(tok: Token) -> Self {
+        match tok.kind {
+            TokenKind::Ident(sym) => Ident {
+                span: tok.span,
+                sym,
+            },
+            _ => unreachable!(),
+        }
+    }
+
     pub fn synthetic(sym: Symbol) -> Self {
         Self {
             span: Span::new_error(),
@@ -296,22 +310,6 @@ impl Ident {
 
     pub fn is_ty(&self) -> bool {
         self.kind() == IdentKind::Ty
-    }
-}
-
-impl Ident {
-    pub fn new(span: Span, sym: Symbol) -> Self {
-        Self { span, sym }
-    }
-
-    pub fn from_token(tok: Token) -> Self {
-        match tok.kind {
-            TokenKind::Ident(sym) => Ident {
-                span: tok.span,
-                sym,
-            },
-            _ => unreachable!(),
-        }
     }
 }
 

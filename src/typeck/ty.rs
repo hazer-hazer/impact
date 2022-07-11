@@ -1,11 +1,33 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::{span::span::Ident, ast::ty::LitTy};
+use crate::span::span::Ident;
 
 use super::ctx::{Ctx, CtxItem, CtxItemName};
 
+#[derive(Clone, Copy)]
+pub enum LitTy {
+    Bool,
+    Int,
+    String,
+}
+
+impl Display for LitTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LitTy::Bool => "bool",
+                LitTy::Int => "int",
+                LitTy::String => "string",
+            }
+        )
+    }
+}
+
 #[derive(Clone)]
 pub enum TyKind {
+    Unit,
     Lit(LitTy),
     Var(Ident),
     Existential(Ident),
@@ -38,6 +60,8 @@ pub type TyResult<T> = Result<T, TyError>;
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind() {
+            TyKind::Unit => write!(f, "()"),
+            TyKind::Lit(lit) => write!(f, "{}", lit),
             TyKind::Var(ident) => write!(f, "{}", ident),
             TyKind::Existential(ident) => write!(f, "{}^", ident),
             TyKind::Func(param_ty, return_ty) => write!(f, "{} -> {}", param_ty, return_ty),
@@ -49,7 +73,7 @@ impl Display for Ty {
 impl Ty {
     pub fn is_mono(&self) -> bool {
         match self.kind() {
-            TyKind::Var(_) | TyKind::Existential(_) => true,
+            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) | TyKind::Existential(_) => true,
             TyKind::Func(param_ty, return_ty) => param_ty.is_mono() && return_ty.is_mono(),
             TyKind::Forall(_, _) => false,
         }
@@ -58,6 +82,7 @@ impl Ty {
     /// Substitute
     pub fn substitute(&self, name: Ident, with: Ty) -> Ty {
         match self.kind() {
+            TyKind::Unit | TyKind::Lit(_) => self.clone(),
             TyKind::Var(ident) => {
                 if name == *ident {
                     with.clone()
@@ -88,7 +113,7 @@ impl Ty {
 
     pub fn substitute_existentials(&self, existentials: &HashMap<Ident, Ty>) -> Ty {
         match self.kind() {
-            TyKind::Var(_) => self.clone(),
+            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => self.clone(),
             TyKind::Existential(ident) => match existentials.get(ident) {
                 Some(ty) => ty.clone(),
                 None => self.clone(),
@@ -106,7 +131,7 @@ impl Ty {
 
     pub fn apply_ctx(&self, ctx: &Ctx) -> Ty {
         match self.kind() {
-            TyKind::Var(_) => self.clone(),
+            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => self.clone(),
             TyKind::Existential(ident) => match ctx.lookup(CtxItemName::Existential(*ident)) {
                 Some(item) => match item {
                     CtxItem::TypedTerm(_, ty) => ty.clone(),

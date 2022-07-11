@@ -7,6 +7,7 @@ use super::def::DefId;
 // #[derive(Debug, Clone, Copy)]
 // pub struct LocalId(NodeId);
 
+#[derive(Clone, Copy)]
 pub enum ResKind {
     Def(DefId),    // Top-level definition, e.g. imported function
     Local(NodeId), // Local variable
@@ -17,6 +18,7 @@ pub enum ResKind {
  * The unit of name resolution.
  * Created for each name in source code after items are defined.
  */
+#[derive(Clone, Copy)]
 pub struct Res {
     kind: ResKind,
 }
@@ -66,8 +68,8 @@ impl Resolutions {
         assert!(self.resolutions.insert(path, res).is_none());
     }
 
-    pub fn get(&self, path: NamePath) -> Option<&Res> {
-        self.resolutions.get(&path)
+    pub fn get(&self, path: NamePath) -> Option<Res> {
+        self.resolutions.get(&path).copied()
     }
 
     pub fn get_resolutions(&self) -> &HashMap<NamePath, Res> {
