@@ -1,7 +1,9 @@
 import { readFileSync } from "fs"
 import { generate, GrammarError, Parser, parser } from "peggy"
 import { Context, createContext, runInContext } from "vm"
+import { AST, PP } from "./ast"
 import { JSGen } from "./js-gen"
+// import { JSGen } from "./js-gen"
 import { ParserCtx } from "./parser-ctx"
 import { prelude } from "./prelude"
 
@@ -71,16 +73,16 @@ export class Compiler {
                 console.log(`Source:\n\`${code}\``);
             }
 
-            const transpiled = this.parser.parse(code, {
-                jsGen: this.jsGen,
+            const ast: AST = this.parser.parse(code, {
                 parserCtx: this.parserCtx
             });
 
-            if (this.options.printJS) {
-                console.log(`JS code: \`${transpiled}\``);
-            }
+            const pp = new PP()
 
-            return this.exec(transpiled);
+            console.log(pp.pp(ast));
+
+            const js = this.jsGen.
+            
         } catch (e: any) {
             if (e instanceof parser.SyntaxError || e instanceof GrammarError) {
                 throw new Error(e.format([

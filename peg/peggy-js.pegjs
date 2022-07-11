@@ -1,20 +1,37 @@
 {
-    const gen = options.jsGen
     const ctx = options.parserCtx.reset()
 }
 
 program =
     NL? stmts:(@stmt _)* {
-        return stmts.join('\n')
+        return {
+            stmts,
+        }
     }
 
-stmt 'statement' = SAMEINDENT node:(item / expr / semi {return ''}) NL? {
+stmt 'statement' = SAMEINDENT node:(
+    item:item {return {tag: 'Item', item}}
+    / expr:expr {return {tag: 'Expr', expr}}
+    / semi {return null}
+) NL? {
     return node;
 }
 
 item 'item' =
-	name:var_id params:(__ @var_id)* _ '=' _ &{return gen.indent_pred();} body:body &{return gen.dedent_pred()} {
-        return gen.letItem(name, params, body)
+    'type' _ name:ty_id _ '=' _ ty:ty {
+        return {
+            tag: 'Ty',
+            name,
+            ty,
+        }
+    }
+	/ name:var_id params:(__ @var_id)* _ '=' _ body:body {
+        return {
+            tag: 'Term',
+            name,
+            params,
+            body,
+        }
     }
 
 expr 'expression' =
@@ -26,43 +43,122 @@ ascription 'type ascription' =
 
 add =
 	lhs:mult _ op:[+-] _ rhs:add {
-        return gen.infix(lhs, op, rhs)
+        return {
+            tag: 'Infix',
+            lhs,
+            op,
+            rhs,
+        }
     }
 	/ mult
 
 mult =
 	lhs:call _ op:[\*\/] _ rhs:mult {
-        return gen.infix(lhs, op, rhs)
+        return {
+            tag: 'Infix',
+            lhs,
+            op,
+            rhs,
+        }
     }
 	/ call
 
 call 'application' =
-	lhs:primary __ arg:call { return gen.call(lhs, arg) }
+	lhs:primary __ arg:call {
+        return {
+            tag: 'App',
+            lhs,
+            arg,
+        }
+    }
 	/ primary
 
 primary 'primary expression' =
-	int:$([0-9]+) {return int}
-    / '\'' str:([^\n\r\'\\] / '\\' .)* '\'' {return `'${str.join('')}'`}
+	int:$([0-9]+) {
+        return {
+            tag: 'Lit',
+            kind: {
+                tag: 'Int',
+                val: parseInt(int),
+            },
+        }
+    }
+    / val:$('true' / 'false') {
+        return {
+            tag: 'Lit',
+            kind: {
+                tag: 'Bool',
+                val: val === 'true',
+            },
+        }
+    }
+    / '\'' str:([^\n\r\'\\] / '\\' .)* '\'' {
+        return {
+            tag: 'Lit',
+            kind: {
+                tag: 'String',
+                val: str,
+            }
+        }
+    }
     / name:var_id {
-    	return name
+    	return {
+            tag: 'Var',
+            name,
+        }
     }
     / 'let' body:body {
-        return body
+        return {
+            tag: 'Let',
+            body,
+        }
     }
 
-body = (@expr / NL @block)
+body =
+    expr
+    / NL block:block {
+        return {
+            tag: 'Block',
+            block,
+        }
+    }
 
 block =
-    INDENT &{return gen.indent_pred();} first:stmt stmts:(semi @stmt)* &{return gen.dedent_pred()} DEDENT {
-        return gen.block([first, ...stmts])
+    INDENT first:stmt stmts:(semi @stmt)* DEDENT {
+        stmts = [first, ...stmts]
+        if (stmts[stmts.length - 1].tag !== 'Expr') {
+            throw new Error('Last element in block must be an expression')
+        }
+        const expr = stmts.pop()
+        return {
+            stmts,
+            expr: expr.expr,
+        }
     }
 
 ty 'type' =
-    simple_ty (_ '->' _ ty)*
+    param:simple_ty ret:(_ '->' _ @ty)* {
+        if (!ret.length) {
+            return param
+        }
+
+        return [param, ...ret].reverse().reduce((ret, ty) => ({
+            tag: 'Func',
+            param: ret,
+            ret: ty,
+        }))
+    }
 
 simple_ty =
-	ty_id
-    / '(' _ ty _ ')'
+	name:ty_id {
+        return {
+            tag: 'Var',
+            name,
+        }
+    }
+    / '(' _ ty:ty _ ')' {
+        return ty
+    }
 
 var_id 'variable name' = $([a-z][A-z0-9]*)
 ty_id 'type name' = $([A-Z][A-z0-9]*)

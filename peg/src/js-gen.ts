@@ -1,4 +1,5 @@
 import { assert } from "console"
+import { AST, Expr, Item, Stmt } from "./ast"
 
 export type Options = {
     indentSize: number
@@ -17,56 +18,92 @@ export class JSGen {
         this.options = { ...defaultOptions, ...options }
     }
 
-    indent() {
+    private reset(): this {
+        this.indentLevel = 0
+        return this
+    }
+
+    private indent(): string {
         this.indentLevel++
         return this.indent_str()
     }
 
-    dedent() {
+    private dedent(): string {
         this.indentLevel--
         assert(this.indentLevel >= 0)
         return this.indent_str()
     }
 
-    indent_str() {
+    private indent_str(): string {
         return ' '.repeat(this.options.indentSize).repeat(this.indentLevel)
     }
 
-    indent_pred() {
-        this.indent()
-        return true
+    public gen(ast: AST): string {
+        return ast.stmts.map(this.genStmt).join('\n')
     }
 
-    dedent_pred() {
-        this.dedent()
-        return true
-    }
-
-    letItem(name: string, params: string[], body: string): string {
-        if (params.length) {
-            return this.letFunc(name, params, body)
-        } else {
-            return this.letVar(name, body)
+    private genStmt(stmt: Stmt): string {
+        switch (stmt.tag) {
+            case 'Expr': return this.genExpr(stmt.expr)
+            case 'Item': return this.genItem(stmt.item)
         }
     }
 
-    letVar(name: string, body: string): string {
-        return `
-const ${name} = ${body};`.trim()
+    private genExpr(expr: Expr): string {
+        switch (expr.tag) {
+            case 'Abs': {
+                return `${expr.param} => ${this.genExpr(expr.body)}`
+            }
+            case 'Var': return expr.name
+            case 'Lit': {
+                switch (expr.kind.tag) {
+                    case 'Unit': return '()'
+                    case 'Bool': return expr.kind.val.toString()
+                    case 'Int': return expr.kind.val.toString()
+                    case 'String': return expr.kind.val
+                }
+            }
+            case 'Infix': return `${this.genExpr(expr.lhs)} ${expr.op} ${this.genExpr(expr.rhs)}`
+            case 'Block': {
+                this.indent();
+
+                let s = `${expr
+                    .block
+                    .stmts
+                    .map(stmt => `${this.indent_str()}${this.genStmt(stmt)}`)
+                    .join('\n')
+                    }`
+
+                let e = `${this.indent_str()}${this.genExpr(expr.block.expr)}`
+
+                this.dedent();
+
+                return `${expr.block.stmts.length ? '\n' : ''}${s}\n${e}`
+            }
+            case 'App': return `${this.genExpr(expr.lhs)} ${this.genExpr(expr.arg)}`
+            case 'Let': return `let ${this.genExpr(expr.body)}`
+            case 'Anno': return ''
+        }
     }
 
-    letFunc(name: string, params: string[], body: string): string {
-        return `
-function ${name}(${params.join(', ')}) {
-${this.indent()}return ${body}
-${this.dedent()}}`.trim()
+    private genItem(item: Item): string {
+        switch (item.tag) {
+            case 'Term': {
+                if (item.params.length) {
+                    return `function ${item.name}(${item.params.join(', ')}) {\n${this.indent()}return ${item.body}\n${this.dedent()}}`.trim()
+                } else {
+                    return `const ${item.name} = ${this.genExpr(item.body)};`.trim()
+                }
+            }
+            case 'Ty': return `type ${item.name} = ${item.ty}`
+        }
     }
 
-    infix(lhs: string, op: string, rhs: string): string {
+    private infix(lhs: string, op: string, rhs: string): string {
         return `${lhs} ${op} ${rhs}`
     }
 
-    block(stmts: string[]): string {
+    private block(stmts: string[]): string {
         let return_expr = stmts.pop();
 
         this.indent();
