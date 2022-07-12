@@ -6,9 +6,9 @@ export type Ty = {
         tag: 'Int'
     } | {
         tag: 'String'
+    } | {
+        tag: 'Unit'
     }
-} | {
-    tag: 'Unit'
 } | {
     tag: 'Var'
     name: string
@@ -166,9 +166,9 @@ export class PP {
                     case 'Bool': return 'Bool'
                     case 'Int': return 'Int'
                     case 'String': return 'String'
+                    case 'Unit': return '()'
                 }
             }
-            case 'Unit': return '()'
             case 'Func': return `${ty.param} -> ${ty.ret}`
             case 'Var': return ty.name
         }

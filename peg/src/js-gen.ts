@@ -18,7 +18,7 @@ export class JSGen {
         this.options = { ...defaultOptions, ...options }
     }
 
-    private reset(): this {
+    public reset(): this {
         this.indentLevel = 0
         return this
     }
@@ -39,7 +39,7 @@ export class JSGen {
     }
 
     public gen(ast: AST): string {
-        return ast.stmts.map(this.genStmt).join('\n')
+        return ast.stmts.map(stmt => this.genStmt(stmt)).join('\n')
     }
 
     private genStmt(stmt: Stmt): string {
@@ -65,22 +65,16 @@ export class JSGen {
             }
             case 'Infix': return `${this.genExpr(expr.lhs)} ${expr.op} ${this.genExpr(expr.rhs)}`
             case 'Block': {
-                this.indent();
+                const return_expr = expr.block.stmts.pop();
 
-                let s = `${expr
-                    .block
-                    .stmts
-                    .map(stmt => `${this.indent_str()}${this.genStmt(stmt)}`)
-                    .join('\n')
-                    }`
-
-                let e = `${this.indent_str()}${this.genExpr(expr.block.expr)}`
-
-                this.dedent();
-
-                return `${expr.block.stmts.length ? '\n' : ''}${s}\n${e}`
+                return `
+(function() {
+${expr.block.stmts.map(stmt => `${this.indent_str()}${stmt}`).join(';\n')};
+${return_expr ? `\n${this.indent_str()}return ${return_expr}` : ''}
+${this.dedent()}}())
+`.trim()
             }
-            case 'App': return `${this.genExpr(expr.lhs)} ${this.genExpr(expr.arg)}`
+            case 'App': return `${this.genExpr(expr.lhs)}(${this.genExpr(expr.arg)})`
             case 'Let': return `let ${this.genExpr(expr.body)}`
             case 'Anno': return ''
         }
@@ -97,25 +91,5 @@ export class JSGen {
             }
             case 'Ty': return `type ${item.name} = ${item.ty}`
         }
-    }
-
-    private infix(lhs: string, op: string, rhs: string): string {
-        return `${lhs} ${op} ${rhs}`
-    }
-
-    private block(stmts: string[]): string {
-        let return_expr = stmts.pop();
-
-        this.indent();
-        return `
-(function() {
-${stmts.map(stmt => `${this.indent_str()}${stmt}`).join(';\n')};
-${return_expr ? `\n${this.indent_str()}return ${return_expr}` : ''}
-${this.dedent()}}())
-`.trim()
-    }
-
-    call(lhs: string, arg: string): string {
-        return `${lhs}(${arg})`
     }
 }

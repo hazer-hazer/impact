@@ -3,7 +3,6 @@ import { generate, GrammarError, Parser, parser } from "peggy"
 import { Context, createContext, runInContext } from "vm"
 import { AST, PP } from "./ast"
 import { JSGen } from "./js-gen"
-// import { JSGen } from "./js-gen"
 import { ParserCtx } from "./parser-ctx"
 import { prelude } from "./prelude"
 
@@ -81,8 +80,13 @@ export class Compiler {
 
             console.log(pp.pp(ast));
 
-            const js = this.jsGen.
-            
+            const js = this.jsGen.gen(ast);
+
+            if (this.options.printJS) {
+                console.log(`JS Code:\n${js}`);
+            }
+
+            return this.exec(js);
         } catch (e: any) {
             if (e instanceof parser.SyntaxError || e instanceof GrammarError) {
                 throw new Error(e.format([
