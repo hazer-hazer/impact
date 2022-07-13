@@ -23,10 +23,14 @@
   },
   "homepage": "https://github.com/hazer-hazer/impact#readme",
   "dependencies": {
-    "peggy": "^2.0.1"
+    "peggy": "^2.0.1",
+    "ts-adt": "^2.1.2"
   },
   "devDependencies": {
     "@types/node": "^18.0.3",
+    "@typescript-eslint/eslint-plugin": "^5.30.6",
+    "@typescript-eslint/parser": "^5.30.6",
+    "eslint": "^8.19.0",
     "nodemon": "^2.0.19"
   }
 }
