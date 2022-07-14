@@ -107,7 +107,7 @@ primary 'primary expression' =
             name,
         }
     }
-    / 'let' body:body {
+    / 'let' body:(NL @block) {
         return {
             tag: 'Let',
             body,

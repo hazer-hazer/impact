@@ -1,3 +1,5 @@
+import { Expr, Item, Ty as AstTy } from './ast'
+
 type Ty = {
     tag: 'Lit'
     kind: {
@@ -25,11 +27,35 @@ type Ty = {
     ret: Ty
 }
 
+function conv(astTy: AstTy): Ty {
+    switch (astTy.tag) {
+    case 'Lit': {
+        return {
+            tag: 'Lit',
+            kind: astTy.kind,
+        }
+    }
+    case 'Func': {
+        return {
+            tag: 'Func',
+            param: conv(astTy.param),
+            ret: conv(astTy.ret),
+        }
+    }
+    case 'Var': {
+        return {
+            tag: 'Var',
+            name: astTy.name,
+        }
+    }
+    }
+}
+
 function isMonotype(a: Ty): boolean {
     switch (a.tag) {
-        case 'Func': return isMonotype(a.param) && isMonotype(a.ret)
-        case 'Forall': return false
-        default: return true
+    case 'Func': return isMonotype(a.param) && isMonotype(a.ret)
+    case 'Forall': return false
+    default: return true
     }
 }
 
@@ -47,13 +73,13 @@ function substitute(a: Ty, name: string, b: Ty): Ty {
             return {
                 tag: 'Forall',
                 alpha: a.alpha,
-                ty: b
+                ty: b,
             }
         }
         return {
             tag: 'Forall',
             alpha: a.alpha,
-            ty: substitute(a.ty, name, b)
+            ty: substitute(a.ty, name, b),
         }
     }
     case 'Existential': {
@@ -65,7 +91,7 @@ function substitute(a: Ty, name: string, b: Ty): Ty {
     case 'Func': return {
         tag: 'Func',
         param: substitute(a.param, name, b),
-        ret: substitute(a.ret, name, b)
+        ret: substitute(a.ret, name, b),
     }
     }
 }
@@ -97,7 +123,7 @@ function toString(ty: Ty): string {
         break
     }
     case 'Var': return ty.name
-    case 'Existential': return `${ty.name}${ty.solution ? ` = ${toString(ty.solution)}` : ''}`
+    case 'Existential': return `^${ty.name}`
     case 'Forall': return `forall ${ty.alpha}. ${toString(ty.ty)}`
     case 'Func': return `${toString(ty.param)} -> ${toString(ty.ret)}`
     }
@@ -123,6 +149,10 @@ type CtxEl = {
 
 class Ctx {
     constructor(private elements: CtxEl[] = []) { }
+
+    private clone(): Ctx {
+        return this.clone()
+    }
 
     private add(el: CtxEl): Ctx {
         return new Ctx([...this.elements, el])
@@ -178,17 +208,22 @@ class Ctx {
         case 'Var':
         case 'Lit': return ty
         case 'Existential': {
-            if (this.elements.some(el => el.tag === 'Existential' && el.name === ty.name && el.solution))
+            for (const el of this.elements) {
+                if (el.tag === 'Existential' && el.name === ty.name && el.solution !== null) {
+                    return this.apply(el.solution)
+                }
+            }
+            return ty
         }
         case 'Forall': return {
             tag: 'Forall',
             alpha: ty.alpha,
-            ty: this.apply(ty.ty)
+            ty: this.apply(ty.ty),
         }
         case 'Func': return {
             tag: 'Func',
             param: this.apply(ty.param),
-            ret: this.apply(ty.ret)
+            ret: this.apply(ty.ret),
         }
         }
     }
@@ -202,18 +237,18 @@ class Ctx {
         // Idk what's wrong with typescript inference on switch-case on tuples,
         //  so I have to use if-else
         if (a.tag === 'Lit' && b.tag === 'Lit') {
-            return {...this}
+            return this.clone()
         }
 
         if (a.tag === 'Var' && b.tag === 'Var') {
             if (a.name === b.name) {
-                return {...this}
+                return this.clone()
             }
         }
 
         if (a.tag === 'Existential' && b.tag === 'Existential') {
             if (a.name === b.name) {
-                return {...this}
+                return this.clone()
             }
         }
 
@@ -226,12 +261,11 @@ class Ctx {
             const name = '>a'
             const gamma = this
                 .add({tag: 'Marker', name})
-                .add({tag: 'Existential', name})
-            
+                .add({tag: 'Existential', name, solution: null})
+
             return gamma.subtype(substitute(a.ty, a.alpha, {
                 tag: 'Existential',
                 name,
-                solution: null,
             }), b).drop({
                 tag:'Marker',
                 name,
@@ -241,39 +275,318 @@ class Ctx {
         if (b.tag === 'Forall') {
             return this.add({
                 tag: 'Var',
-                name: b.alpha
-            }).subtype(a, b.ty).drop({
-                tag: 'Var',
                 name: b.alpha,
-            })
+            }).subtype(a, b.ty)
+                .drop({
+                    tag: 'Var',
+                    name: b.alpha,
+                })
         }
 
         if (a.tag === 'Existential') {
             if (!occursIn(a.name, b)) {
+                this.instantiateL(a.name, b)
             }
         }
 
         if (b.tag === 'Existential') {
-
+            if (!occursIn(b.name, a)) {
+                this.instantiateR(a, b.name)
+            }
         }
+
+        throw new Error()
     }
 
+    // Figure 10.
     private instantiateL(name: string, b: Ty): Ctx {
         if (isMonotype(b)) {
             return this.replace({
                 tag: 'Existential',
                 name,
+                solution: null,
             }, [{
                 tag: 'Existential',
                 name,
+                solution: b,
             }])
         }
 
         switch (b.tag) {
-            case 'Func': {
-                const alpha1 = '>a1'
-                const alpha2 = '>a2'
-                const gamma = 
+        case 'Func': {
+            const alpha1 = '>a1'
+            const alpha2 = '>a2'
+            const gamma = this.replace({
+                tag: 'Existential',
+                name,
+                solution: null,
+            }, [{
+                tag: 'Existential',
+                name: alpha2,
+                solution: null,
+            }, {
+                tag: 'Existential',
+                name: alpha1,
+                solution: null,
+            }, {
+                tag: 'Existential',
+                name,
+                solution: {
+                    tag: 'Func',
+                    param: {
+                        tag: 'Existential',
+                        name: alpha1,
+                    },
+                    ret: {
+                        tag: 'Existential',
+                        name: alpha2,
+                    },
+                },
+            }])
+
+            const theta = gamma.instantiateR(b.param, alpha1)
+            const delta = theta.instantiateL(alpha2, theta.apply(b.ret))
+            return delta
+        }
+        case 'Forall': {
+            return this
+                .add({
+                    tag: 'Var',
+                    name: b.alpha,
+                })
+                .instantiateL(name, b.ty)
+                .drop({
+                    tag: 'Var',
+                    name: b.alpha,
+                })
+        }
+        case 'Existential': {
+            return this.replace({
+                tag: 'Existential',
+                name: b.name,
+                solution: null,
+            }, [{
+                tag: 'Existential',
+                name: b.name,
+                solution: {
+                    tag: 'Existential',
+                    name,
+                },
+            }])
+        }
+        }
+
+        throw new Error()
+    }
+
+    // Figure 10.
+    private instantiateR(a: Ty, name: string): Ctx {
+        if (isMonotype(a)) {
+            return this.replace({
+                tag: 'Existential',
+                name,
+                solution: null,
+            }, [{
+                tag: 'Existential',
+                name,
+                solution: a,
+            }])
+        }
+
+        switch (a.tag) {
+        case 'Func': {
+            const alpha1 = '>a1'
+            const alpha2 = '>a2'
+
+            const gamma = this.replace({
+                tag: 'Existential',
+                name,
+                solution: null,
+            }, [{
+                tag: 'Existential',
+                name: alpha2,
+                solution: null,
+            }, {
+                tag: 'Existential',
+                name: alpha1,
+                solution: null,
+            }, {
+                tag: 'Existential',
+                name,
+                solution: {
+                    tag: 'Func',
+                    param: {
+                        tag: 'Existential',
+                        name: alpha1,
+                    },
+                    ret: {
+                        tag: 'Existential',
+                        name: alpha2,
+                    },
+                },
+            }])
+
+            const theta = gamma.instantiateL(alpha1, a.param)
+            const delta = theta.instantiateR(theta.apply(a.ret), alpha2)
+            return delta
+        }
+        case 'Forall': {
+            const beta1 = '>b1'
+            const gamma = this.add({
+                tag: 'Marker',
+                name: beta1,
+            }).add({
+                tag: 'Existential',
+                name: beta1,
+                solution: null,
+            })
+            return gamma.instantiateR(substitute(a.ty, a.alpha, {
+                tag: 'Existential',
+                name: beta1,
+            }), name).drop({
+                tag: 'Marker',
+                name: beta1,
+            })
+        }
+        case 'Existential': {
+            return this.replace({
+                tag: 'Existential',
+                name: a.name,
+                solution: null,
+            }, [{
+                tag: 'Existential',
+                name: a.name,
+                solution: {
+                    tag: 'Existential',
+                    name,
+                },
+            }])
+        }
+        }
+
+        throw new Error()
+    }
+
+    private check(expr: Expr, ty: Ty): Ctx {
+        if (expr.tag === 'Lit' && ty.tag === 'Lit') {
+            if (expr.kind.tag !== ty.kind.tag) {
+                throw new Error()
+            }
+            return this
+        }
+
+        if (expr.tag === 'Abs' && ty.tag === 'Func') {
+            const typedParam: CtxEl = {
+                tag: 'TypedTerm',
+                name: expr.param,
+                ty: ty.param,
+            }
+            return this
+                .add(typedParam)
+                .check(expr.body, ty.ret)
+                .drop(typedParam)
+        }
+
+        if (ty.tag === 'Forall') {
+            const alpha: CtxEl = {
+                tag: 'Var',
+                name: ty.alpha,
+            }
+            return this
+                .add(alpha)
+                .check(expr, ty.ty)
+                .drop(alpha)
+        }
+
+        
+    }
+
+    private synth(expr: Expr): [Ty, Ctx] {
+        switch (expr.tag) {
+        case 'Lit': {
+            return [{
+                tag: 'Lit',
+                kind: expr.kind,
+            }, this.clone()]
+        }
+        case 'Var': {
+            for (const el of this.elements) {
+                if (el.tag === 'TypedTerm' && el.name === expr.name) {
+                    return [el.ty, this.clone()]
+                }
+            }
+            throw new Error()
+        }
+        case 'Anno': {
+            const ty = conv(expr.ty)
+            const delta = this.check(expr.expr, ty)
+            return [
+                ty,
+                delta,
+            ]
+        }
+        case 'Abs': {
+            const alpha = '>a'
+            const beta = '>b'
+
+            const typedParam: CtxEl = {
+                tag: 'TypedTerm',
+                name: expr.param,
+                ty: {
+                    tag: 'Existential',
+                    name: alpha,
+                },
+            }
+
+            const delta = this
+                .add({
+                    tag: 'Existential',
+                    name: alpha,
+                    solution: null,
+                })
+                .add({
+                    tag: 'Existential',
+                    name: beta,
+                    solution: null,
+                })
+                .add(typedParam)
+                .check(expr.body, {
+                    tag: 'Existential',
+                    name: beta,
+                })
+                .drop(typedParam)
+
+            return [{
+                tag: 'Func',
+                param: {
+                    tag: 'Existential',
+                    name: alpha,
+                },
+                ret: {
+                    tag: 'Existential',
+                    name: beta,
+                },
+            }, delta]
+        }
+        case 'Let': {
+            const letCtx = expr.body.stmts.reduce((ctx, stmt) => ctx., this.clone())
+        }
+        }
+    }
+
+    private synthItem(item: Item): [Ty, Ctx] {
+        switch (item.tag) {
+            case 'Ty': throw new Error('todo')
+            case 'Term': {
+                if (item.params.length) {
+                    throw new Error('todo')
+                }
+                const [termTy, termCtx] = this.synth(item.body)
+                return [termTy, termCtx.add({
+                    tag: 'TypedTerm',
+                    name: item.name,
+                    ty: termTy,
+                })]
             }
         }
     }

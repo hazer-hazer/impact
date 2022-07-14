@@ -1,13 +1,13 @@
 export type Ty = {
     tag: 'Lit'
     kind: {
+        tag: 'Unit'
+    } | {
         tag: 'Bool'
     } | {
         tag: 'Int'
     } | {
         tag: 'String'
-    } | {
-        tag: 'Unit'
     }
 } | {
     tag: 'Var'
@@ -50,7 +50,7 @@ export type Expr = {
     arg: Expr
 } | {
     tag: 'Let'
-    body: Expr
+    body: Block
 } | {
     tag: 'Anno'
     expr: Expr
@@ -110,67 +110,69 @@ export class PP {
 
     private ppExpr(expr: Expr): string {
         switch (expr.tag) {
-            case 'Abs': return `\\${expr.param} -> ${this.ppExpr(expr.body)}`
-            case 'Var': return expr.name
-            case 'Lit': {
-                switch (expr.kind.tag) {
-                    case 'Unit': return '()'
-                    case 'Bool': return expr.kind.val.toString()
-                    case 'Int': return expr.kind.val.toString()
-                    case 'String': return expr.kind.val
-                }
+        case 'Abs': return `\\${expr.param} -> ${this.ppExpr(expr.body)}`
+        case 'Var': return expr.name
+        case 'Lit': {
+            switch (expr.kind.tag) {
+            case 'Unit': return '()'
+            case 'Bool': return expr.kind.val.toString()
+            case 'Int': return expr.kind.val.toString()
+            case 'String': return expr.kind.val
             }
-            case 'Anno': return `${this.ppExpr(expr.expr)}: ${this.ppTy(expr.ty)}`
-            case 'Infix': return `${this.ppExpr(expr.lhs)} ${expr.op} ${this.ppExpr(expr.rhs)}`
-            case 'Block': {
-                this.indent();
-
-                let s = `${expr
-                    .block
-                    .stmts
-                    .map(stmt => `${this.indent_str()}${this.ppStmt(stmt)}`)
-                    .join('\n')
-                    }`
-
-                let e = `${this.indent_str()}${this.ppExpr(expr.block.expr)}`
-
-                this.dedent();
-
-                return `${expr.block.stmts.length ? '\n' : ''}${s}\n${e}`
-            }
-            case 'App': return `${this.ppExpr(expr.lhs)} ${this.ppExpr(expr.arg)}`
-            case 'Let': return `let ${this.ppExpr(expr.body)}`
+            break
         }
+        case 'Anno': return `${this.ppExpr(expr.expr)}: ${this.ppTy(expr.ty)}`
+        case 'Infix': return `${this.ppExpr(expr.lhs)} ${expr.op} ${this.ppExpr(expr.rhs)}`
+        case 'App': return `${this.ppExpr(expr.lhs)} ${this.ppExpr(expr.arg)}`
+        case 'Block': return this.ppBlock(expr.block)
+        case 'Let': return `let ${this.ppBlock(expr.body)}`
+        }
+    }
+
+    private ppBlock(block: Block): string {
+        this.indent()
+
+        const s = block
+            .stmts
+            .map(stmt => `${this.indent_str()}${this.ppStmt(stmt)}`)
+            .join('\n')
+
+        const e = `${this.indent_str()}${this.ppExpr(block.expr)}`
+
+        this.dedent()
+
+        return `${block.stmts.length ? '\n' : ''}${s}\n${e}`
     }
 
     private ppStmt(stmt: Stmt): string {
         switch (stmt.tag) {
-            case 'Expr': return this.ppExpr(stmt.expr)
-            case 'Item': return this.ppItem(stmt.item)
+        case 'Expr': return this.ppExpr(stmt.expr)
+        case 'Item': return this.ppItem(stmt.item)
         }
     }
 
     private ppItem(item: Item): string {
         switch (item.tag) {
-            case 'Term': {
-                return `${item.name} ${item.params.length ? ' ' : ''}${item.params.join(' ')}= ${this.ppExpr(item.body)}`
-            }
-            case 'Ty': return `type ${item.name} = ${item.ty}`
+        case 'Term': {
+            return `${item.name} ${item.params.length ? ' ' : ''}${item.params.join(' ')}= ${this.ppExpr(item.body)}`
+        }
+        case 'Ty': return `type ${item.name} = ${item.ty}`
         }
     }
 
     private ppTy(ty: Ty): string {
         switch (ty.tag) {
-            case 'Lit': {
-                switch (ty.kind.tag) {
-                    case 'Bool': return 'Bool'
-                    case 'Int': return 'Int'
-                    case 'String': return 'String'
-                    case 'Unit': return '()'
-                }
+        case 'Lit': {
+            switch (ty.kind.tag) {
+            case 'Unit': return '()'
+            case 'Bool': return 'Bool'
+            case 'Int': return 'Int'
+            case 'String': return 'String'
             }
-            case 'Func': return `${ty.param} -> ${ty.ret}`
-            case 'Var': return ty.name
+            break
+        }
+        case 'Func': return `${ty.param} -> ${ty.ret}`
+        case 'Var': return ty.name
         }
     }
 }
