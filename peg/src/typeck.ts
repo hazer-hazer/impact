@@ -1,4 +1,4 @@
-import { Expr, Item, Stmt, Ty as AstTy } from './ast'
+import { Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
 
 type Ty = {
     tag: 'Lit'
@@ -25,6 +25,24 @@ type Ty = {
     tag: 'Func'
     param: Ty
     ret: Ty
+}
+
+export function ppTy(ty: Ty): string {
+    switch (ty.tag) {
+    case 'Lit': {
+        switch (ty.kind.tag) {
+        case 'Unit': return '()'
+        case 'Bool': return 'Bool'
+        case 'Int': return 'Int'
+        case 'String': return 'String'
+        }
+        break
+    }
+    case 'Var': return ty.name
+    case 'Existential': return `^${ty.name}`
+    case 'Forall': return `forall ${ty.alpha}. ${ppTy(ty.ty)}`
+    case 'Func': return `${ppTy(ty.param)} -> ${ppTy(ty.ret)}`
+    }
 }
 
 function conv(astTy: AstTy): Ty {
@@ -111,24 +129,6 @@ function occursIn(name: string, a: Ty): boolean {
     }
 }
 
-export function toString(ty: Ty): string {
-    switch (ty.tag) {
-    case 'Lit': {
-        switch (ty.kind.tag) {
-        case 'Unit': return '()'
-        case 'Bool': return 'Bool'
-        case 'Int': return 'Int'
-        case 'String': return 'String'
-        }
-        break
-    }
-    case 'Var': return ty.name
-    case 'Existential': return `^${ty.name}`
-    case 'Forall': return `forall ${ty.alpha}. ${toString(ty.ty)}`
-    case 'Func': return `${toString(ty.param)} -> ${toString(ty.ret)}`
-    }
-}
-
 type CtxEl = {
     tag: 'Var'
     name: string
@@ -145,11 +145,32 @@ type CtxEl = {
     ty: Ty
 }
 
+function ppCtxEl(el: CtxEl): string {
+    switch (el.tag) {
+    case 'Var': return el.name
+    case 'Existential': return `^${el.name}${el.solution ? ` = ${ppTy(el.solution)}` : ''}`
+    case 'Marker': return `>${el.name}`
+    case 'TypedTerm': return `${el.name}: ${ppTy(el.ty)}`
+    }
+}
+
+export class InferErr extends Error {}
+
 export class Ctx {
     constructor(private elements: CtxEl[] = []) { }
 
+    private static lastExId = 0
+
+    private static freshEx(): string {
+        return (this.lastExId++).toString()
+    }
+
+    public pp(): string {
+        return `Type context:\n${this.elements.map(el => `  ${ppCtxEl(el)}`).join('\n')}`
+    }
+
     private clone(): Ctx {
-        return this.clone()
+        return Object.assign(Object.create(Object.getPrototypeOf(this)), this)
     }
 
     private add(el: CtxEl): Ctx {
@@ -201,7 +222,7 @@ export class Ctx {
     }
 
     // Figure 8.
-    private apply(ty: Ty): Ty {
+    public apply(ty: Ty): Ty {
         switch (ty.tag) {
         case 'Var':
         case 'Lit': return ty
@@ -229,7 +250,7 @@ export class Ctx {
     // Figure 9.
     private subtype(a: Ty, b: Ty): Ctx {
         if (!this.is_wf(a) || !this.is_wf(b)) {
-            throw new Error(`Types \`${toString(a)}\` and \`${toString(b)}\` are ill-formed`)
+            throw new InferErr(`Types \`${ppTy(a)}\` and \`${ppTy(b)}\` are ill-formed`)
         }
 
         // Idk what's wrong with typescript inference on switch-case on tuples,
@@ -256,7 +277,7 @@ export class Ctx {
         }
 
         if (a.tag === 'Forall') {
-            const name = '>a'
+            const name = Ctx.freshEx()
             const gamma = this
                 .add({tag: 'Marker', name})
                 .add({tag: 'Existential', name, solution: null})
@@ -283,17 +304,19 @@ export class Ctx {
 
         if (a.tag === 'Existential') {
             if (!occursIn(a.name, b)) {
-                this.instantiateL(a.name, b)
+                return this.instantiateL(a.name, b)
             }
+            throw new InferErr('Circular type')
         }
 
         if (b.tag === 'Existential') {
             if (!occursIn(b.name, a)) {
-                this.instantiateR(a, b.name)
+                return this.instantiateR(a, b.name)
             }
+            throw new InferErr('Circular type')
         }
 
-        throw new Error()
+        throw new InferErr(`Cannot subtype ${ppTy(a)} and ${ppTy(b)}`)
     }
 
     // Figure 10.
@@ -312,8 +335,8 @@ export class Ctx {
 
         switch (b.tag) {
         case 'Func': {
-            const alpha1 = '>a1'
-            const alpha2 = '>a2'
+            const alpha1 = Ctx.freshEx()
+            const alpha2 = Ctx.freshEx()
             const gamma = this.replace({
                 tag: 'Existential',
                 name,
@@ -374,7 +397,7 @@ export class Ctx {
         }
         }
 
-        throw new Error()
+        throw new InferErr(`Cannot instantiateL ${name} as ${ppTy(b)}`)
     }
 
     // Figure 10.
@@ -393,8 +416,8 @@ export class Ctx {
 
         switch (a.tag) {
         case 'Func': {
-            const alpha1 = '>a1'
-            const alpha2 = '>a2'
+            const alpha1 = Ctx.freshEx()
+            const alpha2 = Ctx.freshEx()
 
             const gamma = this.replace({
                 tag: 'Existential',
@@ -429,7 +452,7 @@ export class Ctx {
             return delta
         }
         case 'Forall': {
-            const beta1 = '>b1'
+            const beta1 = Ctx.freshEx()
             const gamma = this.add({
                 tag: 'Marker',
                 name: beta1,
@@ -462,13 +485,13 @@ export class Ctx {
         }
         }
 
-        throw new Error()
+        throw new InferErr(`Cannot instantiateR ${name} as ${ppTy(a)}`)
     }
 
     private check(expr: Expr, ty: Ty): Ctx {
         if (expr.tag === 'Lit' && ty.tag === 'Lit') {
             if (expr.kind.tag !== ty.kind.tag) {
-                throw new Error()
+                throw new InferErr(`${ppExpr(expr)} is not of literal type ${ppTy(ty)}`)
             }
             return this
         }
@@ -521,7 +544,7 @@ export class Ctx {
                     return [el.ty, this.clone()]
                 }
             }
-            throw new Error()
+            throw new InferErr(`${ppExpr(expr)} is untyped`)
         }
         case 'Anno': {
             const ty = conv(expr.ty)
@@ -532,8 +555,8 @@ export class Ctx {
             ]
         }
         case 'Abs': {
-            const alpha = '>a'
-            const beta = '>b'
+            const alpha = Ctx.freshEx()
+            const beta = Ctx.freshEx()
 
             const typedParam: CtxEl = {
                 tag: 'TypedTerm',
@@ -599,14 +622,14 @@ export class Ctx {
         }
         }
 
-        throw new Error()
+        throw new InferErr(`Cannot synthesize type for expression ${ppExpr(expr)}`)
     }
 
     private appSynth(calleeTy: Ty, arg: Expr): [Ty, Ctx] {
         switch (calleeTy.tag) {
         case 'Existential': {
-            const alpha1 = '>a1'
-            const alpha2 = '>a2'
+            const alpha1 = Ctx.freshEx()
+            const alpha2 = Ctx.freshEx()
 
             const gamma = this.replace({
                 tag: 'Existential',
@@ -647,7 +670,7 @@ export class Ctx {
             }, delta]
         }
         case 'Forall': {
-            const alpha1 = '>a1'
+            const alpha1 = Ctx.freshEx()
             return this.add({
                 tag: 'Existential',
                 name: alpha1,
@@ -665,7 +688,7 @@ export class Ctx {
         }
         }
 
-        throw new Error()
+        throw new InferErr(`Cannot synth application ty with callee ${ppTy(calleeTy)} and argument ${ppExpr(arg)}`)
     }
 
     private synthItem(item: Item): [Ty, Ctx] {

@@ -92,6 +92,10 @@ export type AST = {
     stmt: Stmt
 }
 
+export function ppExpr(expr: Expr): string {
+    return (new PP()).ppExpr(expr)
+}
+
 // PP //
 export class PP {
     constructor(private indent_level: number = 0) { }
@@ -113,9 +117,9 @@ export class PP {
         return this.ppStmt(ast.stmt)
     }
 
-    private ppExpr(expr: Expr): string {
+    public ppExpr(expr: Expr): string {
         switch (expr.tag) {
-        case 'Abs': return `\\${expr.param} -> ${this.ppExpr(expr.body)}`
+        case 'Abs': return `(${expr.param} -> ${this.ppExpr(expr.body)})`
         case 'Var': return expr.name
         case 'Lit': {
             switch (expr.kind.tag) {
@@ -134,7 +138,7 @@ export class PP {
         }
     }
 
-    private ppBlock(block: Block): string {
+    public ppBlock(block: Block): string {
         this.indent()
 
         const s = block
@@ -149,14 +153,14 @@ export class PP {
         return `${block.stmts.length ? '\n' : ''}${s}\n${e}`
     }
 
-    private ppStmt(stmt: Stmt): string {
+    public ppStmt(stmt: Stmt): string {
         switch (stmt.tag) {
         case 'Expr': return this.ppExpr(stmt.expr)
         case 'Item': return this.ppItem(stmt.item)
         }
     }
 
-    private ppItem(item: Item): string {
+    public ppItem(item: Item): string {
         switch (item.tag) {
         case 'Term': {
             return `${item.name} ${item.params.length ? ' ' : ''}${item.params.join(' ')}= ${this.ppExpr(item.body)}`
@@ -165,7 +169,7 @@ export class PP {
         }
     }
 
-    private ppTy(ty: Ty): string {
+    public ppTy(ty: Ty): string {
         switch (ty.tag) {
         case 'Lit': {
             switch (ty.kind.tag) {

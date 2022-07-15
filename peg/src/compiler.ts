@@ -1,3 +1,4 @@
+import chalk from 'chalk'
 import { readFileSync } from 'fs'
 import { generate, GrammarError, Parser, parser } from 'peggy'
 import { Context, createContext, runInContext } from 'vm'
@@ -5,7 +6,7 @@ import { AST, PP } from './ast'
 import { JSGen } from './js-gen'
 import { ParserCtx } from './parser-ctx'
 import { prelude } from './prelude'
-import { Ctx, toString } from './typeck'
+import { Ctx, InferErr, ppTy } from './typeck'
 
 export type Options = {
     printJS?: boolean
@@ -59,6 +60,7 @@ export class Compiler {
         }
         case 'ctx': {
             console.log(this.ctx)
+            console.log(this.tyCtx.pp())
             return
         }
         default: {
@@ -81,16 +83,16 @@ export class Compiler {
                 parserCtx: this.parserCtx,
             })
 
-            const [ty, ctx] = this.tyCtx.synth(ast.stmt)
-            this.tyCtx = ctx
-
-            console.log(`:${toString(ty)}`)
-
             if (this.options.printAst) {
                 const pp = new PP()
     
-                console.log(pp.pp(ast))
+                console.log(`AST:\n${pp.pp(ast)}`)
             }
+
+            const [ty, ctx] = this.tyCtx.synth(ast.stmt)
+            this.tyCtx = ctx
+
+            console.log(chalk.magenta(`:${ppTy(this.tyCtx.apply(ty))}`))
 
             const js = this.jsGen.gen(ast)
 
@@ -101,12 +103,18 @@ export class Compiler {
             return this.exec(js)
         } catch (e: unknown) {
             if (e instanceof parser.SyntaxError || e instanceof GrammarError) {
-                throw new Error(e.format([
+                console.log(chalk.red(e.format([
                     { source: this.grammar, text: code },
-                ]))
-            } else {
-                throw e
+                ])))
+                return
             }
+
+            if (e instanceof InferErr) {
+                console.log(chalk.red(e.message))
+                return
+            }
+
+            throw e
         }
     }
 }

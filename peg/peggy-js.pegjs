@@ -32,10 +32,23 @@ item 'item' =
     }
 
 expr 'expression' =
-    ascription
+    param:var_id _ '->' _ body:expr {
+        return {
+            tag: 'Abs',
+            param,
+            body,
+        }
+    }
+    / ascription
 
 ascription 'type ascription' =
-	e:add _ ':' _ ty {return e}
+	expr:add _ ':' _ ty:ty {
+        return {
+            tag: 'Anno',
+            expr,
+            ty,
+        }
+    }
     / add
 
 add =
@@ -110,6 +123,7 @@ primary 'primary expression' =
             body,
         }
     }
+    / '(' _ @expr _ ')'
 
 body =
     expr
@@ -147,7 +161,20 @@ ty 'type' =
     }
 
 simple_ty =
-	name:ty_id {
+    '(' _ ')' {
+        return {
+            tag: 'Unit'
+        }
+    }
+    / tag:('Int' / 'String' / 'Bool') {
+        return {
+            tag: 'Lit',
+            kind: {
+                tag,
+            }
+        }
+    }
+	/ name:ty_id {
         return {
             tag: 'Var',
             name,
