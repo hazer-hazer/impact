@@ -2,12 +2,9 @@
     const ctx = options.parserCtx.reset()
 }
 
-program =
-    NL? stmts:(@stmt _)* {
-        return {
-            stmts,
-        }
-    }
+line = NL? stmt:stmt {
+    return {stmt}
+}
 
 stmt 'statement' = SAMEINDENT node:(
     item:item {return {tag: 'Item', item}}

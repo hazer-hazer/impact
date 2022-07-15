@@ -1,19 +1,22 @@
-import { readFileSync } from "fs"
-import { generate, GrammarError, Parser, parser } from "peggy"
-import { Context, createContext, runInContext } from "vm"
-import { AST, PP } from "./ast"
-import { JSGen } from "./js-gen"
-import { ParserCtx } from "./parser-ctx"
-import { prelude } from "./prelude"
+import { readFileSync } from 'fs'
+import { generate, GrammarError, Parser, parser } from 'peggy'
+import { Context, createContext, runInContext } from 'vm'
+import { AST, PP } from './ast'
+import { JSGen } from './js-gen'
+import { ParserCtx } from './parser-ctx'
+import { prelude } from './prelude'
+import { Ctx, toString } from './typeck'
 
 export type Options = {
     printJS?: boolean
+    printAst?: boolean
     printSource?: boolean
 }
 
 const defaultOptions: Options = {
     printJS: false,
-    printSource: false
+    printSource: false,
+    printAst: false,
 }
 
 export class Compiler {
@@ -23,17 +26,19 @@ export class Compiler {
     private options: Options
     private jsGen: JSGen
     private parserCtx: ParserCtx
+    private tyCtx: Ctx
 
     constructor(options: Options) {
         this.grammar = readFileSync('./peggy-js.pegjs', 'utf-8')
         this.parser = generate(this.grammar, {
-            allowedStartRules: ['program'],
+            allowedStartRules: ['line'],
         })
 
         this.ctx = createContext({ ...prelude })
 
         this.jsGen = new JSGen()
         this.parserCtx = new ParserCtx()
+        this.tyCtx = new Ctx()
 
         this.options = { ...defaultOptions, ...options }
     }
@@ -42,52 +47,59 @@ export class Compiler {
         this.ctx = createContext({ ...prelude })
     }
 
-    runCommand(command: string, args: string[]): any | undefined {
+    runCommand(command: string, args: string[]): unknown | undefined {
         switch (command) {
-            case 'run': {
-                return this.exec(`${args[0]}(${args.slice(1).join(', ')})`)
-            }
-            case 'reset': {
-                this.resetContext()
-                process.stdout.write('\u001B[2J\u001B[0;0f')
-                return;
-            }
-            case 'ctx': {
-                console.log(this.ctx);
-                return;
-            }
-            default: {
-                throw new Error(`Unknown command ${command}`)
-            }
+        case 'run': {
+            return this.exec(`${args[0]}(${args.slice(1).join(', ')})`)
+        }
+        case 'reset': {
+            this.resetContext()
+            process.stdout.write('\u001B[2J\u001B[0;0f')
+            return
+        }
+        case 'ctx': {
+            console.log(this.ctx)
+            return
+        }
+        default: {
+            throw new Error(`Unknown command ${command}`)
+        }
         }
     }
 
-    exec(code: string): any | undefined {
-        return runInContext(code, this.ctx);
+    exec(code: string): unknown | undefined {
+        return runInContext(code, this.ctx)
     }
 
-    run(code: string): any | undefined {
+    run(code: string): unknown | undefined {
         try {
             if (this.options.printSource) {
-                console.log(`Source:\n\`${code}\``);
+                console.log(`Source:\n\`${code}\``)
             }
 
             const ast: AST = this.parser.parse(code, {
-                parserCtx: this.parserCtx
-            });
+                parserCtx: this.parserCtx,
+            })
 
-            const pp = new PP()
+            const [ty, ctx] = this.tyCtx.synth(ast.stmt)
+            this.tyCtx = ctx
 
-            console.log(pp.pp(ast));
+            console.log(`:${toString(ty)}`)
 
-            const js = this.jsGen.gen(ast);
-
-            if (this.options.printJS) {
-                console.log(`JS Code:\n${js}`);
+            if (this.options.printAst) {
+                const pp = new PP()
+    
+                console.log(pp.pp(ast))
             }
 
-            return this.exec(js);
-        } catch (e: any) {
+            const js = this.jsGen.gen(ast)
+
+            if (this.options.printJS) {
+                console.log(`JS Code:\n${js}`)
+            }
+
+            return this.exec(js)
+        } catch (e: unknown) {
             if (e instanceof parser.SyntaxError || e instanceof GrammarError) {
                 throw new Error(e.format([
                     { source: this.grammar, text: code },

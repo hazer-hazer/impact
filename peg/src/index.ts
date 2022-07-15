@@ -1,5 +1,5 @@
-import { Recoverable, start } from "repl"
-import { Compiler } from "./compiler"
+import { Recoverable, start } from 'repl'
+import { Compiler } from './compiler'
 
 const continueChars = ['=']
 
@@ -16,12 +16,12 @@ start({
 
     eval: (input, _ctx, _filename, cb) => {
         try {
-            let trimmed = input.trimEnd()
+            const trimmed = input.trimEnd()
             if (!trimmed.length) {
                 return cb(null, undefined)
             }
 
-            if (continueChars.includes(trimmed[trimmed.length - 1]!)) {
+            if (continueChars.includes(trimmed[trimmed.length - 1])) {
                 return cb(new Recoverable(new Error('continue')), undefined)
             }
 
@@ -39,8 +39,8 @@ start({
             }
 
             return cb(null, compiler.run(input))
-        } catch (e: any) {
-            cb(e, undefined)
+        } catch (e) {
+            cb(e as Error, undefined)
         }
-    }
+    },
 })

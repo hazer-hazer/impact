@@ -84,8 +84,12 @@ export type Stmt = {
     item: Item
 }
 
+// export type AST = {
+//     stmts: Stmt
+// }
+
 export type AST = {
-    stmts: Stmt[]
+    stmt: Stmt
 }
 
 // PP //
@@ -105,7 +109,8 @@ export class PP {
     }
 
     public pp(ast: AST): string {
-        return ast.stmts.map(stmt => this.ppStmt(stmt)).join('\n')
+        // return ast.stmts.map(stmt => this.ppStmt(stmt)).join('\n')
+        return this.ppStmt(ast.stmt)
     }
 
     private ppExpr(expr: Expr): string {

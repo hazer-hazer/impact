@@ -1,4 +1,4 @@
-import { Expr, Item, Ty as AstTy } from './ast'
+import { Expr, Item, Stmt, Ty as AstTy } from './ast'
 
 type Ty = {
     tag: 'Lit'
@@ -111,7 +111,7 @@ function occursIn(name: string, a: Ty): boolean {
     }
 }
 
-function toString(ty: Ty): string {
+export function toString(ty: Ty): string {
     switch (ty.tag) {
     case 'Lit': {
         switch (ty.kind.tag) {
@@ -129,8 +129,6 @@ function toString(ty: Ty): string {
     }
 }
 
-type TyTag = Ty['tag']
-
 type CtxEl = {
     tag: 'Var'
     name: string
@@ -147,7 +145,7 @@ type CtxEl = {
     ty: Ty
 }
 
-class Ctx {
+export class Ctx {
     constructor(private elements: CtxEl[] = []) { }
 
     private clone(): Ctx {
@@ -498,10 +496,18 @@ class Ctx {
                 .drop(alpha)
         }
 
-        
+        const [synthTy, theta] = this.synthExpr(expr)
+        return theta.subtype(theta.apply(synthTy), theta.apply(ty))
     }
 
-    private synth(expr: Expr): [Ty, Ctx] {
+    public synth(stmt: Stmt): [Ty, Ctx] {
+        switch (stmt.tag) {
+        case 'Expr': return this.synthExpr(stmt.expr)
+        case 'Item': return this.synthItem(stmt.item)
+        }
+    }
+
+    private synthExpr(expr: Expr): [Ty, Ctx] {
         switch (expr.tag) {
         case 'Lit': {
             return [{
@@ -569,25 +575,113 @@ class Ctx {
             }, delta]
         }
         case 'Let': {
-            const letCtx = expr.body.stmts.reduce((ctx, stmt) => ctx., this.clone())
+            const letCtx = expr.body.stmts.reduce((ctx, stmt): Ctx => {
+                if (stmt.tag === 'Expr') {
+                    // Not last expression statement type is discarded
+                    return ctx.synthExpr(stmt.expr)[1]
+                }
+
+                return ctx.synthItem(stmt.item)[1]
+            }, this.clone())
+
+            const [ty] = letCtx.synthExpr(expr.body.expr)
+            return [
+                ty,
+                this.clone(),
+            ]
+        }
+        case 'App': {
+            const [ty, theta] = this.synthExpr(expr.lhs)
+            return theta.appSynth(theta.apply(ty), expr.arg)
+        }
+        case 'Infix': {
+            throw new Error('todo transform')
         }
         }
+
+        throw new Error()
+    }
+
+    private appSynth(calleeTy: Ty, arg: Expr): [Ty, Ctx] {
+        switch (calleeTy.tag) {
+        case 'Existential': {
+            const alpha1 = '>a1'
+            const alpha2 = '>a2'
+
+            const gamma = this.replace({
+                tag: 'Existential',
+                name: calleeTy.name,
+                solution: null,
+            }, [{
+                tag: 'Existential',
+                name: alpha2,
+                solution: null,
+            }, {
+                tag: 'Existential',
+                name: alpha1,
+                solution: null,
+            }, {
+                tag: 'Existential',
+                name: calleeTy.name,
+                solution: {
+                    tag: 'Func',
+                    param: {
+                        tag: 'Existential',
+                        name: alpha1,
+                    },
+                    ret: {
+                        tag: 'Existential',
+                        name: alpha2,
+                    },
+                },
+            }])
+
+            const delta = gamma.check(arg, {
+                tag: 'Existential',
+                name: alpha1,
+            })
+
+            return [{
+                tag: 'Existential',
+                name: alpha2,
+            }, delta]
+        }
+        case 'Forall': {
+            const alpha1 = '>a1'
+            return this.add({
+                tag: 'Existential',
+                name: alpha1,
+                solution: null,
+            }).appSynth(substitute(calleeTy.ty, calleeTy.alpha, {
+                tag: 'Existential',
+                name: alpha1,
+            }), arg)
+        }
+        case 'Func': {
+            return [
+                calleeTy.ret,
+                this.check(arg, calleeTy.param),
+            ]
+        }
+        }
+
+        throw new Error()
     }
 
     private synthItem(item: Item): [Ty, Ctx] {
         switch (item.tag) {
-            case 'Ty': throw new Error('todo')
-            case 'Term': {
-                if (item.params.length) {
-                    throw new Error('todo')
-                }
-                const [termTy, termCtx] = this.synth(item.body)
-                return [termTy, termCtx.add({
-                    tag: 'TypedTerm',
-                    name: item.name,
-                    ty: termTy,
-                })]
+        case 'Ty': throw new Error('todo')
+        case 'Term': {
+            if (item.params.length) {
+                throw new Error('todo')
             }
+            const [termTy, termCtx] = this.synthExpr(item.body)
+            return [termTy, termCtx.add({
+                tag: 'TypedTerm',
+                name: item.name,
+                ty: termTy,
+            })]
+        }
         }
     }
 }
