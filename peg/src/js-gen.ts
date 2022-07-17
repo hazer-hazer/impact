@@ -65,13 +65,12 @@ export class JSGen {
             }
             break
         }
-        case 'Infix': return `${this.genExpr(expr.lhs)} ${expr.op} ${this.genExpr(expr.rhs)}`
         case 'Block': {
             return this.genBlock(expr.block)
         }
         case 'App': return `${this.genExpr(expr.lhs)}(${this.genExpr(expr.arg)})`
         case 'Let': return `let ${this.genBlock(expr.body)}`
-        case 'Anno': return ''
+        case 'Anno': return this.genExpr(expr.expr)
         }
     }
 

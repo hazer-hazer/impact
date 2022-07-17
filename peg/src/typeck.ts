@@ -66,6 +66,13 @@ function conv(astTy: AstTy): Ty {
             name: astTy.name,
         }
     }
+    case 'Forall': {
+        return {
+            tag: 'Forall',
+            alpha: astTy.alpha,
+            ty: conv(astTy.ty),
+        }
+    }
     }
 }
 
@@ -173,7 +180,7 @@ export class Ctx {
         return Object.assign(Object.create(Object.getPrototypeOf(this)), this)
     }
 
-    private add(el: CtxEl): Ctx {
+    public add(el: CtxEl): Ctx {
         return new Ctx([...this.elements, el])
     }
 
@@ -255,7 +262,7 @@ export class Ctx {
 
         // Idk what's wrong with typescript inference on switch-case on tuples,
         //  so I have to use if-else
-        if (a.tag === 'Lit' && b.tag === 'Lit') {
+        if (a.tag === 'Lit' && b.tag === 'Lit' && a.kind.tag === b.kind.tag) {
             return this.clone()
         }
 
@@ -544,7 +551,7 @@ export class Ctx {
                     return [el.ty, this.clone()]
                 }
             }
-            throw new InferErr(`${ppExpr(expr)} is untyped`)
+            throw new InferErr(`${ppExpr(expr)} is not defined`)
         }
         case 'Anno': {
             const ty = conv(expr.ty)
@@ -616,9 +623,6 @@ export class Ctx {
         case 'App': {
             const [ty, theta] = this.synthExpr(expr.lhs)
             return theta.appSynth(theta.apply(ty), expr.arg)
-        }
-        case 'Infix': {
-            throw new Error('todo transform')
         }
         }
 

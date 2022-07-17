@@ -1,3 +1,5 @@
+import { Expr } from './ast'
+
 export class ParserCtx {
     private indentStack: string[] = []
     private indent = ''
@@ -28,5 +30,20 @@ export class ParserCtx {
         this.indentStack = []
         this.indent = ''
         return this
+    }
+
+    public makeInfix(lhs: Expr, op: string, rhs: Expr): Expr {
+        return {
+            tag: 'App',
+            lhs: {
+                tag: 'App',
+                lhs: {
+                    tag: 'Var',
+                    name: op,
+                },
+                arg: lhs,
+            },
+            arg: rhs,
+        }
     }
 }

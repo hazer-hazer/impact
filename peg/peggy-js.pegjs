@@ -53,23 +53,13 @@ ascription 'type ascription' =
 
 add =
 	lhs:mult _ op:[+-] _ rhs:add {
-        return {
-            tag: 'Infix',
-            lhs,
-            op,
-            rhs,
-        }
+        return ctx.makeInfix(lhs, op, rhs)
     }
 	/ mult
 
 mult =
 	lhs:call _ op:[\*\/] _ rhs:mult {
-        return {
-            tag: 'Infix',
-            lhs,
-            op,
-            rhs,
-        }
+        return ctx.makeInfix(lhs, op, rhs)
     }
 	/ call
 
@@ -148,7 +138,14 @@ block =
     }
 
 ty 'type' =
-    param:simple_ty ret:(_ '->' _ @ty)* {
+    'forall' _ alpha:var_id _ '.' _ ty:ty {
+        return {
+            tag: 'Forall',
+            alpha,
+            ty,
+        }
+    }
+    / param:simple_ty ret:(_ '->' _ @ty)* {
         if (!ret.length) {
             return param
         }
@@ -184,8 +181,10 @@ simple_ty =
         return ty
     }
 
-var_id 'variable name' = $([a-z][A-z0-9]*)
-ty_id 'type name' = $([A-Z][A-z0-9]*)
+var_id 'variable name' =
+    $([_]*[a-z][_A-z0-9]*)
+    // / '(' @$([\+\-\*\/\^%&$\|]+) ')'
+ty_id 'type name' = $([_]*[A-Z][_A-z0-9]*)
 
 semi 'semi' = (EOL / ';')+
 

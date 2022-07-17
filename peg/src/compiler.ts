@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 import { readFileSync } from 'fs'
-import { generate, GrammarError, Parser, parser } from 'peggy'
+import { generate, Parser } from 'peggy'
 import { Context, createContext, runInContext } from 'vm'
 import { AST, PP } from './ast'
 import { JSGen } from './js-gen'
@@ -20,9 +20,12 @@ const defaultOptions: Options = {
     printAst: false,
 }
 
+const isSyntaxError = (e: unknown) => typeof (e as any).format === 'function'
+
 export class Compiler {
     private grammar: string
     private parser: Parser
+    private tyParser: Parser
     private ctx: Context
     private options: Options
     private jsGen: JSGen
@@ -35,17 +38,39 @@ export class Compiler {
             allowedStartRules: ['line'],
         })
 
-        this.ctx = createContext({ ...prelude })
+        this.tyParser = generate(this.grammar, {
+            allowedStartRules: ['ty'],
+        })
+
+        this.ctx = createContext()
 
         this.jsGen = new JSGen()
         this.parserCtx = new ParserCtx()
         this.tyCtx = new Ctx()
 
         this.options = { ...defaultOptions, ...options }
+    
+        this.initContext()
     }
 
-    private resetContext() {
-        this.ctx = createContext({ ...prelude })
+    private initContext() {
+        const jsPrelude: Record<string, any> = {}
+        for (const [name, decl] of Object.entries(prelude)) {
+            try {
+                const ty = this.tyParser.parse(decl[0], {
+                    parserCtx: this.parserCtx,
+                })
+            } catch (e) {
+                if (isSyntaxError(e)) {
+                    console.log(chalk.red((e as any).format([
+                        { source: this.grammar, text: decl[0] },
+                    ])))
+                }
+                throw new Error('Failed to parse some of the prelude declarations')
+            }
+            jsPrelude[name] = decl[1]
+        }
+        this.ctx = createContext(jsPrelude)
     }
 
     runCommand(command: string, args: string[]): unknown | undefined {
@@ -54,7 +79,7 @@ export class Compiler {
             return this.exec(`${args[0]}(${args.slice(1).join(', ')})`)
         }
         case 'reset': {
-            this.resetContext()
+            this.initContext()
             process.stdout.write('\u001B[2J\u001B[0;0f')
             return
         }
@@ -101,9 +126,10 @@ export class Compiler {
             }
 
             return this.exec(js)
-        } catch (e: unknown) {
-            if (e instanceof parser.SyntaxError || e instanceof GrammarError) {
-                console.log(chalk.red(e.format([
+        } catch (e) {
+            // Idk why the heck peggy does not export its SyntaxError so I could use instnaceof 🙄
+            if (isSyntaxError(e)) {
+                console.log(chalk.red((e as any).format([
                     { source: this.grammar, text: code },
                 ])))
                 return
@@ -112,6 +138,10 @@ export class Compiler {
             if (e instanceof InferErr) {
                 console.log(chalk.red(e.message))
                 return
+            }
+
+            if (e instanceof Error) {
+                console.log(e.message, e.constructor.name)
             }
 
             throw e

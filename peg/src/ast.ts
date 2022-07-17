@@ -16,6 +16,10 @@ export type Ty = {
     tag: 'Func'
     param: Ty
     ret: Ty
+} | {
+    tag: 'Forall',
+    alpha: string,
+    ty: Ty
 }
 
 export type Block = {
@@ -55,11 +59,6 @@ export type Expr = {
     tag: 'Anno'
     expr: Expr
     ty: Ty
-} | {
-    tag: 'Infix'
-    lhs: Expr
-    op: string
-    rhs: Expr
 } | {
     tag: 'Block',
     block: Block,
@@ -131,7 +130,6 @@ export class PP {
             break
         }
         case 'Anno': return `${this.ppExpr(expr.expr)}: ${this.ppTy(expr.ty)}`
-        case 'Infix': return `${this.ppExpr(expr.lhs)} ${expr.op} ${this.ppExpr(expr.rhs)}`
         case 'App': return `${this.ppExpr(expr.lhs)} ${this.ppExpr(expr.arg)}`
         case 'Block': return this.ppBlock(expr.block)
         case 'Let': return `let ${this.ppBlock(expr.body)}`
@@ -182,6 +180,7 @@ export class PP {
         }
         case 'Func': return `${ty.param} -> ${ty.ret}`
         case 'Var': return ty.name
+        case 'Forall': return `forall ${ty.alpha}. ${this.ppTy(ty.ty)}`
         }
     }
 }

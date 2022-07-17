@@ -19,6 +19,7 @@
         "functions": "always-multiline"
       }
     ],
-    "newline-per-chained-call": 2
+    "newline-per-chained-call": 2,
+    "@typescript-eslint/no-explicit-any": "off"
   }
 }
