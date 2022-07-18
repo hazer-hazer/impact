@@ -9,6 +9,14 @@ const defaultOptions: Options = {
     indentSize: 4,
 }
 
+const builtNames: Record<string, string> = {
+    '+': 'plus',
+    '-': 'minus',
+    '*': 'pow',
+    '/': 'div',
+    '%': 'mod',
+}
+
 export class JSGen {
     options: Options
 
@@ -18,6 +26,13 @@ export class JSGen {
         this.options = { ...defaultOptions, ...options }
     }
 
+    public static qualifyName(name: string): string {
+        if (name in builtNames) {
+            return `__$${builtNames[name]}`
+        }
+        return name
+    }
+
     public reset(): this {
         this.indentLevel = 0
         return this
@@ -25,16 +40,16 @@ export class JSGen {
 
     private indent(): string {
         this.indentLevel++
-        return this.indent_str()
+        return this.indentStr()
     }
 
     private dedent(): string {
         this.indentLevel--
         assert(this.indentLevel >= 0)
-        return this.indent_str()
+        return this.indentStr()
     }
 
-    private indent_str(): string {
+    private indentStr(): string {
         return ' '.repeat(this.options.indentSize).repeat(this.indentLevel)
     }
 
@@ -55,7 +70,7 @@ export class JSGen {
         case 'Abs': {
             return `(${expr.param} => ${this.genExpr(expr.body)})`
         }
-        case 'Var': return expr.name
+        case 'Var': return JSGen.qualifyName(expr.name)
         case 'Lit': {
             switch (expr.kind.tag) {
             case 'Unit': return '()'
@@ -75,12 +90,12 @@ export class JSGen {
     }
 
     private genBlock(block: Block): string {
-        const return_expr = block.stmts.pop()
+        const returnExpr = block.stmts.pop()
 
         return `
 (function() {
-${block.stmts.map(stmt => `${this.indent_str()}${stmt}`).join(';\n')};
-${return_expr ? `\n${this.indent_str()}return ${return_expr}` : ''}
+${block.stmts.map(stmt => `${this.indentStr()}${stmt}`).join(';\n')};
+${returnExpr ? `\n${this.indentStr()}return ${returnExpr}` : ''}
 ${this.dedent()}}())
 `.trim()
     }

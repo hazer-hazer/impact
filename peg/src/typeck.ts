@@ -1,6 +1,6 @@
 import { Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
 
-type Ty = {
+export type Ty = {
     tag: 'Lit'
     kind: {
         tag: 'Unit'
@@ -25,6 +25,8 @@ type Ty = {
     tag: 'Func'
     param: Ty
     ret: Ty
+} | {
+    tag: 'Error'
 }
 
 export function ppTy(ty: Ty): string {
@@ -42,10 +44,11 @@ export function ppTy(ty: Ty): string {
     case 'Existential': return `^${ty.name}`
     case 'Forall': return `forall ${ty.alpha}. ${ppTy(ty.ty)}`
     case 'Func': return `${ppTy(ty.param)} -> ${ppTy(ty.ret)}`
+    case 'Error': return '[ERROR]'
     }
 }
 
-function conv(astTy: AstTy): Ty {
+export function conv(astTy: AstTy): Ty {
     switch (astTy.tag) {
     case 'Lit': {
         return {
@@ -65,6 +68,9 @@ function conv(astTy: AstTy): Ty {
             tag: 'Var',
             name: astTy.name,
         }
+    }
+    case 'ConId': {
+        throw new Error('Todo: type aliases')
     }
     case 'Forall': {
         return {
@@ -118,6 +124,7 @@ function substitute(a: Ty, name: string, b: Ty): Ty {
         param: substitute(a.param, name, b),
         ret: substitute(a.ret, name, b),
     }
+    case 'Error': throw new InferErr('Cannot substitute error type')
     }
 }
 
@@ -133,6 +140,7 @@ function occursIn(name: string, a: Ty): boolean {
         return occursIn(name, a.ty)
     }
     case 'Existential': return name === a.name
+    case 'Error': return false
     }
 }
 
@@ -184,6 +192,19 @@ export class Ctx {
         return new Ctx([...this.elements, el])
     }
 
+    public addInPlace(el: CtxEl): this {
+        this.elements.push(el)
+        return this
+    }
+
+    public findTypedVar(name: string): Ty {
+        const ty = this.elements.find(el => el.tag === 'TypedTerm' && el.name === name)
+        if (ty?.tag === 'TypedTerm') {
+            return ty.ty
+        }
+        throw new InferErr(`Type for ${name} not found`)
+    }
+
     private drop(el: CtxEl): Ctx {
         const index = this.elements.indexOf(el)
         if (index < 0) {
@@ -215,16 +236,17 @@ export class Ctx {
     }
 
     // Figure 7.
-    private is_wf(ty: Ty): boolean {
+    private isWf(ty: Ty): boolean {
         switch (ty.tag) {
         case 'Lit': return true
         case 'Var': return this.elements.some(el => el.tag === 'Var' && el.name === ty.name)
-        case 'Func': return this.is_wf(ty.param) && this.is_wf(ty.ret)
+        case 'Func': return this.isWf(ty.param) && this.isWf(ty.ret)
         case 'Forall': return this.add({
             tag: 'Var',
             name: ty.alpha,
-        }).is_wf(ty.ty)
+        }).isWf(ty.ty)
         case 'Existential': return this.elements.some(el => el.tag === 'Existential' && el.name === ty.name)
+        case 'Error': return false
         }
     }
 
@@ -251,12 +273,13 @@ export class Ctx {
             param: this.apply(ty.param),
             ret: this.apply(ty.ret),
         }
+        case 'Error': throw new InferErr('Cannot apply context to apply')
         }
     }
 
     // Figure 9.
     private subtype(a: Ty, b: Ty): Ctx {
-        if (!this.is_wf(a) || !this.is_wf(b)) {
+        if (!this.isWf(a) || !this.isWf(b)) {
             throw new InferErr(`Types \`${ppTy(a)}\` and \`${ppTy(b)}\` are ill-formed`)
         }
 
@@ -323,7 +346,7 @@ export class Ctx {
             throw new InferErr('Circular type')
         }
 
-        throw new InferErr(`Cannot subtype ${ppTy(a)} and ${ppTy(b)}`)
+        throw new InferErr(`${ppTy(a)} is not a subtype of ${ppTy(b)}`)
     }
 
     // Figure 10.

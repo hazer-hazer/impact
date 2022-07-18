@@ -13,6 +13,9 @@ export type Ty = {
     tag: 'Var'
     name: string
 } | {
+    tag: 'ConId',
+    name: string,
+} | {
     tag: 'Func'
     param: Ty
     ret: Ty
@@ -97,18 +100,18 @@ export function ppExpr(expr: Expr): string {
 
 // PP //
 export class PP {
-    constructor(private indent_level: number = 0) { }
+    constructor(private indentLevel: number = 0) { }
 
     private indent() {
-        this.indent_level++
+        this.indentLevel++
     }
 
     private dedent() {
-        this.indent_level--
+        this.indentLevel--
     }
 
-    private indent_str() {
-        return '  '.repeat(this.indent_level)
+    private indentStr() {
+        return '  '.repeat(this.indentLevel)
     }
 
     public pp(ast: AST): string {
@@ -141,10 +144,10 @@ export class PP {
 
         const s = block
             .stmts
-            .map(stmt => `${this.indent_str()}${this.ppStmt(stmt)}`)
+            .map(stmt => `${this.indentStr()}${this.ppStmt(stmt)}`)
             .join('\n')
 
-        const e = `${this.indent_str()}${this.ppExpr(block.expr)}`
+        const e = `${this.indentStr()}${this.ppExpr(block.expr)}`
 
         this.dedent()
 
@@ -180,6 +183,7 @@ export class PP {
         }
         case 'Func': return `${ty.param} -> ${ty.ret}`
         case 'Var': return ty.name
+        case 'ConId': return ty.name
         case 'Forall': return `forall ${ty.alpha}. ${this.ppTy(ty.ty)}`
         }
     }

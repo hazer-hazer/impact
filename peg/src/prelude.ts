@@ -2,7 +2,7 @@ export type Prelude = Record<string, [string, any]>
 
 export const prelude: Prelude = {
     print: [
-        'forall t. t -> t',
+        'forall t. t -> ()',
         (a: any) => console.log(a),
     ],
     '+': [

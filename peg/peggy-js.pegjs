@@ -101,7 +101,7 @@ primary 'primary expression' =
             }
         }
     }
-    / name:var_id {
+    / name:(@var_id / @op_id) {
     	return {
             tag: 'Var',
             name,
@@ -150,7 +150,7 @@ ty 'type' =
             return param
         }
 
-        return [param, ...ret].reverse().reduce((ret, ty) => ({
+        return [param, ...ret].reduce((ret, ty) => ({
             tag: 'Func',
             param: ret,
             ret: ty,
@@ -160,7 +160,10 @@ ty 'type' =
 simple_ty =
     '(' _ ')' {
         return {
-            tag: 'Unit'
+            tag: 'Lit',
+            kind: {
+                tag: 'Unit'
+            }
         }
     }
     / tag:('Int' / 'String' / 'Bool') {
@@ -173,6 +176,12 @@ simple_ty =
     }
 	/ name:ty_id {
         return {
+            tag: 'ConId',
+            name,
+        }
+    }
+    / name:var_id {
+        return {
             tag: 'Var',
             name,
         }
@@ -181,9 +190,8 @@ simple_ty =
         return ty
     }
 
-var_id 'variable name' =
-    $([_]*[a-z][_A-z0-9]*)
-    // / '(' @$([\+\-\*\/\^%&$\|]+) ')'
+var_id 'variable name' = $([_]*[a-z][_A-z0-9]*)
+op_id = '(' @$([\+\-\*\/\^%&$\|]+) ')'
 ty_id 'type name' = $([_]*[A-Z][_A-z0-9]*)
 
 semi 'semi' = (EOL / ';')+
