@@ -174,7 +174,7 @@ export class PP {
     public ppItem(item: Item): string {
         switch (item.tag) {
         case 'Term': {
-            return `${item.name} ${item.params.length ? ' ' : ''}${item.params.join(' ')}= ${this.ppExpr(item.body)}`
+            return `${item.name} ${item.params.join(' ')}${item.params.length ? ' ' : ''}= ${this.ppExpr(item.body)}`
         }
         case 'Ty': return `type ${item.name} = ${item.ty}`
         }

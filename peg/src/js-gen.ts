@@ -105,7 +105,7 @@ ${this.dedent()}}())
         switch (item.tag) {
         case 'Term': {
             if (item.params.length) {
-                return `function ${item.name}(${item.params.join(', ')}) {\n${this.indent()}return ${item.body}\n${this.dedent()}}`.trim()
+                return `function ${item.name}(${item.params.join(', ')}) {\n${this.indent()}return ${this.genExpr(item.body)}\n${this.dedent()}}`.trim()
             } else {
                 return `const ${item.name} = ${this.genExpr(item.body)};`.trim()
             }

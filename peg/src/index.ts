@@ -5,8 +5,8 @@ import { Compiler } from './compiler'
 const continueChars = ['=']
 
 const compiler = new Compiler({
-    // printJS: true,
     // printSource: true,
+    // printJS: true,
     // printAst: true,
 })
 

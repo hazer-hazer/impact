@@ -698,6 +698,8 @@ export class Ctx {
     }
 
     private appSynth(calleeTy: Ty, arg: Expr): [Ty, Ctx] {
+        console.log('appSynth', ppExpr(arg), arg.tag)
+
         switch (calleeTy.tag) {
         case 'Existential': {
             const alpha1 = Ctx.freshEx()
@@ -767,10 +769,15 @@ export class Ctx {
         switch (item.tag) {
         case 'Ty': throw new Error('todo')
         case 'Term': {
+            let body: Expr = item.body
             if (item.params.length) {
-                throw new Error('todo')
+                body = item.params.reduce((body, param) => ({
+                    tag: 'Abs',
+                    param,
+                    body,
+                }), item.body)
             }
-            const [termTy, termCtx] = this.synthExpr(item.body)
+            const [termTy, termCtx] = this.synthExpr(body)
             return [termTy, termCtx.add({
                 tag: 'TypedTerm',
                 name: item.name,
