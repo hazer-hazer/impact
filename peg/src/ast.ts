@@ -65,6 +65,11 @@ export type Expr = {
 } | {
     tag: 'Block',
     block: Block,
+} | {
+    tag: 'If',
+    cond: Expr,
+    then: Expr,
+    else: Expr,
 }
 
 export type Item = {
@@ -96,6 +101,10 @@ export type AST = {
 
 export function ppExpr(expr: Expr): string {
     return (new PP()).ppExpr(expr)
+}
+
+export function ppTy(ty: Ty): string {
+    return (new PP()).ppTy(ty)
 }
 
 // PP //
@@ -136,6 +145,7 @@ export class PP {
         case 'App': return `${this.ppExpr(expr.lhs)} ${this.ppExpr(expr.arg)}`
         case 'Block': return this.ppBlock(expr.block)
         case 'Let': return `let ${this.ppBlock(expr.body)}`
+        case 'If': return `if ${this.ppExpr(expr.cond)} then ${this.ppExpr(expr.then)} else ${this.ppExpr(expr.else)}`
         }
     }
 

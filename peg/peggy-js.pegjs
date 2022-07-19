@@ -74,7 +74,14 @@ call 'application' =
 	/ primary
 
 primary 'primary expression' =
-    'if' 
+    'if' _ cond:expr _ 'then' _ then:body _ 'else' _ _else:body {
+        return {
+            tag: 'If',
+            cond,
+            then,
+            else: _else,
+        }
+    }
 	/ int:$([0-9]+) {
         return {
             tag: 'Lit',
@@ -191,7 +198,9 @@ simple_ty =
         return ty
     }
 
-var_id 'variable name' = $([_]*[a-z][_A-z0-9]*)
+reserved_word = 'forall' / 'type' / 'if' / 'then' / 'else' / 'true' / 'false'
+
+var_id 'variable name' = !reserved_word @$([_]*[a-z][_A-z0-9]*)
 op_id = '(' @$([\+\-\*\/\^%&$\|]+) ')'
 ty_id 'type name' = $([_]*[A-Z][_A-z0-9]*)
 

@@ -1,3 +1,4 @@
+import { ok } from 'assert'
 import chalk from 'chalk'
 import { readFileSync } from 'fs'
 import { generate, Parser, SourceText } from 'peggy'
@@ -7,6 +8,7 @@ import { JSGen } from './js-gen'
 import { ParserCtx } from './parser-ctx'
 import { prelude } from './prelude'
 import { conv, Ctx, InferErr, ppTy, Ty } from './typeck'
+import { Result } from './types'
 
 export type Options = {
     printJS?: boolean
@@ -57,7 +59,7 @@ export class Compiler {
         const jsPrelude: Record<string, any> = {}
         for (const [name, decl] of Object.entries(prelude)) {
             const source = `prelude/${name}`
-            const ty = this.parse<AstTy>(source, decl[0], 'ty')
+            const ty = this.parse<AstTy>(source, decl[0], 'ty').unwrap()
             this.tyCtx.addInPlace({
                 tag: 'TypedTerm',
                 name,
@@ -87,7 +89,7 @@ export class Compiler {
             if (!args[0]) {
                 throw new Error('Expected type name as an argument')
             }
-            const expr = this.parse<Expr>('[:t command]', args[0], 'expr')
+            const expr = this.parse<Expr>('[:t command]', args[0], 'expr').unwrap()
             const ty = this.typeck({
                 tag: 'Expr',
                 expr,
@@ -105,18 +107,19 @@ export class Compiler {
         return runInContext(code, this.ctx)
     }
 
-    parse<T>(source: string, code: string, startRule: string): T {
+    parse<T>(source: string, code: string, startRule: string): Result<T> {
         try {
-            return <T>this.parser.parse(code, {
+            return Result.Ok(this.parser.parse(code, {
                 parserCtx: this.parserCtx,
                 startRule,
-            })
+                grammarSource: source,
+            }))
         } catch (e) {
             // Idk why the heck peggy does not export its SyntaxError so I could use instanceof 🙄
             if (isSyntaxError(e)) {
-                console.error(e.format([
+                console.log(chalk.red(e.format([
                     { source, text: code },
-                ]))
+                ])))
             } else {
                 console.log(e)   
             }
@@ -144,7 +147,7 @@ export class Compiler {
                 console.log(`Source:\n\`${code}\``)
             }
 
-            const ast = this.parse<AST>('REPL', code, 'line')
+            const ast = this.parse<AST>('REPL', code, 'line').unwrap()
 
             if (this.options.printAst) {
                 const pp = new PP()

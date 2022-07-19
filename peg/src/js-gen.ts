@@ -86,6 +86,7 @@ export class JSGen {
         case 'App': return `${this.genExpr(expr.lhs)}(${this.genExpr(expr.arg)})`
         case 'Let': return `let ${this.genBlock(expr.body)}`
         case 'Anno': return this.genExpr(expr.expr)
+        case 'If': return `(${this.genExpr(expr.cond)} ? ${this.genExpr(expr.then)} : ${this.genExpr(expr.else)})`
         }
     }
 

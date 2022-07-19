@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'util'
 import { Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
 
 export type Ty = {
@@ -27,6 +28,10 @@ export type Ty = {
     ret: Ty
 } | {
     tag: 'Error'
+}
+
+function cmpTys(lty: Ty, rty: Ty): boolean {
+    return isDeepStrictEqual(lty, rty)
 }
 
 export function ppTy(ty: Ty): string {
@@ -160,6 +165,10 @@ type CtxEl = {
     ty: Ty
 }
 
+function cmpEls(lel: CtxEl, rel: CtxEl): boolean {
+    return isDeepStrictEqual(lel, rel)
+}
+
 function ppCtxEl(el: CtxEl): string {
     switch (el.tag) {
     case 'Var': return el.name
@@ -205,16 +214,20 @@ export class Ctx {
         throw new InferErr(`Type for ${name} not found`)
     }
 
+    private findIndex(el: CtxEl): number {
+        return this.elements.findIndex(e => cmpEls(el, e))
+    }
+
     private drop(el: CtxEl): Ctx {
-        const index = this.elements.indexOf(el)
+        const index = this.findIndex(el)
         if (index < 0) {
-            throw new Error()
+            throw new Error(`Failed to find context element ${ppCtxEl(el)} to drop`)
         }
         return new Ctx(this.elements.slice(0, index))
     }
 
     private split(el: CtxEl): CtxEl[] {
-        const index = this.elements.indexOf(el)
+        const index = this.findIndex(el)
         if (index < 0) {
             return []
         }
@@ -646,6 +659,41 @@ export class Ctx {
         case 'App': {
             const [ty, theta] = this.synthExpr(expr.lhs)
             return theta.appSynth(theta.apply(ty), expr.arg)
+        }
+        case 'If': {
+            const branchesEx = Ctx.freshEx()
+            const condCtx = this.check(expr.cond, {
+                tag: 'Lit',
+                kind: {tag: 'Bool'},
+            }).addMany([{
+                tag: 'Marker',
+                name: branchesEx,
+            }, {
+                tag: 'Existential',
+                name: branchesEx,
+                solution: null,
+            }])
+
+            const thenCtx = condCtx.check(expr.then, {
+                tag: 'Existential',
+                name: branchesEx,
+            })
+
+            const elseCtx = thenCtx.check(expr.else, thenCtx.apply({
+                tag: 'Existential',
+                name: branchesEx,
+            }))
+
+            console.log('elseCtx', elseCtx.pp())
+            
+
+            return [elseCtx.apply({
+                tag: 'Existential',
+                name: branchesEx,
+            }), elseCtx.drop({
+                tag: 'Marker',
+                name: branchesEx,
+            })]
         }
         }
 

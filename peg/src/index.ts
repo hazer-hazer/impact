@@ -1,3 +1,4 @@
+import 'source-map-support/register'
 import { Recoverable, start } from 'repl'
 import { Compiler } from './compiler'
 
