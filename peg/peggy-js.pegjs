@@ -74,7 +74,8 @@ call 'application' =
 	/ primary
 
 primary 'primary expression' =
-	int:$([0-9]+) {
+    'if' 
+	/ int:$([0-9]+) {
         return {
             tag: 'Lit',
             kind: {
