@@ -104,11 +104,9 @@ ${this.dedent()}}())
     private genItem(item: Item): string {
         switch (item.tag) {
         case 'Term': {
-            if (item.params.length) {
-                return `function ${item.name}(${item.params.join(', ')}) {\n${this.indent()}return ${this.genExpr(item.body)}\n${this.dedent()}}`.trim()
-            } else {
-                return `const ${item.name} = ${this.genExpr(item.body)};`.trim()
-            }
+            return `const ${item.name} = ${
+                item.params.reduce((params, p) => `${params}(${p}) => `, '')
+            } ${this.genExpr(item.body)};`
         }
         case 'Ty': return `type ${item.name} = ${item.ty}`
         }

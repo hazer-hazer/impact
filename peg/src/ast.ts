@@ -142,7 +142,7 @@ export class PP {
             break
         }
         case 'Anno': return `${this.ppExpr(expr.expr)}: ${this.ppTy(expr.ty)}`
-        case 'App': return `${this.ppExpr(expr.lhs)} ${this.ppExpr(expr.arg)}`
+        case 'App': return `(${this.ppExpr(expr.lhs)} ${this.ppExpr(expr.arg)})`
         case 'Block': return this.ppBlock(expr.block)
         case 'Let': return `let ${this.ppBlock(expr.body)}`
         case 'If': return `if ${this.ppExpr(expr.cond)} then ${this.ppExpr(expr.then)} else ${this.ppExpr(expr.else)}`

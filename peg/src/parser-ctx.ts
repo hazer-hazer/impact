@@ -32,8 +32,9 @@ export class ParserCtx {
         return this
     }
 
-    public makeInfix(lhs: Expr, op: string, rhs: Expr): Expr {
-        return {
+    // LA = left-associative
+    public makeInfix(lhs: Expr, ops: [string, Expr][]): Expr {
+        return ops.reduce((infix, [op, rhs]) => ({
             tag: 'App',
             lhs: {
                 tag: 'App',
@@ -41,9 +42,19 @@ export class ParserCtx {
                     tag: 'Var',
                     name: op,
                 },
-                arg: lhs,
+                arg: infix,
             },
             arg: rhs,
-        }
+        }), lhs)
+    }
+
+    public makeApp(lhs: Expr, args: Expr[]): Expr {
+        console.log('args', args)
+
+        return args.reduce((lhs, arg) => ({
+            tag: 'App',
+            lhs,
+            arg,
+        }), lhs)
     }
 }

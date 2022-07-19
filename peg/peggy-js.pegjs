@@ -52,24 +52,20 @@ ascription 'type ascription' =
     / add
 
 add =
-	lhs:mult _ op:[+-] _ rhs:add {
-        return ctx.makeInfix(lhs, op, rhs)
+	lhs:mult ops:(_ @[+-] _ @mult)* {
+        return ctx.makeInfix(lhs, ops)
     }
 	/ mult
 
 mult =
-	lhs:call _ op:[\*\/] _ rhs:mult {
-        return ctx.makeInfix(lhs, op, rhs)
+	lhs:call ops:(_ @[\*\/] _ @call)* {
+        return ctx.makeInfix(lhs, ops)
     }
 	/ call
 
 call 'application' =
-	lhs:primary _ arg:call {
-        return {
-            tag: 'App',
-            lhs,
-            arg,
-        }
+	lhs:primary args:(_ @primary)* {
+        return ctx.makeApp(lhs, args)
     }
 	/ primary
 
