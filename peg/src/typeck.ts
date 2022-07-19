@@ -771,12 +771,21 @@ export class Ctx {
                     body,
                 }), item.body)
             }
-            const [termTy, termCtx] = this.synthExpr(body)
-            return [termTy, termCtx.add({
+
+            // This is what I came with, I'm not sure that this is valid for recursion
+            // but it seems to work
+            const ctx = this.add({
                 tag: 'TypedTerm',
                 name: item.name,
-                ty: termTy,
-            })]
+                ty: {
+                    tag: 'Existential',
+                    name: item.name,
+                },
+            })
+
+            const [termTy, termCtx] = ctx.synthExpr(body)
+
+            return [termTy, termCtx]
         }
         }
     }

@@ -52,7 +52,7 @@ ascription 'type ascription' =
     / cmp
 
 cmp =
-    lhs:add ops:(_ @('>' / '<' / '<=' / '>=' / '==' / '!=') _ @add)* {
+    lhs:add ops:(_ @('<=' / '>=' / '>' / '<' / '==' / '!=') _ @add)* {
         return ctx.makeInfix(lhs, ops)
     }
     / add

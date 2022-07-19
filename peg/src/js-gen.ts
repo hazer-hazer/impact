@@ -15,6 +15,12 @@ const builtNames: Record<string, string> = {
     '*': 'pow',
     '/': 'div',
     '%': 'mod',
+    '>': 'gt',
+    '<': 'lt',
+    '>=': 'lte',
+    '<=': 'gte',
+    '==': 'eq',
+    '!=': 'neq',
 }
 
 export class JSGen {
