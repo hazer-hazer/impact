@@ -48,7 +48,7 @@ export class Compiler {
         this.tyCtx = new Ctx()
 
         this.options = { ...defaultOptions, ...options }
-    
+
         this.initContext()
     }
 
