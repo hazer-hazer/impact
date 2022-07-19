@@ -59,7 +59,7 @@ export class Compiler {
         const jsPrelude: Record<string, any> = {}
         for (const [name, decl] of Object.entries(prelude)) {
             const source = `prelude/${name}`
-            const ty = this.parse<AstTy>(source, decl[0], 'ty').unwrap()
+            const ty = this.parse<AstTy>(source, decl[0], 'ty').unwrap('Failed to parse some prelude declaration')
             this.tyCtx.addInPlace({
                 tag: 'TypedTerm',
                 name,
@@ -107,7 +107,7 @@ export class Compiler {
         return runInContext(code, this.ctx)
     }
 
-    parse<T>(source: string, code: string, startRule: string): Result<T> {
+    parse<T>(source: string, code: string, startRule: string): Result<T, null> {
         try {
             return Result.Ok(this.parser.parse(code, {
                 parserCtx: this.parserCtx,
@@ -123,7 +123,7 @@ export class Compiler {
             } else {
                 console.log(e)   
             }
-            throw new Error('Failed to parse some of the prelude declarations')
+            return Result.Err(null)
         }
     }
 

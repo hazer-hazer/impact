@@ -64,7 +64,7 @@ mult =
 	/ call
 
 call 'application' =
-	lhs:primary __ arg:call {
+	lhs:primary _ arg:call {
         return {
             tag: 'App',
             lhs,

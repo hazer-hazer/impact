@@ -684,9 +684,6 @@ export class Ctx {
                 name: branchesEx,
             }))
 
-            console.log('elseCtx', elseCtx.pp())
-            
-
             return [elseCtx.apply({
                 tag: 'Existential',
                 name: branchesEx,
