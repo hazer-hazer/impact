@@ -30,10 +30,6 @@ export type Ty = {
     tag: 'Error'
 }
 
-function cmpTys(lty: Ty, rty: Ty): boolean {
-    return isDeepStrictEqual(lty, rty)
-}
-
 export function ppTy(ty: Ty): string {
     switch (ty.tag) {
     case 'Lit': {
@@ -698,8 +694,6 @@ export class Ctx {
     }
 
     private appSynth(calleeTy: Ty, arg: Expr): [Ty, Ctx] {
-        console.log('appSynth', ppExpr(arg), arg.tag)
-
         switch (calleeTy.tag) {
         case 'Existential': {
             const alpha1 = Ctx.freshEx()

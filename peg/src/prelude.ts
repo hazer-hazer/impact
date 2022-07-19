@@ -13,6 +13,9 @@ export function curry<T extends AnyFunc>(fn: T): AnyFunc {
     }
 }
 
+const infixOpTy = 'forall t. t -> t -> t'
+const cmpInfixOpTy = 'forall t. t -> t -> Bool'
+
 export const prelude: Prelude = {
     print: [
         'forall t. t -> ()',
@@ -20,10 +23,68 @@ export const prelude: Prelude = {
             (a: any) => console.log(a),
         ),
     ],
+
+    // Basic math operators //
     '+': [
-        'forall t. t -> t -> t',
+        infixOpTy,
         curry(
             (lhs: any, rhs: any) => lhs + rhs,
+        ),
+    ],
+    '-': [
+        infixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs - rhs,
+        ),
+    ],
+    '*': [
+        infixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs * rhs,
+        ),
+    ],
+    '/': [
+        infixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs / rhs,
+        ),
+    ],
+
+    // Comparison operators //
+    '>': [
+        cmpInfixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs > rhs,
+        ),
+    ],
+    '<': [
+        cmpInfixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs < rhs,
+        ),
+    ],
+    '>=': [
+        cmpInfixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs >= rhs,
+        ),
+    ],
+    '<=': [
+        cmpInfixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs <= rhs,
+        ),
+    ],
+    '==': [
+        cmpInfixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs == rhs,
+        ),
+    ],
+    '!=': [
+        cmpInfixOpTy,
+        curry(
+            (lhs: any, rhs: any) => lhs != rhs,
         ),
     ],
 }

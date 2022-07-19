@@ -42,12 +42,18 @@ expr 'expression' =
     / ascription
 
 ascription 'type ascription' =
-	expr:add _ ':' _ ty:ty {
+	expr:cmp _ ':' _ ty:ty {
         return {
             tag: 'Anno',
             expr,
             ty,
         }
+    }
+    / cmp
+
+cmp =
+    lhs:add ops:(_ @('>' / '<' / '<=' / '>=' / '==' / '!=') _ @add)* {
+        return ctx.makeInfix(lhs, ops)
     }
     / add
 

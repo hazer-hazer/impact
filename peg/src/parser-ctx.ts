@@ -1,4 +1,4 @@
-import { Expr, Item } from './ast'
+import { Expr } from './ast'
 
 export class ParserCtx {
     private indentStack: string[] = []
@@ -49,8 +49,6 @@ export class ParserCtx {
     }
 
     public makeApp(lhs: Expr, args: Expr[]): Expr {
-        console.log('args', args)
-
         return args.reduce((lhs, arg) => ({
             tag: 'App',
             lhs,

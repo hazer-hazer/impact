@@ -6,8 +6,8 @@ const continueChars = ['=']
 
 const compiler = new Compiler({
     // printSource: true,
-    printJS: true,
-    printAst: true,
+    // printJS: true,
+    // printAst: true,
 })
 
 start({
