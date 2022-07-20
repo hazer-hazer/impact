@@ -19,6 +19,7 @@
         "functions": "always-multiline"
       }
     ],
+    "no-extra-parens": ["error", "always"],
     "eol-last": ["error", "always"],
     "newline-per-chained-call": 2,
     "@typescript-eslint/no-explicit-any": "off"

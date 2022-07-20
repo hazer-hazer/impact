@@ -22,6 +22,17 @@ item 'item' =
             ty,
         }
     }
+    / 'data' _ name:ty_id ty_params:(__ var_id)* _ '=' _ (NL INDENT)?
+        first_cons:(SAMEINDENT '|'? _ @cons)
+        cons:(SAMEINDENT '|' _ @cons)
+    {
+        return {
+            tag: 'Data',
+            name,
+            ty_params,
+            cons: [first_cons, ...cons]
+        }
+    }
 	/ name:var_id params:(__ @var_id)* _ '=' _ body:body {
         return {
             tag: 'Term',
@@ -30,6 +41,13 @@ item 'item' =
             body,
         }
     }
+
+cons 'constructor' = SAMEINDENT name:ty_id types:(__ @ty)* {
+    return {
+        name,
+        types,
+    }
+}
 
 expr 'expression' =
     param:var_id _ '->' _ body:expr {
@@ -72,6 +90,13 @@ mult =
 call 'application' =
 	lhs:primary args:(_ @primary)* {
         return ctx.makeApp(lhs, args)
+    }
+    / cons:ty_id args:(_ @primary)* {
+        return {
+            tag: 'Cons',
+            cons,
+            args,
+        }
     }
 	/ primary
 
@@ -200,7 +225,7 @@ simple_ty =
         return ty
     }
 
-reserved_word = 'forall' / 'type' / 'if' / 'then' / 'else' / 'true' / 'false'
+reserved_word = 'forall' / 'type' / 'if' / 'then' / 'else' / 'true' / 'false' / 'data'
 
 var_id 'variable name' = !reserved_word @$([_]*[a-z][_A-z0-9]*)
 op_id = '(' @$([\+\-\*\/\^%&$\|]+) ')'

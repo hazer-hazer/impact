@@ -114,6 +114,7 @@ ${this.dedent()}}())
                 item.params.reduce((params, p) => `${params}(${p}) => `, '')
             } ${this.genExpr(item.body)};`
         }
+        case 'Data': return ''
         case 'Ty': return ''
         }
     }

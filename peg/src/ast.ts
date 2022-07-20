@@ -34,7 +34,7 @@ export type Expr = {
     tag: 'Var'
     name: string
 } | {
-    tag: 'Lit',
+    tag: 'Lit'
     kind: {
         tag: 'Unit'
     } | {
@@ -63,13 +63,17 @@ export type Expr = {
     expr: Expr
     ty: Ty
 } | {
-    tag: 'Block',
-    block: Block,
+    tag: 'Block'
+    block: Block
 } | {
-    tag: 'If',
-    cond: Expr,
-    then: Expr,
-    else: Expr,
+    tag: 'If'
+    cond: Expr
+    then: Expr
+    else: Expr
+} | {
+    tag: 'Cons'
+    cons: string
+    args: Expr[]
 }
 
 export type Item = {
@@ -81,6 +85,14 @@ export type Item = {
     name: string
     params: string[]
     body: Expr
+} | {
+    tag: 'Data'
+    name: string
+    ty_params: string[]
+    cons: {
+        name: string
+        types: Ty[]
+    }[]
 }
 
 export type Stmt = {
@@ -146,6 +158,7 @@ export class PP {
         case 'Block': return this.ppBlock(expr.block)
         case 'Let': return `let ${this.ppBlock(expr.body)}`
         case 'If': return `if ${this.ppExpr(expr.cond)} then ${this.ppExpr(expr.then)} else ${this.ppExpr(expr.else)}`
+        case 'Cons': return `${expr.cons} ${expr.args.map(ppExpr).join(' ')}`
         }
     }
 
@@ -177,6 +190,15 @@ export class PP {
             return `${item.name} ${item.params.join(' ')}${item.params.length ? ' ' : ''}= ${this.ppExpr(item.body)}`
         }
         case 'Ty': return `type ${item.name} = ${ppTy(item.ty)}`
+        case 'Data': {
+            this.indent()
+
+            const cons = item.cons.map(c => `${this.indentStr()}| ${c.name} ${c.types.map(ppTy)}`).join('\n')
+
+            this.dedent()
+
+            return `data ${item.name} =\n${cons}`
+        }
         }
     }
 

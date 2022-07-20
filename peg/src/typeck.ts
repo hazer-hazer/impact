@@ -26,6 +26,10 @@ export type Ty = {
     param: Ty
     ret: Ty
 } | {
+    tag: 'Data'
+    name: string
+    types: Ty[]
+} | {
     tag: 'Error'
 }
 
@@ -44,6 +48,7 @@ export function ppTy(ty: Ty): string {
     case 'Existential': return `^${ty.name}`
     case 'Forall': return `forall ${ty.alpha}. ${ppTy(ty.ty)}`
     case 'Func': return `${ppTy(ty.param)} -> ${ppTy(ty.ret)}`
+    case 'Data': return `${ty.name} ${ty.types.map(ppTy).join(' | ')}`
     case 'Error': return '[ERROR]'
     }
 }
@@ -93,39 +98,44 @@ function isMonotype(a: Ty): boolean {
     }
 }
 
-function substitute(a: Ty, name: string, b: Ty): Ty {
-    switch (a.tag) {
-    case 'Lit': return a
+function substitute(inTy: Ty, name: string, withTy: Ty): Ty {
+    switch (inTy.tag) {
+    case 'Lit': return inTy
     case 'Var': {
-        if (a.name === name) {
-            return b
+        if (inTy.name === name) {
+            return withTy
         }
-        return a
+        return inTy
     }
     case 'Forall': {
-        if (a.alpha === name) {
+        if (inTy.alpha === name) {
             return {
                 tag: 'Forall',
-                alpha: a.alpha,
-                ty: b,
+                alpha: inTy.alpha,
+                ty: withTy,
             }
         }
         return {
             tag: 'Forall',
-            alpha: a.alpha,
-            ty: substitute(a.ty, name, b),
+            alpha: inTy.alpha,
+            ty: substitute(inTy.ty, name, withTy),
         }
     }
     case 'Existential': {
-        if (a.name === name) {
-            return b
+        if (inTy.name === name) {
+            return withTy
         }
-        return a
+        return inTy
     }
     case 'Func': return {
         tag: 'Func',
-        param: substitute(a.param, name, b),
-        ret: substitute(a.ret, name, b),
+        param: substitute(inTy.param, name, withTy),
+        ret: substitute(inTy.ret, name, withTy),
+    }
+    case 'Data': return {
+        tag: 'Data',
+        name: inTy.name,
+        types: inTy.types.map(ty => substitute(ty, name, withTy))
     }
     case 'Error': throw new InferErr('Cannot substitute error type')
     }
@@ -143,6 +153,7 @@ function occursIn(name: string, a: Ty): boolean {
         return occursIn(name, a.ty)
     }
     case 'Existential': return name === a.name
+    case 'Data': return a.types.some(ty => occursIn(name, ty))
     case 'Error': return false
     }
 }
@@ -162,9 +173,13 @@ type CtxEl = {
     name: string
     ty: Ty
 } | {
-    tag: 'Alias',
-    name: string,
-    ty: Ty,
+    tag: 'Alias'
+    name: string
+    ty: Ty
+} | {
+    tag: 'Cons'
+    name: string
+    ty: Ty
 }
 
 function ppCtxEl(el: CtxEl): string {
@@ -174,6 +189,7 @@ function ppCtxEl(el: CtxEl): string {
     case 'Marker': return `>${el.name}`
     case 'TypedTerm': return `${el.name}: ${ppTy(el.ty)}`
     case 'Alias': return `type ${el.name} = ${ppTy(el.ty)}`
+    case 'Cons': return `${el.name} ${ppTy(el.ty)}`
     }
 }
 
@@ -259,6 +275,18 @@ export class Ctx {
         throw new Error()
     }
 
+    private resolveCons(name: string): Ty {
+        const index = this.findIndex('Cons', name)
+        if (index < 0) {
+            throw new InferErr(`Constructor ${name} not found`)
+        }
+        const el = this.elements[index]
+        if (el.tag === 'Cons') {
+            return el.ty
+        }
+        throw new Error()
+    }
+
     // Figure 7.
     private isWf(ty: Ty): boolean {
         switch (ty.tag) {
@@ -270,6 +298,7 @@ export class Ctx {
             name: ty.alpha,
         }).isWf(ty.ty)
         case 'Existential': return this.elements.some(el => el.tag === 'Existential' && el.name === ty.name)
+        case 'Data': return ty.types.every(ty => this.isWf(ty)) && 
         case 'Error': return false
         }
     }
@@ -703,6 +732,10 @@ export class Ctx {
                 name: branchesEx,
             })]
         }
+        case 'Cons': {
+            const ty = this.resolveCons(expr.cons)
+            return [ty, this]
+        }
         }
 
         throw new InferErr(`Cannot synthesize type for expression ${ppExpr(expr)}`)
@@ -812,6 +845,34 @@ export class Ctx {
             const [termTy, termCtx] = ctx.synthExpr(body)
 
             return [termTy, termCtx]
+        }
+        case 'Data': {
+            // AGENDA
+
+            // TODO: Add message with duplicate constructors names
+            if (new Set(item.cons.map(c => c.name)).size !== item.cons.length) {
+                throw new InferErr('Duplicate constructors found')
+            }
+
+            const ctx = this.add({
+                tag: ''
+            })
+
+            const ctx = this.addMany(item.cons.map(cons => {
+                if (cons.types.length > 1) {
+                    throw new Error('TODO: Multi-type constructors')
+                }
+                return {
+                    tag: 'Cons',
+                    name: cons.name,
+                    ty: item.ty_params.reduceRight((ty, alpha) => ({
+                        tag: 'Forall',
+                        alpha,
+                        ty: ty,
+                    }), conv(cons.types[0]))
+                }
+            }))
+
         }
         }
     }
