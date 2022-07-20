@@ -176,7 +176,7 @@ export class PP {
         case 'Term': {
             return `${item.name} ${item.params.join(' ')}${item.params.length ? ' ' : ''}= ${this.ppExpr(item.body)}`
         }
-        case 'Ty': return `type ${item.name} = ${item.ty}`
+        case 'Ty': return `type ${item.name} = ${ppTy(item.ty)}`
         }
     }
 
@@ -191,7 +191,7 @@ export class PP {
             }
             break
         }
-        case 'Func': return `${ty.param} -> ${ty.ret}`
+        case 'Func': return `${ppTy(ty.param)} -> ${ppTy(ty.ret)}`
         case 'Var': return ty.name
         case 'ConId': return ty.name
         case 'Forall': return `forall ${ty.alpha}. ${this.ppTy(ty.ty)}`

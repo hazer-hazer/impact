@@ -1,4 +1,3 @@
-import { ok } from 'assert'
 import chalk from 'chalk'
 import { readFileSync } from 'fs'
 import { generate, Parser, SourceText } from 'peggy'
@@ -22,8 +21,18 @@ const defaultOptions: Options = {
     printAst: false,
 }
 
-interface PegSyntaxError {
+interface PegSyntaxError extends Error {
     format(sources: SourceText[]): string;
+}
+
+const printSyntaxError = (err: PegSyntaxError, source: string, code: string) => {
+    console.log(chalk.red(err.format([
+        { source, text: code },
+    ])))
+}
+
+const printErr = <E extends Error>(err: E) => {
+    console.log(chalk.red(err.message))
 }
 
 const isSyntaxError = (e: any): e is PegSyntaxError => 'format' in e
@@ -44,7 +53,7 @@ export class Compiler {
         })
 
         this.ctx = createContext()
-
+ 
         this.jsGen = new JSGen()
         this.parserCtx = new ParserCtx()
         this.tyCtx = new Ctx()
@@ -89,12 +98,21 @@ export class Compiler {
             if (!args[0]) {
                 throw new Error('Expected type name as an argument')
             }
-            const expr = this.parse<Expr>('[:t command]', args[0], 'expr').unwrap()
-            const ty = this.typeck({
-                tag: 'Expr',
-                expr,
-            })
-            console.log(ppTy(ty))
+            const source = '[:t command]'
+            const expr = this
+                .parse<Expr>(source, args[0], 'expr')
+                .mapErr(err => printSyntaxError(err, source, args[0]))
+                .unwrapWith(null)
+
+            const ty = this
+                .typeck({
+                    tag: 'Expr',
+                    expr,
+                })
+                .mapErr(printErr)
+                .unwrapWith(null)
+
+            console.log(ppTy(ty))                
             return
         }
         default: {
@@ -107,7 +125,7 @@ export class Compiler {
         return runInContext(code, this.ctx)
     }
 
-    parse<T>(source: string, code: string, startRule: string): Result<T, null> {
+    parse<T>(source: string, code: string, startRule: string): Result<T, PegSyntaxError> {
         try {
             return Result.Ok(this.parser.parse(code, {
                 parserCtx: this.parserCtx,
@@ -117,26 +135,21 @@ export class Compiler {
         } catch (e) {
             // Idk why the heck peggy does not export its SyntaxError so I could use instanceof 🙄
             if (isSyntaxError(e)) {
-                console.log(chalk.red(e.format([
-                    { source, text: code },
-                ])))
-            } else {
-                console.log(e)   
+                return Result.Err(e)
             }
-            return Result.Err(null)
+            throw e
         }
     }
 
-    typeck(stmt: Stmt): Ty {
+    typeck(stmt: Stmt): Result<Ty, InferErr> {
         try {
             const [ty, ctx] = this.tyCtx.synth(stmt)
             this.tyCtx = ctx
-            return ty
+            return Result.Ok(ty)
         } catch (e) {
             if (e instanceof InferErr) {
-                console.error(e)
+                return Result.Err(e)
             }
-
             throw e
         }
     }
@@ -147,7 +160,12 @@ export class Compiler {
                 console.log(`Source:\n\`${code}\``)
             }
 
-            const ast = this.parse<AST>('REPL', code, 'line').unwrap()
+            const source = 'REPL'
+
+            const ast = this
+                .parse<AST>(source, code, 'line')
+                .mapErr(err => printSyntaxError(err, source, code))
+                .unwrapWith(null)
 
             if (this.options.printAst) {
                 const pp = new PP()
@@ -155,7 +173,10 @@ export class Compiler {
                 console.log(`AST:\n${pp.pp(ast)}`)
             }
 
-            const ty = this.typeck(ast.stmt)
+            const ty = this
+                .typeck(ast.stmt)
+                .mapErr(printErr)
+                .unwrapWith(null)
 
             console.log(chalk.magenta(`:${ppTy(this.tyCtx.apply(ty))}`))
 
@@ -176,7 +197,9 @@ export class Compiler {
                 console.log(e.message, e.constructor.name)
             }
 
-            throw e
+            if (e) {
+                throw e
+            }
         }
     }
 }

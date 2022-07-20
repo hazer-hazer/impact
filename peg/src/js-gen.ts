@@ -114,7 +114,7 @@ ${this.dedent()}}())
                 item.params.reduce((params, p) => `${params}(${p}) => `, '')
             } ${this.genExpr(item.body)};`
         }
-        case 'Ty': return `type ${item.name} = ${item.ty}`
+        case 'Ty': return ''
         }
     }
 }

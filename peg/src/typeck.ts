@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'util'
 import { Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
 
 export type Ty = {
@@ -49,7 +48,7 @@ export function ppTy(ty: Ty): string {
     }
 }
 
-export function conv(astTy: AstTy): Ty {
+export function conv(astTy: AstTy, ctx: Ctx | null = null): Ty {
     switch (astTy.tag) {
     case 'Lit': {
         return {
@@ -60,8 +59,8 @@ export function conv(astTy: AstTy): Ty {
     case 'Func': {
         return {
             tag: 'Func',
-            param: conv(astTy.param),
-            ret: conv(astTy.ret),
+            param: conv(astTy.param, ctx),
+            ret: conv(astTy.ret, ctx),
         }
     }
     case 'Var': {
@@ -71,13 +70,16 @@ export function conv(astTy: AstTy): Ty {
         }
     }
     case 'ConId': {
-        throw new Error('Todo: type aliases')
+        if (!ctx) {
+            throw new Error('Cannot convert AST type without context specified')
+        }
+        return ctx.resolveAlias(astTy.name)
     }
     case 'Forall': {
         return {
             tag: 'Forall',
             alpha: astTy.alpha,
-            ty: conv(astTy.ty),
+            ty: conv(astTy.ty, ctx),
         }
     }
     }
@@ -159,10 +161,10 @@ type CtxEl = {
     tag: 'TypedTerm'
     name: string
     ty: Ty
-}
-
-function cmpEls(lel: CtxEl, rel: CtxEl): boolean {
-    return isDeepStrictEqual(lel, rel)
+} | {
+    tag: 'Alias',
+    name: string,
+    ty: Ty,
 }
 
 function ppCtxEl(el: CtxEl): string {
@@ -171,6 +173,7 @@ function ppCtxEl(el: CtxEl): string {
     case 'Existential': return `^${el.name}${el.solution ? ` = ${ppTy(el.solution)}` : ''}`
     case 'Marker': return `>${el.name}`
     case 'TypedTerm': return `${el.name}: ${ppTy(el.ty)}`
+    case 'Alias': return `type ${el.name} = ${ppTy(el.ty)}`
     }
 }
 
@@ -210,12 +213,12 @@ export class Ctx {
         throw new InferErr(`Type for ${name} not found`)
     }
 
-    private findIndex(el: CtxEl): number {
-        return this.elements.findIndex(e => cmpEls(el, e))
+    private findIndex(tag: CtxEl['tag'], name: string): number {
+        return this.elements.findIndex(el => el.tag === tag && el.name === name)
     }
 
     private drop(el: CtxEl): Ctx {
-        const index = this.findIndex(el)
+        const index = this.findIndex(el.tag, el.name)
         if (index < 0) {
             throw new Error(`Failed to find context element ${ppCtxEl(el)} to drop`)
         }
@@ -223,7 +226,7 @@ export class Ctx {
     }
 
     private split(el: CtxEl): CtxEl[] {
-        const index = this.findIndex(el)
+        const index = this.findIndex(el.tag, el.name)
         if (index < 0) {
             return []
         }
@@ -242,6 +245,18 @@ export class Ctx {
         this.addMany(insert)
         this.addMany(rightSide)
         return this
+    }
+
+    public resolveAlias(name: string): Ty {
+        const index = this.findIndex('Alias', name)
+        if (index < 0) {
+            throw new InferErr(`Type ${name} not found`)
+        }
+        const el = this.elements[index]
+        if (el.tag === 'Alias') {
+            return el.ty
+        }
+        throw new Error()
     }
 
     // Figure 7.
@@ -282,7 +297,7 @@ export class Ctx {
             param: this.apply(ty.param),
             ret: this.apply(ty.ret),
         }
-        case 'Error': throw new InferErr('Cannot apply context to apply')
+        case 'Error': throw new InferErr('Cannot apply context to error type')
         }
     }
 
@@ -586,7 +601,7 @@ export class Ctx {
             throw new InferErr(`${ppExpr(expr)} is not defined`)
         }
         case 'Anno': {
-            const ty = conv(expr.ty)
+            const ty = conv(expr.ty, this)
             const delta = this.check(expr.expr, ty)
             return [
                 ty,
@@ -761,7 +776,18 @@ export class Ctx {
 
     private synthItem(item: Item): [Ty, Ctx] {
         switch (item.tag) {
-        case 'Ty': throw new Error('todo')
+        case 'Ty': {
+            // TODO: Maybe return Unit type?
+            const ty = conv(item.ty, this)
+            return [
+                ty,
+                this.add({
+                    tag: 'Alias',
+                    name: item.name,
+                    ty,
+                }),
+            ]
+        }
         case 'Term': {
             let body: Expr = item.body
             if (item.params.length) {
