@@ -67,14 +67,14 @@ export class JSGen {
         // return ast.stmts.map(stmt => this.genStmt(stmt)).join('\n')
     }
 
-    private genStmt(stmt: Stmt): string {
+    public genStmt(stmt: Stmt): string {
         switch (stmt.tag) {
         case 'Expr': return this.genExpr(stmt.expr)
         case 'Item': return this.genItem(stmt.item)
         }
     }
 
-    private genExpr(expr: Expr): string {
+    public genExpr(expr: Expr): string {
         switch (expr.tag) {
         case 'Abs': {
             return `(${expr.param} => ${this.genExpr(expr.body)})`
@@ -100,7 +100,7 @@ export class JSGen {
         }
     }
 
-    private genBlock(block: Block): string {
+    public genBlock(block: Block): string {
         const returnExpr = block.stmts.pop()
 
         return `
@@ -111,7 +111,7 @@ ${this.dedent()}}())
 `.trim()
     }
 
-    private genItem(item: Item): string {
+    public genItem(item: Item): string {
         switch (item.tag) {
         case 'Term': {
             return `const ${item.name} = ${

@@ -2,6 +2,10 @@
     const ctx = options.parserCtx.reset()
 }
 
+ast = (_ NL)? stmts:(stmt) (_ NL _)? {
+    return 
+}
+
 line = NL? stmt:stmt {
     return {stmt}
 }

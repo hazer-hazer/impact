@@ -110,7 +110,7 @@ export type Stmt = {
 // }
 
 export type AST = {
-    stmt: Stmt
+    stmts: Stmt[]
 }
 
 export function ppExpr(expr: Expr): string {
@@ -168,7 +168,7 @@ export class PP {
         case 'Block': return this.ppBlock(expr.block)
         case 'Let': return `let ${this.ppBlock(expr.body)}`
         case 'If': return `if ${this.ppExpr(expr.cond)} then ${this.ppExpr(expr.then)} else ${this.ppExpr(expr.else)}`
-        case 'Cons': return `${expr.cons} ${expr.args.map(ppExpr).join(' ')}`
+        case 'Cons': return `${expr.cons}${expr.args.length ? ' ' : ''}${expr.args.map(ppExpr).join(' ')}`
         }
     }
 
