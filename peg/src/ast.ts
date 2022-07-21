@@ -114,11 +114,19 @@ export type AST = {
 }
 
 export function ppExpr(expr: Expr): string {
-    return (new PP()).ppExpr(expr)
+    return new PP().ppExpr(expr)
 }
 
 export function ppTy(ty: Ty): string {
-    return (new PP()).ppTy(ty)
+    return new PP().ppTy(ty)
+}
+
+export function ppStmt(stmt: Stmt): string {
+    return new PP().ppStmt(stmt)
+}
+
+export function pp(ast: AST): string {
+    return new PP().pp(ast)
 }
 
 // PP //

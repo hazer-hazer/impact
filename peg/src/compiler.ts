@@ -2,7 +2,7 @@ import chalk from 'chalk'
 import { readFileSync } from 'fs'
 import { generate, Parser, SourceText } from 'peggy'
 import { Context, createContext, runInContext } from 'vm'
-import { AST, Expr, PP, Stmt, Ty as AstTy } from './ast'
+import { AST, Expr, pp, PP, ppExpr, Stmt, Ty as AstTy } from './ast'
 import { JSGen } from './js-gen'
 import { ParserCtx } from './parser-ctx'
 import { prelude } from './prelude'
@@ -112,7 +112,7 @@ export class Compiler {
                 .mapErr(printErr)
                 .unwrapWith(null)
 
-            console.log(ppTy(ty))                
+            console.log(chalk.magenta(`${ppExpr(expr)}: ${ppTy(ty)}`))                
             return
         }
         default: {
@@ -168,9 +168,7 @@ export class Compiler {
                 .unwrapWith(null)
 
             if (this.options.printAst) {
-                const pp = new PP()
-    
-                console.log(`AST:\n${pp.pp(ast)}`)
+                console.log(`AST:\n${pp(ast)}`)
             }
 
             const ty = this
@@ -178,7 +176,7 @@ export class Compiler {
                 .mapErr(printErr)
                 .unwrapWith(null)
 
-            console.log(chalk.magenta(`:${ppTy(this.tyCtx.apply(ty))}`))
+            console.log(chalk.magenta(`${pp(ast)}:${ppTy(this.tyCtx.apply(ty))}`))
 
             const js = this.jsGen.gen(ast)
 
