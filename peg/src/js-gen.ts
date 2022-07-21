@@ -23,6 +23,9 @@ const builtNames: Record<string, string> = {
     '!=': 'neq',
 }
 
+const dataTypeTag = '__$tag'
+const dataTypeValues = '__$values'
+
 export class JSGen {
     options: Options
 
@@ -93,6 +96,7 @@ export class JSGen {
         case 'Let': return `let ${this.genBlock(expr.body)}`
         case 'Anno': return this.genExpr(expr.expr)
         case 'If': return `(${this.genExpr(expr.cond)} ? ${this.genExpr(expr.then)} : ${this.genExpr(expr.else)})`
+        case 'Cons': return `${expr.cons}${expr.args.map(arg => `(${this.genExpr(arg)})`)}`
         }
     }
 
@@ -114,7 +118,30 @@ ${this.dedent()}}())
                 item.params.reduce((params, p) => `${params}(${p}) => `, '')
             } ${this.genExpr(item.body)};`
         }
-        case 'Data': return ''
+        case 'Data': {
+            // data A = C1 | C2
+            // const C1 = {__$tag: 'C1', __$value: []}
+            // const C2 = {__$tag: 'C2', __$values: []}
+
+            // data Opt a = Some a | None
+            // const Some = (_1) => {__$tag: 'Some', __$values: [_1]}
+            // const None = {__$tag: 'None'}
+            return item.cons.map(con =>
+                `const ${
+                    con.name
+                } = ${
+                    con.types.reduce((tys, _, i) => `${tys}(_${i}) => `, '')
+                } {${
+                    dataTypeTag
+                }: '${
+                    con.name
+                }', ${
+                    dataTypeValues
+                }: [${
+                    con.types.map((_, i) => `_${i}`)
+                }]}`)
+                .join('\n')
+        }
         case 'Ty': return ''
         }
     }

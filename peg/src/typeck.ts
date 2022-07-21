@@ -1,4 +1,4 @@
-import { Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
+import { Constructor, Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
 
 export type Ty = {
     tag: 'Lit'
@@ -298,7 +298,7 @@ export class Ctx {
             name: ty.alpha,
         }).isWf(ty.ty)
         case 'Existential': return this.elements.some(el => el.tag === 'Existential' && el.name === ty.name)
-        case 'Data': return ty.types.every(ty => this.isWf(ty)) && 
+        case 'Data': return ty.types.every(ty => this.isWf(ty))
         case 'Error': return false
         }
     }
@@ -325,6 +325,11 @@ export class Ctx {
             tag: 'Func',
             param: this.apply(ty.param),
             ret: this.apply(ty.ret),
+        }
+        case 'Data': return {
+            tag: 'Data',
+            name: ty.name,
+            types: ty.types.map(this.apply.bind(this))
         }
         case 'Error': throw new InferErr('Cannot apply context to error type')
         }
@@ -847,33 +852,44 @@ export class Ctx {
             return [termTy, termCtx]
         }
         case 'Data': {
-            // AGENDA
-
             // TODO: Add message with duplicate constructors names
             if (new Set(item.cons.map(c => c.name)).size !== item.cons.length) {
                 throw new InferErr('Duplicate constructors found')
             }
 
-            const ctx = this.add({
-                tag: ''
-            })
+            const consTypes = item.cons.map(con => this.conType(item.name, item.tyParams, con))
 
-            const ctx = this.addMany(item.cons.map(cons => {
-                if (cons.types.length > 1) {
-                    throw new Error('TODO: Multi-type constructors')
-                }
-                return {
-                    tag: 'Cons',
-                    name: cons.name,
-                    ty: item.ty_params.reduceRight((ty, alpha) => ({
-                        tag: 'Forall',
-                        alpha,
-                        ty: ty,
-                    }), conv(cons.types[0]))
-                }
+            const ctx = consTypes.reduce((ctx, ty, i) => ctx.add({
+                tag: 'Cons',
+                name: item.cons[i].name,
+                ty,
+            }), this.clone())
+
+            return [{
+                tag: 'Data',
+                name: item.name,
+                types: consTypes
+            }, ctx]
+        }
+        }
+    }
+
+    private conType(declName: string, tyParams: string[], con: Constructor): Ty {
+        return tyParams.reduceRight((forall, param): Ty => ({
+            tag: 'Forall',
+            alpha: param,
+            ty: forall,
+        }), con.types.reduceRight((arr, ty): Ty => ({
+            tag: 'Func',
+            param: arr,
+            ret: conv(ty),
+        }), <Ty>{
+            tag: 'Data',
+            name: declName,
+            types: tyParams.map(name => ({
+                tag: 'Var',
+                name,
             }))
-
-        }
-        }
+        }))
     }
 }

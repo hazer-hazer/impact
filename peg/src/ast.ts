@@ -76,6 +76,11 @@ export type Expr = {
     args: Expr[]
 }
 
+export type Constructor = {
+    name: string
+    types: Ty[]
+}
+
 export type Item = {
     tag: 'Ty'
     name: string
@@ -88,11 +93,8 @@ export type Item = {
 } | {
     tag: 'Data'
     name: string
-    ty_params: string[]
-    cons: {
-        name: string
-        types: Ty[]
-    }[]
+    tyParams: string[]
+    cons: Constructor[]
 }
 
 export type Stmt = {

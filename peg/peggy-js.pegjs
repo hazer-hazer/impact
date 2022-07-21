@@ -22,17 +22,26 @@ item 'item' =
             ty,
         }
     }
-    / 'data' _ name:ty_id ty_params:(__ var_id)* _ '=' _ (NL INDENT)?
-        first_cons:(SAMEINDENT '|'? _ @cons)
-        cons:(SAMEINDENT '|' _ @cons)
+    / 'data' _ name:ty_id ty_params:(__ @var_id)* _ '=' _ ('|' _)? first_con:con cons:(_ '|' _ @con)*
     {
         return {
             tag: 'Data',
             name,
-            ty_params,
-            cons: [first_cons, ...cons]
+            tyParams: ty_params,
+            cons: [first_con, ...cons]
         }
     }
+    // / 'data' _ name:ty_id ty_params:(__ var_id)* _ '=' _ (NL INDENT)?
+    //     first_cons:(SAMEINDENT '|'? _ @cons)
+    //     cons:(SAMEINDENT '|' _ @cons)
+    // {
+    //     return {
+    //         tag: 'Data',
+    //         name,
+    //         ty_params,
+    //         cons: [first_cons, ...cons]
+    //     }
+    // }
 	/ name:var_id params:(__ @var_id)* _ '=' _ body:body {
         return {
             tag: 'Term',
@@ -42,7 +51,7 @@ item 'item' =
         }
     }
 
-cons 'constructor' = SAMEINDENT name:ty_id types:(__ @ty)* {
+con 'constructor' = name:ty_id types:(__ @ty)* {
     return {
         name,
         types,
@@ -228,7 +237,7 @@ simple_ty =
 reserved_word = 'forall' / 'type' / 'if' / 'then' / 'else' / 'true' / 'false' / 'data'
 
 var_id 'variable name' = !reserved_word @$([_]*[a-z][_A-z0-9]*)
-op_id = '(' @$([\+\-\*\/\^%&$\|]+) ')'
+op_id = '(' @$([\+\-\*\/\^%&$\|=]+) ')'
 ty_id 'type name' = $([_]*[A-Z][_A-z0-9]*)
 
 semi 'semi' = (EOL / ';')+
