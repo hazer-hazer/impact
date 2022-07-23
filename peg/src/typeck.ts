@@ -1,4 +1,4 @@
-import { Constructor, Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
+import { AST, Constructor, Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
 
 export type Ty = {
     tag: 'Lit'
@@ -611,7 +611,7 @@ export class Ctx {
         return theta.subtype(theta.apply(synthTy), theta.apply(ty))
     }
 
-    public synth(stmt: Stmt): [Ty, Ctx] {
+    public synthStmt(stmt: Stmt): [Ty, Ctx] {
         switch (stmt.tag) {
         case 'Expr': return this.synthExpr(stmt.expr)
         case 'Item': return this.synthItem(stmt.item)

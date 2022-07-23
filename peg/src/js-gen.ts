@@ -63,8 +63,7 @@ export class JSGen {
     }
 
     public gen(ast: AST): string {
-        return this.genStmt(ast.stmt)
-        // return ast.stmts.map(stmt => this.genStmt(stmt)).join('\n')
+        return ast.items.map(item => this.genItem(item)).join('\n')
     }
 
     public genStmt(stmt: Stmt): string {

@@ -8,7 +8,7 @@ const compiler = new Compiler({
     // printSource: true,
     // printJS: true,
     // printAst: true,
-    printPrelude: true
+    // printPrelude: true,
 })
 
 start({

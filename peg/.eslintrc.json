@@ -19,9 +19,18 @@
         "functions": "always-multiline"
       }
     ],
-    "no-extra-parens": ["error", "always"],
+    "no-extra-parens": ["error", "all"],
     "eol-last": ["error", "always"],
     "newline-per-chained-call": 2,
-    "@typescript-eslint/no-explicit-any": "off"
+    "@typescript-eslint/no-explicit-any": "off",
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ]
   }
 }

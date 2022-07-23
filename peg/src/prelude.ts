@@ -35,72 +35,72 @@ const _prelude: Prelude = {
     print: {
         tag: 'func',
         ty: 'forall t. t -> ()',
-        func: (a: any) => console.log(a)
+        func: (a: any) => console.log(a),
     },
 
     // Basic math operators //
     '+': {
         tag: 'func',
         ty: infixOpTy,
-        func: (lhs: any, rhs: any) => lhs + rhs
+        func: (lhs: any, rhs: any) => lhs + rhs,
     },
     '-': {
         tag: 'func',
         ty: infixOpTy,
-        func: (lhs: any, rhs: any) => lhs - rhs
+        func: (lhs: any, rhs: any) => lhs - rhs,
     },
     '*': {
         tag: 'func',
         ty: infixOpTy,
-        func: (lhs: any, rhs: any) => lhs * rhs
+        func: (lhs: any, rhs: any) => lhs * rhs,
     },
     '/': {
         tag: 'func',
         ty: infixOpTy,
-        func: (lhs: any, rhs: any) => lhs / rhs
+        func: (lhs: any, rhs: any) => lhs / rhs,
     },
 
     // Comparison operators //
     '>': {
         tag: 'func',
         ty: cmpInfixOpTy,
-        func: (lhs: any, rhs: any) => lhs > rhs
+        func: (lhs: any, rhs: any) => lhs > rhs,
     },
     '<': {
         tag: 'func',
         ty: cmpInfixOpTy,
-        func: (lhs: any, rhs: any) => lhs < rhs
+        func: (lhs: any, rhs: any) => lhs < rhs,
     },
     '>=': {
         tag: 'func',
         ty: cmpInfixOpTy,
-        func: (lhs: any, rhs: any) => lhs >= rhs
+        func: (lhs: any, rhs: any) => lhs >= rhs,
     },
     '<=': {
         tag: 'func',
         ty: cmpInfixOpTy,
-        func: (lhs: any, rhs: any) => lhs <= rhs
+        func: (lhs: any, rhs: any) => lhs <= rhs,
     },
     '==': {
         tag: 'func',
         ty: cmpInfixOpTy,
-        func: (lhs: any, rhs: any) => lhs == rhs
+        func: (lhs: any, rhs: any) => lhs == rhs,
     },
     '!=': {
         tag: 'func',
         ty: cmpInfixOpTy,
-        func: (lhs: any, rhs: any) => lhs != rhs
+        func: (lhs: any, rhs: any) => lhs != rhs,
     },
 }
 
 export const prelude = Object.fromEntries(Object.entries(_prelude).map(([name, decl]): [string, Decl] => {
     switch (decl.tag) {
-        case 'func': {
-            return [name, {
-                ...decl,
-                func: curry(decl.func),
-            }]
-        }
-        default: return [name, decl]
+    case 'func': {
+        return [name, {
+            ...decl,
+            func: curry(decl.func),
+        }]
+    }
+    default: return [name, decl]
     }
 }))

@@ -1,13 +1,12 @@
 import chalk from 'chalk'
-import { assert, table } from 'console'
 import { readFileSync } from 'fs'
-import { generate, Parser, SourceText } from 'peggy'
+import { Parser, SourceText, generate } from 'peggy'
 import { Context, createContext, runInContext } from 'vm'
-import { AST, Expr, Item, pp, PP, ppExpr, Stmt, Ty as AstTy } from './ast'
+import { AST, Ty as AstTy, Expr, Stmt, ppExpr, ppStmt } from './ast'
 import { JSGen } from './js-gen'
 import { ParserCtx } from './parser-ctx'
 import { firstClassPrelude, prelude } from './prelude'
-import { conv, Ctx, InferErr, ppTy, Ty } from './typeck'
+import { Ctx, InferErr, Ty, conv, ppTy } from './typeck'
 import { Result } from './types'
 
 export type Options = {
@@ -52,7 +51,7 @@ export class Compiler {
     constructor(options: Options) {
         this.grammar = readFileSync('./peggy-js.pegjs', 'utf-8')
         this.parser = generate(this.grammar, {
-            allowedStartRules: ['line', 'ty', 'expr', 'item'],
+            allowedStartRules: ['ast', 'line', 'ty', 'expr', 'item'],
         })
 
         this.ctx = createContext()
@@ -74,89 +73,97 @@ export class Compiler {
         const ast = this
             .parse<AST>(source, firstClassPrelude, 'ast')
             .mapErr(err => printSyntaxError(err, source, firstClassPrelude))
-            .unwrap(`Failed to parse first-class prelude`)
+            .unwrap('Failed to parse first-class prelude')
 
-        const [_, ctx] = this.typeck(ast.stmt).unwrap(`Type check failed on first-class prelude`)
+        const ctx = ast.items.reduce((ctx, item) => this.typeck({
+            tag: 'Item',
+            item,
+        }, ctx).unwrap('Type check failed on first-class prelude')[1], new Ctx()) 
 
-        this.exec(this.jsGen.gen(ast))
+        const fcPrelude = this.jsGen.gen(ast)
 
-        let tyCtx = ctx
+        const tyCtx = ctx
 
         // JS prelude
         for (const [name, decl] of Object.entries(prelude)) {
             const source = `prelude/${name}`
 
             switch (decl.tag) {
-                case 'func':
-                case 'val': {
-                    const ty = this.parse<AstTy>(source, decl.ty, 'ty').unwrap(`Failed to parse type of ${decl.tag} '${name}' from prelude`)
-                    tyCtx.addInPlace({
-                        tag: 'TypedTerm',
-                        name,
-                        ty: conv(ty),
-                    })
+            case 'func':
+            case 'val': {
+                const ty = this.parse<AstTy>(source, decl.ty, 'ty').unwrap(`Failed to parse type of ${decl.tag} '${name}' from prelude`)
+                tyCtx.addInPlace({
+                    tag: 'TypedTerm',
+                    name,
+                    ty: conv(ty),
+                })
 
-                    let jsCode: any
-                    if (decl.tag === 'func') {
-                        jsCode = decl.func
-                    } else if (decl.tag === 'val') {
-                        jsCode = decl.val
-                    }
-
-                    jsPrelude[JSGen.qualifyName(name)] = jsCode
-                    break
+                let jsCode: any
+                if (decl.tag === 'func') {
+                    jsCode = decl.func
+                } else if (decl.tag === 'val') {
+                    jsCode = decl.val
                 }
+
+                jsPrelude[JSGen.qualifyName(name)] = jsCode
+                break
+            }
             }
         }
 
         this.tyCtx = tyCtx
+
         this.ctx = createContext(jsPrelude)
+        this.exec(fcPrelude)
 
         if (this.options.printPrelude) {
-            console.log(JSON.stringify(jsPrelude, null, 2));
+            console.log('JS Prelude:')
+            console.log(jsPrelude)
+            console.log('First-Class prelude')
+            console.log(fcPrelude)   
         }
     }
 
     runCommand(command: string, args: string[]): unknown | undefined {
         switch (command) {
-            case 'run': {
-                return this.exec(`${args[0]}(${args.slice(1).join(', ')})`)
+        case 'run': {
+            return this.exec(`${args[0]}(${args.slice(1).join(', ')})`)
+        }
+        case 'reset': {
+            this.initContext()
+            process.stdout.write('\u001B[2J\u001B[0;0f')
+            return
+        }
+        case 'ctx': {
+            console.log(this.ctx)
+            console.log(this.tyCtx.pp())
+            return
+        }
+        case 't': {
+            if (!args[0]) {
+                throw new Error('Expected type name as an argument')
             }
-            case 'reset': {
-                this.initContext()
-                process.stdout.write('\u001B[2J\u001B[0;0f')
-                return
-            }
-            case 'ctx': {
-                console.log(this.ctx)
-                console.log(this.tyCtx.pp())
-                return
-            }
-            case 't': {
-                if (!args[0]) {
-                    throw new Error('Expected type name as an argument')
-                }
-                const source = '[:t command]'
-                const expr = this
-                    .parse<Expr>(source, args[0], 'expr')
-                    .mapErr(err => printSyntaxError(err, source, args[0]))
-                    .unwrapWith(null)
+            const source = '[:t command]'
+            const expr = this
+                .parse<Expr>(source, args[0], 'expr')
+                .mapErr(err => printSyntaxError(err, source, args[0]))
+                .unwrapWith(null)
 
-                // TODO: Set this to resulting context?
-                const [ty, _] = this
-                    .typeck({
-                        tag: 'Expr',
-                        expr,
-                    })
-                    .mapErr(printErr)
-                    .unwrapWith(null)
+            // TODO: Set this to resulting context?
+            const [ty, _] = this
+                .typeck({
+                    tag: 'Expr',
+                    expr,
+                })
+                .mapErr(printErr)
+                .unwrapWith(null)
 
-                console.log(chalk.magenta(`${ppExpr(expr)}: ${ppTy(ty)}`))
-                return
-            }
-            default: {
-                throw new Error(`Unknown command ${command}`)
-            }
+            console.log(chalk.magenta(`${ppExpr(expr)}: ${ppTy(ty)}`))
+            return
+        }
+        default: {
+            throw new Error(`Unknown command ${command}`)
+        }
         }
     }
 
@@ -182,7 +189,7 @@ export class Compiler {
 
     typeck(stmt: Stmt, ctx = this.tyCtx): Result<[Ty, Ctx], InferErr> {
         try {
-            const [ty, resultCtx] = ctx.synth(stmt)
+            const [ty, resultCtx] = ctx.synthStmt(stmt)
             return Result.Ok([resultCtx.apply(ty), resultCtx])
         } catch (e) {
             if (e instanceof InferErr) {
@@ -200,25 +207,25 @@ export class Compiler {
 
             const source = 'REPL'
 
-            const ast = this
-                .parse<AST>(source, code, 'line')
+            const line = this
+                .parse<Stmt>(source, code, 'line')
                 .mapErr(err => printSyntaxError(err, source, code))
                 .unwrapWith(null)
 
             if (this.options.printAst) {
-                console.log(`AST:\n${pp(ast)}`)
+                console.log(`AST:\n${ppStmt(line)}`)
             }
 
             const [ty, ctx] = this
-                .typeck(ast.stmt)
+                .typeck(line)
                 .mapErr(printErr)
                 .unwrapWith(null)
 
             this.tyCtx = ctx
 
-            console.log(chalk.magenta(`${pp(ast)}: ${ppTy(ty)}`))
+            console.log(chalk.magenta(`${ppStmt(line)}: ${ppTy(ty)}`))
 
-            const js = this.jsGen.gen(ast)
+            const js = this.jsGen.genStmt(line)
 
             if (this.options.printJS) {
                 console.log(`JS Code:\n${js}`)
