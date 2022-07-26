@@ -2,8 +2,10 @@
     const ctx = options.parserCtx.reset()
 }
 
-ast = (_ NL)? stmts:(stmt) (_ NL _)? {
-    return 
+ast = (_ NL)? items:(item semi)* (_ NL _)? {
+    return {
+        items,
+    }
 }
 
 line = NL? stmt:stmt {
