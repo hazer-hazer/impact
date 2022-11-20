@@ -4,3 +4,5 @@ Jacy
 sloc
 transpiler
 PeggyJS
+Typechecking
+const

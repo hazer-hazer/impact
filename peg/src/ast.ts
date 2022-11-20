@@ -125,6 +125,17 @@ export function pp(ast: AST): string {
     return new PP().pp(ast)
 }
 
+export function isOpId(id: string): boolean {
+    return /[+\-*/^%&$|=]+/.test(id)
+}
+
+export function representId(id: string): string {
+    if (isOpId(id)) {
+        return `(${id})`
+    }
+    return id
+}
+
 // PP //
 export class PP {
     constructor(private indentLevel: number = 0) { }
@@ -148,7 +159,7 @@ export class PP {
     public ppExpr(expr: Expr): string {
         switch (expr.tag) {
         case 'Abs': return `(${expr.param} -> ${this.ppExpr(expr.body)})`
-        case 'Var': return expr.name
+        case 'Var': return representId(expr.name)
         case 'Lit': {
             switch (expr.kind.tag) {
             case 'Unit': return '()'

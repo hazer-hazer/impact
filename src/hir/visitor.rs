@@ -1,13 +1,10 @@
 use crate::{
-    ast::{
-        expr::{InfixOp, Lit, PrefixOp},
-        visitor::walk_pr,
-    },
+    ast::expr::{InfixOp, PrefixOp},
     span::span::Ident,
 };
 
 use super::{
-    expr::{Block, Expr, ExprKind},
+    expr::{Block, Expr, ExprKind, FuncCall, Lambda, Lit, PathExpr, TyExpr},
     item::{Item, ItemKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind},
@@ -77,10 +74,10 @@ pub trait HirVisitor {
             ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
             ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
-            ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
+            ExprKind::Call(call) => self.visit_call_expr(call),
             ExprKind::Let(block) => self.visit_let_expr(block),
-            ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
-            ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
+            ExprKind::Lambda(lambda) => self.visit_lambda(lambda),
+            ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
         }
     }
 
@@ -88,8 +85,8 @@ pub trait HirVisitor {
 
     fn visit_lit_expr(&mut self, _: &Lit) {}
 
-    fn visit_path_expr(&mut self, path: &Path) {
-        self.visit_path(path)
+    fn visit_path_expr(&mut self, path: &PathExpr) {
+        self.visit_path(&path.0)
     }
 
     fn visit_block_expr(&mut self, block: &Block) {
@@ -105,23 +102,23 @@ pub trait HirVisitor {
         self.visit_expr(rhs);
     }
 
-    fn visit_app_expr(&mut self, lhs: &N<Expr>, arg: &N<Expr>) {
-        self.visit_expr(lhs);
-        self.visit_expr(arg);
+    fn visit_call_expr(&mut self, call: &FuncCall) {
+        self.visit_expr(&call.lhs);
+        self.visit_expr(&call.arg);
     }
 
-    fn visit_abs_expr(&mut self, param: &Ident, body: &N<Expr>) {
-        self.visit_ident(param);
-        self.visit_expr(body);
+    fn visit_lambda(&mut self, lambda: &Lambda) {
+        self.visit_ident(&lambda.param);
+        self.visit_expr(&lambda.body);
     }
 
     fn visit_let_expr(&mut self, block: &Block) {
         self.visit_block(block);
     }
 
-    fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) {
-        self.visit_expr(expr);
-        self.visit_ty(ty);
+    fn visit_type_expr(&mut self, ty_expr: &TyExpr) {
+        self.visit_expr(&ty_expr.expr);
+        self.visit_ty(&ty_expr.ty);
     }
 
     // Types //

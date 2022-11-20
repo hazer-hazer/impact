@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    parser::token::{Infix, Prefix, Token, TokenKind},
+    parser::token::{FloatKind, Infix, IntKind, Prefix, Token, TokenKind},
     span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
@@ -50,7 +50,8 @@ impl NodeKindStr for Expr {
 #[derive(Clone, Copy)]
 pub enum Lit {
     Bool(bool),
-    Int(i64),
+    Int(u64, IntKind),
+    Float(f64, FloatKind),
     String(Symbol),
 }
 
@@ -191,7 +192,8 @@ impl Display for Lit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Lit::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
-            Lit::Int(val) => write!(f, "{}", val),
+            Lit::Int(val, kind) => write!(f, "{}{}", val, kind),
+            Lit::Float(val, kind) => write!(f, "{}{}", val, kind),
             Lit::String(val) => write!(f, "{}", val),
         }
     }

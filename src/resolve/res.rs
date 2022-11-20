@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::ast::NodeId;
 
@@ -7,7 +7,7 @@ use super::def::DefId;
 // #[derive(Debug, Clone, Copy)]
 // pub struct LocalId(NodeId);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ResKind {
     Def(DefId),    // Top-level definition, e.g. imported function
     Local(NodeId), // Local variable
@@ -18,7 +18,7 @@ pub enum ResKind {
  * The unit of name resolution.
  * Created for each name in source code after items are defined.
  */
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Res {
     kind: ResKind,
 }
@@ -44,6 +44,16 @@ impl Res {
 
     pub fn kind(&self) -> &ResKind {
         &self.kind
+    }
+}
+
+impl Display for Res {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            ResKind::Def(def_id) => write!(f, "{}", def_id),
+            ResKind::Local(node_id) => write!(f, "{}", node_id),
+            ResKind::Error => write!(f, "[ERROR]"),
+        }
     }
 }
 

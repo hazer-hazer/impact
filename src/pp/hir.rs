@@ -1,10 +1,7 @@
 use crate::{
-    ast::{
-        expr::{InfixOp, Lit, PrefixOp},
-        visitor::walk_pr,
-    },
+    ast::expr::{InfixOp, PrefixOp},
     hir::{
-        expr::{Block, Expr},
+        expr::{Block, Expr, FuncCall, Lambda, TyExpr, Lit},
         item::Item,
         stmt::{Stmt, StmtKind},
         ty::Ty,
@@ -99,17 +96,17 @@ impl<'a> HirVisitor for AstLikePP<'a> {
         self.visit_expr(rhs);
     }
 
-    fn visit_abs_expr(&mut self, param: &Ident, body: &N<Expr>) {
+    fn visit_lambda(&mut self, lambda: &Lambda) {
         self.punct(Punct::Backslash);
-        self.visit_ident(param);
+        self.visit_ident(&lambda.param);
         self.punct(Punct::Arrow);
-        self.visit_expr(body);
+        self.visit_expr(&lambda.body);
     }
 
-    fn visit_app_expr(&mut self, lhs: &N<Expr>, arg: &N<Expr>) {
-        self.visit_expr(lhs);
+    fn visit_call_expr(&mut self, call: &FuncCall) {
+        self.visit_expr(&call.lhs);
         self.sp();
-        self.visit_expr(arg);
+        self.visit_expr(&call.arg);
     }
 
     fn visit_let_expr(&mut self, block: &Block) {
@@ -117,10 +114,10 @@ impl<'a> HirVisitor for AstLikePP<'a> {
         self.visit_block(block);
     }
 
-    fn visit_type_expr(&mut self, expr: &N<Expr>, ty: &Ty) {
-        self.visit_expr(expr);
+    fn visit_type_expr(&mut self, ty_expr: &TyExpr) {
+        self.visit_expr(&ty_expr.expr);
         self.punct(Punct::Colon);
-        self.visit_ty(ty);
+        self.visit_ty(&ty_expr.ty);
     }
 
     // Types //

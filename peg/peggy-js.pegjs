@@ -142,7 +142,7 @@ primary 'primary expression' =
             },
         }
     }
-    / '\'' str:([^\n\r\'\\] / '\\' .)* '\'' {
+    / '\'' str:$([^\n\r\'\\] / '\\' .)* '\'' {
         return {
             tag: 'Lit',
             kind: {
@@ -243,7 +243,7 @@ simple_ty =
 reserved_word = 'forall' / 'type' / 'if' / 'then' / 'else' / 'true' / 'false' / 'data'
 
 var_id 'variable name' = !reserved_word @$([_]*[a-z][_A-z0-9]*)
-op_id = '(' @$([\+\-\*\/\^%&$\|=]+) ')'
+op_id = '(' @$([+\-*/^%&$|=]+) ')'
 ty_id 'type name' = $([_]*[A-Z][_A-z0-9]*)
 
 semi 'semi' = (EOL / ';')+

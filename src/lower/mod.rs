@@ -6,11 +6,17 @@ use crate::{
         ty::{Ty, TyKind},
         Path, WithNodeId, AST, N, PR,
     },
-    hir::{self, HIR},
-    message::message::{Message, MessageBuilder, MessageStorage},
+    hir::{
+        self,
+        expr::{FuncCall, Lambda, PathExpr, TyExpr},
+        HIR,
+    },
+    message::message::MessageStorage,
+    parser::token::{FloatKind, IntKind},
     resolve::res::NamePath,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
+    typeck::ty::{DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
 };
 
 macro_rules! lower_pr_boxed {
@@ -140,12 +146,43 @@ impl<'a> Lower<'a> {
         hir::expr::Expr::new(kind, expr.span())
     }
 
+    fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
+        match kind {
+            IntKind::Unknown => DEFAULT_INT_KIND,
+            IntKind::Inferred(id) => todo!(),
+            IntKind::U8 => hir::expr::IntKind::U8,
+            IntKind::U16 => hir::expr::IntKind::U16,
+            IntKind::U32 => hir::expr::IntKind::U32,
+            IntKind::U64 => hir::expr::IntKind::U64,
+            IntKind::I8 => hir::expr::IntKind::I8,
+            IntKind::I16 => hir::expr::IntKind::I16,
+            IntKind::I32 => hir::expr::IntKind::I32,
+            IntKind::I64 => hir::expr::IntKind::I64,
+            IntKind::Uint => hir::expr::IntKind::Uint,
+            IntKind::Int => hir::expr::IntKind::Int,
+        }
+    }
+
+    fn lower_float_kind(&self, kind: FloatKind) -> hir::expr::FloatKind {
+        match kind {
+            FloatKind::Unknown => DEFAULT_FLOAT_KIND,
+            FloatKind::Inferred(id) => todo!(),
+            FloatKind::F32 => hir::expr::FloatKind::F32,
+            FloatKind::F64 => hir::expr::FloatKind::F64,
+        }
+    }
+
     fn lower_lit_expr(&mut self, lit: &Lit) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Lit(*lit)
+        hir::expr::ExprKind::Lit(match lit {
+            Lit::Bool(val) => hir::expr::Lit::Bool(*val),
+            Lit::Int(val, kind) => hir::expr::Lit::Int(*val, self.lower_int_kind(*kind)),
+            Lit::Float(val, kind) => hir::expr::Lit::Float(*val, self.lower_float_kind(*kind)),
+            Lit::String(val) => hir::expr::Lit::String(*val),
+        })
     }
 
     fn lower_path_expr(&mut self, path: &PR<Path>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Path(lower_pr!(self, path, lower_path))
+        hir::expr::ExprKind::Path(PathExpr(lower_pr!(self, path, lower_path)))
     }
 
     fn lower_block_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
@@ -170,17 +207,17 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Abs(
-            lower_pr!(self, param, lower_ident),
-            lower_pr_boxed!(self, body, lower_expr),
-        )
+        hir::expr::ExprKind::Lambda(Lambda {
+            param: lower_pr!(self, param, lower_ident),
+            body: lower_pr_boxed!(self, body, lower_expr),
+        })
     }
 
     fn lower_app_expr(&mut self, lhs: &PR<N<Expr>>, arg: &PR<N<Expr>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::App(
-            lower_pr_boxed!(self, lhs, lower_expr),
-            lower_pr_boxed!(self, arg, lower_expr),
-        )
+        hir::expr::ExprKind::Call(FuncCall {
+            lhs: lower_pr_boxed!(self, lhs, lower_expr),
+            arg: lower_pr_boxed!(self, arg, lower_expr),
+        })
     }
 
     fn lower_let_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
@@ -188,10 +225,10 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_ty_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Ty(
-            lower_pr_boxed!(self, expr, lower_expr),
-            lower_pr!(self, ty, lower_ty),
-        )
+        hir::expr::ExprKind::Ty(TyExpr {
+            expr: lower_pr_boxed!(self, expr, lower_expr),
+            ty: lower_pr!(self, ty, lower_ty),
+        })
     }
 
     // Types //

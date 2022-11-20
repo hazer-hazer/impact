@@ -1,12 +1,11 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::expr::Lit,
-    hir::expr::{Expr, ExprKind, Block},
+    hir::expr::{Block, Expr, ExprKind, Lit},
     span::span::{Ident, Kw, Symbol, WithSpan},
 };
 
-use super::ty::{LitTy, Ty, TyError, TyKind, TyResult};
+use super::ty::{PrimTy, Ty, TyError, TyKind, TyResult};
 
 #[derive(Clone)]
 pub enum CtxItem {
@@ -186,9 +185,10 @@ impl Ctx {
             ExprKind::Unit => Ok((Ty::new(TyKind::Unit), self.clone())),
             ExprKind::Lit(lit) => {
                 let lit_ty = match lit {
-                    Lit::Bool(_) => LitTy::Bool,
-                    Lit::Int(_) => LitTy::Int,
-                    Lit::String(_) => LitTy::String,
+                    Lit::Bool(_) => PrimTy::Bool,
+                    Lit::Int(_, kind) => PrimTy::Int,
+                    Lit::Float(_, _) => PrimTy::Float(()),
+                    Lit::String(_) => PrimTy::String,
                 };
 
                 Ok((Ty::lit(lit_ty), self.clone()))
@@ -208,15 +208,13 @@ impl Ctx {
             }
             ExprKind::Infix(lhs, op, rhs) => todo!(),
             ExprKind::Prefix(op, rhs) => todo!(),
-            ExprKind::Abs(param, body) => todo!(),
-            ExprKind::App(lhs, arg) => todo!(),
+            ExprKind::Lambda(param, body) => todo!(),
+            ExprKind::Call(lhs, arg) => todo!(),
             ExprKind::Block(stmts) => todo!(),
             ExprKind::Let(block) => todo!(),
             ExprKind::Ty(expr, ty) => {}
         }
     }
 
-    fn synth_block(&self, block: Block) -> TyResult<(Ty, Ctx)> {
-        
-    }
+    fn synth_block(&self, block: Block) -> TyResult<(Ty, Ctx)> {}
 }

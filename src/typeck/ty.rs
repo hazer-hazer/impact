@@ -1,34 +1,103 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::span::span::Ident;
+use crate::{parser, span::span::Ident};
 
 use super::ctx::{Ctx, CtxItem, CtxItemName};
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TypeVarId(pub usize);
+
 #[derive(Clone, Copy)]
-pub enum LitTy {
-    Bool,
+pub enum IntKind {
+    U8,
+    U16,
+    U32,
+    U64,
+    Uint,
+
+    I8,
+    I16,
+    I32,
+    I64,
     Int,
-    String,
 }
 
-impl Display for LitTy {
+pub const DEFAULT_INT_KIND: IntKind = IntKind::I32;
+
+impl IntKind {
+    pub fn is_unsigned(&self) -> bool {
+        match self {
+            IntKind::U8 | IntKind::U16 | IntKind::U32 | IntKind::U64 | IntKind::Uint => true,
+            IntKind::I8 | IntKind::I16 | IntKind::I32 | IntKind::I64 | IntKind::Int => false,
+        }
+    }
+}
+
+impl Display for IntKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                LitTy::Bool => "bool",
-                LitTy::Int => "int",
-                LitTy::String => "string",
+                IntKind::U8 => "u8",
+                IntKind::U16 => "u16",
+                IntKind::U32 => "u32",
+                IntKind::U64 => "u64",
+                IntKind::Uint => "uint",
+                IntKind::I8 => "i8",
+                IntKind::I16 => "i16",
+                IntKind::I32 => "i32",
+                IntKind::I64 => "i64",
+                IntKind::Int => "int",
             }
         )
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum FloatKind {
+    F32,
+    F64,
+}
+
+pub const DEFAULT_FLOAT_KIND: FloatKind = FloatKind::F32;
+
+impl Display for FloatKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FloatKind::F32 => "f32",
+                FloatKind::F64 => "f64",
+            }
+        )
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum PrimTy {
+    Bool,
+    Int(IntKind),
+    Float(FloatKind),
+    String,
+}
+
+impl Display for PrimTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrimTy::Bool => write!(f, "bool"),
+            PrimTy::String => write!(f, "string"),
+            PrimTy::Int(kind) => write!(f, "{}", kind),
+            PrimTy::Float(kind) => write!(f, "{}", kind),
+        }
     }
 }
 
 #[derive(Clone)]
 pub enum TyKind {
     Unit,
-    Lit(LitTy),
+    Lit(PrimTy),
     Var(Ident),
     Existential(Ident),
     Func(Box<Ty>, Box<Ty>),
@@ -45,7 +114,7 @@ impl Ty {
         Self { kind }
     }
 
-    pub fn lit(lit_ty: LitTy) -> Self {
+    pub fn lit(lit_ty: PrimTy) -> Self {
         Self::new(TyKind::Lit(lit_ty))
     }
 

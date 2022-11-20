@@ -26,8 +26,7 @@
   "dependencies": {
     "chalk": "4.1.2",
     "peggy": "^2.0.1",
-    "source-map-support": "^0.5.21",
-    "ts-adt": "^2.1.2"
+    "source-map-support": "^0.5.21"
   },
   "devDependencies": {
     "@types/chalk": "^2.2.0",

@@ -8,6 +8,7 @@ use session::Source;
 
 mod ast;
 mod cli;
+mod codegen;
 mod config;
 mod hir;
 mod interface;
@@ -18,7 +19,7 @@ mod pp;
 mod resolve;
 mod session;
 mod span;
-// mod typeck;
+mod typeck;
 
 fn main() {
     let config = Config {

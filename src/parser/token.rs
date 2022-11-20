@@ -1,6 +1,10 @@
-use std::fmt::{Debug, Display};
+use core::fmt;
+use std::fmt::{write, Debug, Display};
 
-use crate::span::span::{Kw, Span, SpanLen, Symbol, WithSpan};
+use crate::{
+    span::span::{Kw, Span, SpanLen, Symbol, WithSpan},
+    typeck::ty::TypeVarId,
+};
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Infix {
@@ -73,12 +77,41 @@ impl Display for Punct {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum IntKind {
+    Unknown,
+    Inferred(TypeVarId),
+
+    U8,
+    U16,
+    U32,
+    U64,
+    Uint,
+
+    I8,
+    I16,
+    I32,
+    I64,
+    Int,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FloatKind {
+    Unknown,
+
+    Inferred(TypeVarId),
+
+    F32,
+    F64,
+}
+
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TokenKind {
     Eof,
     Nl,
     Bool(bool),
-    Int(i64),
+    Int(u64, IntKind),
+    Float(f64, FloatKind),
     String(Symbol),
     Kw(Kw),
     Ident(Symbol),
@@ -184,7 +217,7 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             (TokenKind::Eof, TokenCmp::Eof)
             | (TokenKind::Nl, TokenCmp::Nl)
             | (TokenKind::Bool(_), TokenCmp::Bool)
-            | (TokenKind::Int(_), TokenCmp::Int)
+            | (TokenKind::Int(_, _), TokenCmp::Int)
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
             | (TokenKind::Prefix(_), TokenCmp::SomePrefix)
@@ -200,15 +233,54 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
     }
 }
 
+impl Display for IntKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                IntKind::Unknown => "",
+                IntKind::Inferred(_) => "",
+                IntKind::U8 => "u8",
+                IntKind::U16 => "u16",
+                IntKind::U32 => "u32",
+                IntKind::U64 => "u64",
+                IntKind::Uint => "uint",
+                IntKind::I8 => "i8",
+                IntKind::I16 => "i16",
+                IntKind::I32 => "i32",
+                IntKind::I64 => "i64",
+                IntKind::Int => "int",
+            }
+        )
+    }
+}
+
+impl Display for FloatKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FloatKind::Unknown => "",
+                FloatKind::Inferred(_) => "",
+                FloatKind::F32 => "f32",
+                FloatKind::F64 => "f64",
+            }
+        )
+    }
+}
+
 impl Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TokenKind::Eof => write!(f, "{}", "[EOF]"),
             TokenKind::Nl => write!(f, "{}", "new-line"),
-            TokenKind::Int(val) => write!(f, "{}", val),
+            TokenKind::Int(val, kind) => write!(f, "{}{}", val, kind),
             TokenKind::String(val) | TokenKind::Ident(val) | TokenKind::Error(val) => {
                 write!(f, "{}", val)
             }
+            TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),
             TokenKind::Infix(infix) => write!(f, "{}", infix),
             TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
             TokenKind::Prefix(prefix) => write!(f, "{}", prefix),

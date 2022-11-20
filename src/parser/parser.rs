@@ -587,7 +587,7 @@ impl Parser {
 
         let (kind, advance) = match kind {
             TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val)))), true),
-            TokenKind::Int(val) => (Some(Ok(ExprKind::Lit(Lit::Int(val)))), true),
+            TokenKind::Int(val, kind) => (Some(Ok(ExprKind::Lit(Lit::Int(val, kind)))), true),
             TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
             TokenKind::Ident(_) => (
                 Some(Ok(ExprKind::Path(

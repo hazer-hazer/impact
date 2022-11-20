@@ -5,6 +5,8 @@ use crate::session::{Session, Stage, StageOutput};
 
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
+use super::token::IntKind;
+
 enum TokenStartMatch {
     Ident,
     Num,
@@ -218,8 +220,9 @@ impl Lexer {
             self.advance();
         }
 
+        // TODO: Tags
         let (frag, len) = self.get_fragment(start);
-        let kind = TokenKind::Int(frag.parse().expect("TODO: Check integer lexing"));
+        let kind = TokenKind::Int(frag.parse().expect("TODO: Check integer lexing"), IntKind::Unknown);
         self.add_token(kind, len);
     }
 

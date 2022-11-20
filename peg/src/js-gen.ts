@@ -84,7 +84,7 @@ export class JSGen {
             case 'Unit': return '()'
             case 'Bool': return expr.kind.val.toString()
             case 'Int': return expr.kind.val.toString()
-            case 'String': return expr.kind.val
+            case 'String': return `'${expr.kind.val}'`
             }
             break
         }

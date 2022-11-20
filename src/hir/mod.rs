@@ -42,6 +42,10 @@ impl Path {
         Self { res, segments }
     }
 
+    pub fn res(&self) -> &Res {
+        &self.res
+    }
+
     pub fn segments(&self) -> &[Ident] {
         self.segments.as_ref()
     }

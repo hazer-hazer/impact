@@ -8,6 +8,7 @@ import { ParserCtx } from './parser-ctx'
 import { firstClassPrelude, prelude } from './prelude'
 import { Ctx, InferErr, Ty, conv, ppTy } from './typeck'
 import { Result } from './types'
+import { valueStr } from './value'
 
 export type Options = {
     printJS?: boolean
@@ -95,7 +96,7 @@ export class Compiler {
                 tyCtx.addInPlace({
                     tag: 'TypedTerm',
                     name,
-                    ty: conv(ty),
+                    ty: conv(ty, tyCtx),
                 })
 
                 let jsCode: any
@@ -231,7 +232,8 @@ export class Compiler {
                 console.log(`JS Code:\n${js}`)
             }
 
-            return this.exec(js)
+            const result = this.exec(js)
+            console.log(valueStr(result))
         } catch (e) {
             if (e instanceof InferErr) {
                 console.log(chalk.red(e.message))

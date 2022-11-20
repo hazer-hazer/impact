@@ -1,4 +1,5 @@
-import { AST, Constructor, Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
+import { Constructor, Expr, Item, ppExpr, Stmt, Ty as AstTy } from './ast'
+import { zip } from './utils'
 
 export type Ty = {
     tag: 'Lit'
@@ -48,7 +49,7 @@ export function ppTy(ty: Ty): string {
     case 'Existential': return `^${ty.name}`
     case 'Forall': return `forall ${ty.alpha}. ${ppTy(ty.ty)}`
     case 'Func': return `${ppTy(ty.param)} -> ${ppTy(ty.ret)}`
-    case 'Data': return `${ty.name} ${ty.types.map(ppTy).join(' | ')}`
+    case 'Data': return `${ty.name}${ty.types.length ? ' ' : ''}${ty.types.map(ppTy).join(' | ')}`
     case 'Error': return '[ERROR]'
     }
 }
@@ -135,7 +136,7 @@ function substitute(inTy: Ty, name: string, withTy: Ty): Ty {
     case 'Data': return {
         tag: 'Data',
         name: inTy.name,
-        types: inTy.types.map(ty => substitute(ty, name, withTy))
+        types: inTy.types.map(ty => substitute(ty, name, withTy)),
     }
     case 'Error': throw new InferErr('Cannot substitute error type')
     }
@@ -329,7 +330,7 @@ export class Ctx {
         case 'Data': return {
             tag: 'Data',
             name: ty.name,
-            types: ty.types.map(this.apply.bind(this))
+            types: ty.types.map(this.apply.bind(this)),
         }
         case 'Error': throw new InferErr('Cannot apply context to error type')
         }
@@ -404,7 +405,19 @@ export class Ctx {
             throw new InferErr('Circular type')
         }
 
+        if (a.tag === 'Data' && b.tag === 'Data') {
+            const tyPairs = zip(a.types, b.types)
+            return tyPairs.reduce((ctx, [a, b]) => {
+                const c = ctx.subtype(a, b)
+                return c.subtype(b, a)
+            }, this.clone())
+        }
+
         throw new InferErr(`${ppTy(a)} is not a subtype of ${ppTy(b)}`)
+    }
+
+    subtypePair(lty: Ty, rty: Ty): Ctx {
+        return this.subtype(this.apply(lty), this.apply(rty))
     }
 
     // Figure 10.
@@ -868,7 +881,7 @@ export class Ctx {
             return [{
                 tag: 'Data',
                 name: item.name,
-                types: consTypes
+                types: consTypes,
             }, ctx]
         }
         }
@@ -889,7 +902,7 @@ export class Ctx {
             types: tyParams.map(name => ({
                 tag: 'Var',
                 name,
-            }))
+            })),
         }))
     }
 }

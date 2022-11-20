@@ -27,9 +27,7 @@ type AnyFunc = (...args: any[]) => any
 const infixOpTy = 'forall t. t -> t -> t'
 const cmpInfixOpTy = 'forall t. t -> t -> Bool'
 
-export const firstClassPrelude = `
-data Bool = True | False
-`
+export const firstClassPrelude = ''
 
 const _prelude: Prelude = {
     print: {

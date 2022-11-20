@@ -32,6 +32,7 @@ for Higher-Rank Polymorphism" (PDF)](https://arxiv.org/pdf/1306.6032.pdf) and it
  / nikomatsakis](https://github.com/nikomatsakis) nico nico nii
   - [**Lean4 version**](https://github.com/gabriel-fallen/bidirectional-demo) by [Alexander Chichigin
  / gabriel-fallen](https://github.com/gabriel-fallen)
+ - [**Haskell version**](https://github.com/zehaochen19/vanilla-lang/tree/master) by [Zehao Chen / zehaochen19](https://github.com/zehaochen19). Pretty implementation of basic programming language with bidir as typeck algorithm.
 
 #### Syntax
 

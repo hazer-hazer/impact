@@ -1,9 +1,31 @@
+use std::fmt::Display;
+
 use crate::{
-    ast::expr::{InfixOp, Lit, PrefixOp},
-    span::span::{Ident, Span, WithSpan},
+    ast::expr::{InfixOp, PrefixOp},
+    span::span::{Ident, Span, Symbol, WithSpan},
 };
 
 use super::{stmt::Stmt, ty::Ty, Path, N};
+
+pub use crate::typeck::ty::{FloatKind, IntKind};
+
+pub enum Lit {
+    Bool(bool),
+    Int(u64, IntKind),
+    Float(f64, FloatKind),
+    String(Symbol),
+}
+
+impl Display for Lit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Lit::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
+            Lit::Int(val, kind) => write!(f, "{}{}", val, kind),
+            Lit::Float(val, kind) => write!(f, "{}{}", val, kind),
+            Lit::String(val) => write!(f, "{}", val),
+        }
+    }
+}
 
 pub struct Expr {
     kind: ExprKind,
@@ -45,15 +67,32 @@ impl Block {
     }
 }
 
+pub struct PathExpr(pub Path);
+
+pub struct Lambda {
+    pub param: Ident,
+    pub body: N<Expr>,
+}
+
+pub struct TyExpr {
+    pub expr: N<Expr>,
+    pub ty: Ty,
+}
+
+pub struct FuncCall {
+    pub lhs: N<Expr>,
+    pub arg: N<Expr>,
+}
+
 pub enum ExprKind {
     Unit,
     Lit(Lit),
-    Path(Path),
+    Path(PathExpr),
     Block(Block),
     Infix(N<Expr>, InfixOp, N<Expr>),
     Prefix(PrefixOp, N<Expr>),
-    Abs(Ident, N<Expr>),
-    App(N<Expr>, N<Expr>),
+    Lambda(Lambda),
+    Call(FuncCall),
     Let(Block),
-    Ty(N<Expr>, Ty),
+    Ty(TyExpr),
 }
