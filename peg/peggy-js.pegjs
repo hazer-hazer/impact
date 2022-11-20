@@ -2,7 +2,11 @@
     const ctx = options.parserCtx.reset()
 }
 
+<<<<<<< HEAD
 ast = (_ NL)? items:item* (_ NL _)? {
+=======
+ast = (_ NL)? items:(item semi)* (_ NL _)? {
+>>>>>>> efc3b0d6d54666287edcf462ae24f25961ebde7f
     return {
         items,
     }
