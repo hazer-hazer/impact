@@ -84,13 +84,24 @@ pub struct FuncCall {
     pub arg: N<Expr>,
 }
 
+pub struct Infix {
+    pub lhs: N<Expr>,
+    pub op: InfixOp,
+    pub rhs: N<Expr>,
+}
+
+pub struct Prefix {
+    pub op: PrefixOp,
+    pub rhs: N<Expr>,
+}
+
 pub enum ExprKind {
     Unit,
     Lit(Lit),
     Path(PathExpr),
     Block(Block),
-    Infix(N<Expr>, InfixOp, N<Expr>),
-    Prefix(PrefixOp, N<Expr>),
+    Infix(Infix),
+    Prefix(Prefix),
     Lambda(Lambda),
     Call(FuncCall),
     Let(Block),

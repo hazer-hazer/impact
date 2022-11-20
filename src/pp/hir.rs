@@ -1,8 +1,8 @@
 use crate::{
     ast::expr::{InfixOp, PrefixOp},
     hir::{
-        expr::{Block, Expr, FuncCall, Lambda, TyExpr, Lit},
-        item::Item,
+        expr::{Block, Expr, FuncCall, Infix, Lambda, Lit, Prefix, TyExpr},
+        item::{Decl, Item, Mod, TypeItem},
         stmt::{Stmt, StmtKind},
         ty::Ty,
         visitor::HirVisitor,
@@ -52,28 +52,28 @@ impl<'a> HirVisitor for AstLikePP<'a> {
     }
 
     // Items //
-    fn visit_type_item(&mut self, name: &Ident, ty: &N<Ty>) {
+    fn visit_type_item(&mut self, ty_item: &TypeItem) {
         self.kw(Kw::Type);
-        self.visit_ident(name);
+        self.visit_ident(&ty_item.name);
         self.punct(Punct::Assign);
-        self.visit_ty(ty);
+        self.visit_ty(&ty_item.ty);
     }
 
-    fn visit_mod_item(&mut self, name: &Ident, items: &Vec<Item>) {
+    fn visit_mod_item(&mut self, mod_item: &Mod) {
         self.kw(Kw::Mod);
-        self.visit_ident(name);
+        self.visit_ident(&mod_item.name);
         self.nl();
-        walk_block!(self, items, visit_item);
+        walk_block!(self, &mod_item.items, visit_item);
     }
 
-    fn visit_decl_item(&mut self, name: &Ident, params: &Vec<Ident>, body: &Expr) {
-        self.visit_ident(name);
-        if !params.is_empty() {
+    fn visit_decl_item(&mut self, decl: &Decl) {
+        self.visit_ident(&decl.name);
+        if !decl.params.is_empty() {
             self.sp();
         }
-        walk_each_delim!(self, params, visit_ident, " ");
+        walk_each_delim!(self, &decl.params, visit_ident, " ");
         self.punct(Punct::Assign);
-        self.visit_expr(body);
+        self.visit_expr(&decl.body);
     }
 
     // Expressions //
@@ -85,15 +85,15 @@ impl<'a> HirVisitor for AstLikePP<'a> {
         self.string(lit);
     }
 
-    fn visit_infix_expr(&mut self, lhs: &N<Expr>, op: &InfixOp, rhs: &N<Expr>) {
-        self.visit_expr(lhs);
-        self.infix(op);
-        self.visit_expr(rhs);
+    fn visit_infix_expr(&mut self, infix: &Infix) {
+        self.visit_expr(&infix.lhs);
+        self.infix(&infix.op);
+        self.visit_expr(&infix.rhs);
     }
 
-    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &N<Expr>) {
-        self.prefix(op);
-        self.visit_expr(rhs);
+    fn visit_prefix_expr(&mut self, prefix: &Prefix) {
+        self.prefix(&prefix.op);
+        self.visit_expr(&prefix.rhs);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda) {

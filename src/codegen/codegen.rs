@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell::{
+    basic_block::BasicBlock,
     builder::Builder,
     context::Context,
     module::Module,
@@ -8,7 +9,11 @@ use inkwell::{
 };
 
 use crate::{
-    hir::expr::{Expr, ExprKind, Lit, PathExpr},
+    hir::{
+        expr::{Expr, ExprKind, Lambda, Lit, PathExpr},
+        item::{Decl, Item, ItemKind},
+        stmt::{Stmt, StmtKind},
+    },
     resolve::res::Res,
     typeck::ty::{FloatKind, IntKind},
 };
@@ -23,6 +28,10 @@ pub struct Generator<'ctx> {
 }
 
 impl<'ctx> Generator<'ctx> {
+    fn current_block(&self) -> BasicBlock<'ctx> {
+        self.builder.get_insert_block().unwrap()
+    }
+
     // Definitions //
     fn bind_res_value(&mut self, res: Res, value: BasicValueEnum<'ctx>) {
         self.res_values.insert(res, value);
@@ -105,6 +114,15 @@ pub trait CodeGen<'g> {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g>;
 }
 
+impl<'g> CodeGen<'g> for Stmt {
+    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
+        match self.kind() {
+            StmtKind::Expr(expr) => expr.codegen(g),
+            StmtKind::Item(item) => todo!("No items in HIR"),
+        }
+    }
+}
+
 impl<'g> CodeGen<'g> for Lit {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
         match self {
@@ -122,6 +140,12 @@ impl<'g> CodeGen<'g> for PathExpr {
     }
 }
 
+impl<'g> CodeGen<'g> for Lambda {
+    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
+        let block = g.current_block();
+    }
+}
+
 impl<'g> CodeGen<'g> for Expr {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
         match self.kind() {
@@ -133,6 +157,23 @@ impl<'g> CodeGen<'g> for Expr {
             ExprKind::Call(_) => todo!(),
             ExprKind::Let(_) => todo!(),
             ExprKind::Ty(_) => todo!(),
+            ExprKind::Infix(_) => todo!(),
+            ExprKind::Prefix(_) => todo!(),
         }
+    }
+}
+
+impl<'g> CodeGen<'g> for Item {
+    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
+        match self.kind() {
+            ItemKind::Decl(decl) => {
+                assert!(decl.params.is_empty());
+
+                g.bind_res_value(Res::local(self), value)
+            }
+            ItemKind::Mod(_) | ItemKind::Type(_) => {}
+        }
+
+        g.unit_value()
     }
 }

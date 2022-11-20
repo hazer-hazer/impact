@@ -2,10 +2,27 @@ use crate::span::span::{Ident, Span, WithSpan};
 
 use super::{expr::Expr, ty::Ty, N};
 
+pub struct TypeItem {
+    pub name: Ident,
+    pub ty: N<Ty>,
+}
+
+pub struct Mod {
+    pub name: Ident,
+    pub items: Vec<Item>,
+}
+
+// TODO: Lower function declaration to variable with lambda
+pub struct Decl {
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub body: Expr,
+}
+
 pub enum ItemKind {
-    Type(Ident, N<Ty>),
-    Mod(Ident, Vec<Item>),
-    Decl(Ident, Vec<Ident>, Expr),
+    Type(TypeItem),
+    Mod(Mod),
+    Decl(Decl),
 }
 
 pub struct Item {

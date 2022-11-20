@@ -8,15 +8,19 @@ use crate::{
     },
     hir::{
         self,
-        expr::{FuncCall, Lambda, PathExpr, TyExpr},
+        expr::{FuncCall, Infix, Lambda, PathExpr, Prefix, TyExpr},
+        item::{Decl, Mod, TypeItem},
         HIR,
     },
-    message::message::MessageStorage,
+    message::message::{Message, MessageBuilder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::res::NamePath,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
-    typeck::ty::{DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
+    typeck::{
+        self,
+        ty::{DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
+    },
 };
 
 macro_rules! lower_pr_boxed {
@@ -98,10 +102,10 @@ impl<'a> Lower<'a> {
     }
 
     fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
-        hir::item::ItemKind::Type(
-            lower_pr!(self, name, lower_ident),
-            lower_pr_boxed!(self, ty, lower_ty),
-        )
+        hir::item::ItemKind::Type(TypeItem {
+            name: lower_pr!(self, name, lower_ident),
+            ty: lower_pr_boxed!(self, ty, lower_ty),
+        })
     }
 
     fn lower_mod_item(
@@ -109,10 +113,10 @@ impl<'a> Lower<'a> {
         name: &PR<Ident>,
         items: &Vec<PR<N<Item>>>,
     ) -> hir::item::ItemKind {
-        hir::item::ItemKind::Mod(
-            lower_pr!(self, name, lower_ident),
-            lower_each_pr!(self, items, lower_item),
-        )
+        hir::item::ItemKind::Mod(Mod {
+            name: lower_pr!(self, name, lower_ident),
+            items: lower_each_pr!(self, items, lower_item),
+        })
     }
 
     fn lower_decl_item(
@@ -121,11 +125,11 @@ impl<'a> Lower<'a> {
         params: &Vec<PR<Ident>>,
         body: &PR<N<Expr>>,
     ) -> hir::item::ItemKind {
-        hir::item::ItemKind::Decl(
-            lower_pr!(self, name, lower_ident),
-            lower_each_pr!(self, params, lower_ident),
-            lower_pr!(self, body, lower_expr),
-        )
+        hir::item::ItemKind::Decl(Decl {
+            name: lower_pr!(self, name, lower_ident),
+            params: lower_each_pr!(self, params, lower_ident),
+            body: lower_pr!(self, body, lower_expr),
+        })
     }
 
     // Expressions //
@@ -195,15 +199,18 @@ impl<'a> Lower<'a> {
         op: &InfixOp,
         rhs: &PR<N<Expr>>,
     ) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Infix(
-            lower_pr_boxed!(self, lhs, lower_expr),
-            op.clone(),
-            lower_pr_boxed!(self, rhs, lower_expr),
-        )
+        hir::expr::ExprKind::Infix(Infix {
+            lhs: lower_pr_boxed!(self, lhs, lower_expr),
+            op: op.clone(),
+            rhs: lower_pr_boxed!(self, rhs, lower_expr),
+        })
     }
 
     fn lower_prefix_expr(&mut self, op: &PrefixOp, rhs: &PR<N<Expr>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Prefix(op.clone(), lower_pr_boxed!(self, rhs, lower_expr))
+        hir::expr::ExprKind::Prefix(Prefix {
+            op: op.clone(),
+            rhs: lower_pr_boxed!(self, rhs, lower_expr),
+        })
     }
 
     fn lower_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) -> hir::expr::ExprKind {
