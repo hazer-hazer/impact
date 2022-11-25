@@ -78,6 +78,15 @@ impl<'a> AstVisitor for DefCollector<'a> {
     fn visit_err(&mut self, _: &ErrorNode) {}
 
     fn visit_item(&mut self, item: &Item) {
+        // Do not collect variables, they are defined and resolved in NameResolver
+        match item.kind() {
+            ItemKind::Decl(name, params, body) if params.is_empty() => {
+                self.visit_decl_item(name, params, body, item.id());
+                return;
+            }
+            _ => {}
+        }
+
         let def_id = self.define(
             item.id(),
             DefKind::from_item_kind(item.kind()),

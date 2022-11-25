@@ -26,6 +26,13 @@ impl Item {
             }
         }
     }
+
+    pub fn is_var(&self) -> bool {
+        match self.kind() {
+            ItemKind::Decl(_, params, _) => params.is_empty(),
+            _ => false,
+        }
+    }
 }
 
 impl WithNodeId for Item {

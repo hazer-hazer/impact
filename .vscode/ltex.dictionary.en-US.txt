@@ -6,3 +6,6 @@ transpiler
 PeggyJS
 Typechecking
 const
+camelCase
+PascalCase
+SomeType

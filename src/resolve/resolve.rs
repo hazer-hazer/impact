@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    def::{ModuleId, ROOT_DEF_ID},
+    def::{DefId, DefMap, ModuleId, ROOT_DEF_ID},
     res::{NamePath, Res},
 };
 
@@ -25,7 +25,7 @@ enum ScopeKind {
 
 #[derive(Debug)]
 struct Scope {
-    locals: HashMap<Symbol, NodeId>,
+    locals: HashMap<Symbol, DefId>,
     kind: ScopeKind,
 }
 
@@ -37,12 +37,12 @@ impl Scope {
         }
     }
 
-    pub fn get(&self, sym: Symbol) -> Option<&NodeId> {
+    pub fn get(&self, sym: Symbol) -> Option<&DefId> {
         self.locals.get(&sym)
     }
 
-    pub fn define(&mut self, sym: Symbol, node_id: NodeId) -> Option<NodeId> {
-        self.locals.insert(sym, node_id)
+    pub fn define(&mut self, sym: Symbol, def_id: DefId) -> Option<DefId> {
+        self.locals.insert(sym, def_id)
     }
 
     fn kind(&self) -> &ScopeKind {
@@ -54,7 +54,7 @@ pub struct NameResolver<'a> {
     ast: &'a AST,
     scopes: Vec<Scope>,
     module: ModuleId, // Nearest `mod` item
-    locals_spans: NodeMap<Span>,
+    locals_spans: DefMap<Span>,
     msg: MessageStorage,
     sess: Session,
 }
@@ -89,15 +89,15 @@ impl<'a> NameResolver<'a> {
         self.scopes.last_mut().unwrap()
     }
 
-    fn define_local(&mut self, ident: Ident, node_id: NodeId) {
-        let defined = self.scope().define(ident.sym(), node_id);
+    fn define_local(&mut self, ident: Ident, def_id: DefId) {
+        let defined = self.scope().define(ident.sym(), def_id);
         if let Some(old) = defined {
             MessageBuilder::error()
                 .span(self.locals_spans[&old])
                 .text(format!("{} is already defined", ident))
                 .emit(self);
         } else {
-            self.locals_spans.insert(node_id, ident.span());
+            self.locals_spans.insert(def_id, ident.span());
         }
     }
 
@@ -109,7 +109,7 @@ impl<'a> NameResolver<'a> {
         if segments.get(0).unwrap().is_var() && segments.len() == 1 {
             let seg = segments.get(0).unwrap();
             if let Some(local) = self.scope().get(seg.sym()) {
-                return Res::local(*local);
+                return Res::def(*local);
             }
         }
 
