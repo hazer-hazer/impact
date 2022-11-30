@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    cli::{color::Colorize},
+    cli::color::Colorize,
     span::span::{Ident, Span, WithSpan},
 };
 
@@ -11,6 +11,7 @@ pub mod expr;
 pub mod item;
 pub mod stmt;
 pub mod ty;
+pub mod validator;
 pub mod visitor;
 
 pub type N<T> = Box<T>;

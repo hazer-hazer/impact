@@ -1,20 +1,18 @@
-use std::collections::HashMap;
-
 use crate::{
     ast::{
         expr::Block,
         item::{Item, ItemKind},
         visitor::{walk_each_pr, AstVisitor},
-        ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST,
+        ErrorNode, Path, WithNodeId, AST,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Span, Symbol},
+    span::span::Span,
 };
 
 use super::{
-    def::{DefId, DefMap, ModuleId, ROOT_DEF_ID},
+    def::{DefMap, ModuleId, ROOT_DEF_ID},
     res::{NamePath, Res},
 };
 
@@ -25,24 +23,14 @@ enum ScopeKind {
 
 #[derive(Debug)]
 struct Scope {
-    locals: HashMap<Symbol, DefId>,
     kind: ScopeKind,
 }
 
 impl Scope {
     pub fn new_module(module_id: ModuleId) -> Self {
         Self {
-            locals: Default::default(),
             kind: ScopeKind::Module(module_id),
         }
-    }
-
-    pub fn get(&self, sym: Symbol) -> Option<&DefId> {
-        self.locals.get(&sym)
-    }
-
-    pub fn define(&mut self, sym: Symbol, def_id: DefId) -> Option<DefId> {
-        self.locals.insert(sym, def_id)
     }
 
     fn kind(&self) -> &ScopeKind {
@@ -89,29 +77,10 @@ impl<'a> NameResolver<'a> {
         self.scopes.last_mut().unwrap()
     }
 
-    fn define_local(&mut self, ident: Ident, def_id: DefId) {
-        let defined = self.scope().define(ident.sym(), def_id);
-        if let Some(old) = defined {
-            MessageBuilder::error()
-                .span(self.locals_spans[&old])
-                .text(format!("{} is already defined", ident))
-                .emit(self);
-        } else {
-            self.locals_spans.insert(def_id, ident.span());
-        }
-    }
-
     fn resolve_path(&mut self, path: &Path) -> Res {
         verbose!("Path segments {:?}", path.segments());
 
         let segments = path.segments();
-
-        if segments.get(0).unwrap().is_var() && segments.len() == 1 {
-            let seg = segments.get(0).unwrap();
-            if let Some(local) = self.scope().get(seg.sym()) {
-                return Res::def(*local);
-            }
-        }
 
         let mut search_mod = self.sess.def_table.get_module(self.module);
 

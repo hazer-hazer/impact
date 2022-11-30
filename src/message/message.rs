@@ -1,6 +1,28 @@
 use std::fmt::Display;
 
-use crate::{cli::color::Color, span::span::Span};
+use crate::{
+    cli::color::Color,
+    span::span::{Ident, Span},
+};
+
+/// For LS
+pub enum SolutionKind {
+    Rename {
+        name: Ident,
+        to: String,
+        // TODO: Name identifier for LS
+    },
+}
+
+pub struct Solution {
+    kind: SolutionKind,
+}
+
+impl Solution {
+    pub fn new(kind: SolutionKind) -> Self {
+        Self { kind }
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub enum MessageKind {
@@ -20,6 +42,7 @@ impl Display for MessageKind {
         )
     }
 }
+
 impl MessageKind {
     pub fn color(&self) -> Color {
         match self {

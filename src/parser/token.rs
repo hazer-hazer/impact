@@ -1,5 +1,5 @@
 use core::fmt;
-use std::fmt::{write, Debug, Display};
+use std::fmt::{Debug, Display};
 
 use crate::{
     span::span::{Kw, Span, SpanLen, Symbol, WithSpan},

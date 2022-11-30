@@ -204,7 +204,6 @@ impl<'a> AstLikePP<'a> {
 
         let node_id = match res.kind() {
             ResKind::Def(def_id) => Some(self.sess.def_table.get_node_id(*def_id).unwrap()),
-            ResKind::Local(node_id) => Some(*node_id),
             ResKind::Error => None,
         };
 

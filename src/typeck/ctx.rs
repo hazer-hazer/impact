@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     hir::expr::{Block, Expr, ExprKind, Lit},
-    span::span::{Ident, Kw, Symbol, WithSpan},
+    span::span::{Ident, Kw, Symbol},
 };
 
 use super::ty::{PrimTy, Ty, TyError, TyKind, TyResult};
@@ -186,15 +186,15 @@ impl Ctx {
             ExprKind::Lit(lit) => {
                 let lit_ty = match lit {
                     Lit::Bool(_) => PrimTy::Bool,
-                    Lit::Int(_, kind) => PrimTy::Int,
-                    Lit::Float(_, _) => PrimTy::Float(()),
+                    Lit::Int(_, kind) => PrimTy::Int(*kind),
+                    Lit::Float(_, kind) => PrimTy::Float(*kind),
                     Lit::String(_) => PrimTy::String,
                 };
 
                 Ok((Ty::lit(lit_ty), self.clone()))
             }
             ExprKind::Path(path) => {
-                if let Some(item) = self.lookup(CtxItemName::TypedTerm(path.target_name())) {
+                if let Some(item) = self.lookup(CtxItemName::TypedTerm(path.0.target_name())) {
                     Ok((
                         match item {
                             CtxItem::TypedTerm(_, ty) => ty.clone(),
@@ -206,15 +206,17 @@ impl Ctx {
                     Err(TyError())
                 }
             }
-            ExprKind::Infix(lhs, op, rhs) => todo!(),
-            ExprKind::Prefix(op, rhs) => todo!(),
-            ExprKind::Lambda(param, body) => todo!(),
-            ExprKind::Call(lhs, arg) => todo!(),
-            ExprKind::Block(stmts) => todo!(),
-            ExprKind::Let(block) => todo!(),
-            ExprKind::Ty(expr, ty) => {}
+            ExprKind::Block(_) => todo!(),
+            ExprKind::Infix(_) => todo!(),
+            ExprKind::Prefix(_) => todo!(),
+            ExprKind::Lambda(_) => todo!(),
+            ExprKind::Call(_) => todo!(),
+            ExprKind::Let(_) => todo!(),
+            ExprKind::Ty(_) => todo!(),
         }
     }
 
-    fn synth_block(&self, block: Block) -> TyResult<(Ty, Ctx)> {}
+    fn synth_block(&self, block: Block) -> TyResult<(Ty, Ctx)> {
+        todo!()
+    }
 }
