@@ -1,3 +1,4 @@
+use core::fmt;
 use std::fmt::Display;
 
 use crate::{
@@ -5,15 +6,49 @@ use crate::{
     span::span::{Ident, Span},
 };
 
+#[derive(Clone, Copy, Debug)]
+pub enum NameKind {
+    Var,
+    Func,
+    Const,
+    File,
+    Variant,
+    Type,
+    TypeVar,
+    Mod,
+}
+
+impl Display for NameKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                NameKind::Var => "variable",
+                NameKind::Func => "function",
+                NameKind::Const => "constant",
+                NameKind::File => "file",
+                NameKind::Variant => "enum variant",
+                NameKind::Type => "type",
+                NameKind::TypeVar => "type variable",
+                NameKind::Mod => "module",
+            }
+        )
+    }
+}
+
 /// For LS
+#[derive(Debug)]
 pub enum SolutionKind {
     Rename {
+        kind: NameKind,
         name: Ident,
         to: String,
         // TODO: Name identifier for LS
     },
 }
 
+#[derive(Debug)]
 pub struct Solution {
     kind: SolutionKind,
 }
@@ -21,6 +56,10 @@ pub struct Solution {
 impl Solution {
     pub fn new(kind: SolutionKind) -> Self {
         Self { kind }
+    }
+
+    pub fn kind(&self) -> &SolutionKind {
+        &self.kind
     }
 }
 
@@ -62,6 +101,8 @@ pub struct Message {
 
     // Labels are spanned
     labels: Vec<Label>,
+
+    solution: Option<Solution>,
 }
 
 impl Message {
@@ -84,6 +125,10 @@ impl Message {
     pub fn labels(&self) -> &[Label] {
         self.labels.as_ref()
     }
+
+    pub fn solution(&self) -> Option<&Solution> {
+        self.solution.as_ref()
+    }
 }
 
 #[derive(Debug)]
@@ -93,6 +138,10 @@ pub struct Label {
 }
 
 impl Label {
+    pub fn new(span: Span, text: String) -> Self {
+        Self { span, text }
+    }
+
     pub fn text(&self) -> &str {
         self.text.as_ref()
     }
@@ -126,6 +175,7 @@ pub struct MessageBuilder {
     span: Option<Span>,
     text: Option<String>,
     labels: Vec<Label>,
+    solution: Option<Solution>,
 }
 
 impl MessageBuilder {
@@ -135,6 +185,7 @@ impl MessageBuilder {
             span: None,
             text: None,
             labels: vec![],
+            solution: None,
         }
     }
 
@@ -161,6 +212,11 @@ impl MessageBuilder {
         self
     }
 
+    pub fn solution(mut self, solution: Solution) -> Self {
+        self.solution = Some(solution);
+        self
+    }
+
     pub fn build(self) -> Message {
         let span = self.checked_span();
         let text = self.checked_text().clone();
@@ -169,6 +225,7 @@ impl MessageBuilder {
             span,
             text,
             labels: self.labels,
+            solution: self.solution,
         }
     }
 

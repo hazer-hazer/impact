@@ -101,7 +101,7 @@ impl AstMetadata {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ErrorNode {
     span: Span,
 }

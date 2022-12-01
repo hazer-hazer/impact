@@ -87,7 +87,7 @@ impl Display for ItemKind {
                     .iter()
                     .map(|param| pr_display(param))
                     .collect::<Vec<_>>()
-                    .join("\n"),
+                    .join(" "),
                 pr_display(body)
             ),
         }

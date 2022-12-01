@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::{
-    message::{Label, Message},
+    message::{Label, Message, Solution, SolutionKind},
     MessageEmitter,
 };
 
@@ -87,6 +87,10 @@ impl MessageEmitter for TermEmitter {
             .iter()
             .for_each(|label| self.process_label(sess, label));
 
+        if let Some(solution) = msg.solution() {
+            self.process_solution(sess, solution);
+        }
+
         println!();
     }
 }
@@ -162,6 +166,18 @@ impl TermEmitter {
                 " ".repeat(num_indent + num_len + 3),
                 label.text()
             );
+        }
+    }
+
+    fn process_solution(&self, sess: &Session, solution: &Solution) {
+        match solution.kind() {
+            SolutionKind::Rename { kind, name, to } => self.process_label(
+                sess,
+                &Label::new(
+                    name.span(),
+                    format!("Rename {} `{}` to {}", kind, name.sym(), to),
+                ),
+            ),
         }
     }
 }

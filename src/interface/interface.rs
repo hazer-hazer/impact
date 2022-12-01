@@ -1,5 +1,5 @@
 use crate::{
-    ast::visitor::AstVisitor,
+    ast::{validator::AstValidator, visitor::AstVisitor},
     cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
@@ -71,6 +71,13 @@ impl Interface {
             pp.visit_ast(&ast);
             println!("Printing AST after parsing\n{}", pp.get_string());
         }
+
+        self.should_stop(stage)?;
+
+        // AST Validation //
+        verbose!("=== AST Validation ===");
+        let stage = StageName::AstValidation;
+        let (_, sess) = AstValidator::new(sess, &ast).run_and_emit(true)?;
 
         self.should_stop(stage)?;
 
