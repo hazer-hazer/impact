@@ -6,37 +6,28 @@ use crate::{
 
 use super::visitor::AstVisitor;
 
-trait StringSliceExtension {
-    fn check_first(&self, pred: fn(char) -> bool) -> bool;
-    fn is_uppercase(&self) -> bool;
-    fn is_lowercase(&self) -> bool;
-    fn is_alphabetic(&self) -> bool;
+use lazy_static::lazy_static;
+use regex::Regex;
 
-    fn transform_first<It: Iterator<Item = char>>(&self, transform: fn(char) -> It) -> String;
-    fn to_uppercase(&self) -> String;
-    fn to_lowercase(&self) -> String;
+lazy_static! {
+    static ref PASCAL_CASE_REGEX: Regex = Regex::new(r"^[A-Z][A-z\d]*$").unwrap();
+    static ref CAMEL_CASE_REGEX: Regex = Regex::new(r"^[a-z][A-z\d]*$").unwrap();
+    static ref SNAKE_CASE_REGEX: Regex = Regex::new(r"^[a-z]+(?:_[a-z\d]+)*$").unwrap();
+    static ref CONSTANT_CASE_REGEX: Regex = Regex::new(r"^[A-Z]+(?:_[A-Z\d]+)*$").unwrap();
+    static ref WORDS_REGEX: Regex = Regex::new("re").unwrap();
 }
 
-impl StringSliceExtension for &str {
-    fn check_first(&self, pred: fn(char) -> bool) -> bool {
-        match self.chars().nth(0) {
-            Some(ch) => pred(ch),
-            None => false,
-        }
-    }
+trait NameFormat {
+    fn transform_first<It: Iterator<Item = char>>(&self, transform: fn(char) -> It) -> String;
+    fn lowercase(&self) -> String;
+    fn capitalize(&self) -> String;
 
-    fn is_uppercase(&self) -> bool {
-        self.check_first(|ch| ch.is_uppercase())
-    }
+    fn to_pascal_case(&self) -> String;
+    fn to_camel_case(&self) -> String;
+    fn to_snake_case(&self) -> String;
+}
 
-    fn is_lowercase(&self) -> bool {
-        self.check_first(|ch| ch.is_lowercase())
-    }
-
-    fn is_alphabetic(&self) -> bool {
-        self.check_first(|ch| ch.is_alphabetic())
-    }
-
+impl<'a> NameFormat for &'a str {
     fn transform_first<It: Iterator<Item = char>>(&self, transform: fn(char) -> It) -> String {
         let mut chars = self.chars();
         match chars.next() {
@@ -45,46 +36,41 @@ impl StringSliceExtension for &str {
         }
     }
 
-    fn to_uppercase(&self) -> String {
+    fn capitalize(&self) -> String {
         self.transform_first(|ch| ch.to_uppercase())
     }
 
-    fn to_lowercase(&self) -> String {
+    fn lowercase(&self) -> String {
         self.transform_first(|ch| ch.to_lowercase())
     }
-}
 
-struct Words<'a> {
-    str: &'a str,
-    words: Vec<&'a str>,
-}
-
-impl<'a> Words<'a> {
-    fn new(str: &'a str) -> Self {
-        Self {
-            str,
-            words: str.split(|ch: char| !ch.is_alphanumeric()).collect(),
-        }
+    fn to_pascal_case(&self) -> String {
+        self.split(|ch: char| !ch.is_alphanumeric())
+            .collect::<Vec<_>>()
+            .iter()
+            .map(NameFormat::capitalize)
+            .collect::<String>()
     }
 
-    pub fn is_pascal_case(&self) -> bool {
-        if self.str.contains("_")
-            || self
-                .words
+    fn to_camel_case(&self) -> String {
+        let words = self
+            .split(|ch: char| !ch.is_alphanumeric())
+            .collect::<Vec<_>>();
+
+        format!(
+            "{}{}",
+            words[0].capitalize(),
+            words[1..]
                 .iter()
-                .any(|word| word.is_alphabetic() && !word.is_uppercase())
-        {
-            return false;
-        }
-
-        true
+                .map(NameFormat::capitalize)
+                .collect::<String>()
+        )
     }
 
-    pub fn is_camel_case(&self) -> bool {
-        if self.str.contains("_") {
-            return false;
-        }
+    fn to_snake_case(&self) -> String {
+        
 
+        words.join("_")
     }
 }
 
@@ -102,16 +88,7 @@ impl AstValidator {
 
         assert!(!str.is_empty());
 
-        let words = str
-            .split(|ch: char| !ch.is_alphabetic())
-            .collect::<Vec<_>>();
-
-        if str.contains("_") || words.iter().any(|word| !word.is_uppercase()) {
-            let to = words
-                .iter()
-                .map(|word| word.to_uppercase())
-                .collect::<String>();
-
+        if PASCAL_CASE_REGEX.is_match(str) {
             return Some(Solution::new(SolutionKind::Rename { name, to }));
         }
 
@@ -139,7 +116,7 @@ impl AstValidator {
             to.push_str(
                 &words[1..]
                     .iter()
-                    .map(|word| word.to_uppercase())
+                    .map(|word| word.capitalize())
                     .collect::<String>(),
             );
 
