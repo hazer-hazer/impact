@@ -1,4 +1,5 @@
 main =
-    let
-        A = 123
-        a
+    A = let
+        asd = 123
+        asd + 123
+    A

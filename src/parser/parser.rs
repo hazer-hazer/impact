@@ -550,6 +550,7 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {
+        verbose!("Parse postfix {}", self.peek());
         let lo = self.span();
 
         let lhs = self.parse_primary();
@@ -598,7 +599,7 @@ impl Parser {
 
             // Error token is an error on lexing stage
             //  so don't emit one more error for it, just add error stub
-            TokenKind::Error(_) => (Some(Err(ErrorNode::new(span))), false),
+            TokenKind::Error(_) => (Some(Err(ErrorNode::new(span))), true),
 
             _ => (None, false),
         };

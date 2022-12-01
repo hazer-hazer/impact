@@ -222,7 +222,10 @@ impl Lexer {
 
         // TODO: Tags
         let (frag, len) = self.get_fragment(start);
-        let kind = TokenKind::Int(frag.parse().expect("TODO: Check integer lexing"), IntKind::Unknown);
+        let kind = TokenKind::Int(
+            frag.parse().expect("TODO: Check integer lexing"),
+            IntKind::Unknown,
+        );
         self.add_token(kind, len);
     }
 
@@ -237,7 +240,7 @@ impl Lexer {
     fn lex_indent(&mut self) {
         let pos = self.pos;
 
-        while self.peek().is_indent_precursor() {
+        while !self.eof() && self.peek().is_indent_precursor() {
             self.save_source_line();
 
             self.advance();
@@ -281,6 +284,7 @@ impl Stage<TokenStream> for Lexer {
     fn run(mut self) -> StageOutput<TokenStream> {
         while !self.eof() {
             self.token_start_pos = self.pos;
+            println!("Token {}", self.peek());
             match self.peek().match_first() {
                 TokenStartMatch::Skip => {
                     self.advance();
