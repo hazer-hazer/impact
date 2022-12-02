@@ -1,1 +1,7 @@
-let a = 123 in a
+main =
+    a = let
+        asd = 123
+        asd + 123
+    a
+
+// 

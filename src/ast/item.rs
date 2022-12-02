@@ -4,6 +4,7 @@ use crate::span::span::{Ident, Span, WithSpan};
 
 use super::{expr::Expr, pr_display, ty::Ty, NodeId, NodeKindStr, WithNodeId, N, PR};
 
+#[derive(Debug)]
 pub struct Item {
     id: NodeId,
     kind: ItemKind,
@@ -59,6 +60,7 @@ impl NodeKindStr for Item {
     }
 }
 
+#[derive(Debug)]
 pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),

@@ -132,6 +132,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct Path {
     id: NodeId,
     segments: Vec<Ident>,

@@ -195,6 +195,7 @@ impl std::fmt::Display for Span {
     }
 }
 
+#[derive(Debug)]
 pub struct Spanned<T> {
     span: Span,
     node: T,

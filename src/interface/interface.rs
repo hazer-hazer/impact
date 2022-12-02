@@ -64,13 +64,15 @@ impl Interface {
         // Parsing //
         verbose!("=== Parsing ===");
         let stage = StageName::Parser;
-        let (ast, sess) = Parser::new(sess, tokens).run_and_emit(true)?;
+        let parse_result = Parser::new(sess, tokens).run();
 
         if self.config.check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
-            pp.visit_ast(&ast);
+            let mut pp = AstLikePP::new(parse_result.sess(), AstPPMode::Normal);
+            pp.visit_ast(parse_result.data());
             println!("Printing AST after parsing\n{}", pp.get_string());
         }
+
+        let (ast, sess) = parse_result.emit(true)?;
 
         self.should_stop(stage)?;
 

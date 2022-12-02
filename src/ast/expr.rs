@@ -7,6 +7,7 @@ use crate::{
 
 use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, WithNodeId, N, PR};
 
+#[derive(Debug)]
 pub struct Expr {
     id: NodeId,
     kind: ExprKind,
@@ -47,7 +48,7 @@ impl NodeKindStr for Expr {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Lit {
     Bool(bool),
     Int(u64, IntKind),
@@ -57,7 +58,7 @@ pub enum Lit {
 
 pub type InfixOp = Spanned<InfixOpKind>;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum InfixOpKind {
     Plus,
     Minus,
@@ -102,7 +103,7 @@ impl Display for InfixOpKind {
 
 pub type PrefixOp = Spanned<PrefixOpKind>;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum PrefixOpKind {
     Not,
 }
@@ -133,6 +134,7 @@ impl Display for PrefixOpKind {
     }
 }
 
+#[derive(Debug)]
 pub struct Block {
     id: NodeId,
     stmts: Vec<PR<N<Stmt>>>,
@@ -175,6 +177,7 @@ impl Display for Block {
     }
 }
 
+#[derive(Debug)]
 pub enum ExprKind {
     Unit,
     Lit(Lit),

@@ -7,6 +7,7 @@ use crate::{
 
 use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, PR};
 
+#[derive(Debug)]
 pub struct Ty {
     id: NodeId,
     kind: TyKind,
@@ -47,6 +48,7 @@ impl NodeKindStr for Ty {
     }
 }
 
+#[derive(Debug)]
 pub enum TyKind {
     Unit,
     Path(PR<Path>),

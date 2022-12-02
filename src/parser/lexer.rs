@@ -284,7 +284,6 @@ impl Stage<TokenStream> for Lexer {
     fn run(mut self) -> StageOutput<TokenStream> {
         while !self.eof() {
             self.token_start_pos = self.pos;
-            println!("Token {}", self.peek());
             match self.peek().match_first() {
                 TokenStartMatch::Skip => {
                     self.advance();

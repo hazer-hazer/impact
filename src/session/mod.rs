@@ -264,6 +264,14 @@ impl<T> StageOutput<T> {
     pub fn emit(self, stop_on_error: bool) -> StageResult<T> {
         TermEmitter::new().emit(self, stop_on_error)
     }
+
+    pub fn data(&self) -> &T {
+        &self.data
+    }
+
+    pub fn sess(&self) -> &Session {
+        &self.sess
+    }
 }
 
 pub trait Stage<T>

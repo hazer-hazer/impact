@@ -113,10 +113,6 @@ impl Parser {
         self.peek_tok().span
     }
 
-    fn backtrack(&mut self, pos: usize) {
-        self.pos = pos;
-    }
-
     fn is(&self, cmp: TokenCmp) -> bool {
         cmp == self.peek()
     }
@@ -129,19 +125,23 @@ impl Parser {
     }
 
     fn lookup_after_many1(&mut self, after: TokenCmp, cmp: TokenCmp) -> bool {
+        let mut cur_pos = self.pos;
         let start = self.pos;
-        while self.is(after) {
-            self.advance();
+
+        while let Some(tok) = self.tokens.0.get(cur_pos) {
+            if tok.kind != after {
+                break;
+            }
+            cur_pos += 1;
         }
 
-        let mut got = false;
-        if self.pos != start && self.is(cmp) {
-            got = true;
+        if cur_pos > start {
+            if let Some(tok) = self.tokens.0.get(cur_pos) {
+                return tok.kind == cmp;
+            }
         }
 
-        self.backtrack(start);
-
-        got
+        false
     }
 
     fn advance_offset_tok(&mut self, offset: usize) -> Token {
@@ -338,12 +338,15 @@ impl Parser {
         self.skip_opt_nls();
 
         let item = self.parse_opt_item();
-        self.expect_semis()?;
+        if item.is_some() {
+            self.expect_semis()?;
+        }
 
         self.try_recover_any(item, "item")
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
+        verbose!("Parse [opt] item {}", self.peek());
         if self.is(TokenCmp::Kw(Kw::Mod)) {
             Some(self.parse_mod_item())
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
@@ -550,12 +553,13 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {
-        verbose!("Parse postfix {}", self.peek());
         let lo = self.span();
 
         let lhs = self.parse_primary();
 
         if let Some(lhs) = lhs {
+            verbose!("Parse postfix {}", self.peek());
+
             let arg = self.parse_postfix();
 
             if let Some(arg) = arg {
@@ -640,7 +644,7 @@ impl Parser {
             return self.parse_block_expr();
         }
 
-        return self.parse_expr();
+        self.parse_expr()
     }
 
     fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {

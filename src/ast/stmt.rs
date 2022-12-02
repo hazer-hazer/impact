@@ -6,6 +6,7 @@ use super::{
     expr::Expr, item::Item, pr_display, pr_node_kind_str, NodeId, NodeKindStr, WithNodeId, N, PR,
 };
 
+#[derive(Debug)]
 pub struct Stmt {
     id: NodeId,
     kind: StmtKind,
@@ -46,6 +47,7 @@ impl WithSpan for Stmt {
     }
 }
 
+#[derive(Debug)]
 pub enum StmtKind {
     Expr(PR<N<Expr>>),
     Item(PR<N<Item>>),
