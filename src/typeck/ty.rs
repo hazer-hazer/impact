@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::{parser, span::span::Ident};
+use crate::{span::span::Ident};
 
 use super::ctx::{Ctx, CtxItem, CtxItemName};
 
@@ -173,7 +173,7 @@ impl Ty {
     }
 
     /// Substitute all occurrences of universally quantified type inside it body
-    pub fn open_forall(&self, subst: Ty) -> Ty {
+    pub fn open_forall(&self, _subst: Ty) -> Ty {
         match self.kind() {
             TyKind::Forall(ident, ty) => self.substitute(*ident, *ty.clone()),
             _ => unreachable!(),

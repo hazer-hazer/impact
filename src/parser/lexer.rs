@@ -5,7 +5,7 @@ use crate::session::{Session, Stage, StageOutput};
 
 use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
-use super::token::IntKind;
+use super::token::{ComplexSymbol, IntKind};
 
 enum TokenStartMatch {
     Ident,
@@ -147,7 +147,7 @@ impl Lexer {
         MessageBuilder::error()
             .span(span)
             .text(msg.to_string())
-            .emit(self);
+            .emit_single_label(self);
 
         self.tokens.push(Token {
             span,
@@ -278,6 +278,24 @@ impl Lexer {
             }
         }
     }
+
+    fn lex_multiline_comment(&mut self) {
+        self.advance_offset(2);
+
+        while !self.eof() && self.peek() != '*' && self.lookup() != Some('/') {
+            self.advance();
+        }
+
+        self.advance_offset(2);
+    }
+
+    fn lex_line_comment(&mut self) {
+        self.advance_offset(2);
+
+        while !self.eof() && self.peek() != '\n' {
+            self.advance();
+        }
+    }
 }
 
 impl Stage<TokenStream> for Lexer {
@@ -287,18 +305,28 @@ impl Stage<TokenStream> for Lexer {
             match self.peek().match_first() {
                 TokenStartMatch::Skip => {
                     self.advance();
-                }
+                },
                 TokenStartMatch::Ident => self.lex_ident(),
                 TokenStartMatch::Num => self.lex_num(),
                 TokenStartMatch::String => self.lex_str(),
                 TokenStartMatch::IndentPrecursor => self.lex_indent(),
                 TokenStartMatch::Unknown => {
                     match TokenKind::try_from_chars(self.peek(), self.lookup()) {
-                        Some((kind, len)) => self.add_token_adv(kind, len),
+                        ComplexSymbol::Infix(kind, len) => {
+                            self.add_token_adv(TokenKind::Infix(kind), len)
+                        },
 
-                        None => self.unexpected_token(),
+                        ComplexSymbol::Punct(kind, len) => {
+                            self.add_token_adv(TokenKind::Punct(kind), len)
+                        },
+
+                        ComplexSymbol::LineComment => self.lex_line_comment(),
+
+                        ComplexSymbol::MultilineComment => self.lex_multiline_comment(),
+
+                        ComplexSymbol::None => self.unexpected_token(),
                     }
-                }
+                },
             };
         }
 

@@ -1,6 +1,7 @@
 use crate::{
     ast::{AstMetadata, NodeId},
     config::config::Config,
+    interface::interface::InterruptionReason,
     message::{
         message::{Message, MessageStorage},
         term_emitter::TermEmitter,
@@ -223,10 +224,7 @@ impl Session {
     }
 
     pub fn with_sess<'a, T>(&'a self, val: &'a T) -> WithSession<'a, T> {
-        WithSession {
-            sess: self,
-            val: val,
-        }
+        WithSession { sess: self, val }
     }
 
     pub fn config(&self) -> &Config {
@@ -250,7 +248,7 @@ pub struct StageOutput<T> {
     pub messages: Vec<Message>,
 }
 
-pub type StageResult<T> = Result<(T, Session), String>;
+pub type StageResult<T> = Result<(T, Session), InterruptionReason>;
 
 impl<T> StageOutput<T> {
     pub fn new(sess: Session, data: T, messages: MessageStorage) -> Self {

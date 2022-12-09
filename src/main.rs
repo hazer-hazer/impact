@@ -3,7 +3,7 @@ use std::fs::read_to_string;
 
 use cli::color::Colorize;
 use config::config::{Config, PPStages, StageName};
-use interface::interface::Interface;
+use interface::interface::{Interface, InterruptionReason};
 use message::message::MessageKind;
 use session::Source;
 
@@ -37,6 +37,13 @@ fn main() {
     let result = interface.compile_single_source(source);
 
     if let Err(err) = result {
-        println!("{}", err.fg_color(MessageKind::Error.color()))
+        match err {
+            InterruptionReason::ConfiguredStop => {
+                println!("Compilation stopped due to configured compilation depth");
+            },
+            InterruptionReason::Error(err) => {
+                println!("{}", err.fg_color(MessageKind::Error.color()))
+            },
+        }
     }
 }

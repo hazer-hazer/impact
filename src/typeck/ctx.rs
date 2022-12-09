@@ -216,7 +216,7 @@ impl Ctx {
         }
     }
 
-    fn synth_block(&self, block: Block) -> TyResult<(Ty, Ctx)> {
+    fn synth_block(&self, _block: Block) -> TyResult<(Ty, Ctx)> {
         todo!()
     }
 }

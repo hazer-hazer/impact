@@ -1,8 +1,7 @@
 use crate::{
-    ast::expr::{InfixOp, PrefixOp},
     hir::{
-        expr::{Block, Expr, FuncCall, Infix, Lambda, Lit, Prefix, TyExpr},
-        item::{Decl, Item, Mod, TypeItem},
+        expr::{Block, FuncCall, Infix, Lambda, Lit, Prefix, TyExpr},
+        item::{Decl, Mod, TypeItem},
         stmt::{Stmt, StmtKind},
         ty::Ty,
         visitor::HirVisitor,

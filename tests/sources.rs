@@ -9,7 +9,7 @@ use std::{
 use impact::{
     cli::color::Colorize,
     config::config::{Config, PPStages, StageName},
-    interface::interface::Interface,
+    interface::interface::{Interface, InterruptionReason},
     message::message::MessageKind,
     session::Source,
 };
@@ -23,11 +23,16 @@ const DEFAULT_CONFIG: Config = Config {
 // TODO: Move this to `cli` module
 enum ConfigOptionKind {
     StopAt(StageName),
+    PPStages(PPStages),
 }
 
 impl ConfigOptionKind {
     fn stop_at(stage_name: &str) -> Self {
         Self::StopAt(StageName::from_str(stage_name))
+    }
+
+    fn pp_stages(pp_stages: PPStages) -> Self {
+        Self::PPStages(pp_stages)
     }
 }
 
@@ -61,13 +66,30 @@ impl<'a> ConfigOptionBuilder<'a> {
 
     fn emit(self) -> ConfigOption {
         ConfigOption::new(match self.name {
-            "stop_at" => {
+            "stop-at" => {
                 assert!(
                     self.args.len() == 1,
                     "Invalid count of arguments given for test option `stop_at`"
                 );
                 ConfigOptionKind::stop_at(self.args[0])
-            }
+            },
+            "pp" => {
+                assert!(self.args.len() >= 1);
+                ConfigOptionKind::pp_stages(if self.args.len() > 1 {
+                    PPStages::Some(
+                        self.args
+                            .iter()
+                            .map(|stage| StageName::from_str(stage))
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    match self.args[0] {
+                        "[all]" => PPStages::All,
+                        "[none]" => PPStages::None,
+                        _ => PPStages::Some(vec![StageName::from_str(self.args[0])]),
+                    }
+                })
+            },
             _ => panic!("Unknown test option `{}`", self.name),
         })
     }
@@ -89,6 +111,7 @@ fn config_from_options(options: Vec<ConfigOption>) -> Config {
     for opt in options {
         match opt.kind {
             ConfigOptionKind::StopAt(stage) => config.compilation_depth = stage,
+            ConfigOptionKind::PPStages(pp_stages) => config.pp_stages = pp_stages,
         }
     }
     config
@@ -105,7 +128,7 @@ fn parse_test(path: &Path) -> io::Result<Test> {
 
     for line in reader.lines() {
         let line = line?;
-        content.push_str(&line);
+        content.push_str(&format!("{}\n", line));
 
         if line.starts_with(OPTIONS_LINE_BEGIN) {
             options.extend(
@@ -114,7 +137,7 @@ fn parse_test(path: &Path) -> io::Result<Test> {
                     .filter(|arg| !arg.trim().is_empty())
                     .fold(Vec::default(), |mut opts, str| {
                         if str.starts_with("--") {
-                            opts.push(ConfigOptionBuilder::new(str));
+                            opts.push(ConfigOptionBuilder::new(&str[2..]));
                         } else if opts.is_empty() {
                             panic!("Unexpected option argument `{}` without option", str);
                         } else {
@@ -142,7 +165,7 @@ fn parse_all_tests(dir: &Path, cb: fn(Test)) -> io::Result<()> {
             let path = entry.path();
 
             if path.is_dir() {
-                parse_all_tests(dir, cb)?;
+                parse_all_tests(&path, cb)?;
             } else {
                 cb(parse_test(&path)?);
             }
@@ -154,14 +177,23 @@ fn parse_all_tests(dir: &Path, cb: fn(Test)) -> io::Result<()> {
 
 #[test]
 fn test_sources() -> io::Result<()> {
-    let current_dir = env::current_dir()?;
+    let sources_path = Path::new("tests/sources");
 
-    parse_all_tests(&current_dir, |test: Test| {
+    parse_all_tests(&sources_path, |test: Test| {
+        println!("Running test `{}`", test.source.filename());
+
         let interface = Interface::new(test.config);
         let result = interface.compile_single_source(test.source);
 
         if let Err(err) = result {
-            panic!("{}", err.fg_color(MessageKind::Error.color()));
+            match err {
+                InterruptionReason::ConfiguredStop => {
+                    println!("Stop due to configured compilation depth")
+                },
+                InterruptionReason::Error(err) => {
+                    println!("{}", err.fg_color(MessageKind::Error.color()))
+                },
+            }
         }
     })?;
 

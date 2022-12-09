@@ -127,6 +127,14 @@ pub enum TokenKind {
     Error(Symbol),
 }
 
+pub enum ComplexSymbol {
+    LineComment,
+    MultilineComment,
+    Punct(Punct, SpanLen),
+    Infix(Infix, SpanLen),
+    None,
+}
+
 impl TokenKind {
     pub fn try_from_reserved_sym(sym: Symbol) -> Option<Self> {
         match sym.as_str() {
@@ -141,23 +149,25 @@ impl TokenKind {
         }
     }
 
-    pub fn try_from_chars(char1: char, char2: Option<char>) -> Option<(Self, SpanLen)> {
+    pub fn try_from_chars(char1: char, char2: Option<char>) -> ComplexSymbol {
         match (char1, char2) {
-            ('+', _) => Some((TokenKind::Infix(Infix::Plus), 1)),
-            ('*', _) => Some((TokenKind::Infix(Infix::Mul), 1)),
-            ('/', _) => Some((TokenKind::Infix(Infix::Div), 1)),
-            ('%', _) => Some((TokenKind::Infix(Infix::Mod), 1)),
-            ('=', _) => Some((TokenKind::Punct(Punct::Assign), 1)),
-            ('\\', _) => Some((TokenKind::Punct(Punct::Backslash), 1)),
-            (':', _) => Some((TokenKind::Punct(Punct::Colon), 1)),
-            ('.', _) => Some((TokenKind::Punct(Punct::Dot), 1)),
-            ('(', _) => Some((TokenKind::Punct(Punct::LParen), 1)),
-            (')', _) => Some((TokenKind::Punct(Punct::RParen), 1)),
+            ('/', Some('/')) => ComplexSymbol::LineComment,
 
-            ('-', Some('>')) => Some((TokenKind::Punct(Punct::Arrow), 2)),
-            ('-', _) => Some((TokenKind::Infix(Infix::Minus), 1)),
+            ('+', _) => ComplexSymbol::Infix(Infix::Plus, 1),
+            ('*', _) => ComplexSymbol::Infix(Infix::Mul, 1),
+            ('/', _) => ComplexSymbol::Infix(Infix::Div, 1),
+            ('%', _) => ComplexSymbol::Infix(Infix::Mod, 1),
+            ('=', _) => ComplexSymbol::Punct(Punct::Assign, 1),
+            ('\\', _) => ComplexSymbol::Punct(Punct::Backslash, 1),
+            (':', _) => ComplexSymbol::Punct(Punct::Colon, 1),
+            ('.', _) => ComplexSymbol::Punct(Punct::Dot, 1),
+            ('(', _) => ComplexSymbol::Punct(Punct::LParen, 1),
+            (')', _) => ComplexSymbol::Punct(Punct::RParen, 1),
 
-            _ => None,
+            ('-', Some('>')) => ComplexSymbol::Punct(Punct::Arrow, 2),
+            ('-', _) => ComplexSymbol::Infix(Infix::Minus, 1),
+
+            _ => ComplexSymbol::None,
         }
     }
 }
@@ -279,7 +289,7 @@ impl Display for TokenKind {
             TokenKind::Int(val, kind) => write!(f, "{}{}", val, kind),
             TokenKind::String(val) | TokenKind::Ident(val) | TokenKind::Error(val) => {
                 write!(f, "{}", val)
-            }
+            },
             TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),
             TokenKind::Infix(infix) => write!(f, "{}", infix),
             TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),

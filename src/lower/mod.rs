@@ -12,13 +12,12 @@ use crate::{
         item::{Decl, Mod, TypeItem},
         HIR,
     },
-    message::message::{Message, MessageBuilder, MessageStorage},
+    message::message::{MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::res::NamePath,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
     typeck::{
-        self,
         ty::{DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
     },
 };
@@ -153,7 +152,7 @@ impl<'a> Lower<'a> {
     fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
         match kind {
             IntKind::Unknown => DEFAULT_INT_KIND,
-            IntKind::Inferred(id) => todo!(),
+            IntKind::Inferred(_id) => todo!(),
             IntKind::U8 => hir::expr::IntKind::U8,
             IntKind::U16 => hir::expr::IntKind::U16,
             IntKind::U32 => hir::expr::IntKind::U32,
@@ -170,7 +169,7 @@ impl<'a> Lower<'a> {
     fn lower_float_kind(&self, kind: FloatKind) -> hir::expr::FloatKind {
         match kind {
             FloatKind::Unknown => DEFAULT_FLOAT_KIND,
-            FloatKind::Inferred(id) => todo!(),
+            FloatKind::Inferred(_id) => todo!(),
             FloatKind::F32 => hir::expr::FloatKind::F32,
             FloatKind::F64 => hir::expr::FloatKind::F64,
         }

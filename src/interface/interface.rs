@@ -14,7 +14,12 @@ pub struct Interface {
     config: Config,
 }
 
-type InterruptResult = Result<(), String>;
+pub enum InterruptionReason {
+    ConfiguredStop,
+    Error(String),
+}
+
+type InterruptResult = Result<(), InterruptionReason>;
 
 impl Interface {
     pub fn new(config: Config) -> Self {
@@ -129,10 +134,7 @@ impl Interface {
 
     fn should_stop(&self, stage: StageName) -> InterruptResult {
         if self.config.compilation_depth <= stage {
-            Err(format!(
-                "Compilation stopped due to configured compilation depth {}",
-                self.config.compilation_depth
-            ))
+            Err(InterruptionReason::ConfiguredStop)
         } else {
             Ok(())
         }

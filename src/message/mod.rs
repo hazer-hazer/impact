@@ -1,4 +1,7 @@
-use crate::session::{Session, StageOutput, StageResult};
+use crate::{
+    interface::interface::InterruptionReason,
+    session::{Session, StageOutput, StageResult},
+};
 
 use self::message::Message;
 
@@ -33,7 +36,9 @@ pub trait MessageEmitter {
         }
 
         if stop_on_error && self.got_error() {
-            Err(String::from("Stop due to errors above"))
+            Err(InterruptionReason::Error(String::from(
+                "Stop due to errors above",
+            )))
         } else {
             Ok((output.data, output.sess))
         }
