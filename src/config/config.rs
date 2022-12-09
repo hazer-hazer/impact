@@ -12,6 +12,21 @@ pub enum StageName {
     Unset,
 }
 
+impl StageName {
+    pub fn from_str(name: &str) -> Self {
+        match name {
+            "lexer" => Self::Lexer,
+            "parser" => Self::Parser,
+            "ast_validation" => Self::AstValidation,
+            "def_collect" => Self::DefCollect,
+            "nameres" => Self::NameRes,
+            "lower" => Self::Lower,
+            "typeck" => Self::Typeck,
+            _ => panic!("Invalid stage name `{}`", name),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum PPStages {
     None,
