@@ -57,6 +57,7 @@ impl Display for StageName {
 pub struct Config {
     pub compilation_depth: StageName,
     pub pp_stages: PPStages,
+    pub expected_output: Option<String>,
 }
 
 impl Config {
@@ -65,6 +66,50 @@ impl Config {
             PPStages::None => false,
             PPStages::Some(stages) => stages.contains(&stage),
             PPStages::All => true,
+        }
+    }
+
+    pub fn expected_output(&self) -> Option<&String> {
+        self.expected_output.as_ref()
+    }
+}
+
+pub const DEFAULT_COMPILATION_DEPTH: StageName = StageName::Unset;
+pub const DEFAULT_PP_STAGES: PPStages = PPStages::None;
+pub const DEFAULT_EXPECTED_OUTPUT: Option<String> = None;
+
+#[derive(Default)]
+pub struct ConfigBuilder {
+    compilation_depth: Option<StageName>,
+    pp_stages: Option<PPStages>,
+    expected_output: Option<String>,
+}
+
+impl ConfigBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn compilation_depth(mut self, compilation_depth: StageName) -> Self {
+        self.compilation_depth = Some(compilation_depth);
+        self
+    }
+
+    pub fn pp_stages(mut self, pp_stages: PPStages) -> Self {
+        self.pp_stages = Some(pp_stages);
+        self
+    }
+
+    pub fn expected_output(mut self, expected_output: String) -> Self {
+        self.expected_output = Some(expected_output);
+        self
+    }
+
+    pub fn emit(self) -> Config {
+        Config {
+            compilation_depth: self.compilation_depth.unwrap_or(DEFAULT_COMPILATION_DEPTH),
+            pp_stages: self.pp_stages.unwrap_or(DEFAULT_PP_STAGES),
+            expected_output: self.expected_output,
         }
     }
 }

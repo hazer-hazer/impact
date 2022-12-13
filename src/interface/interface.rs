@@ -3,6 +3,7 @@ use crate::{
     cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
+    interface::writer::out,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::{defs::DefPrinter, AstLikePP, AstPPMode},
@@ -10,8 +11,13 @@ use crate::{
     session::{Session, Source, Stage},
 };
 
-pub struct Interface {
+use super::writer::Writer;
+
+pub type InterfaceWriter<'a> = &'a mut dyn Writer<InterruptResult>;
+
+pub struct Interface<'a> {
     config: Config,
+    writer: InterfaceWriter<'a>,
 }
 
 pub enum InterruptionReason {
@@ -19,11 +25,11 @@ pub enum InterruptionReason {
     Error(String),
 }
 
-type InterruptResult = Result<(), InterruptionReason>;
+pub type InterruptResult = Result<(), InterruptionReason>;
 
-impl Interface {
-    pub fn new(config: Config) -> Self {
-        Self { config }
+impl<'a> Interface<'a> {
+    pub fn new(config: Config, writer: InterfaceWriter<'a>) -> Self {
+        Self { config, writer }
     }
 
     pub fn compile_single_source(self, source: Source) -> InterruptResult {
@@ -38,7 +44,8 @@ impl Interface {
         let (tokens, sess) = Lexer::new(source_id, sess).run_and_emit(true)?;
 
         if cfg!(feature = "pp_lines") {
-            println!(
+            out!(
+                self.writer,
                 "=== SOURCE LINES ===\n{}\nPosition: {:?}\n",
                 sess.source_map
                     .get_source(source_id)
@@ -49,11 +56,12 @@ impl Interface {
                     .collect::<Vec<_>>()
                     .join("\n"),
                 sess.source_map.get_source(source_id).lines_positions()
-            );
+            )?;
         }
 
         if self.config.check_pp_stage(stage) {
-            println!(
+            out!(
+                self.writer,
                 "Printing tokens after lexing\n{}",
                 tokens
                     .0
@@ -61,7 +69,7 @@ impl Interface {
                     .map(|t| format!("{:?}", t))
                     .collect::<Vec<_>>()
                     .join("\n")
-            )
+            )?;
         }
 
         self.should_stop(stage)?;
@@ -74,7 +82,11 @@ impl Interface {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(parse_result.sess(), AstPPMode::Normal);
             pp.visit_ast(parse_result.data());
-            println!("Printing AST after parsing\n{}", pp.get_string());
+            out!(
+                self.writer,
+                "Printing AST after parsing\n{}",
+                pp.get_string()
+            )?;
         }
 
         let (ast, sess) = parse_result.emit(true)?;
@@ -97,7 +109,7 @@ impl Interface {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.pp_defs();
-            println!("{}", pp.get_string());
+            out!(self.writer, "{}", pp.get_string())?;
         }
 
         self.should_stop(stage)?;
@@ -111,7 +123,7 @@ impl Interface {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::NameHighlighter);
             pp.visit_ast(&ast);
-            println!("{}", pp.get_string());
+            out!(self.writer, "{}", pp.get_string())?;
         }
 
         self.should_stop(stage)?;
@@ -124,7 +136,11 @@ impl Interface {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.visit_hir(&hir);
-            println!("Printing HIR after parsing\n{}", pp.get_string());
+            out!(
+                self.writer,
+                "Printing HIR after parsing\n{}",
+                pp.get_string()
+            )?;
         }
 
         self.should_stop(stage)?;
@@ -138,5 +154,9 @@ impl Interface {
         } else {
             Ok(())
         }
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }

@@ -9,3 +9,4 @@ const
 camelCase
 PascalCase
 SomeType
+non-corelative

@@ -2,8 +2,10 @@
 use std::fs::read_to_string;
 
 use cli::color::Colorize;
-use config::config::{Config, PPStages, StageName};
+use config::config::ConfigBuilder;
+use config::config::{PPStages, StageName};
 use interface::interface::{Interface, InterruptionReason};
+use interface::writer::ConsoleWriter;
 use message::message::MessageKind;
 use session::Source;
 
@@ -23,11 +25,13 @@ mod span;
 mod typeck;
 
 fn main() {
-    let config = Config {
-        compilation_depth: StageName::Unset,
-        pp_stages: PPStages::All,
-    };
-    let interface = Interface::new(config);
+    let config = ConfigBuilder::new()
+        .compilation_depth(StageName::Unset)
+        .pp_stages(PPStages::All)
+        .emit();
+
+    let mut writer = ConsoleWriter;
+    let interface = Interface::new(config, &mut writer);
 
     let source_path = "examples/sample.imp";
     let source_file = read_to_string(source_path).unwrap();
