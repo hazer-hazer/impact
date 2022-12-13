@@ -4,4 +4,7 @@ main =
         asd + 123
     a
 
-//> --stop-at lexer --pp all
+//> --pp lexer
+
+/*
+*/

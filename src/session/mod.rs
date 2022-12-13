@@ -131,7 +131,7 @@ impl Source {
         let line = &self.source[pos as usize..(next_line_pos - 1) as usize];
         let num = index + 1;
         let num_len = num.to_string().len();
-        let num_indent = num_len - (lines_count + 1).to_string().len();
+        let num_indent = (lines_count + 1).to_string().len() - num_len;
 
         LineInfo {
             str: line,

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
@@ -145,6 +145,9 @@ impl Parser {
     }
 
     fn advance_offset_tok(&mut self, offset: usize) -> Token {
+        if self.eof() {
+            panic!("Advanced to EOF");
+        }
         let last = self.pos;
         self.pos += offset;
         self.peek_tok_at(last)
@@ -238,7 +241,7 @@ impl Parser {
                         .label(stmt.span(), format!("Unexpected {}", stmt.kind_str()))
                         .emit(self);
                     Err(ErrorNode::new(stmt.span()))
-                }
+                },
                 Err(err) => Err(err),
             }
         }
@@ -338,11 +341,14 @@ impl Parser {
         self.skip_opt_nls();
 
         let item = self.parse_opt_item();
-        if item.is_some() {
-            self.expect_semis()?;
-        }
 
         self.try_recover_any(item, "item")
+    }
+
+    fn parse_item_semi(&mut self) -> PR<N<Item>> {
+        let item = self.parse_item();
+        self.expect_semis()?;
+        item
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
@@ -688,13 +694,13 @@ impl Parser {
                     Some(inner) => TyKind::Paren(inner),
                     None => TyKind::Unit,
                 }
-            }
+            },
 
             TokenKind::Ident(_) => TyKind::Path(self.parse_path("type path")),
 
             _ => {
                 return None;
-            }
+            },
         };
 
         let ty = Ok(Box::new(Ty::new(
@@ -719,7 +725,7 @@ impl Parser {
         let mut items = vec![];
 
         while !self.eof() {
-            items.push(self.parse_item());
+            items.push(self.parse_item_semi());
         }
 
         AST::new(items)

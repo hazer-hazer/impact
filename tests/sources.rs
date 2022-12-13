@@ -1,7 +1,7 @@
 use core::panic;
 use std::{
-    fs::{read_dir, read_to_string, File},
-    io::{self, BufRead, BufReader},
+    fs::{read_dir, read_to_string},
+    io::{self},
     path::Path,
 };
 
@@ -49,7 +49,7 @@ struct Comment {
 }
 
 impl Comment {
-    fn into_config_option(self) -> ConfigOption {
+    fn into_config_option(mut self) -> ConfigOption {
         ConfigOption::new(match self.option.as_str() {
             "stop-at" => {
                 assert!(
@@ -74,6 +74,10 @@ impl Comment {
                         _ => PPStages::Some(vec![StageName::from_str(self.args[0].as_str())]),
                     }
                 })
+            },
+            "expected-output" => {
+                assert!(self.args.len() == 1);
+                ConfigOptionKind::ExpectedOutput(self.args.remove(0))
             },
             _ => panic!("Unknown test option `{}`", self.option),
         })
@@ -199,7 +203,17 @@ impl CommentParser {
 
                     self.skip_ws();
 
-                    if self.any(&['\'', '\"']) {
+                    if self.check(&['\'', '\'', '\'']) || self.check(&['"', '"', '"']) {
+                        let quote = self.peek().unwrap();
+                        self.advance(3);
+
+                        let arg = self.eat_until(&[quote, quote, quote]);
+
+                        self.comments.push(Comment {
+                            option,
+                            args: vec![arg.trim().to_string()],
+                        });
+                    } else if self.any(&['\'', '\"']) {
                         let quote = self.peek().unwrap();
                         self.advance(1);
 
@@ -211,16 +225,6 @@ impl CommentParser {
                         });
 
                         continue;
-                    } else if self.check(&['\'', '\'', '\'']) || self.check(&['"', '"', '"']) {
-                        let quote = self.peek().unwrap();
-                        self.advance(3);
-
-                        let arg = self.eat_until(&[quote, quote, quote]);
-
-                        self.comments.push(Comment {
-                            option,
-                            args: vec![arg],
-                        });
                     } else {
                         let mut args = vec![];
                         while !self.eof() && !self.check(&['-', '-']) && !self.check(stop) {
