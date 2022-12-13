@@ -44,7 +44,6 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     fn visit_ast(&mut self, ast: &AST) {
-        println!("== AST ==");
         walk_each_pr_delim!(self, ast.items(), visit_item, "\n")
     }
 

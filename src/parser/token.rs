@@ -152,6 +152,7 @@ impl TokenKind {
     pub fn try_from_chars(char1: char, char2: Option<char>) -> ComplexSymbol {
         match (char1, char2) {
             ('/', Some('/')) => ComplexSymbol::LineComment,
+            ('/', Some('*')) => ComplexSymbol::MultilineComment,
 
             ('+', _) => ComplexSymbol::Infix(Infix::Plus, 1),
             ('*', _) => ComplexSymbol::Infix(Infix::Mul, 1),
@@ -285,7 +286,7 @@ impl Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TokenKind::Eof => write!(f, "{}", "[EOF]"),
-            TokenKind::Nl => write!(f, "{}", "new-line"),
+            TokenKind::Nl => write!(f, "{}", "[NL]"),
             TokenKind::Int(val, kind) => write!(f, "{}{}", val, kind),
             TokenKind::String(val) | TokenKind::Ident(val) | TokenKind::Error(val) => {
                 write!(f, "{}", val)
@@ -295,8 +296,8 @@ impl Display for TokenKind {
             TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
             TokenKind::Prefix(prefix) => write!(f, "{}", prefix),
             TokenKind::Kw(kw) => write!(f, "{}", kw),
-            TokenKind::Indent => write!(f, "{}", "indent"),
-            TokenKind::Dedent => write!(f, "{}", "dedent"),
+            TokenKind::Indent => write!(f, "{}", "[INDENT]"),
+            TokenKind::Dedent => write!(f, "{}", "[DEDENT]"),
             TokenKind::Punct(punct) => write!(f, "{}", punct),
         }
     }
@@ -335,6 +336,8 @@ impl WithSpan for Token {
 #[derive(Default, Debug)]
 pub struct TokenStream(pub Vec<Token>);
 
+pub const TOKEN_STREAM_DELIM: &str = " ";
+
 impl std::ops::Index<usize> for TokenStream {
     type Output = Token;
 
@@ -353,14 +356,14 @@ impl TokenStream {
 
 impl Display for TokenStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", {
-            let mut s = String::new();
-
-            for tok in self.0.iter() {
-                s += format!("{}\n", tok).as_str();
-            }
-
-            s
-        })
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(|t| format!("{}", t))
+                .collect::<Vec<_>>()
+                .join(TOKEN_STREAM_DELIM)
+        )
     }
 }

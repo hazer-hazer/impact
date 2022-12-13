@@ -1,7 +1,12 @@
+use std::sync::Arc;
+
 use crate::{
     ast::{AstMetadata, NodeId},
     config::config::Config,
-    interface::interface::InterruptionReason,
+    interface::{
+        interface::{InterruptResult, InterruptionReason, UnitInterruptResult},
+        writer::Writer,
+    },
     message::{
         message::{Message, MessageStorage},
         term_emitter::TermEmitter,
@@ -204,8 +209,11 @@ impl SourceMap {
     }
 }
 
+pub type SessionWriter = Box<dyn Writer<UnitInterruptResult, ()>>;
+
 pub struct Session {
     config: Config,
+    pub writer: SessionWriter,
     pub source_map: SourceMap,
     ast_metadata: AstMetadata,
     pub def_table: DefTable,
@@ -213,9 +221,10 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, writer: SessionWriter) -> Self {
         Self {
             config,
+            writer,
             source_map: Default::default(),
             ast_metadata: Default::default(),
             def_table: Default::default(),

@@ -1,6 +1,6 @@
 use crate::{
     interface::interface::InterruptionReason,
-    session::{Session, StageOutput, StageResult},
+    session::{Session, StageOutput, StageResult}, cli::verbose,
 };
 
 use self::message::Message;
@@ -15,9 +15,9 @@ pub trait MessageEmitter {
 
         if cfg!(feature = "verbose_debug") {
             if messages.is_empty() {
-                println!("Got no messages");
+                verbose!("Got no messages");
             } else {
-                println!(
+                verbose!(
                     "Printing messages as are\n{}",
                     messages
                         .iter()

@@ -13,7 +13,7 @@ use impact::{
         writer::StorageWriter,
     },
     message::message::MessageKind,
-    session::Source,
+    session::{Session, Source},
 };
 
 // TODO: Move this to `cli` module
@@ -312,24 +312,25 @@ fn test_sources() -> io::Result<()> {
     parse_all_tests(&sources_path, |test: Test| {
         println!("Running test `{}`", test.source.filename());
 
-        let mut writer = StorageWriter::default();
-        let interface = Interface::new(test.config.clone(), &mut writer);
+        let writer = Box::new(StorageWriter::default());
+        let interface = Interface::new(test.config.clone());
 
-        let result = interface.compile_single_source(test.source);
+        let result = interface.compile_single_source(test.source, writer);
 
-        if let Err(err) = result {
-            match err {
+        match result {
+            Ok(sess) => {
+                if let Some(expected_output) = test.config.expected_output() {
+                    assert_eq!(expected_output, sess.writer.data());
+                }
+            },
+            Err(err) => match err {
                 InterruptionReason::ConfiguredStop => {
                     println!("Stop due to configured compilation depth")
                 },
                 InterruptionReason::Error(err) => {
                     println!("{}", err.fg_color(MessageKind::Error.color()))
                 },
-            }
-        }
-
-        if let Some(expected_output) = test.config.expected_output() {
-            assert_eq!(expected_output, writer.data());
+            },
         }
     })?;
 

@@ -13,6 +13,7 @@
     "interner",
     "Interner",
     "outl",
+    "outln",
     "polytype",
     "ppfmt",
     "prec",

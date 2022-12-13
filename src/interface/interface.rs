@@ -3,21 +3,16 @@ use crate::{
     cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
-    interface::writer::out,
+    interface::writer::{out, outln},
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::{defs::DefPrinter, AstLikePP, AstPPMode},
     resolve::{collect::DefCollector, resolve::NameResolver},
-    session::{Session, Source, Stage},
+    session::{Session, SessionWriter, Source, Stage},
 };
 
-use super::writer::Writer;
-
-pub type InterfaceWriter<'a> = &'a mut dyn Writer<InterruptResult>;
-
-pub struct Interface<'a> {
+pub struct Interface {
     config: Config,
-    writer: InterfaceWriter<'a>,
 }
 
 pub enum InterruptionReason {
@@ -25,15 +20,16 @@ pub enum InterruptionReason {
     Error(String),
 }
 
-pub type InterruptResult = Result<(), InterruptionReason>;
+pub type InterruptResult = Result<Session, InterruptionReason>;
+pub type UnitInterruptResult = Result<(), InterruptionReason>;
 
-impl<'a> Interface<'a> {
-    pub fn new(config: Config, writer: InterfaceWriter<'a>) -> Self {
-        Self { config, writer }
+impl Interface {
+    pub fn new(config: Config) -> Self {
+        Self { config }
     }
 
-    pub fn compile_single_source(self, source: Source) -> InterruptResult {
-        let mut sess = Session::new(self.config.clone());
+    pub fn compile_single_source(self, source: Source, writer: SessionWriter) -> InterruptResult {
+        let mut sess = Session::new(self.config.clone(), writer);
 
         // Lexing //
         verbose!("=== Lexing ===");
@@ -41,12 +37,12 @@ impl<'a> Interface<'a> {
 
         let source_id = sess.source_map.add_source(source);
 
-        let (tokens, sess) = Lexer::new(source_id, sess).run_and_emit(true)?;
+        let (tokens, mut sess) = Lexer::new(source_id, sess).run_and_emit(true)?;
 
         if cfg!(feature = "pp_lines") {
-            outl!(
-                self.writer,
-                "=== SOURCE LINES ===\n{}\nPosition: {:?}\n",
+            outln!(
+                sess.writer,
+                "=== SOURCE LINES ===\n{}\nPositions: {:?}\n",
                 sess.source_map
                     .get_source(source_id)
                     .get_lines()
@@ -59,17 +55,8 @@ impl<'a> Interface<'a> {
             )?;
         }
 
-        if self.config.check_pp_stage(stage) {
-            outl!(
-                self.writer,
-                "Printing tokens after lexing\n{}",
-                tokens
-                    .0
-                    .iter()
-                    .map(|t| format!("{:?}", t))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )?;
+        if sess.config().check_pp_stage(stage) {
+            outln!(sess.writer, "Printing tokens after lexing\n{}", tokens)?;
         }
 
         self.should_stop(stage)?;
@@ -79,17 +66,14 @@ impl<'a> Interface<'a> {
         let stage = StageName::Parser;
         let parse_result = Parser::new(sess, tokens).run();
 
-        if self.config.check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(parse_result.sess(), AstPPMode::Normal);
-            pp.visit_ast(parse_result.data());
-            outl!(
-                self.writer,
-                "Printing AST after parsing\n{}",
-                pp.get_string()
-            )?;
-        }
+        let (ast, mut sess) = parse_result.emit(true)?;
 
-        let (ast, sess) = parse_result.emit(true)?;
+        if sess.config().check_pp_stage(stage) {
+            let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
+            pp.visit_ast(&ast);
+            let ast = pp.get_string();
+            outln!(sess.writer, "Printing AST after parsing\n{}", ast)?;
+        }
 
         self.should_stop(stage)?;
 
@@ -104,12 +88,13 @@ impl<'a> Interface<'a> {
         verbose!("=== Definition collection ===");
         let stage = StageName::DefCollect;
 
-        let (_, sess) = DefCollector::new(sess, &ast).run_and_emit(true)?;
+        let (_, mut sess) = DefCollector::new(sess, &ast).run_and_emit(true)?;
 
-        if self.config.check_pp_stage(stage) {
+        if sess.config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.pp_defs();
-            outl!(self.writer, "{}", pp.get_string())?;
+            let defs = pp.get_string();
+            outln!(sess.writer, "{}", defs)?;
         }
 
         self.should_stop(stage)?;
@@ -118,12 +103,13 @@ impl<'a> Interface<'a> {
         verbose!("=== Name resolution ===");
         let stage = StageName::NameRes;
 
-        let (_, sess) = NameResolver::new(sess, &ast).run_and_emit(true)?;
+        let (_, mut sess) = NameResolver::new(sess, &ast).run_and_emit(true)?;
 
-        if self.config.check_pp_stage(stage) {
+        if sess.config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::NameHighlighter);
             pp.visit_ast(&ast);
-            outl!(self.writer, "{}", pp.get_string())?;
+            let ast = pp.get_string();
+            outln!(sess.writer, "{}", ast)?;
         }
 
         self.should_stop(stage)?;
@@ -131,24 +117,21 @@ impl<'a> Interface<'a> {
         // Lowering //
         verbose!("=== Lowering ===");
         let stage = StageName::Lower;
-        let (hir, sess) = Lower::new(sess, &ast).run_and_emit(true)?;
+        let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
-        if self.config.check_pp_stage(stage) {
+        if sess.config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.visit_hir(&hir);
-            outl!(
-                self.writer,
-                "Printing HIR after parsing\n{}",
-                pp.get_string()
-            )?;
+            let hir = pp.get_string();
+            outln!(sess.writer, "Printing HIR after parsing\n{}", hir)?;
         }
 
         self.should_stop(stage)?;
 
-        Ok(())
+        Ok(sess)
     }
 
-    fn should_stop(&self, stage: StageName) -> InterruptResult {
+    fn should_stop(&self, stage: StageName) -> UnitInterruptResult {
         if self.config.compilation_depth <= stage {
             Err(InterruptionReason::ConfiguredStop)
         } else {

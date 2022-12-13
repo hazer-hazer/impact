@@ -7,6 +7,7 @@ use config::config::{PPStages, StageName};
 use interface::interface::{Interface, InterruptionReason};
 use interface::writer::ConsoleWriter;
 use message::message::MessageKind;
+use session::Session;
 use session::Source;
 
 mod ast;
@@ -30,15 +31,15 @@ fn main() {
         .pp_stages(PPStages::All)
         .emit();
 
-    let mut writer = ConsoleWriter;
-    let interface = Interface::new(config, &mut writer);
+    let mut writer = Box::new(ConsoleWriter);
+    let interface = Interface::new(config);
 
     let source_path = "examples/sample.imp";
     let source_file = read_to_string(source_path).unwrap();
 
     let source = Source::new(source_path.to_string(), source_file);
 
-    let result = interface.compile_single_source(source);
+    let result = interface.compile_single_source(source, writer);
 
     if let Err(err) = result {
         match err {
