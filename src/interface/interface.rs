@@ -44,7 +44,7 @@ impl<'a> Interface<'a> {
         let (tokens, sess) = Lexer::new(source_id, sess).run_and_emit(true)?;
 
         if cfg!(feature = "pp_lines") {
-            out!(
+            outl!(
                 self.writer,
                 "=== SOURCE LINES ===\n{}\nPosition: {:?}\n",
                 sess.source_map
@@ -60,7 +60,7 @@ impl<'a> Interface<'a> {
         }
 
         if self.config.check_pp_stage(stage) {
-            out!(
+            outl!(
                 self.writer,
                 "Printing tokens after lexing\n{}",
                 tokens
@@ -82,7 +82,7 @@ impl<'a> Interface<'a> {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(parse_result.sess(), AstPPMode::Normal);
             pp.visit_ast(parse_result.data());
-            out!(
+            outl!(
                 self.writer,
                 "Printing AST after parsing\n{}",
                 pp.get_string()
@@ -109,7 +109,7 @@ impl<'a> Interface<'a> {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.pp_defs();
-            out!(self.writer, "{}", pp.get_string())?;
+            outl!(self.writer, "{}", pp.get_string())?;
         }
 
         self.should_stop(stage)?;
@@ -123,7 +123,7 @@ impl<'a> Interface<'a> {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::NameHighlighter);
             pp.visit_ast(&ast);
-            out!(self.writer, "{}", pp.get_string())?;
+            outl!(self.writer, "{}", pp.get_string())?;
         }
 
         self.should_stop(stage)?;
@@ -136,7 +136,7 @@ impl<'a> Interface<'a> {
         if self.config.check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.visit_hir(&hir);
-            out!(
+            outl!(
                 self.writer,
                 "Printing HIR after parsing\n{}",
                 pp.get_string()

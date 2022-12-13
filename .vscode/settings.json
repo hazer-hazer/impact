@@ -12,6 +12,7 @@
     "idents",
     "interner",
     "Interner",
+    "outl",
     "polytype",
     "ppfmt",
     "prec",

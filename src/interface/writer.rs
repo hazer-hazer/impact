@@ -10,7 +10,14 @@ macro_rules! out {
     };
 }
 
+macro_rules! outl {
+    ($writer: expr, $($args: tt)*) => {
+        $writer.write(std::format!($($args)*, "\n"))
+    };
+}
+
 pub(crate) use out;
+pub(crate) use outl;
 
 pub struct ConsoleWriter;
 
