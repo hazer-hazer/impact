@@ -63,7 +63,7 @@ impl Display for TyKind {
             TyKind::Path(path) => write!(f, "{}", pr_display(path)),
             TyKind::Func(param_ty, return_ty) => {
                 write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
-            }
+            },
             TyKind::Paren(inner) => write!(f, "{}", pr_display(inner)),
         }
     }

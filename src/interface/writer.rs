@@ -1,13 +1,21 @@
-use super::interface::UnitInterruptResult;
+#[derive(Default)]
+pub struct Writer {
+    data: String,
+}
 
-pub trait Writer<R, D> {
-    fn write(&mut self, data: String) -> R;
-    fn writeln(&mut self, data: String) -> R {
-        self.write(data);
-        self.write(String::from("\n"))
+impl Writer {
+    pub fn write(&mut self, add: String) {
+        self.data.push_str(&add)
     }
 
-    fn data(self) -> D;
+    pub fn writeln(&mut self, add: String) {
+        self.data.push_str(&add);
+        self.data.push('\n')
+    }
+
+    pub fn data(&self) -> &String {
+        &self.data
+    }
 }
 
 macro_rules! out {
@@ -22,32 +30,4 @@ macro_rules! outln {
     };
 }
 
-pub(crate) use out;
 pub(crate) use outln;
-
-pub struct ConsoleWriter;
-
-impl Writer<UnitInterruptResult, ()> for ConsoleWriter {
-    fn write(&mut self, data: String) -> UnitInterruptResult {
-        print!("{}", data);
-        Ok(())
-    }
-
-    fn data(self) {}
-}
-
-#[derive(Default)]
-pub struct StorageWriter {
-    data: String,
-}
-
-impl Writer<UnitInterruptResult, String> for StorageWriter {
-    fn write(&mut self, data: String) -> UnitInterruptResult {
-        self.data.push_str(&data);
-        Ok(())
-    }
-
-    fn data(self) -> String {
-        self.data
-    }
-}

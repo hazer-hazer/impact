@@ -1,10 +1,10 @@
-use std::sync::Arc;
+
 
 use crate::{
     ast::{AstMetadata, NodeId},
     config::config::Config,
     interface::{
-        interface::{InterruptResult, InterruptionReason, UnitInterruptResult},
+        interface::{InterruptionReason},
         writer::Writer,
     },
     message::{
@@ -209,11 +209,9 @@ impl SourceMap {
     }
 }
 
-pub type SessionWriter = Box<dyn Writer<UnitInterruptResult, ()>>;
-
 pub struct Session {
     config: Config,
-    pub writer: SessionWriter,
+    pub writer: Writer,
     pub source_map: SourceMap,
     ast_metadata: AstMetadata,
     pub def_table: DefTable,
@@ -221,10 +219,10 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(config: Config, writer: SessionWriter) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
             config,
-            writer,
+            writer: Default::default(),
             source_map: Default::default(),
             ast_metadata: Default::default(),
             def_table: Default::default(),
@@ -257,7 +255,7 @@ pub struct StageOutput<T> {
     pub messages: Vec<Message>,
 }
 
-pub type StageResult<T> = Result<(T, Session), InterruptionReason>;
+pub type StageResult<T> = Result<(T, Session), (InterruptionReason, Session)>;
 
 impl<T> StageOutput<T> {
     pub fn new(sess: Session, data: T, messages: MessageStorage) -> Self {

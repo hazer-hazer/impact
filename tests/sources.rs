@@ -8,15 +8,13 @@ use std::{
 use impact::{
     cli::color::Colorize,
     config::config::{Config, ConfigBuilder, PPStages, StageName},
-    interface::{
-        interface::{Interface, InterruptionReason},
-        writer::StorageWriter,
-    },
-    message::message::MessageKind,
-    session::{Session, Source},
+    interface::interface::Interface,
+    session::Source,
 };
+use similar::{ChangeTag, TextDiff};
 
 // TODO: Move this to `cli` module
+#[derive(Debug)]
 enum ConfigOptionKind {
     StopAt(StageName),
     PPStages(PPStages),
@@ -33,6 +31,7 @@ impl ConfigOptionKind {
     }
 }
 
+#[derive(Debug)]
 struct ConfigOption {
     kind: ConfigOptionKind,
 }
@@ -43,6 +42,7 @@ impl ConfigOption {
     }
 }
 
+#[derive(Debug)]
 struct Comment {
     option: String,
     args: Vec<String>,
@@ -312,24 +312,35 @@ fn test_sources() -> io::Result<()> {
     parse_all_tests(&sources_path, |test: Test| {
         println!("Running test `{}`", test.source.filename());
 
-        let writer = Box::new(StorageWriter::default());
         let interface = Interface::new(test.config.clone());
 
-        let result = interface.compile_single_source(test.source, writer);
+        let result = interface.compile_single_source(test.source);
 
         match result {
-            Ok(sess) => {
+            Ok(sess) | Err((_, sess)) => {
+                let writer_data = sess.writer.data();
+                println!("{}", writer_data);
                 if let Some(expected_output) = test.config.expected_output() {
-                    assert_eq!(expected_output, sess.writer.data());
+                    let diff = TextDiff::from_lines(expected_output, writer_data);
+
+                    let differ = diff.ratio() < 1.0;
+
+                    if differ {
+                        println!("Actual output differs from expected:");
+                    }
+
+                    for diff in diff.iter_all_changes() {
+                        let sign = match diff.tag() {
+                            ChangeTag::Equal => " ".black(),
+                            ChangeTag::Delete => "-".red(),
+                            ChangeTag::Insert => "+".green(),
+                        };
+                    }
+
+                    if differ {
+                        panic!()
+                    }
                 }
-            },
-            Err(err) => match err {
-                InterruptionReason::ConfiguredStop => {
-                    println!("Stop due to configured compilation depth")
-                },
-                InterruptionReason::Error(err) => {
-                    println!("{}", err.fg_color(MessageKind::Error.color()))
-                },
             },
         }
     })?;

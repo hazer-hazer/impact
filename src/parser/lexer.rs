@@ -268,13 +268,14 @@ impl Lexer {
         if indent_size > level {
             self.add_token(TokenKind::Indent, indent_size as SpanLen);
             self.indent_levels.push(indent_size);
-        }
-
-        while !self.eof() && indent_size < level {
-            self.add_token(TokenKind::Dedent, 1);
-            level = self.indent_levels.pop().unwrap();
-            if level < indent_size {
-                self.add_error("Invalid indentation");
+        } else {
+            while indent_size < level {
+                self.add_token(TokenKind::Dedent, 1);
+                self.indent_levels.pop().unwrap();
+                level = *self.indent_levels.last().unwrap_or(&0);
+                if level < indent_size {
+                    self.add_error("Invalid indentation");
+                }
             }
         }
     }

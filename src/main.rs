@@ -5,9 +5,8 @@ use cli::color::Colorize;
 use config::config::ConfigBuilder;
 use config::config::{PPStages, StageName};
 use interface::interface::{Interface, InterruptionReason};
-use interface::writer::ConsoleWriter;
 use message::message::MessageKind;
-use session::Session;
+
 use session::Source;
 
 mod ast;
@@ -31,7 +30,6 @@ fn main() {
         .pp_stages(PPStages::All)
         .emit();
 
-    let mut writer = Box::new(ConsoleWriter);
     let interface = Interface::new(config);
 
     let source_path = "examples/sample.imp";
@@ -39,9 +37,9 @@ fn main() {
 
     let source = Source::new(source_path.to_string(), source_file);
 
-    let result = interface.compile_single_source(source, writer);
+    let result = interface.compile_single_source(source);
 
-    if let Err(err) = result {
+    if let Err((err, _sess)) = result {
         match err {
             InterruptionReason::ConfiguredStop => {
                 println!("Compilation stopped due to configured compilation depth");

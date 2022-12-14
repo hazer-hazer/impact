@@ -16,6 +16,7 @@ inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", feat
 regex = "1"
 lazy_static = "1.4.0"
 convert_case = "0.6.0"
+similar = "2.2.1"
 
 [features]
 verbose_debug = []

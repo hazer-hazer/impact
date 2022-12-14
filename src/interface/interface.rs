@@ -3,12 +3,12 @@ use crate::{
     cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
-    interface::writer::{out, outln},
+    interface::writer::outln,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::{defs::DefPrinter, AstLikePP, AstPPMode},
     resolve::{collect::DefCollector, resolve::NameResolver},
-    session::{Session, SessionWriter, Source, Stage},
+    session::{Session, Source, Stage},
 };
 
 pub struct Interface {
@@ -20,16 +20,16 @@ pub enum InterruptionReason {
     Error(String),
 }
 
-pub type InterruptResult = Result<Session, InterruptionReason>;
-pub type UnitInterruptResult = Result<(), InterruptionReason>;
+pub type InterruptResult = Result<Session, (InterruptionReason, Session)>;
+pub type UnitInterruptResult = Result<Session, (InterruptionReason, Session)>;
 
 impl Interface {
     pub fn new(config: Config) -> Self {
         Self { config }
     }
 
-    pub fn compile_single_source(self, source: Source, writer: SessionWriter) -> InterruptResult {
-        let mut sess = Session::new(self.config.clone(), writer);
+    pub fn compile_single_source(self, source: Source) -> InterruptResult {
+        let mut sess = Session::new(self.config.clone());
 
         // Lexing //
         verbose!("=== Lexing ===");
@@ -52,14 +52,14 @@ impl Interface {
                     .collect::<Vec<_>>()
                     .join("\n"),
                 sess.source_map.get_source(source_id).lines_positions()
-            )?;
+            );
         }
 
         if sess.config().check_pp_stage(stage) {
-            outln!(sess.writer, "Printing tokens after lexing\n{}", tokens)?;
+            outln!(sess.writer, "Tokens: {}", tokens);
         }
 
-        self.should_stop(stage)?;
+        let sess = self.should_stop(sess, stage)?;
 
         // Parsing //
         verbose!("=== Parsing ===");
@@ -72,17 +72,17 @@ impl Interface {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.visit_ast(&ast);
             let ast = pp.get_string();
-            outln!(sess.writer, "Printing AST after parsing\n{}", ast)?;
+            outln!(sess.writer, "Printing AST after parsing\n{}", ast);
         }
 
-        self.should_stop(stage)?;
+        let sess = self.should_stop(sess, stage)?;
 
         // AST Validation //
         verbose!("=== AST Validation ===");
         let stage = StageName::AstValidation;
         let (_, sess) = AstValidator::new(sess, &ast).run_and_emit(true)?;
 
-        self.should_stop(stage)?;
+        let sess = self.should_stop(sess, stage)?;
 
         // Def collection //
         verbose!("=== Definition collection ===");
@@ -94,10 +94,10 @@ impl Interface {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.pp_defs();
             let defs = pp.get_string();
-            outln!(sess.writer, "{}", defs)?;
+            outln!(sess.writer, "{}", defs);
         }
 
-        self.should_stop(stage)?;
+        let sess = self.should_stop(sess, stage)?;
 
         // Name resolution //
         verbose!("=== Name resolution ===");
@@ -109,10 +109,10 @@ impl Interface {
             let mut pp = AstLikePP::new(&sess, AstPPMode::NameHighlighter);
             pp.visit_ast(&ast);
             let ast = pp.get_string();
-            outln!(sess.writer, "{}", ast)?;
+            outln!(sess.writer, "{}", ast);
         }
 
-        self.should_stop(stage)?;
+        let sess = self.should_stop(sess, stage)?;
 
         // Lowering //
         verbose!("=== Lowering ===");
@@ -123,19 +123,19 @@ impl Interface {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.visit_hir(&hir);
             let hir = pp.get_string();
-            outln!(sess.writer, "Printing HIR after parsing\n{}", hir)?;
+            outln!(sess.writer, "Printing HIR after parsing\n{}", hir);
         }
 
-        self.should_stop(stage)?;
+        let sess = self.should_stop(sess, stage)?;
 
         Ok(sess)
     }
 
-    fn should_stop(&self, stage: StageName) -> UnitInterruptResult {
+    fn should_stop(&self, sess: Session, stage: StageName) -> UnitInterruptResult {
         if self.config.compilation_depth <= stage {
-            Err(InterruptionReason::ConfiguredStop)
+            Err((InterruptionReason::ConfiguredStop, sess))
         } else {
-            Ok(())
+            Ok(sess)
         }
     }
 

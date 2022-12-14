@@ -24,7 +24,7 @@ impl Item {
         match self.kind() {
             ItemKind::Type(name, _) | ItemKind::Mod(name, _) | ItemKind::Decl(name, _, _) => {
                 Some(name.as_ref().unwrap())
-            }
+            },
         }
     }
 
