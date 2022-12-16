@@ -37,10 +37,7 @@ pub trait MessageEmitter {
         }
 
         if stop_on_error && self.got_error() {
-            Err((
-                InterruptionReason::Error(String::from("Stop due to errors above")),
-                output.sess,
-            ))
+            Err((InterruptionReason::ErrorMessage, output.sess))
         } else {
             Ok((output.data, output.sess))
         }

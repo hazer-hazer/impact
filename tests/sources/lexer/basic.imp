@@ -4,7 +4,7 @@ main =
         asd + 123
     a
 
-//> --pp lexer
+//> --stop-at lexer --pp lexer --interruption-reason configured
 
 /*> --expected-output """
 Tokens: main = [NL] [INDENT] a = let [NL] [INDENT] asd = 123 [NL] asd + 123 [NL] [DEDENT] a [NL] [DEDENT] [NL] [NL] [EOF]

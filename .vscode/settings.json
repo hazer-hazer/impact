@@ -14,6 +14,7 @@
     "Interner",
     "outl",
     "outln",
+    "peekable",
     "polytype",
     "ppfmt",
     "prec",

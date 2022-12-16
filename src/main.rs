@@ -5,7 +5,6 @@ use cli::color::Colorize;
 use config::config::ConfigBuilder;
 use config::config::{PPStages, StageName};
 use interface::interface::{Interface, InterruptionReason};
-use message::message::MessageKind;
 
 use session::Source;
 
@@ -28,6 +27,8 @@ fn main() {
     let config = ConfigBuilder::new()
         .compilation_depth(StageName::Unset)
         .pp_stages(PPStages::All)
+        .verbose_messages(true)
+        .parser_debug(true)
         .emit();
 
     let interface = Interface::new(config);
@@ -39,13 +40,20 @@ fn main() {
 
     let result = interface.compile_single_source(source);
 
-    if let Err((err, _sess)) = result {
-        match err {
+    let (interruption_reason, sess) = match result {
+        Err((interruption_reason, sess)) => (Some(interruption_reason), sess),
+        Ok(sess) => (None, sess),
+    };
+
+    println!("{}", sess.writer.data());
+
+    if let Some(interruption_reason) = interruption_reason {
+        match interruption_reason {
             InterruptionReason::ConfiguredStop => {
                 println!("Compilation stopped due to configured compilation depth");
             },
-            InterruptionReason::Error(err) => {
-                println!("{}", err.fg_color(MessageKind::Error.color()))
+            InterruptionReason::ErrorMessage => {
+                println!("{}", "Stop due to errors above".red())
             },
         }
     }

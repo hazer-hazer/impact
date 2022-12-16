@@ -6,12 +6,12 @@ use std::{
 };
 
 use impact::{
-    cli::color::Colorize,
+    cli::color::{Color, Colorize},
     config::config::{Config, ConfigBuilder, PPStages, StageName},
-    interface::interface::Interface,
+    interface::interface::{Interface, InterruptionReason},
     session::Source,
 };
-use similar::{ChangeTag, TextDiff};
+use similar::{ChangeTag, DiffableStr, TextDiff};
 
 // TODO: Move this to `cli` module
 #[derive(Debug)]
@@ -19,6 +19,7 @@ enum ConfigOptionKind {
     StopAt(StageName),
     PPStages(PPStages),
     ExpectedOutput(String),
+    InterruptionReason(InterruptionReason),
 }
 
 impl ConfigOptionKind {
@@ -78,6 +79,10 @@ impl Comment {
             "expected-output" => {
                 assert!(self.args.len() == 1);
                 ConfigOptionKind::ExpectedOutput(self.args.remove(0))
+            },
+            "interruption-reason" => {
+                assert!(self.args.len() == 1);
+                ConfigOptionKind::InterruptionReason(InterruptionReason::from_str(&self.args[0]))
             },
             _ => panic!("Unknown test option `{}`", self.option),
         })
@@ -181,61 +186,65 @@ impl CommentParser {
             if let Some(stop) = stop {
                 self.skip_ws();
 
-                if self.advance_if(stop) {
-                    continue;
-                }
-
-                if self.advance_if(&['-', '-']) {
-                    let mut option = String::new();
-                    while let Some(ch) = self.peek() {
-                        if ch.is_alphanumeric() || ch == '-' {
-                            option.push(ch);
-                        } else {
-                            break;
-                        }
-                        self.advance(1);
+                loop {
+                    if self.advance_if(stop) {
+                        break;
                     }
 
-                    if option.is_empty() {
-                        // TODO: CLI arguments (`--` separator)
-                        panic!("Unexpected empty command `--{}`", option);
-                    }
-
-                    self.skip_ws();
-
-                    if self.check(&['\'', '\'', '\'']) || self.check(&['"', '"', '"']) {
-                        let quote = self.peek().unwrap();
-                        self.advance(3);
-
-                        let arg = self.eat_until(&[quote, quote, quote]);
-
-                        self.comments.push(Comment {
-                            option,
-                            args: vec![arg.trim().to_string()],
-                        });
-                    } else if self.any(&['\'', '\"']) {
-                        let quote = self.peek().unwrap();
-                        self.advance(1);
-
-                        let arg = self.eat_until(&[quote]);
-
-                        self.comments.push(Comment {
-                            option,
-                            args: vec![arg],
-                        });
-
-                        continue;
-                    } else {
-                        let mut args = vec![];
-                        while !self.eof() && !self.check(&['-', '-']) && !self.check(stop) {
-                            let mut arg = String::new();
-                            while !self.eof() && !self.skip_ws() {
-                                arg.push(self.peek().unwrap());
-                                self.advance(1);
+                    if self.advance_if(&['-', '-']) {
+                        let mut option = String::new();
+                        while let Some(ch) = self.peek() {
+                            if ch.is_alphanumeric() || ch == '-' {
+                                option.push(ch);
+                            } else {
+                                break;
                             }
-                            args.push(arg);
+                            self.advance(1);
                         }
-                        self.comments.push(Comment { option, args });
+
+                        if option.is_empty() {
+                            // TODO: CLI arguments (`--` separator)
+                            panic!("Unexpected empty command `--{}`", option);
+                        }
+
+                        self.skip_ws();
+
+                        if self.check(&['\'', '\'', '\'']) || self.check(&['"', '"', '"']) {
+                            let quote = self.peek().unwrap();
+                            self.advance(3);
+
+                            let arg = self.eat_until(&[quote, quote, quote]);
+
+                            self.comments.push(Comment {
+                                option,
+                                args: vec![arg.trim().to_string()],
+                            });
+                        } else if self.any(&['\'', '\"']) {
+                            let quote = self.peek().unwrap();
+                            self.advance(1);
+
+                            let arg = self.eat_until(&[quote]);
+
+                            self.comments.push(Comment {
+                                option,
+                                args: vec![arg],
+                            });
+
+                            continue;
+                        } else {
+                            let mut args = vec![];
+                            while !self.eof() && !self.check(&['-', '-']) && !self.check(stop) {
+                                let mut arg = String::new();
+                                while !self.eof() && !self.check(stop) && !self.skip_ws() {
+                                    arg.push(self.peek().unwrap());
+                                    self.advance(1);
+                                }
+                                args.push(arg);
+                            }
+                            self.comments.push(Comment { option, args });
+                        }
+                    } else {
+                        break;
                     }
                 }
             } else {
@@ -265,6 +274,9 @@ fn config_from_options(options: Vec<ConfigOption>) -> Config {
             ConfigOptionKind::StopAt(stage) => config.compilation_depth(stage),
             ConfigOptionKind::PPStages(pp_stages) => config.pp_stages(pp_stages),
             ConfigOptionKind::ExpectedOutput(output) => config.expected_output(output),
+            ConfigOptionKind::InterruptionReason(interruption_reason) => {
+                config.interruption_reason(interruption_reason)
+            },
         };
     }
     config.emit()
@@ -310,38 +322,71 @@ fn test_sources() -> io::Result<()> {
     let sources_path = Path::new("tests/sources");
 
     parse_all_tests(&sources_path, |test: Test| {
-        println!("Running test `{}`", test.source.filename());
+        println!(
+            "Running test `{}` with options {}",
+            test.source.filename(),
+            test.config
+        );
 
         let interface = Interface::new(test.config.clone());
 
         let result = interface.compile_single_source(test.source);
 
-        match result {
-            Ok(sess) | Err((_, sess)) => {
-                let writer_data = sess.writer.data();
-                println!("{}", writer_data);
-                if let Some(expected_output) = test.config.expected_output() {
-                    let diff = TextDiff::from_lines(expected_output, writer_data);
+        let (interruption_reason, sess) = match result {
+            Err((interruption_reason, sess)) => (Some(interruption_reason), sess),
+            Ok(sess) => (None, sess),
+        };
 
-                    let differ = diff.ratio() < 1.0;
-
-                    if differ {
-                        println!("Actual output differs from expected:");
-                    }
-
-                    for diff in diff.iter_all_changes() {
-                        let sign = match diff.tag() {
-                            ChangeTag::Equal => " ".black(),
-                            ChangeTag::Delete => "-".red(),
-                            ChangeTag::Insert => "+".green(),
-                        };
-                    }
-
-                    if differ {
-                        panic!()
-                    }
-                }
+        match (&interruption_reason, test.config.interruption_reason()) {
+            (Some(interruption_reason), Some(expected_interruption_reason)) => {
+                assert_eq!(interruption_reason, expected_interruption_reason);
             },
+            _ => {},
+        }
+
+        let writer_data = sess.writer.data();
+
+        println!("{}", writer_data);
+
+        if let Some(expected_output) = test.config.expected_output() {
+            let diff = TextDiff::configure()
+                .newline_terminated(true)
+                .diff_lines(expected_output.trim(), writer_data.trim());
+
+            let do_differ = diff.ratio() < 1.0;
+
+            if do_differ {
+                println!(
+                    "{} output differs from {}:",
+                    "Actual".green(),
+                    "expected".red()
+                );
+            }
+
+            for diff in diff.iter_all_changes() {
+                let color = match diff.tag() {
+                    ChangeTag::Equal => Color::Black,
+                    ChangeTag::Delete => Color::Red,
+                    ChangeTag::Insert => Color::Green,
+                };
+                print!(
+                    "{}",
+                    format!(
+                        "{}{}",
+                        match diff.tag() {
+                            ChangeTag::Equal => " ",
+                            ChangeTag::Delete => "-",
+                            ChangeTag::Insert => "+",
+                        },
+                        diff
+                    )
+                    .fg_color(color)
+                );
+            }
+
+            if do_differ {
+                panic!()
+            }
         }
     })?;
 

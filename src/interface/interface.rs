@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     ast::{validator::AstValidator, visitor::AstVisitor},
     cli::verbose,
@@ -15,9 +17,33 @@ pub struct Interface {
     config: Config,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum InterruptionReason {
     ConfiguredStop,
-    Error(String),
+    ErrorMessage,
+}
+
+impl InterruptionReason {
+    pub fn from_str(str: &str) -> Self {
+        match str {
+            "configured" => Self::ConfiguredStop,
+            "error" => Self::ErrorMessage,
+            _ => panic!("Invalid interruption reason name"),
+        }
+    }
+}
+
+impl Display for InterruptionReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                InterruptionReason::ConfiguredStop => "configured",
+                InterruptionReason::ErrorMessage => "error",
+            }
+        )
+    }
 }
 
 pub type InterruptResult = Result<Session, (InterruptionReason, Session)>;

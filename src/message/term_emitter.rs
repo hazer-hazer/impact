@@ -59,6 +59,12 @@ impl MessageEmitter for TermEmitter {
             format!("{}: {}", msg.kind(), msg.text()).fg_color(msg.kind().color())
         );
 
+        if sess.config().verbose_messages() {
+            if let Some(origin) = msg.origin() {
+                println!("{}", format!("Originated from {}", origin).yellow())
+            }
+        }
+
         let num_indent = lines.last().unwrap().num_indent;
 
         // TODO: Range for column too or just the start?

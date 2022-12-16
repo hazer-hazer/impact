@@ -212,3 +212,21 @@ impl<'a> Colorize for &'a str {
         }
     }
 }
+
+impl Colorize for String {
+    fn fg_color(self, color: Color) -> ColorizedString {
+        ColorizedString {
+            string: self,
+            bg: None,
+            fg: Some(color),
+        }
+    }
+
+    fn bg_color(self, color: Color) -> ColorizedString {
+        ColorizedString {
+            string: self,
+            bg: Some(color),
+            fg: None,
+        }
+    }
+}

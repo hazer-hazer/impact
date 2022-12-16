@@ -10,6 +10,10 @@ impl Writer {
 
     pub fn writeln(&mut self, add: String) {
         self.data.push_str(&add);
+        self.nl()
+    }
+
+    pub fn nl(&mut self) {
         self.data.push('\n')
     }
 
@@ -23,6 +27,8 @@ macro_rules! out {
         $writer.write(std::format!($($args)*))
     };
 }
+
+pub(crate) use out;
 
 macro_rules! outln {
     ($writer: expr, $($args: tt)*) => {

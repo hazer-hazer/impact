@@ -3,8 +3,3 @@ main =
         asd = 123
         asd + 123
     a
-
-//> --pp lexer
-
-/*
-*/

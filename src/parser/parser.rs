@@ -1,4 +1,4 @@
-use std::fmt::{Display};
+use std::fmt::Display;
 
 use crate::{
     ast::{
@@ -8,7 +8,11 @@ use crate::{
         ty::{Ty, TyKind},
         ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
     },
-    cli::verbose,
+    cli::{
+        color::{Color, Colorize},
+        verbose,
+    },
+    interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
@@ -16,11 +20,53 @@ use crate::{
 
 use super::token::{Infix, Punct, Token, TokenCmp, TokenKind, TokenStream};
 
+#[derive(Debug, PartialEq)]
+enum ParseEntryKind {
+    Opt,
+    Expect,
+    ExpectWrapper,
+    Wrapper,
+    RecoverWrapper,
+}
+
+impl ParseEntryKind {
+    fn is_recovering(&self) -> bool {
+        match self {
+            ParseEntryKind::Opt
+            | ParseEntryKind::Expect
+            | ParseEntryKind::ExpectWrapper
+            | ParseEntryKind::Wrapper => false,
+            ParseEntryKind::RecoverWrapper => true,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ParseEntry {
+    parent: Option<usize>,
+    id: usize,
+    kind: ParseEntryKind,
+    children: Vec<usize>,
+    entity: String,
+    peek: Token,
+    failed: bool,
+}
+
+#[derive(Clone, Copy)]
+struct ParseEntryPrinter<'a> {
+    parent_prefix: &'a str,
+    is_last: bool,
+    continuous: bool,
+    recovering: bool,
+}
+
 pub struct Parser {
     sess: Session,
     pos: usize,
     tokens: TokenStream,
     msg: MessageStorage,
+    parse_entries: Vec<ParseEntry>,
+    parse_entry: Option<usize>,
 }
 
 impl MessageHolder for Parser {
@@ -70,6 +116,8 @@ impl Parser {
             tokens,
             pos: 0,
             msg: MessageStorage::default(),
+            parse_entries: Vec::new(),
+            parse_entry: None,
         }
     }
 
@@ -173,6 +221,7 @@ impl Parser {
         MessageBuilder::error()
             .span(self.span())
             .text(format!("Expected {}, got {}", expected, got))
+            .origin(file!(), line!())
             .emit_single_label(self);
         Err(ErrorNode::new(self.span()))
     }
@@ -182,6 +231,7 @@ impl Parser {
             .span(self.span())
             .text(format!("Unexpected token {}", self.peek()))
             .label(self.span(), format!("Unexpected {}", self.peek()))
+            .origin(file!(), line!())
             .emit(self);
         ErrorNode::new(self.advance_tok().span)
     }
@@ -233,16 +283,22 @@ impl Parser {
         if let Some(entity) = entity {
             entity
         } else {
+            let pe = self.enter_entity(ParseEntryKind::RecoverWrapper, "recover any");
             match self.parse_stmt() {
                 Ok(stmt) => {
                     MessageBuilder::error()
                         .span(stmt.span())
                         .text(format!("Expected {}, got {}", expected, stmt.kind_str()))
                         .label(stmt.span(), format!("Unexpected {}", stmt.kind_str()))
+                        .origin(file!(), line!())
                         .emit(self);
+                    self.exit_parsed_entity(pe);
                     Err(ErrorNode::new(stmt.span()))
                 },
-                Err(err) => Err(err),
+                ref e @ Err(err) => {
+                    self.exit_entity(pe, e);
+                    Err(err)
+                },
             }
         }
     }
@@ -313,10 +369,19 @@ impl Parser {
 
     // Statements //
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
-        verbose!("Parse stmt {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "statement");
 
+        let stmt = self._parse_stmt();
+
+        self.exit_entity(pe, &stmt);
+
+        stmt
+    }
+
+    fn _parse_stmt(&mut self) -> PR<N<Stmt>> {
         if let Some(item) = self.parse_opt_item() {
             let span = item.span();
+
             Ok(Box::new(Stmt::new(
                 self.next_node_id(),
                 StmtKind::Item(item),
@@ -338,34 +403,58 @@ impl Parser {
 
     // Items //
     fn parse_item(&mut self) -> PR<N<Item>> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "item");
+
         self.skip_opt_nls();
 
         let item = self.parse_opt_item();
+
+        self.exit_expected_entity(pe, &item);
 
         self.try_recover_any(item, "item")
     }
 
     fn parse_item_semi(&mut self) -> PR<N<Item>> {
+        let pe = self.enter_entity(ParseEntryKind::Wrapper, "item with semi");
+
         let item = self.parse_item();
         self.expect_semis()?;
+
+        self.exit_entity(pe, &item);
+
         item
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
-        verbose!("Parse [opt] item {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Opt, "item");
+
         if self.is(TokenCmp::Kw(Kw::Mod)) {
-            Some(self.parse_mod_item())
+            let mod_item = self.parse_mod_item();
+
+            self.exit_entity(pe, &mod_item);
+
+            Some(mod_item)
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
-            Some(self.parse_type_item())
+            let ty_item = self.parse_type_item();
+
+            self.exit_entity(pe, &ty_item);
+
+            Some(ty_item)
         } else if self.lookup_after_many1(TokenCmp::Ident, TokenCmp::Punct(Punct::Assign)) {
-            Some(self.parse_decl_item())
+            let decl = self.parse_decl_item();
+
+            self.exit_entity(pe, &decl);
+
+            Some(decl)
         } else {
+            self.exit_parsed_entity(pe);
+
             None
         }
     }
 
     fn parse_mod_item(&mut self) -> PR<N<Item>> {
-        verbose!("Parse mod {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "module");
 
         let lo = self.span();
 
@@ -375,6 +464,8 @@ impl Parser {
 
         let items = parse_block_common!(self, parse_item);
 
+        self.exit_parsed_entity(pe);
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Mod(name, items),
@@ -383,7 +474,7 @@ impl Parser {
     }
 
     fn parse_type_item(&mut self) -> PR<N<Item>> {
-        verbose!("Parse type alias {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "type alias");
 
         let lo = self.span();
 
@@ -395,6 +486,8 @@ impl Parser {
 
         let ty = self.parse_ty();
 
+        self.exit_parsed_entity(pe);
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Type(name, ty),
@@ -403,7 +496,7 @@ impl Parser {
     }
 
     fn parse_decl_item(&mut self) -> PR<N<Item>> {
-        verbose!("Parse decl {} at {}", self.peek(), self.span());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "declaration");
 
         let lo = self.span();
 
@@ -426,6 +519,8 @@ impl Parser {
 
         let body = self.parse_body();
 
+        self.exit_parsed_entity(pe);
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Decl(name, params, body),
@@ -435,9 +530,12 @@ impl Parser {
 
     // Expressions //
     fn parse_expr(&mut self) -> PR<N<Expr>> {
-        verbose!("Parse expr {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "expression");
 
         let expr = self.parse_opt_expr();
+
+        self.exit_expected_entity(pe, &expr);
+
         self.try_recover_any(expr, "expression")
     }
 
@@ -450,13 +548,15 @@ impl Parser {
     }
 
     fn parse_let(&mut self) -> PR<N<Expr>> {
-        verbose!("Parse let {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "let expression");
 
         let lo = self.span();
 
         self.expect_kw(Kw::Let)?;
 
         let block = self.parse_block();
+
+        self.exit_parsed_entity(pe);
 
         // There might be a better way to slice vector
         Ok(Box::new(Expr::new(
@@ -467,10 +567,12 @@ impl Parser {
     }
 
     fn parse_block_expr(&mut self) -> PR<N<Expr>> {
-        verbose!("Parse block expr {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "block expression");
 
         let lo = self.span();
         let block = self.parse_block();
+
+        self.exit_parsed_entity(pe);
 
         return Ok(Box::new(Expr::new(
             self.next_node_id(),
@@ -499,8 +601,6 @@ impl Parser {
         let mut lhs = self.parse_prec(prec + 1)?;
 
         while let Some(op) = self.skip_any(&PREC_TABLE[prec as usize]) {
-            verbose!("Parse prec {}", prec);
-
             if op.kind == TokenKind::Punct(Punct::Colon) {
                 // Parse ascription (type expression)
                 let ty = self.parse_ty();
@@ -533,8 +633,6 @@ impl Parser {
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
         if let Some(op) = self.skip(TokenCmp::SomePrefix) {
-            verbose!("Parse prefix {}", self.peek());
-
             let rhs = self.parse_postfix();
 
             let rhs = if let Some(rhs) = rhs {
@@ -544,6 +642,7 @@ impl Parser {
                 MessageBuilder::error()
                     .span(self.span())
                     .text(format!("Expected expression after {} operator", op.kind))
+                    .origin(file!(), line!())
                     .emit_single_label(self);
                 Err(ErrorNode::new(self.span()))
             };
@@ -588,7 +687,7 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
-        verbose!("Parse primary {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "primary expression");
 
         let Token { kind, span } = self.peek_tok();
 
@@ -618,11 +717,13 @@ impl Parser {
             self.advance();
         }
 
+        self.exit_parsed_entity(pe);
+
         kind.map(|k| k.map(|k| Box::new(Expr::new(self.next_node_id(), k, span))))
     }
 
     fn parse_path(&mut self, expected: &str) -> PR<Path> {
-        verbose!("Parse path {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "path");
 
         // If no first identifier present then it's "expected path" error, not "expected identifier"
         let mut segments = vec![self.parse_ident(expected)?];
@@ -630,31 +731,41 @@ impl Parser {
             segments.push(self.parse_ident("path segment (identifier)")?);
         }
 
+        self.exit_parsed_entity(pe);
+
         Ok(Path::new(self.next_node_id(), segments))
     }
 
     fn parse_block(&mut self) -> PR<Block> {
-        verbose!("Parse block {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "block");
 
         let lo = self.span();
 
         let stmts = parse_block_common!(self, parse_stmt);
 
+        self.exit_parsed_entity(pe);
+
         Ok(Block::new(self.next_node_id(), stmts, self.close_span(lo)))
     }
 
     fn parse_body(&mut self) -> PR<N<Expr>> {
-        verbose!("Parse body {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Wrapper, "body");
 
-        if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
-            return self.parse_block_expr();
-        }
+        let body = if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
+            let body = self.parse_block_expr();
+            body
+        } else {
+            let body = self.parse_expr();
+            body
+        };
 
-        self.parse_expr()
+        self.exit_parsed_entity(pe);
+
+        body
     }
 
     fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {
-        verbose!("Parse abs {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Expect, "lambda");
 
         let lo = self.span();
 
@@ -666,6 +777,8 @@ impl Parser {
 
         let body = self.parse_expr();
 
+        self.exit_parsed_entity(pe);
+
         Some(Ok(Box::new(Expr::new(
             self.next_node_id(),
             ExprKind::Abs(param, body),
@@ -675,12 +788,18 @@ impl Parser {
 
     // Types //
     fn parse_ty(&mut self) -> PR<N<Ty>> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "type");
+
         let ty = self.parse_opt_ty();
-        self.try_recover_any(ty, "type")
+        let ty = self.try_recover_any(ty, "type");
+
+        self.exit_parsed_entity(pe);
+
+        ty
     }
 
     fn parse_opt_ty(&mut self) -> Option<PR<N<Ty>>> {
-        verbose!("Parse opt ty {}", self.peek());
+        let pe = self.enter_entity(ParseEntryKind::Opt, "type");
 
         let lo = self.span();
 
@@ -711,12 +830,17 @@ impl Parser {
 
         if self.skip_punct(Punct::Arrow).is_some() {
             let return_ty = self.parse_ty();
+
+            self.exit_parsed_entity(pe);
+
             Some(Ok(Box::new(Ty::new(
                 self.next_node_id(),
                 TyKind::Func(ty, return_ty),
                 self.close_span(lo),
             ))))
         } else {
+            self.exit_parsed_entity(pe);
+
             Some(ty)
         }
     }
@@ -724,11 +848,266 @@ impl Parser {
     fn parse(&mut self) -> AST {
         let mut items = vec![];
 
+        let pe = self.enter_entity(ParseEntryKind::Expect, "top-level item list");
         while !self.eof() {
             items.push(self.parse_item_semi());
         }
+        self.exit_parsed_entity(pe);
+
+        self.print_parse_entries();
 
         AST::new(items)
+    }
+
+    // Debug //
+    fn enter_entity(&mut self, kind: ParseEntryKind, entity: &str) -> Option<usize> {
+        if !self.sess.config().parser_debug() {
+            return None;
+        }
+
+        let id = self.parse_entries.len();
+
+        self.parse_entries.push(ParseEntry {
+            parent: self.parse_entry,
+            id,
+            kind,
+            entity: entity.to_string(),
+            peek: self.peek_tok(),
+            children: vec![],
+            failed: false,
+        });
+
+        // Add entry to parent
+        if let Some(entry) = self.parse_entry {
+            self.parse_entries.get_mut(entry).unwrap().children.push(id);
+        }
+
+        self.parse_entry = Some(id);
+
+        Some(id)
+    }
+
+    fn exit_expected_entity<T, E>(&mut self, id: Option<usize>, entity: &Option<Result<T, E>>) {
+        self._exit_entity(
+            id,
+            match entity {
+                Some(pr) => pr.is_err(),
+                None => true,
+            },
+        )
+    }
+
+    fn exit_parsed_entity(&mut self, id: Option<usize>) {
+        self._exit_entity(id, true)
+    }
+
+    fn exit_entity<T, E>(&mut self, id: Option<usize>, pr: &Result<T, E>) {
+        self._exit_entity(id, pr.is_err());
+    }
+
+    fn _exit_entity(&mut self, id: Option<usize>, failed: bool) {
+        if !self.sess.config().parser_debug() {
+            return;
+        }
+
+        if failed {
+            self.parse_entries.get_mut(id.unwrap()).unwrap().failed = true;
+        }
+
+        let mut cur_id = id;
+
+        while let Some(id) = cur_id {
+            let pe = self.parse_entries.get(id).unwrap();
+            if pe.id == id || pe.parent.is_none() {
+                break;
+            }
+            cur_id = pe.parent;
+
+            println!("Failed {}", id);
+            self.parse_entries.get_mut(id).unwrap().failed = true;
+        }
+
+        self.parse_entry = cur_id;
+    }
+
+    fn _parse_entry(&self) -> Option<&ParseEntry> {
+        self.parse_entries.get(self.parse_entry.unwrap())
+    }
+
+    fn print_parse_entries(&mut self) {
+        if !self.sess.config().parser_debug() {
+            return;
+        }
+
+        self.print_parse_entry(
+            self.parse_entry.unwrap(),
+            ParseEntryPrinter {
+                parent_prefix: "",
+                is_last: true,
+                continuous: false,
+                recovering: false,
+            },
+        );
+    }
+
+    fn print_parse_entry(&mut self, index: usize, printer: ParseEntryPrinter) {
+        let entry = self.parse_entries.get(index).unwrap();
+        let failed = entry.failed
+            || entry.children.len() == 1
+                && self.parse_entries[entry.children[0]].kind.is_recovering();
+        let recovering = printer.recovering || entry.kind.is_recovering();
+
+        const PREFIXES: [&[&str]; 2] = [
+            // Prefix
+            &["├──", "│  "],
+            // Last
+            &["╰──", "   "],
+        ];
+
+        const RECOVER_PREFIXES: [&[&str]; 2] = [
+            // Prefix
+            &["╠═", "║  "],
+            // Last
+            &["╚═", "   "],
+        ];
+
+        const FIRST_RECOVER_PREFIXES: [&[&str]; 2] = [
+            // Prefix
+            &["╞═", "│  "],
+            // Last
+            &["╘═", "   "],
+        ];
+
+        const FAILED_PREFIXES: [&[&str]; 2] = [
+            // Prefix
+            &["├×─", "│  "],
+            // Last
+            &["╰×─", "   "],
+        ];
+
+        let prefixes = match (entry.kind.is_recovering(), printer.recovering, failed) {
+            (_, _, true) => FAILED_PREFIXES,
+            (true, true, _) => RECOVER_PREFIXES,
+            (false, true, _) => RECOVER_PREFIXES,
+            (false, false, _) => PREFIXES,
+            (true, false, _) => FIRST_RECOVER_PREFIXES,
+        }[if printer.is_last { 1 } else { 0 }];
+
+        let prefix_color = if failed {
+            Color::Red
+        } else if recovering {
+            Color::Yellow
+        } else {
+            Color::Green
+        };
+
+        let prefix = if printer.continuous {
+            String::new().fg_color(Color::Green)
+        } else {
+            format!(
+                "{}{}{} ",
+                printer.parent_prefix,
+                prefixes[0],
+                if entry.children.is_empty() {
+                    "──"
+                } else {
+                    "┬─"
+                }
+            )
+            .fg_color(prefix_color)
+        };
+
+        let parent_prefix = format!(
+            "{}{}",
+            printer.parent_prefix,
+            if printer.continuous { "" } else { prefixes[1] }
+        );
+
+        match entry.kind {
+            ParseEntryKind::Opt => {
+                assert!(entry.children.len() <= 1);
+
+                out!(
+                    self.sess.writer,
+                    "{}{}? `{}` - {} ",
+                    prefix,
+                    entry.entity,
+                    entry.peek.kind,
+                    if entry.children.is_empty() {
+                        "no".black()
+                    } else {
+                        "yes".white()
+                    }
+                );
+
+                if let Some(&child) = entry.children.first() {
+                    self.print_parse_entry(
+                        child,
+                        ParseEntryPrinter {
+                            parent_prefix: &parent_prefix,
+                            is_last: true,
+                            continuous: true,
+                            recovering,
+                        },
+                    );
+                } else {
+                    self.sess.writer.nl();
+                }
+            },
+            ParseEntryKind::Wrapper
+            | ParseEntryKind::ExpectWrapper
+            | ParseEntryKind::RecoverWrapper => {
+                assert!(entry.children.len() <= 1);
+
+                let expect = entry.kind == ParseEntryKind::ExpectWrapper;
+
+                out!(
+                    self.sess.writer,
+                    "{}[{}]{} `{}` - ",
+                    prefix,
+                    entry.entity,
+                    if expect { "!" } else { "" },
+                    entry.peek.kind
+                );
+
+                if let Some(&child) = entry.children.first() {
+                    self.print_parse_entry(
+                        child,
+                        ParseEntryPrinter {
+                            parent_prefix: &parent_prefix,
+                            is_last: true,
+                            continuous: true,
+                            recovering,
+                        },
+                    );
+                } else {
+                    self.sess.writer.nl();
+                }
+            },
+            ParseEntryKind::Expect => {
+                outln!(
+                    self.sess.writer,
+                    "{}{}! `{}`",
+                    prefix,
+                    entry.entity,
+                    entry.peek.kind
+                );
+
+                let children = entry.children.clone();
+                let mut it = children.iter().peekable();
+                while let Some(&child) = it.next() {
+                    self.print_parse_entry(
+                        child,
+                        ParseEntryPrinter {
+                            parent_prefix: &parent_prefix,
+                            is_last: it.peek().is_none(),
+                            continuous: false,
+                            recovering,
+                        },
+                    );
+                }
+            },
+        };
     }
 }
 

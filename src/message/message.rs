@@ -1,5 +1,5 @@
 use core::fmt;
-use std::fmt::Display;
+use std::fmt::{Display};
 
 use crate::{
     cli::color::Color,
@@ -103,6 +103,8 @@ pub struct Message {
     labels: Vec<Label>,
 
     solution: Option<Solution>,
+
+    origin: Option<String>,
 }
 
 impl Message {
@@ -128,6 +130,10 @@ impl Message {
 
     pub fn solution(&self) -> Option<&Solution> {
         self.solution.as_ref()
+    }
+
+    pub fn origin(&self) -> Option<&String> {
+        self.origin.as_ref()
     }
 }
 
@@ -176,6 +182,7 @@ pub struct MessageBuilder {
     text: Option<String>,
     labels: Vec<Label>,
     solution: Option<Solution>,
+    origin: Option<String>,
 }
 
 impl MessageBuilder {
@@ -186,6 +193,7 @@ impl MessageBuilder {
             text: None,
             labels: vec![],
             solution: None,
+            origin: None,
         }
     }
 
@@ -217,6 +225,11 @@ impl MessageBuilder {
         self
     }
 
+    pub fn origin(mut self, file: &str, line: u32) -> Self {
+        self.origin = Some(format!("{}:{}", file, line));
+        self
+    }
+
     pub fn build(self) -> Message {
         let span = self.checked_span();
         let text = self.checked_text().clone();
@@ -226,6 +239,7 @@ impl MessageBuilder {
             text,
             labels: self.labels,
             solution: self.solution,
+            origin: self.origin,
         }
     }
 
