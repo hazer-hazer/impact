@@ -1,12 +1,7 @@
-
-
 use crate::{
     ast::{AstMetadata, NodeId},
     config::config::Config,
-    interface::{
-        interface::{InterruptionReason},
-        writer::Writer,
-    },
+    interface::{interface::InterruptionReason, writer::Writer},
     message::{
         message::{Message, MessageStorage},
         term_emitter::TermEmitter,
@@ -276,6 +271,10 @@ impl<T> StageOutput<T> {
 
     pub fn sess(&self) -> &Session {
         &self.sess
+    }
+
+    pub fn sess_mut(&mut self) -> &mut Session {
+        &mut self.sess
     }
 }
 

@@ -101,14 +101,29 @@ impl AstMetadata {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ErrorNode {
     span: Span,
+    parsed: Option<String>,
 }
 
 impl ErrorNode {
     pub fn new(span: Span) -> Self {
-        Self { span }
+        Self { span, parsed: None }
+    }
+
+    pub fn new_parsed<T>(node: T) -> Self
+    where
+        T: WithSpan + Display,
+    {
+        Self {
+            span: node.span(),
+            parsed: Some(format!("{}", node)),
+        }
+    }
+
+    pub fn parsed(&self) -> Option<&String> {
+        self.parsed.as_ref()
     }
 }
 

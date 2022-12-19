@@ -68,7 +68,7 @@ impl<'a> AstValidator<'a> {
         }
     }
 
-    fn validate_name(&mut self, name: Ident, kind: NameKind) {
+    fn validate_name(&mut self, name: &Ident, kind: NameKind) {
         let solution = match kind {
             NameKind::Var | NameKind::Func | NameKind::TypeVar => self.validate_varname(name, kind),
             NameKind::Const => self.validate_const_name(name, kind),
@@ -91,7 +91,8 @@ impl<'a> AstValidator<'a> {
      * - All words start with an uppercase letter, even words after digits
      * - It does not contain underscore
      */
-    fn validate_typename(&self, name: Ident, kind: NameKind) -> Option<Solution> {
+    fn validate_typename(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
+        let name = *name;
         let sym = name.sym();
         let str = sym.as_str();
 
@@ -109,7 +110,8 @@ impl<'a> AstValidator<'a> {
      * - All subsequent words start with an uppercase letter
      * - It does not contain underscore
      */
-    fn validate_varname(&self, name: Ident, kind: NameKind) -> Option<Solution> {
+    fn validate_varname(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
+        let name = *name;
         let sym = name.sym();
         let str = sym.as_str();
 
@@ -126,7 +128,8 @@ impl<'a> AstValidator<'a> {
      * - All letters are lowercase
      * - Words are delimited with underscores
      */
-    fn validate_mod_name(&self, name: Ident, kind: NameKind) -> Option<Solution> {
+    fn validate_mod_name(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
+        let name = *name;
         let sym = name.sym();
         let str = sym.as_str();
 
@@ -143,7 +146,8 @@ impl<'a> AstValidator<'a> {
      * - All letters are uppercase
      * - Words are delimited with underscores
      */
-    fn validate_const_name(&self, name: Ident, kind: NameKind) -> Option<Solution> {
+    fn validate_const_name(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
+        let name = *name;
         let sym = name.sym();
         let str = sym.as_str();
 
@@ -158,7 +162,8 @@ impl<'a> AstValidator<'a> {
     /**
      * File name is either snake_case or kebab-case
      */
-    fn validate_file_name(&self, name: Ident, kind: NameKind) -> Option<Solution> {
+    fn validate_file_name(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
+        let name = *name;
         let sym = name.sym();
         let str = sym.as_str();
 
@@ -179,22 +184,22 @@ impl<'a> AstVisitor for AstValidator<'a> {
     fn visit_item(&mut self, item: &Item) {
         match item.kind() {
             ItemKind::Type(name, ty) => {
-                self.validate_typename(name.unwrap(), NameKind::Type);
+                self.validate_typename(name.as_ref().unwrap(), NameKind::Type);
                 self.visit_type_item(name, ty, item.id());
-            }
+            },
             ItemKind::Mod(name, items) => {
-                self.validate_name(name.unwrap(), NameKind::Mod);
+                self.validate_name(name.as_ref().unwrap(), NameKind::Mod);
                 self.visit_mod_item(name, items, item.id());
-            }
+            },
             ItemKind::Decl(name, params, body) => {
                 let name_kind = if params.is_empty() {
                     NameKind::Var
                 } else {
                     NameKind::Func
                 };
-                self.validate_name(name.unwrap(), name_kind);
+                self.validate_name(name.as_ref().unwrap(), name_kind);
                 self.visit_decl_item(name, params, body, item.id());
-            }
+            },
         }
     }
 }

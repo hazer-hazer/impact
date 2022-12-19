@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
@@ -26,6 +26,7 @@ enum ParseEntryKind {
     Expect,
     ExpectWrapper,
     Wrapper,
+    ExpectToken,
     RecoverWrapper,
 }
 
@@ -35,6 +36,7 @@ impl ParseEntryKind {
             ParseEntryKind::Opt
             | ParseEntryKind::Expect
             | ParseEntryKind::ExpectWrapper
+            | ParseEntryKind::ExpectToken
             | ParseEntryKind::Wrapper => false,
             ParseEntryKind::RecoverWrapper => true,
         }
@@ -233,10 +235,12 @@ impl Parser {
             .label(self.span(), format!("Unexpected {}", self.peek()))
             .origin(file!(), line!())
             .emit(self);
-        ErrorNode::new(self.advance_tok().span)
+        let tok = self.advance_tok();
+        ErrorNode::new_parsed(tok)
     }
 
     fn expect(&mut self, cmp: TokenCmp) -> PR<()> {
+        self.mark_expect_token(cmp);
         if self.is(cmp) {
             self.advance();
             Ok(())
@@ -284,7 +288,8 @@ impl Parser {
             entity
         } else {
             let pe = self.enter_entity(ParseEntryKind::RecoverWrapper, "recover any");
-            match self.parse_stmt() {
+            let stmt = self.parse_stmt();
+            match stmt {
                 Ok(stmt) => {
                     MessageBuilder::error()
                         .span(stmt.span())
@@ -293,10 +298,10 @@ impl Parser {
                         .origin(file!(), line!())
                         .emit(self);
                     self.exit_parsed_entity(pe);
-                    Err(ErrorNode::new(stmt.span()))
+                    Err(ErrorNode::new_parsed(stmt))
                 },
-                ref e @ Err(err) => {
-                    self.exit_entity(pe, e);
+                Err(err) => {
+                    self._exit_entity(pe, true);
                     Err(err)
                 },
             }
@@ -404,8 +409,6 @@ impl Parser {
     // Items //
     fn parse_item(&mut self) -> PR<N<Item>> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "item");
-
-        self.skip_opt_nls();
 
         let item = self.parse_opt_item();
 
@@ -849,10 +852,15 @@ impl Parser {
         let mut items = vec![];
 
         let pe = self.enter_entity(ParseEntryKind::Expect, "top-level item list");
+
+        self.skip_opt_nls();
+
         while !self.eof() {
             items.push(self.parse_item_semi());
         }
         self.exit_parsed_entity(pe);
+
+        dbg!(&self.parse_entries, self.parse_entry);
 
         self.print_parse_entries();
 
@@ -887,6 +895,14 @@ impl Parser {
         Some(id)
     }
 
+    fn mark_expect_token(&mut self, cmp: TokenCmp) {
+        let id = self.enter_entity(ParseEntryKind::ExpectToken, &cmp.to_string());
+
+        let failed = !self.is(cmp);
+
+        self._exit_entity(id, failed);
+    }
+
     fn exit_expected_entity<T, E>(&mut self, id: Option<usize>, entity: &Option<Result<T, E>>) {
         self._exit_entity(
             id,
@@ -898,7 +914,7 @@ impl Parser {
     }
 
     fn exit_parsed_entity(&mut self, id: Option<usize>) {
-        self._exit_entity(id, true)
+        self._exit_entity(id, false)
     }
 
     fn exit_entity<T, E>(&mut self, id: Option<usize>, pr: &Result<T, E>) {
@@ -923,7 +939,6 @@ impl Parser {
             }
             cur_id = pe.parent;
 
-            println!("Failed {}", id);
             self.parse_entries.get_mut(id).unwrap().failed = true;
         }
 
@@ -957,32 +972,40 @@ impl Parser {
                 && self.parse_entries[entry.children[0]].kind.is_recovering();
         let recovering = printer.recovering || entry.kind.is_recovering();
 
-        const PREFIXES: [&[&str]; 2] = [
+        const PREFIXES: [&[&str]; 3] = [
             // Prefix
             &["├──", "│  "],
             // Last
             &["╰──", "   "],
+            // Postfix
+            &["──", "┬─"],
         ];
 
-        const RECOVER_PREFIXES: [&[&str]; 2] = [
+        const RECOVER_PREFIXES: [&[&str]; 3] = [
             // Prefix
-            &["╠═", "║  "],
+            &["╠══", "║  "],
             // Last
-            &["╚═", "   "],
+            &["╚══", "   "],
+            // Postfix
+            &["══", "╦═"],
         ];
 
-        const FIRST_RECOVER_PREFIXES: [&[&str]; 2] = [
+        const FIRST_RECOVER_PREFIXES: [&[&str]; 3] = [
             // Prefix
-            &["╞═", "│  "],
+            &["╞══", "│  "],
             // Last
-            &["╘═", "   "],
+            &["╘══", "   "],
+            // Postfix
+            &["══", "╦═"],
         ];
 
-        const FAILED_PREFIXES: [&[&str]; 2] = [
+        const FAILED_PREFIXES: [&[&str]; 3] = [
             // Prefix
             &["├×─", "│  "],
             // Last
             &["╰×─", "   "],
+            // Postfix
+            &["──", "┬─"],
         ];
 
         let prefixes = match (entry.kind.is_recovering(), printer.recovering, failed) {
@@ -991,7 +1014,9 @@ impl Parser {
             (false, true, _) => RECOVER_PREFIXES,
             (false, false, _) => PREFIXES,
             (true, false, _) => FIRST_RECOVER_PREFIXES,
-        }[if printer.is_last { 1 } else { 0 }];
+        };
+
+        let main_prefixes = prefixes[if printer.is_last { 1 } else { 0 }];
 
         let prefix_color = if failed {
             Color::Red
@@ -1007,11 +1032,11 @@ impl Parser {
             format!(
                 "{}{}{} ",
                 printer.parent_prefix,
-                prefixes[0],
+                main_prefixes[0],
                 if entry.children.is_empty() {
-                    "──"
+                    prefixes[2][0]
                 } else {
-                    "┬─"
+                    prefixes[2][1]
                 }
             )
             .fg_color(prefix_color)
@@ -1020,7 +1045,11 @@ impl Parser {
         let parent_prefix = format!(
             "{}{}",
             printer.parent_prefix,
-            if printer.continuous { "" } else { prefixes[1] }
+            if printer.continuous {
+                ""
+            } else {
+                main_prefixes[1]
+            }
         );
 
         match entry.kind {
@@ -1106,6 +1135,17 @@ impl Parser {
                         },
                     );
                 }
+            },
+            ParseEntryKind::ExpectToken => {
+                assert!(entry.children.is_empty());
+
+                outln!(
+                    self.sess.writer,
+                    "{}{}! `{}`",
+                    prefix,
+                    entry.entity,
+                    entry.peek.kind
+                );
             },
         };
     }
