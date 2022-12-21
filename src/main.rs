@@ -1,4 +1,9 @@
+<<<<<<< Updated upstream
 #![allow(dead_code)]
+=======
+#![deny(unconditional_recursion)]
+
+>>>>>>> Stashed changes
 use std::fs::read_to_string;
 
 use cli::color::Colorize;
