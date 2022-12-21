@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display};
+use std::fmt::{write, Debug, Display};
 
 use crate::{
     ast::{
@@ -28,6 +28,7 @@ enum ParseEntryKind {
     Wrapper,
     ExpectToken,
     RecoverWrapper,
+    LateCheck,
 }
 
 impl Display for ParseEntryKind {
@@ -39,6 +40,7 @@ impl Display for ParseEntryKind {
             ParseEntryKind::Wrapper => write!(f, "wrapper"),
             ParseEntryKind::ExpectToken => write!(f, "expected token"),
             ParseEntryKind::RecoverWrapper => write!(f, "recovering wrapper"),
+            ParseEntryKind::LateCheck => write!(f, "late check"),
         }
     }
 }
@@ -50,7 +52,8 @@ impl ParseEntryKind {
             | ParseEntryKind::Expect
             | ParseEntryKind::ExpectWrapper
             | ParseEntryKind::ExpectToken
-            | ParseEntryKind::Wrapper => false,
+            | ParseEntryKind::Wrapper
+            | ParseEntryKind::LateCheck => false,
             ParseEntryKind::RecoverWrapper => true,
         }
     }
@@ -62,7 +65,7 @@ struct ParseEntry {
     id: usize,
     kind: ParseEntryKind,
     children: Vec<usize>,
-    entity: String,
+    name: String,
     start: Token,
     end: Option<Token>,
     failed: bool,
@@ -549,11 +552,17 @@ impl Parser {
     }
 
     fn parse_opt_expr(&mut self) -> Option<PR<N<Expr>>> {
-        if self.is(TokenCmp::Kw(Kw::Let)) {
-            return Some(self.parse_let());
-        }
+        let pe = self.enter_entity(ParseEntryKind::Opt, "expression");
 
-        self.parse_prec(0)
+        let expr = if self.is(TokenCmp::Kw(Kw::Let)) {
+            Some(self.parse_let())
+        } else {
+            self.parse_prec(0)
+        };
+
+        self.exit_parsed_entity(pe);
+
+        expr
     }
 
     fn parse_let(&mut self) -> PR<N<Expr>> {
@@ -615,6 +624,8 @@ impl Parser {
 
                 let ty = self.parse_ty();
 
+                self.mark_late_check("type ascription");
+
                 lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
                     ExprKind::Ty(lhs, ty),
@@ -628,6 +639,8 @@ impl Parser {
                 let rhs = self.parse_prec(prec + 1);
 
                 if let Some(rhs) = rhs {
+                    self.mark_late_check("infix expression");
+
                     lhs = Ok(Box::new(Expr::new(
                         self.next_node_id(),
                         ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
@@ -659,6 +672,8 @@ impl Parser {
                 Err(ErrorNode::new(self.span()))
             };
 
+            self.mark_late_check("prefix expression");
+
             Some(Ok(Box::new(Expr::new(
                 self.next_node_id(),
                 ExprKind::Prefix(PrefixOpKind::from_tok(&op), rhs),
@@ -678,6 +693,8 @@ impl Parser {
             let arg = self.parse_postfix();
 
             if let Some(arg) = arg {
+                self.mark_late_check("function call");
+
                 Some(Ok(Box::new(Expr::new(
                     self.next_node_id(),
                     ExprKind::App(lhs, arg),
@@ -697,8 +714,6 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
-        let pe = self.enter_entity(ParseEntryKind::Expect, "primary expression");
-
         let Token { kind, span } = self.peek_tok();
 
         if self.is(TokenCmp::Punct(Punct::Backslash)) {
@@ -727,7 +742,13 @@ impl Parser {
             self.advance();
         }
 
-        self.exit_parsed_entity(pe);
+        if let Some(kind) = &kind {
+            self.mark_late_check(&format!(
+                "primary expression `{}`",
+                kind.as_ref()
+                    .map_or("[ERROR]".to_string(), |expr| expr.to_string())
+            ));
+        }
 
         kind.map(|k| k.map(|k| Box::new(Expr::new(self.next_node_id(), k, span))))
     }
@@ -867,18 +888,20 @@ impl Parser {
         }
         self.exit_parsed_entity(pe);
 
+        dbg!(&self.parse_entries);
+
         self.print_parse_entries();
 
         AST::new(items)
     }
 
     // Debug //
-    fn enter_entity(&mut self, kind: ParseEntryKind, entity: &str) -> Option<usize> {
+    fn enter_entity(&mut self, kind: ParseEntryKind, name: &str) -> Option<usize> {
         if !self.sess.config().parser_debug() {
             return None;
         }
 
-        verbose!("Enter {} {}", kind, entity);
+        verbose!("Enter {} {}", kind, name);
 
         let id = self.parse_entries.len();
 
@@ -886,7 +909,7 @@ impl Parser {
             parent: self.parse_entry,
             id,
             kind,
-            entity: entity.to_string(),
+            name: name.to_string(),
             start: self.peek_tok(),
             end: None,
             children: vec![],
@@ -909,6 +932,12 @@ impl Parser {
         let failed = !self.is(cmp);
 
         self._exit_entity(id, failed);
+    }
+
+    fn mark_late_check(&mut self, name: &str) {
+        let id = self.enter_entity(ParseEntryKind::LateCheck, name);
+
+        self.exit_parsed_entity(id);
     }
 
     fn exit_expected_entity<T, E>(&mut self, id: Option<usize>, entity: &Option<Result<T, E>>) {
@@ -948,7 +977,7 @@ impl Parser {
         while let Some(id) = cur_id {
             let pe = self.parse_entries.get(id).unwrap();
 
-            verbose!("Exit {} {}", pe.kind, pe.entity);
+            verbose!("Exit {} {}", pe.kind, pe.name);
 
             cur_id = pe.parent;
 
@@ -1062,12 +1091,11 @@ impl Parser {
         };
 
         let wrong_tree = match entry.kind {
-            ParseEntryKind::Opt
-            | ParseEntryKind::ExpectWrapper
+            ParseEntryKind::ExpectWrapper
             | ParseEntryKind::Wrapper
             | ParseEntryKind::RecoverWrapper => entry.children.len() > 1,
-            ParseEntryKind::Expect => false,
-            ParseEntryKind::ExpectToken => !entry.children.is_empty(),
+            ParseEntryKind::Opt | ParseEntryKind::Expect => false,
+            ParseEntryKind::ExpectToken | ParseEntryKind::LateCheck => !entry.children.is_empty(),
         };
 
         let wrong_tree_suffix = if wrong_tree { "[WRONG_TREE] " } else { "" }.bright_red();
@@ -1088,12 +1116,14 @@ impl Parser {
 
         let prefix = format!("{}{}", prefix, wrong_tree_suffix);
 
+        let name = entry.name.as_str().white();
+
         if wrong_tree {
             outln!(
                 self.sess.writer,
                 "{}{} `{}`-`{}`",
                 prefix,
-                entry.entity,
+                name,
                 entry.start.kind,
                 entry_end
             );
@@ -1121,7 +1151,7 @@ impl Parser {
                     self.sess.writer,
                     "{}{}? `{}`-`{}` - {} ",
                     prefix,
-                    entry.entity,
+                    name,
                     entry.start.kind,
                     entry_end,
                     if entry.children.is_empty() {
@@ -1154,7 +1184,7 @@ impl Parser {
                     self.sess.writer,
                     "{}[{}]{} `{}`-`{}` - ",
                     prefix,
-                    entry.entity,
+                    name,
                     if expect { "!" } else { "" },
                     entry.start.kind,
                     entry_end,
@@ -1179,7 +1209,7 @@ impl Parser {
                     self.sess.writer,
                     "{}{}! `{}`-`{}`",
                     prefix,
-                    entry.entity,
+                    name,
                     entry.start.kind,
                     entry_end,
                 );
@@ -1198,12 +1228,19 @@ impl Parser {
                     );
                 }
             },
-            ParseEntryKind::ExpectToken => {
+            ParseEntryKind::ExpectToken | ParseEntryKind::LateCheck => {
+                let symbol = match entry.kind {
+                    ParseEntryKind::ExpectToken => "!",
+                    ParseEntryKind::LateCheck => "",
+                    _ => unreachable!(),
+                };
+
                 outln!(
                     self.sess.writer,
-                    "{}{}! `{}`-`{}`",
+                    "{}{}{} `{}`-`{}`",
                     prefix,
-                    entry.entity,
+                    name,
+                    symbol,
                     entry.start.kind,
                     entry_end,
                 );
