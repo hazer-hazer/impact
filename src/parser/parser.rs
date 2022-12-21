@@ -28,7 +28,6 @@ enum ParseEntryKind {
     Wrapper,
     ExpectToken,
     RecoverWrapper,
-    FuturePred(bool),
 }
 
 impl Display for ParseEntryKind {
@@ -40,12 +39,6 @@ impl Display for ParseEntryKind {
             ParseEntryKind::Wrapper => write!(f, "wrapper"),
             ParseEntryKind::ExpectToken => write!(f, "expected token"),
             ParseEntryKind::RecoverWrapper => write!(f, "recovering wrapper"),
-            ParseEntryKind::FuturePred(accepted) => write!(
-                f,
-                "{}{}",
-                if *accepted { "accepted" } else { "ignored" },
-                "future predicate"
-            ),
         }
     }
 }
@@ -57,8 +50,7 @@ impl ParseEntryKind {
             | ParseEntryKind::Expect
             | ParseEntryKind::ExpectWrapper
             | ParseEntryKind::ExpectToken
-            | ParseEntryKind::Wrapper
-            | ParseEntryKind::FuturePred(_) => false,
+            | ParseEntryKind::Wrapper => false,
             ParseEntryKind::RecoverWrapper => true,
         }
     }
@@ -613,8 +605,6 @@ impl Parser {
             return self.parse_prefix();
         }
 
-        let mut pe = self.enter_future_pred_entry("infix expression");
-
         let lo = self.span();
 
         let mut lhs = self.parse_prec(prec + 1)?;
@@ -624,8 +614,6 @@ impl Parser {
                 // Parse ascription (type expression)
 
                 let ty = self.parse_ty();
-
-                self.exit_future_pred_entry(pe, "type ascription");
 
                 lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
@@ -640,17 +628,12 @@ impl Parser {
                 let rhs = self.parse_prec(prec + 1);
 
                 if let Some(rhs) = rhs {
-                    self.exit_future_pred_entry(pe, "infix expression");
-
                     lhs = Ok(Box::new(Expr::new(
                         self.next_node_id(),
                         ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
                         self.close_span(lo),
                     )));
-
-                    pe = self.enter_future_pred_entry("complex infix expression");
                 } else {
-                    self.exit_parsed_entity(pe);
                     break;
                 }
             }
@@ -661,8 +644,6 @@ impl Parser {
 
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
-
-        let pe = self.enter_future_pred_entry("prefix expression");
 
         if let Some(op) = self.skip(TokenCmp::SomePrefix) {
             let rhs = self.parse_postfix();
@@ -678,16 +659,12 @@ impl Parser {
                 Err(ErrorNode::new(self.span()))
             };
 
-            self.exit_future_pred_entry(pe, "prefix expression");
-
             Some(Ok(Box::new(Expr::new(
                 self.next_node_id(),
                 ExprKind::Prefix(PrefixOpKind::from_tok(&op), rhs),
                 op.span.to(lo),
             ))))
         } else {
-            self.exit_parsed_entity(pe);
-
             self.parse_postfix()
         }
     }
@@ -695,14 +672,10 @@ impl Parser {
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
-        let pe = self.enter_future_pred_entry("postfix expression");
-
         let lhs = self.parse_primary();
 
         if let Some(lhs) = lhs {
             let arg = self.parse_postfix();
-
-            self.exit_future_pred_entry(pe, "function call");
 
             if let Some(arg) = arg {
                 Some(Ok(Box::new(Expr::new(
@@ -714,8 +687,6 @@ impl Parser {
                 Some(lhs)
             }
         } else {
-            self.exit_parsed_entity(pe);
-
             lhs
         }
 
@@ -932,33 +903,12 @@ impl Parser {
         Some(id)
     }
 
-    fn enter_future_pred_entry(&mut self, prediction: &str) -> Option<usize> {
-        self.enter_entity(
-            ParseEntryKind::FuturePred(false),
-            &format!("False prediction of {}", prediction),
-        )
-    }
-
     fn mark_expect_token(&mut self, cmp: TokenCmp) {
         let id = self.enter_entity(ParseEntryKind::ExpectToken, &cmp.to_string());
 
         let failed = !self.is(cmp);
 
         self._exit_entity(id, failed);
-    }
-
-    fn exit_future_pred_entry(&mut self, id: Option<usize>, name: &str) {
-        self.exit_parsed_entity(id);
-
-        let entry = self.parse_entries.get_mut(id.unwrap()).unwrap();
-
-        match entry.kind {
-            ParseEntryKind::FuturePred(ref mut accepted) => {
-                entry.entity = name.to_string();
-                *accepted = true;
-            },
-            _ => panic!(),
-        }
     }
 
     fn exit_expected_entity<T, E>(&mut self, id: Option<usize>, entity: &Option<Result<T, E>>) {
@@ -1115,7 +1065,6 @@ impl Parser {
             ParseEntryKind::Opt
             | ParseEntryKind::ExpectWrapper
             | ParseEntryKind::Wrapper
-            | ParseEntryKind::FuturePred(_)
             | ParseEntryKind::RecoverWrapper => entry.children.len() > 1,
             ParseEntryKind::Expect => false,
             ParseEntryKind::ExpectToken => !entry.children.is_empty(),
@@ -1258,23 +1207,6 @@ impl Parser {
                     entry.start.kind,
                     entry_end,
                 );
-            },
-            ParseEntryKind::FuturePred(accepted) => {
-                if accepted {
-                    let children = entry.children.clone();
-                    let mut it = children.iter().peekable();
-                    while let Some(&child) = it.next() {
-                        self.print_parse_entry(
-                            child,
-                            ParseEntryPrinter {
-                                parent_prefix: &parent_prefix,
-                                is_last: it.peek().is_none(),
-                                continuous: false,
-                                recovering,
-                            },
-                        );
-                    }
-                }
             },
         };
     }
