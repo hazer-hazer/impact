@@ -7,6 +7,17 @@ use crate::{
 
 use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, WithNodeId, N, PR};
 
+macro_rules! is_block_ended {
+    ($pr: expr) => {
+        match &$pr {
+            Err(_) => false,
+            Ok(node) => node.is_block_ended(),
+        }
+    };
+}
+
+pub(crate) use is_block_ended;
+
 #[derive(Debug)]
 pub struct Expr {
     id: NodeId,
@@ -21,6 +32,10 @@ impl Expr {
 
     pub fn kind(&self) -> &ExprKind {
         &self.kind
+    }
+
+    pub fn is_block_ended(&self) -> bool {
+        self.kind.is_block_ended()
     }
 }
 
@@ -191,6 +206,19 @@ pub enum ExprKind {
     Ty(PR<N<Expr>>, PR<N<Ty>>),
 }
 
+impl ExprKind {
+    pub fn is_block_ended(&self) -> bool {
+        match self {
+            ExprKind::Unit | ExprKind::Lit(_) | ExprKind::Path(_) | ExprKind::Ty(_, _) => false,
+            ExprKind::Block(_) | ExprKind::Let(_) => true,
+            ExprKind::Infix(_, _, expr)
+            | ExprKind::Prefix(_, expr)
+            | ExprKind::Abs(_, expr)
+            | ExprKind::App(_, expr) => is_block_ended!(expr),
+        }
+    }
+}
+
 impl Display for Lit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -211,11 +239,11 @@ impl Display for ExprKind {
             ExprKind::Block(block) => write!(f, "{}", pr_display(block)),
             ExprKind::Infix(lhs, op, rhs) => {
                 write!(f, "{} {} {}", pr_display(lhs), op, pr_display(rhs))
-            }
+            },
             ExprKind::Prefix(op, rhs) => write!(f, "{}{}", op, pr_display(rhs)),
             ExprKind::Abs(param_name, body) => {
                 write!(f, "{} -> {}", pr_display(param_name), pr_display(body))
-            }
+            },
             ExprKind::App(lhs, arg) => write!(f, "{} {}", pr_display(lhs), pr_display(arg)),
             ExprKind::Let(block) => write!(f, "{}", pr_display(block)),
             ExprKind::Ty(expr, ty) => write!(f, "{}: {}", pr_display(expr), pr_display(ty)),

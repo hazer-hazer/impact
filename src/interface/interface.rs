@@ -82,6 +82,7 @@ impl Interface {
         }
 
         if sess.config().check_pp_stage(stage) {
+            println!("Tokens: {}", tokens);
             outln!(sess.writer, "Tokens: {}", tokens);
         }
 

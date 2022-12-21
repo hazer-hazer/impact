@@ -247,9 +247,12 @@ impl Lexer {
             self.last_line_begin = self.pos;
         }
 
-        self.add_token(TokenKind::Nl, 1);
-
         if self.eof() {
+            self.add_token(TokenKind::Nl, 1);
+
+            while let Some(_) = self.indent_levels.pop() {
+                self.add_token(TokenKind::BlockEnd, 1);
+            }
             return;
         }
 
@@ -265,12 +268,14 @@ impl Lexer {
 
         let mut level = *self.indent_levels.last().unwrap_or(&0);
 
-        if indent_size > level {
-            self.add_token(TokenKind::Indent, indent_size as SpanLen);
+        if indent_size == level {
+            self.add_token(TokenKind::Nl, 1);
+        } else if indent_size > level {
+            self.add_token(TokenKind::BlockStart, indent_size as SpanLen);
             self.indent_levels.push(indent_size);
         } else {
             while indent_size < level {
-                self.add_token(TokenKind::Dedent, 1);
+                self.add_token(TokenKind::BlockEnd, 1);
                 self.indent_levels.pop().unwrap();
                 level = *self.indent_levels.last().unwrap_or(&0);
                 if level < indent_size {

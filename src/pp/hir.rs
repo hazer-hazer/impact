@@ -1,12 +1,7 @@
 use crate::{
     hir::{
-<<<<<<< Updated upstream
         expr::{Block, FuncCall, Infix, Lambda, Lit, Prefix, TyExpr},
         item::{Decl, Mod, TypeItem},
-=======
-        expr::{Block, Expr, ExprKind, FuncCall, Infix, Lambda, Lit, Prefix, TyExpr},
-        item::{Decl, Item, Mod, TypeItem},
->>>>>>> Stashed changes
         stmt::{Stmt, StmtKind},
         ty::Ty,
         visitor::HirVisitor,

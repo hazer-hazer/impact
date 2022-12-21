@@ -109,6 +109,9 @@ pub enum FloatKind {
 pub enum TokenKind {
     Eof,
     Nl,
+    BlockStart,
+    BlockEnd,
+
     Bool(bool),
     Int(u64, IntKind),
     Float(f64, FloatKind),
@@ -120,9 +123,6 @@ pub enum TokenKind {
     Infix(Infix),
 
     Punct(Punct),
-
-    Indent,
-    Dedent,
 
     Error(Symbol),
 }
@@ -183,6 +183,8 @@ impl PartialEq<TokenCmp> for TokenKind {
 pub enum TokenCmp {
     Eof,
     Nl,
+    BlockStart,
+    BlockEnd,
     Bool,
     Int,
     String,
@@ -192,8 +194,6 @@ pub enum TokenCmp {
     Infix(Infix),
     Kw(Kw),
     Punct(Punct),
-    Indent,
-    Dedent,
     Error,
 }
 
@@ -214,8 +214,8 @@ impl Display for TokenCmp {
                 TokenCmp::Infix(infix) => format!("{} infix operator", infix),
                 TokenCmp::Kw(kw) => format!("{} keyword", kw),
                 TokenCmp::Punct(punct) => format!("{} punctuation", punct),
-                TokenCmp::Indent => "indent".to_string(),
-                TokenCmp::Dedent => "dedent".to_string(),
+                TokenCmp::BlockStart => "[BLOCK START]".to_string(),
+                TokenCmp::BlockEnd => "[BLOCK END]".to_string(),
                 TokenCmp::Error => "[ERROR]".to_string(),
             }
         )
@@ -232,8 +232,8 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
             | (TokenKind::Prefix(_), TokenCmp::SomePrefix)
-            | (TokenKind::Indent, TokenCmp::Indent)
-            | (TokenKind::Dedent, TokenCmp::Dedent)
+            | (TokenKind::BlockStart, TokenCmp::BlockStart)
+            | (TokenKind::BlockEnd, TokenCmp::BlockEnd)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
@@ -296,8 +296,8 @@ impl Display for TokenKind {
             TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
             TokenKind::Prefix(prefix) => write!(f, "{}", prefix),
             TokenKind::Kw(kw) => write!(f, "{}", kw),
-            TokenKind::Indent => write!(f, "{}", "[INDENT]"),
-            TokenKind::Dedent => write!(f, "{}", "[DEDENT]"),
+            TokenKind::BlockStart => write!(f, "{}", "[BLOCK START]"),
+            TokenKind::BlockEnd => write!(f, "{}", "[BLOCK END]"),
             TokenKind::Punct(punct) => write!(f, "{}", punct),
         }
     }

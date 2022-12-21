@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
-        expr::{Block, Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
+        expr::{is_block_ended, Block, Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         item::{Item, ItemKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -28,22 +28,25 @@ enum ParseEntryKind {
     Wrapper,
     ExpectToken,
     RecoverWrapper,
+    FuturePred(bool),
 }
 
 impl Display for ParseEntryKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ParseEntryKind::Opt => "optional",
-                ParseEntryKind::Expect => "expected",
-                ParseEntryKind::ExpectWrapper => "expected wrapper",
-                ParseEntryKind::Wrapper => "wrapper",
-                ParseEntryKind::ExpectToken => "expected token",
-                ParseEntryKind::RecoverWrapper => "recovering wrapper",
-            }
-        )
+        match self {
+            ParseEntryKind::Opt => write!(f, "optional"),
+            ParseEntryKind::Expect => write!(f, "expected"),
+            ParseEntryKind::ExpectWrapper => write!(f, "expected wrapper"),
+            ParseEntryKind::Wrapper => write!(f, "wrapper"),
+            ParseEntryKind::ExpectToken => write!(f, "expected token"),
+            ParseEntryKind::RecoverWrapper => write!(f, "recovering wrapper"),
+            ParseEntryKind::FuturePred(accepted) => write!(
+                f,
+                "{}{}",
+                if *accepted { "accepted" } else { "ignored" },
+                "future predicate"
+            ),
+        }
     }
 }
 
@@ -54,7 +57,8 @@ impl ParseEntryKind {
             | ParseEntryKind::Expect
             | ParseEntryKind::ExpectWrapper
             | ParseEntryKind::ExpectToken
-            | ParseEntryKind::Wrapper => false,
+            | ParseEntryKind::Wrapper
+            | ParseEntryKind::FuturePred(_) => false,
             ParseEntryKind::RecoverWrapper => true,
         }
     }
@@ -67,7 +71,8 @@ struct ParseEntry {
     kind: ParseEntryKind,
     children: Vec<usize>,
     entity: String,
-    peek: Token,
+    start: Token,
+    end: Option<Token>,
     failed: bool,
 }
 
@@ -98,30 +103,14 @@ macro_rules! parse_block_common {
     ($self: ident, $parse: ident) => {{
         let mut entities = vec![];
 
-        $self.just_skip(TokenCmp::Nl);
-        $self.just_skip(TokenCmp::Indent);
+        $self.just_skip(TokenCmp::BlockStart);
 
-        let mut first = true;
-        while !$self.is(TokenCmp::Dedent) {
-            if $self.eof() {
-                break;
-            }
-
-            if first {
-                first = false;
-            } else {
-                $self.expect_semis()?;
-            }
-
-            if $self.eof() {
-                break;
-            }
-
+        while !$self.eof() && !$self.is(TokenCmp::BlockEnd) {
             entities.push($self.$parse());
         }
 
         if !$self.eof() {
-            $self.just_skip(TokenCmp::Dedent);
+            $self.just_skip(TokenCmp::BlockEnd);
         }
 
         entities
@@ -270,7 +259,7 @@ impl Parser {
     fn expect_semis(&mut self) -> PR<()> {
         // If we encountered EOF don't skip it
         // Note: Keep order
-        if self.eof() || self.skip_opt_nls() {
+        if self.eof() || self.is(TokenCmp::BlockEnd) || self.skip_opt_nls() {
             Ok(())
         } else {
             self.expected_error("semi", self.peek())
@@ -410,7 +399,9 @@ impl Parser {
                 span,
             )))
         } else if let Some(expr) = self.parse_opt_expr() {
-            self.expect_semis()?;
+            if !is_block_ended!(expr) {
+                self.expect_semis()?;
+            }
 
             let span = expr.span();
             Ok(Box::new(Stmt::new(
@@ -453,17 +444,23 @@ impl Parser {
 
             self.exit_entity(pe, &mod_item);
 
+            self.skip_opt_nls();
+
             Some(mod_item)
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
             let ty_item = self.parse_type_item();
 
             self.exit_entity(pe, &ty_item);
 
+            self.skip_opt_nls();
+
             Some(ty_item)
         } else if self.lookup_after_many1(TokenCmp::Ident, TokenCmp::Punct(Punct::Assign)) {
             let decl = self.parse_decl_item();
 
             self.exit_entity(pe, &decl);
+
+            self.skip_opt_nls();
 
             Some(decl)
         } else {
@@ -616,6 +613,8 @@ impl Parser {
             return self.parse_prefix();
         }
 
+        let mut pe = self.enter_future_pred_entry("infix expression");
+
         let lo = self.span();
 
         let mut lhs = self.parse_prec(prec + 1)?;
@@ -623,7 +622,11 @@ impl Parser {
         while let Some(op) = self.skip_any(&PREC_TABLE[prec as usize]) {
             if op.kind == TokenKind::Punct(Punct::Colon) {
                 // Parse ascription (type expression)
+
                 let ty = self.parse_ty();
+
+                self.exit_future_pred_entry(pe, "type ascription");
+
                 lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
                     ExprKind::Ty(lhs, ty),
@@ -631,17 +634,23 @@ impl Parser {
                 )));
 
                 // TODO: Allow ascription of ascription?
+                // pe = self.enter_future_pred_entry();
                 break;
             } else {
                 let rhs = self.parse_prec(prec + 1);
 
                 if let Some(rhs) = rhs {
+                    self.exit_future_pred_entry(pe, "infix expression");
+
                     lhs = Ok(Box::new(Expr::new(
                         self.next_node_id(),
                         ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
                         self.close_span(lo),
                     )));
+
+                    pe = self.enter_future_pred_entry("complex infix expression");
                 } else {
+                    self.exit_parsed_entity(pe);
                     break;
                 }
             }
@@ -652,6 +661,9 @@ impl Parser {
 
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
+
+        let pe = self.enter_future_pred_entry("prefix expression");
+
         if let Some(op) = self.skip(TokenCmp::SomePrefix) {
             let rhs = self.parse_postfix();
 
@@ -666,12 +678,16 @@ impl Parser {
                 Err(ErrorNode::new(self.span()))
             };
 
+            self.exit_future_pred_entry(pe, "prefix expression");
+
             Some(Ok(Box::new(Expr::new(
                 self.next_node_id(),
                 ExprKind::Prefix(PrefixOpKind::from_tok(&op), rhs),
                 op.span.to(lo),
             ))))
         } else {
+            self.exit_parsed_entity(pe);
+
             self.parse_postfix()
         }
     }
@@ -679,10 +695,14 @@ impl Parser {
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
+        let pe = self.enter_future_pred_entry("postfix expression");
+
         let lhs = self.parse_primary();
 
         if let Some(lhs) = lhs {
             let arg = self.parse_postfix();
+
+            self.exit_future_pred_entry(pe, "function call");
 
             if let Some(arg) = arg {
                 Some(Ok(Box::new(Expr::new(
@@ -694,6 +714,8 @@ impl Parser {
                 Some(lhs)
             }
         } else {
+            self.exit_parsed_entity(pe);
+
             lhs
         }
 
@@ -768,7 +790,7 @@ impl Parser {
     fn parse_body(&mut self) -> PR<N<Expr>> {
         let pe = self.enter_entity(ParseEntryKind::Wrapper, "body");
 
-        let body = if self.is(TokenCmp::Nl) && self.next_is(TokenCmp::Indent) {
+        let body = if self.is(TokenCmp::BlockStart) {
             let body = self.parse_block_expr();
             body
         } else {
@@ -874,8 +896,6 @@ impl Parser {
         }
         self.exit_parsed_entity(pe);
 
-        dbg!(&self.parse_entries, self.parse_entry);
-
         self.print_parse_entries();
 
         AST::new(items)
@@ -896,7 +916,8 @@ impl Parser {
             id,
             kind,
             entity: entity.to_string(),
-            peek: self.peek_tok(),
+            start: self.peek_tok(),
+            end: None,
             children: vec![],
             failed: false,
         });
@@ -911,12 +932,33 @@ impl Parser {
         Some(id)
     }
 
+    fn enter_future_pred_entry(&mut self, prediction: &str) -> Option<usize> {
+        self.enter_entity(
+            ParseEntryKind::FuturePred(false),
+            &format!("False prediction of {}", prediction),
+        )
+    }
+
     fn mark_expect_token(&mut self, cmp: TokenCmp) {
         let id = self.enter_entity(ParseEntryKind::ExpectToken, &cmp.to_string());
 
         let failed = !self.is(cmp);
 
         self._exit_entity(id, failed);
+    }
+
+    fn exit_future_pred_entry(&mut self, id: Option<usize>, name: &str) {
+        self.exit_parsed_entity(id);
+
+        let entry = self.parse_entries.get_mut(id.unwrap()).unwrap();
+
+        match entry.kind {
+            ParseEntryKind::FuturePred(ref mut accepted) => {
+                entry.entity = name.to_string();
+                *accepted = true;
+            },
+            _ => panic!(),
+        }
     }
 
     fn exit_expected_entity<T, E>(&mut self, id: Option<usize>, entity: &Option<Result<T, E>>) {
@@ -942,8 +984,13 @@ impl Parser {
             return;
         }
 
+        let end = Some(self.peek_tok());
+        let entry = self.parse_entries.get_mut(id.unwrap()).unwrap();
+
+        entry.end = end;
+
         if failed {
-            self.parse_entries.get_mut(id.unwrap()).unwrap().failed = true;
+            entry.failed = true;
         }
 
         let mut cur_id = id;
@@ -955,11 +1002,13 @@ impl Parser {
 
             cur_id = pe.parent;
 
-            if pe.id == id || pe.parent.is_none() {
+            if pe.id == id {
                 break;
             }
 
-            self.parse_entries.get_mut(id).unwrap().failed = true;
+            let entry = self.parse_entries.get_mut(id).unwrap();
+            entry.failed = true;
+            entry.end = end;
         }
 
         self.parse_entry = cur_id;
@@ -975,7 +1024,7 @@ impl Parser {
         }
 
         self.print_parse_entry(
-            self.parse_entry.unwrap(),
+            self.parse_entries.first().unwrap().id,
             ParseEntryPrinter {
                 parent_prefix: "",
                 is_last: true,
@@ -1062,6 +1111,18 @@ impl Parser {
             .fg_color(prefix_color)
         };
 
+        let wrong_tree = match entry.kind {
+            ParseEntryKind::Opt
+            | ParseEntryKind::ExpectWrapper
+            | ParseEntryKind::Wrapper
+            | ParseEntryKind::FuturePred(_)
+            | ParseEntryKind::RecoverWrapper => entry.children.len() > 1,
+            ParseEntryKind::Expect => false,
+            ParseEntryKind::ExpectToken => !entry.children.is_empty(),
+        };
+
+        let wrong_tree_suffix = if wrong_tree { "[WRONG_TREE] " } else { "" }.bright_red();
+
         let parent_prefix = format!(
             "{}{}",
             printer.parent_prefix,
@@ -1072,16 +1133,48 @@ impl Parser {
             }
         );
 
+        let entry_end = entry
+            .end
+            .map_or("[]".to_string(), |end| end.kind.to_string());
+
+        let prefix = format!("{}{}", prefix, wrong_tree_suffix);
+
+        if wrong_tree {
+            outln!(
+                self.sess.writer,
+                "{}{} `{}`-`{}`",
+                prefix,
+                entry.entity,
+                entry.start.kind,
+                entry_end
+            );
+
+            let children = entry.children.clone();
+            let mut it = children.iter().peekable();
+            while let Some(&child) = it.next() {
+                self.print_parse_entry(
+                    child,
+                    ParseEntryPrinter {
+                        parent_prefix: &parent_prefix,
+                        is_last: it.peek().is_none(),
+                        continuous: false,
+                        recovering,
+                    },
+                );
+            }
+
+            return;
+        }
+
         match entry.kind {
             ParseEntryKind::Opt => {
-                assert!(entry.children.len() <= 1);
-
                 out!(
                     self.sess.writer,
-                    "{}{}? `{}` - {} ",
+                    "{}{}? `{}`-`{}` - {} ",
                     prefix,
                     entry.entity,
-                    entry.peek.kind,
+                    entry.start.kind,
+                    entry_end,
                     if entry.children.is_empty() {
                         "no".black()
                     } else {
@@ -1106,17 +1199,16 @@ impl Parser {
             ParseEntryKind::Wrapper
             | ParseEntryKind::ExpectWrapper
             | ParseEntryKind::RecoverWrapper => {
-                assert!(entry.children.len() <= 1);
-
                 let expect = entry.kind == ParseEntryKind::ExpectWrapper;
 
                 out!(
                     self.sess.writer,
-                    "{}[{}]{} `{}` - ",
+                    "{}[{}]{} `{}`-`{}` - ",
                     prefix,
                     entry.entity,
                     if expect { "!" } else { "" },
-                    entry.peek.kind
+                    entry.start.kind,
+                    entry_end,
                 );
 
                 if let Some(&child) = entry.children.first() {
@@ -1136,10 +1228,11 @@ impl Parser {
             ParseEntryKind::Expect => {
                 outln!(
                     self.sess.writer,
-                    "{}{}! `{}`",
+                    "{}{}! `{}`-`{}`",
                     prefix,
                     entry.entity,
-                    entry.peek.kind
+                    entry.start.kind,
+                    entry_end,
                 );
 
                 let children = entry.children.clone();
@@ -1157,36 +1250,30 @@ impl Parser {
                 }
             },
             ParseEntryKind::ExpectToken => {
-                let wrong_tree = if !entry.children.is_empty() {
-                    " [WRONG TREE] "
-                } else {
-                    ""
-                }
-                .bright_red();
-
                 outln!(
                     self.sess.writer,
-                    "{}{}{}! `{}`",
+                    "{}{}! `{}`-`{}`",
                     prefix,
-                    wrong_tree,
                     entry.entity,
-                    entry.peek.kind
+                    entry.start.kind,
+                    entry_end,
                 );
-
-                let parent_prefix = &format!("{}{}", parent_prefix, wrong_tree);
-
-                let children = entry.children.clone();
-                let mut it = children.iter().peekable();
-                while let Some(&child) = it.next() {
-                    self.print_parse_entry(
-                        child,
-                        ParseEntryPrinter {
-                            parent_prefix: &parent_prefix,
-                            is_last: it.peek().is_none(),
-                            continuous: false,
-                            recovering,
-                        },
-                    );
+            },
+            ParseEntryKind::FuturePred(accepted) => {
+                if accepted {
+                    let children = entry.children.clone();
+                    let mut it = children.iter().peekable();
+                    while let Some(&child) = it.next() {
+                        self.print_parse_entry(
+                            child,
+                            ParseEntryPrinter {
+                                parent_prefix: &parent_prefix,
+                                is_last: it.peek().is_none(),
+                                continuous: false,
+                                recovering,
+                            },
+                        );
+                    }
                 }
             },
         };
