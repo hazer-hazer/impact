@@ -1,5 +1,12 @@
+<<<<<<< Updated upstream
 main =
     a = let
         asd = 123
         asd + 123
+=======
+main () =
+    let
+        a = 123
+        a + 123
+>>>>>>> Stashed changes
     a

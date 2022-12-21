@@ -143,6 +143,7 @@ impl<'g> CodeGen<'g> for PathExpr {
 impl<'g> CodeGen<'g> for Lambda {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
         let block = g.current_block();
+        todo!()
     }
 }
 
@@ -169,7 +170,8 @@ impl<'g> CodeGen<'g> for Item {
             ItemKind::Decl(decl) => {
                 assert!(decl.params.is_empty());
 
-                g.bind_res_value(Res::local(self), value)
+                todo!()
+                // g.bind_res_value(Res::local(self), value)
             }
             ItemKind::Mod(_) | ItemKind::Type(_) => {}
         }

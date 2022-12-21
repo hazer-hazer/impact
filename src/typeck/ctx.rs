@@ -1,11 +1,16 @@
 use std::fmt::Display;
 
 use crate::{
+<<<<<<< Updated upstream
     hir::expr::{Block, Expr, ExprKind, Lit},
     span::span::{Ident, Kw, Symbol},
+=======
+    hir::expr::{Block, Expr, ExprKind, Infix, Lit},
+    span::span::{Ident, Kw, Symbol, WithSpan},
+>>>>>>> Stashed changes
 };
 
-use super::ty::{PrimTy, Ty, TyError, TyKind, TyResult};
+use super::ty::{FloatKind, IntKind, PrimTy, Ty, TyError, TyKind, TyResult};
 
 #[derive(Clone)]
 pub enum CtxItem {
@@ -186,15 +191,25 @@ impl Ctx {
             ExprKind::Lit(lit) => {
                 let lit_ty = match lit {
                     Lit::Bool(_) => PrimTy::Bool,
+<<<<<<< Updated upstream
                     Lit::Int(_, kind) => PrimTy::Int(*kind),
                     Lit::Float(_, kind) => PrimTy::Float(*kind),
+=======
+                    Lit::Int(_, kind) => PrimTy::Int(IntKind::I32),
+                    Lit::Float(_, _) => PrimTy::Float(FloatKind::F32),
+>>>>>>> Stashed changes
                     Lit::String(_) => PrimTy::String,
                 };
 
                 Ok((Ty::lit(lit_ty), self.clone()))
             }
             ExprKind::Path(path) => {
+<<<<<<< Updated upstream
                 if let Some(item) = self.lookup(CtxItemName::TypedTerm(path.0.target_name())) {
+=======
+                let path = &path.0;
+                if let Some(item) = self.lookup(CtxItemName::TypedTerm(path.target_name())) {
+>>>>>>> Stashed changes
                     Ok((
                         match item {
                             CtxItem::TypedTerm(_, ty) => ty.clone(),
@@ -206,6 +221,7 @@ impl Ctx {
                     Err(TyError())
                 }
             }
+<<<<<<< Updated upstream
             ExprKind::Block(_) => todo!(),
             ExprKind::Infix(_) => todo!(),
             ExprKind::Prefix(_) => todo!(),
@@ -217,6 +233,19 @@ impl Ctx {
     }
 
     fn synth_block(&self, _block: Block) -> TyResult<(Ty, Ctx)> {
+=======
+            ExprKind::Infix(infix) => todo!(),
+            ExprKind::Prefix(prefix) => todo!(),
+            ExprKind::Lambda(lambda) => todo!(),
+            ExprKind::Call(call) => todo!(),
+            ExprKind::Block(stmts) => todo!(),
+            ExprKind::Let(block) => todo!(),
+            ExprKind::Ty(ty_expr) => todo!(),
+        }
+    }
+
+    fn synth_block(&self, block: Block) -> TyResult<(Ty, Ctx)> {
+>>>>>>> Stashed changes
         todo!()
     }
 }
