@@ -30,6 +30,23 @@ enum ParseEntryKind {
     RecoverWrapper,
 }
 
+impl Display for ParseEntryKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ParseEntryKind::Opt => "optional",
+                ParseEntryKind::Expect => "expected",
+                ParseEntryKind::ExpectWrapper => "expected wrapper",
+                ParseEntryKind::Wrapper => "wrapper",
+                ParseEntryKind::ExpectToken => "expected token",
+                ParseEntryKind::RecoverWrapper => "recovering wrapper",
+            }
+        )
+    }
+}
+
 impl ParseEntryKind {
     fn is_recovering(&self) -> bool {
         match self {
@@ -81,8 +98,8 @@ macro_rules! parse_block_common {
     ($self: ident, $parse: ident) => {{
         let mut entities = vec![];
 
-        $self.expect(TokenCmp::Nl)?;
-        $self.expect(TokenCmp::Indent)?;
+        $self.just_skip(TokenCmp::Nl);
+        $self.just_skip(TokenCmp::Indent);
 
         let mut first = true;
         while !$self.is(TokenCmp::Dedent) {
@@ -641,7 +658,6 @@ impl Parser {
             let rhs = if let Some(rhs) = rhs {
                 rhs
             } else {
-                verbose!("[parse_prefix] expected expression error {}", self.peek());
                 MessageBuilder::error()
                     .span(self.span())
                     .text(format!("Expected expression after {} operator", op.kind))
@@ -666,8 +682,6 @@ impl Parser {
         let lhs = self.parse_primary();
 
         if let Some(lhs) = lhs {
-            verbose!("Parse postfix {}", self.peek());
-
             let arg = self.parse_postfix();
 
             if let Some(arg) = arg {
@@ -873,6 +887,8 @@ impl Parser {
             return None;
         }
 
+        verbose!("Enter {} {}", kind, entity);
+
         let id = self.parse_entries.len();
 
         self.parse_entries.push(ParseEntry {
@@ -934,10 +950,14 @@ impl Parser {
 
         while let Some(id) = cur_id {
             let pe = self.parse_entries.get(id).unwrap();
+
+            verbose!("Exit {} {}", pe.kind, pe.entity);
+
+            cur_id = pe.parent;
+
             if pe.id == id || pe.parent.is_none() {
                 break;
             }
-            cur_id = pe.parent;
 
             self.parse_entries.get_mut(id).unwrap().failed = true;
         }
@@ -1137,15 +1157,37 @@ impl Parser {
                 }
             },
             ParseEntryKind::ExpectToken => {
-                assert!(entry.children.is_empty());
+                let wrong_tree = if !entry.children.is_empty() {
+                    " [WRONG TREE] "
+                } else {
+                    ""
+                }
+                .bright_red();
 
                 outln!(
                     self.sess.writer,
-                    "{}{}! `{}`",
+                    "{}{}{}! `{}`",
                     prefix,
+                    wrong_tree,
                     entry.entity,
                     entry.peek.kind
                 );
+
+                let parent_prefix = &format!("{}{}", parent_prefix, wrong_tree);
+
+                let children = entry.children.clone();
+                let mut it = children.iter().peekable();
+                while let Some(&child) = it.next() {
+                    self.print_parse_entry(
+                        child,
+                        ParseEntryPrinter {
+                            parent_prefix: &parent_prefix,
+                            is_last: it.peek().is_none(),
+                            continuous: false,
+                            recovering,
+                        },
+                    );
+                }
             },
         };
     }
