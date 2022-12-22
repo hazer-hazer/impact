@@ -3,45 +3,39 @@ use crate::{
         expr::Block,
         item::{Item, ItemKind},
         visitor::{walk_each_pr, AstVisitor},
-        ErrorNode, Path, WithNodeId, AST,
+        ErrorNode, NodeId, Path, WithNodeId, AST,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
-    span::span::Span,
+    span::span::{Ident, Span},
 };
 
 use super::{
-    def::{DefMap, ModuleId, ROOT_DEF_ID},
+    def::{DefId, DefKind, DefMap, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
     res::{NamePath, Res},
 };
 
-#[derive(Debug)]
-enum ScopeKind {
-    Module(ModuleId),
-}
+// #[derive(Debug)]
+// enum ScopeKind {
+//     Module(ModuleId),
+// }
 
-#[derive(Debug)]
-struct Scope {
-    kind: ScopeKind,
-}
+// #[derive(Debug)]
+// struct Scope {
+//     module_id: ModuleId,
+// }
 
-impl Scope {
-    pub fn new_module(module_id: ModuleId) -> Self {
-        Self {
-            kind: ScopeKind::Module(module_id),
-        }
-    }
-
-    fn kind(&self) -> &ScopeKind {
-        &self.kind
-    }
-}
+// impl Scope {
+//     pub fn new_module(module_id: ModuleId) -> Self {
+//         Self { module_id }
+//     }
+// }
 
 pub struct NameResolver<'a> {
     ast: &'a AST,
-    scopes: Vec<Scope>,
-    module: ModuleId, // Nearest `mod` item
+    scopes: Vec<ModuleId>,
+    nearest_mod: ModuleId, // Nearest `mod` item
     locals_spans: DefMap<Span>,
     msg: MessageStorage,
     sess: Session,
@@ -52,37 +46,60 @@ impl<'a> NameResolver<'a> {
         Self {
             ast,
             scopes: Default::default(),
-            module: ModuleId::Module(ROOT_DEF_ID),
+            nearest_mod: ModuleId::Module(ROOT_DEF_ID),
             locals_spans: Default::default(),
             msg: Default::default(),
             sess,
         }
     }
 
-    fn enter_scope(&mut self, scope: Scope) {
-        verbose!("Enter scope {:?}", scope);
+    fn define_var(&mut self, node_id: NodeId, ident: &Ident) -> DefId {
+        verbose!("Define var {} {}", node_id, ident);
 
-        match scope.kind() {
-            ScopeKind::Module(module_id) => self.module = *module_id,
+        let def_id = self.sess.def_table.define(node_id, DefKind::Var, ident);
+        let old_def = self.sess.def_table.get_module_mut(self.scope()).define(
+            Namespace::Value,
+            ident.sym(),
+            def_id,
+        );
+
+        if let Some(old_def) = old_def {
+            let old_def = self.sess.def_table.get_def(old_def).unwrap();
+            MessageBuilder::error()
+                .span(ident.span())
+                .text(format!(
+                    "Duplicate local variable `{}` definition",
+                    ident.sym()
+                ))
+                .label(old_def.name().span(), "Previously defined here".to_string())
+                .label(ident.span(), "Redefined here".to_string())
+                .emit(self);
         }
 
-        self.scopes.push(scope);
+        def_id
+    }
+
+    fn enter_scope(&mut self, module_id: ModuleId) {
+        verbose!("Enter scope {}", module_id);
+
+        self.nearest_mod = module_id;
+
+        self.scopes.push(module_id);
     }
 
     fn exit_scope(&mut self) {
+        verbose!("Exit scope");
         self.scopes.pop();
     }
 
-    fn scope(&mut self) -> &mut Scope {
-        self.scopes.last_mut().unwrap()
+    fn scope(&self) -> ModuleId {
+        *self.scopes.last().unwrap()
     }
 
     fn resolve_path(&mut self, path: &Path) -> Res {
-        verbose!("Path segments {:?}", path.segments());
-
         let segments = path.segments();
 
-        let mut search_mod = self.sess.def_table.get_module(self.module);
+        let mut search_mod = self.sess.def_table.get_module(self.nearest_mod);
 
         for seg_index in 0..segments.len() {
             let seg = segments[seg_index];
@@ -105,6 +122,9 @@ impl<'a> NameResolver<'a> {
             let def = match search_mod.get_by_ident(&seg) {
                 Some(def) => def,
                 None => {
+                    println!("Failed to resolve {};", path);
+                    println!("{}", self.sess.def_table.defs().iter().map(|));
+
                     let prefix = path.prefix_str(seg_index);
                     MessageBuilder::error()
                         .span(path.prefix_span(seg_index))
@@ -115,7 +135,7 @@ impl<'a> NameResolver<'a> {
                         )
                         .emit(self);
                     return Res::error();
-                }
+                },
             };
 
             if is_target {
@@ -145,35 +165,40 @@ impl<'a> AstVisitor for NameResolver<'a> {
             ItemKind::Mod(name, items) => {
                 let module_id =
                     ModuleId::Module(self.sess.def_table.get_def_id(item.id()).unwrap());
-                self.module = module_id;
-                self.enter_scope(Scope::new_module(module_id));
+                self.nearest_mod = module_id;
+                self.enter_scope(module_id);
                 self.visit_mod_item(name, items, item.id());
                 self.exit_scope();
-            }
+            },
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
             ItemKind::Decl(name, params, body) => {
-                self.visit_decl_item(name, params, body, item.id())
-            }
+                self.visit_decl_item(name, params, body, item.id());
+
+                if params.is_empty() {
+                    self.define_var(item.id(), item.name().unwrap());
+                }
+            },
         }
     }
 
     fn visit_block(&mut self, block: &Block) {
-        self.enter_scope(Scope::new_module(ModuleId::Block(block.id())));
+        self.enter_scope(ModuleId::Block(block.id()));
         walk_each_pr!(self, block.stmts(), visit_stmt);
         self.exit_scope();
     }
 
     fn visit_path(&mut self, path: &Path) {
-        verbose!("Resolve path `{}`", path);
-
         let res = self.resolve_path(path);
+
+        verbose!("Resolved path `{}` as {}", path, res);
+
         self.sess.res.set(NamePath::new(path.id()), res);
     }
 }
 
 impl<'a> Stage<()> for NameResolver<'a> {
     fn run(mut self) -> StageOutput<()> {
-        self.enter_scope(Scope::new_module(ModuleId::Module(ROOT_DEF_ID)));
+        self.enter_scope(ROOT_MODULE_ID);
         self.visit_ast(self.ast);
         StageOutput::new(self.sess, (), self.msg)
     }

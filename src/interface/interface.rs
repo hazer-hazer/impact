@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::{validator::AstValidator, visitor::AstVisitor},
+    ast::{validator::AstValidator, visitor::AstVisitor, NodeId},
     cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
@@ -9,7 +9,11 @@ use crate::{
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
     pp::{defs::DefPrinter, AstLikePP, AstPPMode},
-    resolve::{collect::DefCollector, resolve::NameResolver},
+    resolve::{
+        collect::DefCollector,
+        def::{DefId, ModuleId},
+        resolve::NameResolver,
+    },
     session::{Session, Source, Stage},
 };
 
@@ -56,6 +60,13 @@ impl Interface {
 
     pub fn compile_single_source(self, source: Source) -> InterruptResult {
         let mut sess = Session::new(self.config.clone());
+
+        // Debug info //
+        verbose!("== Identifiers format ==");
+        verbose!("NodeId: {}", NodeId::new(0));
+        verbose!("DefId: {}", DefId::new(0));
+        verbose!("ModuleId::Block: {}", ModuleId::Block(NodeId::new(0)));
+        verbose!("ModuleId::Module: {}", ModuleId::Module(DefId::new(0)));
 
         // Lexing //
         verbose!("=== Lexing ===");
@@ -125,7 +136,11 @@ impl Interface {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
             pp.pp_defs();
             let defs = pp.get_string();
-            outln!(sess.writer, "{}", defs);
+            outln!(
+                sess.writer,
+                "Printing definitions after def collection\n{}",
+                defs
+            );
         }
 
         let sess = self.should_stop(sess, stage)?;
@@ -134,14 +149,27 @@ impl Interface {
         verbose!("=== Name resolution ===");
         let stage = StageName::NameRes;
 
-        let (_, mut sess) = NameResolver::new(sess, &ast).run_and_emit(true)?;
+        let mut name_res_result = NameResolver::new(sess, &ast).run();
 
-        if sess.config().check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(&sess, AstPPMode::NameHighlighter);
+        if name_res_result.sess().config().check_pp_stage(stage) {
+            let mut pp = AstLikePP::new(name_res_result.sess(), AstPPMode::Normal);
+            pp.pp_defs();
+            let defs = pp.get_string();
+            outln!(
+                name_res_result.sess_mut().writer,
+                "Printing definitions after name resolution\n{}",
+                defs
+            );
+        }
+
+        if name_res_result.sess().config().check_pp_stage(stage) {
+            let mut pp = AstLikePP::new(name_res_result.sess(), AstPPMode::NameHighlighter);
             pp.visit_ast(&ast);
             let ast = pp.get_string();
-            outln!(sess.writer, "{}", ast);
+            outln!(name_res_result.sess_mut().writer, "Printing AST after name resolution (resolved names are marked with a same color)\n{}", ast);
         }
+
+        let (_, sess) = name_res_result.emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
 

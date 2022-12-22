@@ -5,6 +5,7 @@ use crate::{
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, WithNodeId, AST,
     },
+    cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::Ident,
@@ -40,14 +41,17 @@ impl<'a> DefCollector<'a> {
     }
 
     fn enter_def_module(&mut self, def_id: DefId) {
+        verbose!("Enter def module {}", def_id);
         self.current_module = self.sess.def_table.add_module(def_id, self.current_module);
     }
 
     fn enter_block_module(&mut self, node_id: NodeId) {
+        verbose!("Enter block module {}", node_id);
         self.current_module = self.sess.def_table.add_block(node_id, self.current_module)
     }
 
     fn exit_module(&mut self) {
+        verbose!("Exit module");
         self.current_module = self
             .sess
             .def_table
@@ -57,6 +61,8 @@ impl<'a> DefCollector<'a> {
     }
 
     fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
+        verbose!("Define {} {} {}", node_id, kind, ident);
+
         let def_id = self.sess.def_table.define(node_id, kind, ident);
         let old_def = self.module().define(kind.namespace(), ident.sym(), def_id);
 
@@ -83,8 +89,8 @@ impl<'a> AstVisitor for DefCollector<'a> {
             ItemKind::Decl(name, params, body) if params.is_empty() => {
                 self.visit_decl_item(name, params, body, item.id());
                 return;
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         let def_id = self.define(
@@ -99,11 +105,11 @@ impl<'a> AstVisitor for DefCollector<'a> {
                 self.enter_def_module(def_id);
                 self.visit_mod_item(name, items, item.id());
                 self.exit_module();
-            }
-            ItemKind::Type(_, _) => {}
+            },
+            ItemKind::Type(_, _) => {},
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
-            }
+            },
         }
     }
 

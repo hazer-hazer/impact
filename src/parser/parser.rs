@@ -512,7 +512,7 @@ impl Parser {
 
         let lo = self.span();
 
-        // TODO: Rewrite this scary hell
+        // TODO: Rewrite this scary hell, also use patterns
         let mut idents = self
             .parse_many1(TokenCmp::Ident)?
             .iter()
@@ -888,8 +888,6 @@ impl Parser {
         }
         self.exit_parsed_entity(pe);
 
-        dbg!(&self.parse_entries);
-
         self.print_parse_entries();
 
         AST::new(items)
@@ -901,7 +899,7 @@ impl Parser {
             return None;
         }
 
-        verbose!("Enter {} {}", kind, name);
+        // verbose!("Enter {} {}", kind, name);
 
         let id = self.parse_entries.len();
 
@@ -977,7 +975,7 @@ impl Parser {
         while let Some(id) = cur_id {
             let pe = self.parse_entries.get(id).unwrap();
 
-            verbose!("Exit {} {}", pe.kind, pe.name);
+            // verbose!("Exit {} {}", pe.kind, pe.name);
 
             cur_id = pe.parent;
 

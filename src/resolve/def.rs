@@ -6,11 +6,12 @@ use crate::{
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum DefKind {
     Type,
     Mod,
-    Decl,
+    Func,
+    Var,
 }
 
 impl DefKind {
@@ -18,7 +19,8 @@ impl DefKind {
         match kind {
             ItemKind::Type(_, _) => DefKind::Type,
             ItemKind::Mod(_, _) => DefKind::Mod,
-            ItemKind::Decl(_, _, _) => DefKind::Decl,
+            ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Var,
+            ItemKind::Decl(_, _, _) => DefKind::Func,
         }
     }
 
@@ -26,7 +28,8 @@ impl DefKind {
         match self {
             DefKind::Type => Namespace::Type,
             DefKind::Mod => Namespace::Type,
-            DefKind::Decl => Namespace::Value,
+            DefKind::Func => Namespace::Value,
+            DefKind::Var => Namespace::Value,
         }
     }
 }
@@ -39,16 +42,21 @@ impl Display for DefKind {
             match self {
                 DefKind::Type => "type alias",
                 DefKind::Mod => "module",
-                DefKind::Decl => "term declaration",
+                DefKind::Func => "function",
+                DefKind::Var => "function",
             }
         )
     }
 }
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub struct DefId(pub u32);
+pub struct DefId(u32);
 
 impl DefId {
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
@@ -67,6 +75,7 @@ pub type DefMap<T> = HashMap<DefId, T>;
 /**
  * Definition of item, e.g. type
  */
+#[derive(Debug, Clone)]
 pub struct Def {
     pub def_id: DefId,
     pub kind: DefKind,
@@ -180,6 +189,8 @@ pub enum ModuleId {
     Block(NodeId),
     Module(DefId),
 }
+
+pub const ROOT_MODULE_ID: ModuleId = ModuleId::Module(ROOT_DEF_ID);
 
 impl Display for ModuleId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -339,5 +350,9 @@ impl DefTable {
 
     pub fn defs(&self) -> &[Def] {
         self.defs.as_ref()
+    }
+
+    pub fn blocks(&self) -> &NodeMap<Module> {
+        &self.blocks
     }
 }

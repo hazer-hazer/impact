@@ -54,6 +54,10 @@ where
 pub struct NodeId(u32);
 
 impl NodeId {
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
