@@ -3,6 +3,7 @@ use crate::span::span::Ident;
 use super::{
     expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
     item::{Item, ItemKind},
+    pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind},
     ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
@@ -72,7 +73,7 @@ pub trait AstVisitor {
             ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
-            }
+            },
         }
     }
 
@@ -89,13 +90,24 @@ pub trait AstVisitor {
     fn visit_decl_item(
         &mut self,
         name: &PR<Ident>,
-        params: &Vec<PR<Ident>>,
+        params: &Vec<PR<Pat>>,
         body: &PR<N<Expr>>,
         _: NodeId,
     ) {
         walk_pr!(self, name, visit_ident);
-        walk_each_pr!(self, params, visit_ident);
+        walk_each_pr!(self, params, visit_pat);
         walk_pr!(self, body, visit_expr);
+    }
+
+    // Patterns //
+    fn visit_pat(&mut self, pat: &Pat) {
+        match pat.kind() {
+            PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
+        }
+    }
+
+    fn visit_ident_pat(&mut self, ident: &Ident) {
+        self.visit_ident(ident);
     }
 
     // Expressions //
@@ -140,8 +152,8 @@ pub trait AstVisitor {
         walk_pr!(self, arg, visit_expr);
     }
 
-    fn visit_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) {
-        walk_pr!(self, param, visit_ident);
+    fn visit_abs_expr(&mut self, param: &PR<Pat>, body: &PR<N<Expr>>) {
+        walk_pr!(self, param, visit_pat);
         walk_pr!(self, body, visit_expr);
     }
 

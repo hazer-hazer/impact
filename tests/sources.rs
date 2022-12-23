@@ -11,7 +11,7 @@ use impact::{
     interface::interface::{Interface, InterruptionReason},
     session::Source,
 };
-use similar::{ChangeTag, DiffableStr, TextDiff};
+use similar::{ChangeTag, TextDiff};
 
 // TODO: Move this to `cli` module
 #[derive(Debug)]

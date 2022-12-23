@@ -2,11 +2,12 @@ use crate::{
     ast::{
         expr::{Block, Expr, InfixOp, Lit, PrefixOp},
         item::Item,
+        pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::Ty,
         visitor::walk_pr,
         visitor::AstVisitor,
-        ErrorNode, NodeId, Path, AST, N, PR,
+        ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
     },
     parser::token::Punct,
     span::span::{Ident, Kw},
@@ -63,14 +64,14 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     // Items //
     fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>, id: NodeId) {
         self.kw(Kw::Type);
-        walk_pr!(self, name, def_name, id);
+        walk_pr!(self, name, name, id);
         self.punct(Punct::Assign);
         walk_pr!(self, ty, visit_ty);
     }
 
     fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>, id: NodeId) {
         self.kw(Kw::Mod);
-        walk_pr!(self, name, def_name, id);
+        walk_pr!(self, name, name, id);
         self.nl();
         walk_block!(self, items, visit_item);
     }
@@ -78,17 +79,24 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     fn visit_decl_item(
         &mut self,
         name: &PR<Ident>,
-        params: &Vec<PR<Ident>>,
+        params: &Vec<PR<Pat>>,
         body: &PR<N<Expr>>,
         id: NodeId,
     ) {
-        walk_pr!(self, name, def_name, id);
+        walk_pr!(self, name, name, id);
         if !params.is_empty() {
             self.sp();
         }
-        walk_each_pr_delim!(self, params, visit_ident, " ");
+        walk_each_pr_delim!(self, params, visit_pat, " ");
         self.punct(Punct::Assign);
         walk_pr!(self, body, visit_expr);
+    }
+
+    // Patterns //
+    fn visit_pat(&mut self, pat: &Pat) {
+        match pat.kind() {
+            PatKind::Ident(ident) => walk_pr!(self, ident, name, pat.id()),
+        }
     }
 
     // Expressions //
@@ -111,9 +119,9 @@ impl<'a> AstVisitor for AstLikePP<'a> {
         walk_pr!(self, rhs, visit_expr);
     }
 
-    fn visit_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) {
+    fn visit_abs_expr(&mut self, param: &PR<Pat>, body: &PR<N<Expr>>) {
         self.punct(Punct::Backslash);
-        walk_pr!(self, param, visit_ident);
+        walk_pr!(self, param, visit_pat);
         self.punct(Punct::Arrow);
         walk_pr!(self, body, visit_expr);
     }

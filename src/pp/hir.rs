@@ -38,7 +38,7 @@ macro_rules! walk_each_delim {
 
 impl<'a> HirVisitor for AstLikePP<'a> {
     fn visit_hir(&mut self, hir: &HIR) {
-        println!("== HIR ==");
+        self.line("== HIR ==");
         walk_each_delim!(self, hir.items(), visit_item, "\n")
     }
 
@@ -67,12 +67,8 @@ impl<'a> HirVisitor for AstLikePP<'a> {
 
     fn visit_decl_item(&mut self, decl: &Decl) {
         self.visit_ident(&decl.name);
-        if !decl.params.is_empty() {
-            self.sp();
-        }
-        walk_each_delim!(self, &decl.params, visit_ident, " ");
         self.punct(Punct::Assign);
-        self.visit_expr(&decl.body);
+        self.visit_expr(&decl.value);
     }
 
     // Expressions //
@@ -97,7 +93,7 @@ impl<'a> HirVisitor for AstLikePP<'a> {
 
     fn visit_lambda(&mut self, lambda: &Lambda) {
         self.punct(Punct::Backslash);
-        self.visit_ident(&lambda.param);
+        self.visit_pat(&lambda.param);
         self.punct(Punct::Arrow);
         self.visit_expr(&lambda.body);
     }

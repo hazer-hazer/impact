@@ -93,7 +93,6 @@ impl Interface {
         }
 
         if sess.config().check_pp_stage(stage) {
-            println!("Tokens: {}", tokens);
             outln!(sess.writer, "Tokens: {}", tokens);
         }
 
@@ -191,7 +190,7 @@ impl Interface {
     }
 
     fn should_stop(&self, sess: Session, stage: StageName) -> UnitInterruptResult {
-        if self.config.compilation_depth <= stage {
+        if self.config.compilation_depth() <= stage {
             Err((InterruptionReason::ConfiguredStop, sess))
         } else {
             Ok(sess)

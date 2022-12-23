@@ -20,6 +20,7 @@
     "prec",
     "preds",
     "Punct",
+    "rfold",
     "rustc",
     "sess",
     "skippable",

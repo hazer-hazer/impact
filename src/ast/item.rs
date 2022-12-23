@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::{expr::Expr, pr_display, ty::Ty, NodeId, NodeKindStr, WithNodeId, N, PR};
+use super::{expr::Expr, pat::Pat, pr_display, ty::Ty, NodeId, NodeKindStr, WithNodeId, N, PR};
 
 #[derive(Debug)]
 pub struct Item {
@@ -64,7 +64,7 @@ impl NodeKindStr for Item {
 pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
-    Decl(PR<Ident>, Vec<PR<Ident>>, PR<N<Expr>>),
+    Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
 }
 
 impl Display for ItemKind {

@@ -9,7 +9,8 @@ use super::def::DefId;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ResKind {
-    Def(DefId), // Top-level definition, e.g. imported function
+    Local(NodeId),
+    Def(DefId), // Definition, e.g. imported function
     Error,
 }
 
@@ -26,6 +27,12 @@ impl Res {
     pub fn def(def_id: DefId) -> Self {
         Self {
             kind: ResKind::Def(def_id),
+        }
+    }
+
+    pub fn local(node_id: NodeId) -> Self {
+        Self {
+            kind: ResKind::Local(node_id),
         }
     }
 
@@ -51,6 +58,7 @@ impl Display for Res {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             ResKind::Def(def_id) => write!(f, "{}", def_id),
+            ResKind::Local(node_id) => write!(f, "{}", node_id),
             ResKind::Error => write!(f, "[ERROR]"),
         }
     }

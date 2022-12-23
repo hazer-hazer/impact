@@ -2,10 +2,12 @@ use std::fmt::Display;
 
 use crate::{
     parser::token::{FloatKind, Infix, IntKind, Prefix, Token, TokenKind},
-    span::span::{Ident, Span, Spanned, Symbol, WithSpan},
+    span::span::{Span, Spanned, Symbol, WithSpan},
 };
 
-use super::{pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, WithNodeId, N, PR};
+use super::{
+    pat::Pat, pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, WithNodeId, N, PR,
+};
 
 macro_rules! is_block_ended {
     ($pr: expr) => {
@@ -200,7 +202,7 @@ pub enum ExprKind {
     Block(PR<Block>),
     Infix(PR<N<Expr>>, InfixOp, PR<N<Expr>>),
     Prefix(PrefixOp, PR<N<Expr>>),
-    Abs(PR<Ident>, PR<N<Expr>>),
+    Abs(PR<Pat>, PR<N<Expr>>),
     App(PR<N<Expr>>, PR<N<Expr>>),
     Let(PR<Block>),
     Ty(PR<N<Expr>>, PR<N<Ty>>),

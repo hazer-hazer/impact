@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use crate::{
     ast::expr::{InfixOp, PrefixOp},
-    span::span::{Ident, Span, Symbol, WithSpan},
+    span::span::{Span, Symbol, WithSpan},
 };
 
-use super::{stmt::Stmt, ty::Ty, Path, N};
+use super::{pat::Pat, stmt::Stmt, ty::Ty, Path, N};
 
 pub use crate::typeck::ty::{FloatKind, IntKind};
 
@@ -70,7 +70,7 @@ impl Block {
 pub struct PathExpr(pub Path);
 
 pub struct Lambda {
-    pub param: Ident,
+    pub param: Pat,
     pub body: N<Expr>,
 }
 

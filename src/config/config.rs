@@ -75,11 +75,10 @@ impl Display for PPStages {
 
 #[derive(Clone)]
 pub struct Config {
-    // TODO: Replace pub with getters
-    pub compilation_depth: StageName,
-    pub pp_stages: PPStages,
-    pub expected_output: Option<String>,
-    pub interruption_reason: Option<InterruptionReason>,
+    compilation_depth: StageName,
+    pp_stages: PPStages,
+    expected_output: Option<String>,
+    interruption_reason: Option<InterruptionReason>,
     verbose_messages: bool,
     parser_debug: bool,
 }
@@ -107,6 +106,14 @@ impl Config {
 
     pub fn parser_debug(&self) -> bool {
         self.parser_debug
+    }
+
+    pub fn compilation_depth(&self) -> StageName {
+        self.compilation_depth
+    }
+
+    pub fn pp_stages(&self) -> &PPStages {
+        &self.pp_stages
     }
 }
 

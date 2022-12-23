@@ -2,6 +2,7 @@ use crate::{
     ast::{
         expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
         item::{Item, ItemKind},
+        pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         Path, WithNodeId, AST, N, PR,
@@ -12,14 +13,12 @@ use crate::{
         item::{Decl, Mod, TypeItem},
         HIR,
     },
-    message::message::{MessageStorage},
+    message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
     resolve::res::NamePath,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
-    typeck::{
-        ty::{DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
-    },
+    typeck::ty::{DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
 };
 
 macro_rules! lower_pr_boxed {
@@ -121,14 +120,39 @@ impl<'a> Lower<'a> {
     fn lower_decl_item(
         &mut self,
         name: &PR<Ident>,
-        params: &Vec<PR<Ident>>,
+        params: &Vec<PR<Pat>>,
         body: &PR<N<Expr>>,
     ) -> hir::item::ItemKind {
-        hir::item::ItemKind::Decl(Decl {
-            name: lower_pr!(self, name, lower_ident),
-            params: lower_each_pr!(self, params, lower_ident),
-            body: lower_pr!(self, body, lower_expr),
-        })
+        if params.is_empty() {
+            hir::item::ItemKind::Decl(Decl {
+                name: lower_pr!(self, name, lower_ident),
+                value: lower_pr!(self, body, lower_expr),
+            })
+        } else {
+            hir::item::ItemKind::Decl(Decl {
+                name: lower_pr!(self, name, lower_ident),
+                value: params
+                    .iter()
+                    .rfold(lower_pr!(self, body, lower_expr), |body, param| {
+                        hir::expr::Expr::new(
+                            hir::expr::ExprKind::Lambda(hir::expr::Lambda {
+                                param: lower_pr!(self, param, lower_pat),
+                                body: Box::new(body),
+                            }),
+                            param.span(),
+                        )
+                    }),
+            })
+        }
+    }
+
+    // Patterns //
+    fn lower_pat(&mut self, pat: &Pat) -> hir::pat::Pat {
+        let kind = match pat.kind() {
+            PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
+        };
+
+        hir::pat::Pat::new(kind, pat.span())
     }
 
     // Expressions //
@@ -212,9 +236,9 @@ impl<'a> Lower<'a> {
         })
     }
 
-    fn lower_abs_expr(&mut self, param: &PR<Ident>, body: &PR<N<Expr>>) -> hir::expr::ExprKind {
+    fn lower_abs_expr(&mut self, param: &PR<Pat>, body: &PR<N<Expr>>) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Lambda(Lambda {
-            param: lower_pr!(self, param, lower_ident),
+            param: lower_pr!(self, param, lower_pat),
             body: lower_pr_boxed!(self, body, lower_expr),
         })
     }

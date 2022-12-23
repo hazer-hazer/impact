@@ -12,6 +12,7 @@ use self::item::Item;
  */
 pub mod expr;
 pub mod item;
+pub mod pat;
 pub mod stmt;
 pub mod ty;
 pub mod visitor;

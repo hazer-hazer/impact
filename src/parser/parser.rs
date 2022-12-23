@@ -1,17 +1,15 @@
-use std::fmt::{write, Debug, Display};
+use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
         expr::{is_block_ended, Block, Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
         item::{Item, ItemKind},
+        pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
     },
-    cli::{
-        color::{Color, Colorize},
-        verbose,
-    },
+    cli::color::{Color, Colorize},
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
@@ -269,10 +267,7 @@ impl Parser {
         self.expect(TokenCmp::Punct(punct))
     }
 
-    fn expected<'a, T>(&'a mut self, entity: Option<T>, expected: &str) -> PR<T>
-    where
-        T: WithSpan,
-    {
+    fn expected<'a, T>(&'a mut self, entity: Option<T>, expected: &str) -> PR<T> {
         if let Some(entity) = entity {
             Ok(entity)
         } else {
@@ -512,22 +507,17 @@ impl Parser {
 
         let lo = self.span();
 
-        // TODO: Rewrite this scary hell, also use patterns
-        let mut idents = self
-            .parse_many1(TokenCmp::Ident)?
-            .iter()
-            .map(|t| {
-                t.clone().map(|t| match t.kind {
-                    TokenKind::Ident(_) => Ident::from_token(t),
-                    _ => unreachable!(),
-                })
-            })
-            .collect::<Vec<_>>();
+        let name = self.parse_ident("function name");
 
-        let name = idents.remove(0);
-        let params = idents;
+        let mut params = vec![];
+        while !self.eof() {
+            if self.is(TokenCmp::Punct(Punct::Assign)) {
+                break;
+            }
+            params.push(self.parse_pat("function parameter (pattern)"));
+        }
 
-        self.skip_punct(Punct::Assign);
+        self.expect(TokenCmp::Punct(Punct::Assign))?;
 
         let body = self.parse_body();
 
@@ -538,6 +528,24 @@ impl Parser {
             ItemKind::Decl(name, params, body),
             self.close_span(lo),
         )))
+    }
+
+    // Patterns //
+    fn parse_pat(&mut self, expected: &str) -> PR<Pat> {
+        let lo = self.span();
+
+        let kind = self.parse_pat_kind();
+        let kind = self.expected(kind, expected)?;
+
+        Ok(Pat::new(self.next_node_id(), kind, self.close_span(lo)))
+    }
+
+    fn parse_pat_kind(&mut self) -> Option<PatKind> {
+        if self.is(TokenCmp::Ident) {
+            Some(PatKind::Ident(self.parse_ident("[bug] ident pattern")))
+        } else {
+            None
+        }
     }
 
     // Expressions //
@@ -717,7 +725,7 @@ impl Parser {
         let Token { kind, span } = self.peek_tok();
 
         if self.is(TokenCmp::Punct(Punct::Backslash)) {
-            return self.parse_abs();
+            return self.parse_lambda();
         }
 
         let (kind, advance) = match kind {
@@ -795,18 +803,18 @@ impl Parser {
         body
     }
 
-    fn parse_abs(&mut self) -> Option<PR<N<Expr>>> {
+    fn parse_lambda(&mut self) -> Option<PR<N<Expr>>> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "lambda");
 
         let lo = self.span();
 
         self.skip(TokenCmp::Punct(Punct::Backslash));
 
-        let param = self.parse_ident("parameter name");
+        let param = self.parse_pat("lambda parameter (pattern)");
 
         self.skip(TokenCmp::Punct(Punct::Arrow));
 
-        let body = self.parse_expr();
+        let body = self.parse_body();
 
         self.exit_parsed_entity(pe);
 

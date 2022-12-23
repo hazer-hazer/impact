@@ -13,10 +13,23 @@ pub mod stmt;
 pub mod ty;
 pub mod validator;
 pub mod visitor;
+pub mod pat;
 
 pub type N<T> = Box<T>;
 
 pub type PR<T> = Result<T, ErrorNode>;
+
+impl<T> WithNodeId for Result<T, ErrorNode>
+where
+    T: WithNodeId,
+{
+    fn id(&self) -> NodeId {
+        match self {
+            Ok(node) => node.id(),
+            Err(err) => err.id(),
+        }
+    }
+}
 
 pub fn pr_display<T>(pr: &PR<T>) -> String
 where
@@ -134,6 +147,12 @@ impl ErrorNode {
 impl Display for ErrorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[ERROR]")
+    }
+}
+
+impl WithNodeId for ErrorNode {
+    fn id(&self) -> NodeId {
+        return DUMMY_NODE_ID;
     }
 }
 

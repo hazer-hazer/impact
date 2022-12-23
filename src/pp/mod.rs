@@ -180,7 +180,7 @@ impl<'a> AstLikePP<'a> {
         color
     }
 
-    fn def_name(&mut self, ident: &Ident, item_node_id: NodeId) {
+    fn name(&mut self, ident: &Ident, item_node_id: NodeId) {
         if self.mode == AstPPMode::Normal {
             self.string(ident);
             return;
@@ -203,6 +203,7 @@ impl<'a> AstLikePP<'a> {
             .expect("No unresolved paths must exist after name resolution");
 
         let node_id = match res.kind() {
+            ResKind::Local(node_id) => Some(*node_id),
             ResKind::Def(def_id) => Some(self.sess.def_table.get_node_id(*def_id).unwrap()),
             ResKind::Error => None,
         };

@@ -50,7 +50,7 @@ impl Display for Kw {
 
 type SymbolInner = u32;
 
-#[derive(Clone, Copy, PartialEq, Debug, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Symbol(SymbolInner);
 
 impl Symbol {
@@ -81,6 +81,12 @@ impl Symbol {
 impl Display for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Symbol({};`{}`)", self.0, self.as_str())
     }
 }
 
@@ -132,7 +138,7 @@ impl Interner {
     fn resolve(&self, sym: &Symbol) -> &'static str {
         self.strings
             .get(sym.as_inner() as usize)
-            .expect(format!("Failed to resolve symbol {sym:?}").as_str())
+            .expect(format!("Failed to resolve symbol {}", sym.0).as_str())
     }
 }
 

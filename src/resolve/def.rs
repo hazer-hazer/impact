@@ -12,6 +12,7 @@ pub enum DefKind {
     Mod,
     Func,
     Var,
+    Param,
 }
 
 impl DefKind {
@@ -30,6 +31,7 @@ impl DefKind {
             DefKind::Mod => Namespace::Type,
             DefKind::Func => Namespace::Value,
             DefKind::Var => Namespace::Value,
+            DefKind::Param => Namespace::Value,
         }
     }
 }
@@ -43,7 +45,8 @@ impl Display for DefKind {
                 DefKind::Type => "type alias",
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
-                DefKind::Var => "function",
+                DefKind::Var => "var",
+                DefKind::Param => "function parameter",
             }
         )
     }
@@ -330,8 +333,10 @@ impl DefTable {
         let def_id = DefId(self.defs.len() as u32);
         self.defs.push(Def::new(def_id, kind, *ident));
 
-        self.node_id_def_id.insert(node_id, def_id);
-        self.def_id_node_id.insert(def_id, node_id);
+        if node_id != DUMMY_NODE_ID {
+            self.node_id_def_id.insert(node_id, def_id);
+            self.def_id_node_id.insert(def_id, node_id);
+        }
 
         def_id
     }

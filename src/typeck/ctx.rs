@@ -5,7 +5,7 @@ use crate::{
     span::span::{Ident, Kw, Symbol},
 };
 
-use super::ty::{FloatKind, IntKind, PrimTy, Ty, TyError, TyKind, TyResult};
+use super::ty::{PrimTy, Ty, TyError, TyKind, TyResult};
 
 #[derive(Clone)]
 pub enum CtxItem {

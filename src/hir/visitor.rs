@@ -3,6 +3,7 @@ use crate::span::span::Ident;
 use super::{
     expr::{Block, Expr, ExprKind, FuncCall, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
     item::{Decl, Item, ItemKind, Mod, TypeItem},
+    pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind},
     Path, HIR, N,
@@ -58,8 +59,18 @@ pub trait HirVisitor {
 
     fn visit_decl_item(&mut self, decl: &Decl) {
         self.visit_ident(&decl.name);
-        walk_each!(self, &decl.params, visit_ident);
-        self.visit_expr(&decl.body);
+        self.visit_expr(&decl.value);
+    }
+
+    // Patterns //
+    fn visit_pat(&mut self, pat: &Pat) {
+        match pat.kind() {
+            PatKind::Ident(ident) => self.visit_ident_pat(ident),
+        }
+    }
+
+    fn visit_ident_pat(&mut self, ident: &Ident) {
+        self.visit_ident(ident);
     }
 
     // Expressions //
@@ -105,7 +116,7 @@ pub trait HirVisitor {
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda) {
-        self.visit_ident(&lambda.param);
+        self.visit_pat(&lambda.param);
         self.visit_expr(&lambda.body);
     }
 

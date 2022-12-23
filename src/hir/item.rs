@@ -12,11 +12,9 @@ pub struct Mod {
     pub items: Vec<Item>,
 }
 
-// TODO: Lower function declaration to variable with lambda
 pub struct Decl {
     pub name: Ident,
-    pub params: Vec<Ident>,
-    pub body: Expr,
+    pub value: Expr,
 }
 
 pub enum ItemKind {
