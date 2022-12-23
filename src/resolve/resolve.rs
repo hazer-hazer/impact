@@ -123,7 +123,16 @@ impl<'a> NameResolver<'a> {
                 Some(def) => def,
                 None => {
                     println!("Failed to resolve {};", path);
-                    println!("{}", self.sess.def_table.defs().iter().map(|));
+                    println!(
+                        "{}",
+                        self.sess
+                            .def_table
+                            .defs()
+                            .iter()
+                            .map(|def| def.to_string())
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    );
 
                     let prefix = path.prefix_str(seg_index);
                     MessageBuilder::error()
