@@ -79,7 +79,7 @@ pub struct TyExpr {
     pub ty: Ty,
 }
 
-pub struct FuncCall {
+pub struct Call {
     pub lhs: N<Expr>,
     pub arg: N<Expr>,
 }
@@ -103,7 +103,7 @@ pub enum ExprKind {
     Infix(Infix),
     Prefix(Prefix),
     Lambda(Lambda),
-    Call(FuncCall),
+    Call(Call),
     Let(Block),
     Ty(TyExpr),
 }

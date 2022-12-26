@@ -1,5 +1,5 @@
 use crate::{
-    ast::{AstMetadata, NodeId},
+    ast::{ty::Ty, AstMetadata, NodeId, NodeMap},
     config::config::Config,
     interface::{interface::InterruptionReason, writer::Writer},
     message::{
@@ -211,6 +211,7 @@ pub struct Session {
     ast_metadata: AstMetadata,
     pub def_table: DefTable,
     pub res: Resolutions,
+    pub ty_aliases: NodeMap<Ty>,
 }
 
 impl Session {
@@ -222,6 +223,7 @@ impl Session {
             ast_metadata: Default::default(),
             def_table: Default::default(),
             res: Resolutions::default(),
+            ty_aliases: Default::default(),
         }
     }
 

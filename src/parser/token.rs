@@ -1,10 +1,7 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
-use crate::{
-    span::span::{Kw, Span, SpanLen, Symbol, WithSpan},
-    typeck::ty::TypeVarId,
-};
+use crate::span::span::{Kw, Span, SpanLen, Symbol, WithSpan};
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Infix {
@@ -80,7 +77,6 @@ impl Display for Punct {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum IntKind {
     Unknown,
-    Inferred(TypeVarId),
 
     U8,
     U16,
@@ -95,14 +91,48 @@ pub enum IntKind {
     Int,
 }
 
+impl Display for IntKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                IntKind::Unknown => "",
+                IntKind::U8 => "u8",
+                IntKind::U16 => "u16",
+                IntKind::U32 => "u32",
+                IntKind::U64 => "u64",
+                IntKind::Uint => "uint",
+                IntKind::I8 => "i8",
+                IntKind::I16 => "i16",
+                IntKind::I32 => "i32",
+                IntKind::I64 => "i64",
+                IntKind::Int => "int",
+            }
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FloatKind {
     Unknown,
 
-    Inferred(TypeVarId),
-
     F32,
     F64,
+}
+
+impl Display for FloatKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FloatKind::Unknown => "",
+                FloatKind::F32 => "f32",
+                FloatKind::F64 => "f64",
+            }
+        )
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -241,44 +271,6 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             (TokenKind::Infix(infix1), TokenCmp::Infix(infix2)) => infix1 == infix2,
             _ => false,
         }
-    }
-}
-
-impl Display for IntKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                IntKind::Unknown => "",
-                IntKind::Inferred(_) => "",
-                IntKind::U8 => "u8",
-                IntKind::U16 => "u16",
-                IntKind::U32 => "u32",
-                IntKind::U64 => "u64",
-                IntKind::Uint => "uint",
-                IntKind::I8 => "i8",
-                IntKind::I16 => "i16",
-                IntKind::I32 => "i32",
-                IntKind::I64 => "i64",
-                IntKind::Int => "int",
-            }
-        )
-    }
-}
-
-impl Display for FloatKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                FloatKind::Unknown => "",
-                FloatKind::Inferred(_) => "",
-                FloatKind::F32 => "f32",
-                FloatKind::F64 => "f64",
-            }
-        )
     }
 }
 

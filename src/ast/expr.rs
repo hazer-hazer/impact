@@ -1,7 +1,7 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 use crate::{
-    parser::token::{FloatKind, Infix, IntKind, Prefix, Token, TokenKind},
+    parser::token::{self, FloatKind, IntKind, Token, TokenKind},
     span::span::{Span, Spanned, Symbol, WithSpan},
 };
 
@@ -90,11 +90,11 @@ impl InfixOpKind {
             tok.span,
             match tok.kind {
                 TokenKind::Infix(infix) => match infix {
-                    Infix::Plus => InfixOpKind::Plus,
-                    Infix::Minus => InfixOpKind::Minus,
-                    Infix::Mul => InfixOpKind::Mul,
-                    Infix::Div => InfixOpKind::Div,
-                    Infix::Mod => InfixOpKind::Mod,
+                    token::Infix::Plus => InfixOpKind::Plus,
+                    token::Infix::Minus => InfixOpKind::Minus,
+                    token::Infix::Mul => InfixOpKind::Mul,
+                    token::Infix::Div => InfixOpKind::Div,
+                    token::Infix::Mod => InfixOpKind::Mod,
                 },
                 _ => panic!("Cannot make InfixOpKind from not a Infix Token"),
             },
@@ -131,7 +131,7 @@ impl PrefixOpKind {
             tok.span,
             match tok.kind {
                 TokenKind::Prefix(prefix) => match prefix {
-                    Prefix::Not => PrefixOpKind::Not,
+                    token::Prefix::Not => PrefixOpKind::Not,
                 },
                 _ => panic!("Cannot make PrefixOpKind from not a Prefix Token"),
             },
@@ -195,28 +195,103 @@ impl Display for Block {
 }
 
 #[derive(Debug)]
+pub struct PathExpr(pub PR<Path>);
+
+#[derive(Debug)]
+pub struct Infix {
+    pub lhs: PR<N<Expr>>,
+    pub op: InfixOp,
+    pub rhs: PR<N<Expr>>,
+}
+
+impl Display for Infix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            pr_display(&self.lhs),
+            self.op,
+            pr_display(&self.rhs)
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct Prefix {
+    pub op: PrefixOp,
+    pub rhs: PR<N<Expr>>,
+}
+
+impl Display for Prefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.op, pr_display(&self.rhs))
+    }
+}
+
+#[derive(Debug)]
+pub struct Lambda {
+    pub param: PR<Pat>,
+    pub body: PR<N<Expr>>,
+}
+
+impl Display for Lambda {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} -> {}",
+            pr_display(&self.param),
+            pr_display(&self.body)
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct Call {
+    pub lhs: PR<N<Expr>>,
+    pub arg: PR<N<Expr>>,
+}
+
+impl Display for Call {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", pr_display(&self.lhs), pr_display(&self.arg))
+    }
+}
+
+#[derive(Debug)]
+pub struct TyExpr {
+    pub expr: PR<N<Expr>>,
+    pub ty: PR<N<Ty>>,
+}
+
+impl Display for TyExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", pr_display(&self.expr), pr_display(&self.ty))
+    }
+}
+
+#[derive(Debug)]
 pub enum ExprKind {
     Unit,
     Lit(Lit),
-    Path(PR<Path>),
+    Path(PathExpr),
     Block(PR<Block>),
-    Infix(PR<N<Expr>>, InfixOp, PR<N<Expr>>),
-    Prefix(PrefixOp, PR<N<Expr>>),
-    Abs(PR<Pat>, PR<N<Expr>>),
-    App(PR<N<Expr>>, PR<N<Expr>>),
+    Infix(Infix),
+    Prefix(Prefix),
+    Lambda(Lambda),
+    Call(Call),
     Let(PR<Block>),
-    Ty(PR<N<Expr>>, PR<N<Ty>>),
+    Ty(TyExpr),
 }
 
 impl ExprKind {
     pub fn is_block_ended(&self) -> bool {
         match self {
-            ExprKind::Unit | ExprKind::Lit(_) | ExprKind::Path(_) | ExprKind::Ty(_, _) => false,
+            ExprKind::Unit | ExprKind::Lit(_) | ExprKind::Path(_) | ExprKind::Ty(_) => false,
             ExprKind::Block(_) | ExprKind::Let(_) => true,
-            ExprKind::Infix(_, _, expr)
-            | ExprKind::Prefix(_, expr)
-            | ExprKind::Abs(_, expr)
-            | ExprKind::App(_, expr) => is_block_ended!(expr),
+            ExprKind::Infix(infix) => is_block_ended!(infix.rhs),
+            ExprKind::Prefix(prefix) => is_block_ended!(prefix.rhs),
+            ExprKind::Lambda(lambda) => is_block_ended!(lambda.body),
+            ExprKind::Call(call) => is_block_ended!(call.arg),
         }
     }
 }
@@ -237,18 +312,14 @@ impl Display for ExprKind {
         match self {
             ExprKind::Unit => write!(f, "()"),
             ExprKind::Lit(lit) => write!(f, "{}", lit),
-            ExprKind::Path(path) => write!(f, "{}", pr_display(path)),
+            ExprKind::Path(path) => write!(f, "{}", pr_display(&path.0)),
             ExprKind::Block(block) => write!(f, "{}", pr_display(block)),
-            ExprKind::Infix(lhs, op, rhs) => {
-                write!(f, "{} {} {}", pr_display(lhs), op, pr_display(rhs))
-            },
-            ExprKind::Prefix(op, rhs) => write!(f, "{}{}", op, pr_display(rhs)),
-            ExprKind::Abs(param_name, body) => {
-                write!(f, "{} -> {}", pr_display(param_name), pr_display(body))
-            },
-            ExprKind::App(lhs, arg) => write!(f, "{} {}", pr_display(lhs), pr_display(arg)),
+            ExprKind::Infix(infix) => write!(f, "{}", infix),
+            ExprKind::Prefix(prefix) => write!(f, "{}", prefix),
+            ExprKind::Lambda(lambda) => write!(f, "{}", lambda),
+            ExprKind::Call(call) => write!(f, "{}", call),
             ExprKind::Let(block) => write!(f, "{}", pr_display(block)),
-            ExprKind::Ty(expr, ty) => write!(f, "{}: {}", pr_display(expr), pr_display(ty)),
+            ExprKind::Ty(ty_expr) => write!(f, "{}", ty_expr),
         }
     }
 }
@@ -260,12 +331,12 @@ impl NodeKindStr for ExprKind {
             ExprKind::Lit(_) => "literal",
             ExprKind::Block(_) => "block expression",
             ExprKind::Path(_) => "path",
-            ExprKind::Abs(_, _) => "lambda",
-            ExprKind::App(_, _) => "function call",
+            ExprKind::Lambda(_) => "lambda",
+            ExprKind::Call(_) => "function call",
             ExprKind::Let(_) => "let expression",
-            ExprKind::Ty(_, _) => "type ascription",
-            ExprKind::Infix(_, _, _) => "infix expression",
-            ExprKind::Prefix(_, _) => "prefix expression",
+            ExprKind::Ty(_) => "type ascription",
+            ExprKind::Infix(_) => "infix expression",
+            ExprKind::Prefix(_) => "prefix expression",
         }
         .to_string()
     }

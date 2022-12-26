@@ -43,7 +43,6 @@ export function ppTy(ty: Ty): string {
         case 'Int': return 'Int'
         case 'String': return 'String'
         }
-        break
     }
     case 'Var': return ty.name
     case 'Existential': return `^${ty.name}`

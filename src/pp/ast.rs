@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Block, Expr, InfixOp, Lit, PrefixOp},
+        expr::{Block, Call, Expr, Infix, InfixOp, Lambda, Lit, Prefix, PrefixOp, TyExpr},
         item::Item,
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -108,28 +108,28 @@ impl<'a> AstVisitor for AstLikePP<'a> {
         self.string(lit);
     }
 
-    fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, op: &InfixOp, rhs: &PR<N<Expr>>) {
-        walk_pr!(self, lhs, visit_expr);
-        self.infix(op);
-        walk_pr!(self, rhs, visit_expr);
+    fn visit_infix_expr(&mut self, infix: &Infix) {
+        walk_pr!(self, &infix.lhs, visit_expr);
+        self.infix(&infix.op);
+        walk_pr!(self, &infix.rhs, visit_expr);
     }
 
-    fn visit_prefix_expr(&mut self, op: &PrefixOp, rhs: &PR<N<Expr>>) {
-        self.prefix(op);
-        walk_pr!(self, rhs, visit_expr);
+    fn visit_prefix_expr(&mut self, prefix: &Prefix) {
+        self.prefix(&prefix.op);
+        walk_pr!(self, &prefix.rhs, visit_expr);
     }
 
-    fn visit_abs_expr(&mut self, param: &PR<Pat>, body: &PR<N<Expr>>) {
+    fn visit_lambda_expr(&mut self, lambda: &Lambda) {
         self.punct(Punct::Backslash);
-        walk_pr!(self, param, visit_pat);
+        walk_pr!(self, &lambda.param, visit_pat);
         self.punct(Punct::Arrow);
-        walk_pr!(self, body, visit_expr);
+        walk_pr!(self, &lambda.body, visit_expr);
     }
 
-    fn visit_app_expr(&mut self, lhs: &PR<N<Expr>>, arg: &PR<N<Expr>>) {
-        walk_pr!(self, lhs, visit_expr);
+    fn visit_app_expr(&mut self, call: &Call) {
+        walk_pr!(self, &call.lhs, visit_expr);
         self.sp();
-        walk_pr!(self, arg, visit_expr);
+        walk_pr!(self, &call.arg, visit_expr);
     }
 
     fn visit_let_expr(&mut self, block: &PR<Block>) {
@@ -137,10 +137,10 @@ impl<'a> AstVisitor for AstLikePP<'a> {
         walk_pr!(self, block, visit_block);
     }
 
-    fn visit_type_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) {
-        walk_pr!(self, expr, visit_expr);
+    fn visit_type_expr(&mut self, ty_expr: &TyExpr) {
+        walk_pr!(self, &ty_expr.expr, visit_expr);
         self.punct(Punct::Colon);
-        walk_pr!(self, ty, visit_ty);
+        walk_pr!(self, &ty_expr.ty, visit_ty);
     }
 
     // Types //

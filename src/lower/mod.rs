@@ -1,6 +1,9 @@
 use crate::{
     ast::{
-        expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
+        expr::{
+            Block, Call, Expr, ExprKind, Infix, InfixOp, Lambda, Lit, PathExpr, Prefix, PrefixOp,
+            TyExpr,
+        },
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -9,7 +12,6 @@ use crate::{
     },
     hir::{
         self,
-        expr::{FuncCall, Infix, Lambda, PathExpr, Prefix, TyExpr},
         item::{Decl, Mod, TypeItem},
         HIR,
     },
@@ -18,7 +20,6 @@ use crate::{
     resolve::res::NamePath,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
-    typeck::ty::{DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
 };
 
 macro_rules! lower_pr_boxed {
@@ -162,12 +163,12 @@ impl<'a> Lower<'a> {
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
             ExprKind::Path(path) => self.lower_path_expr(path),
             ExprKind::Block(block) => self.lower_block_expr(block),
-            ExprKind::Infix(lhs, op, rhs) => self.lower_infix_expr(lhs, op, rhs),
-            ExprKind::Prefix(op, rhs) => self.lower_prefix_expr(op, rhs),
-            ExprKind::Abs(param, body) => self.lower_abs_expr(param, body),
-            ExprKind::App(lhs, arg) => self.lower_app_expr(lhs, arg),
+            ExprKind::Infix(infix) => self.lower_infix_expr(infix),
+            ExprKind::Prefix(prefix) => self.lower_prefix_expr(prefix),
+            ExprKind::Lambda(lambda) => self.lower_lambda_expr(lambda),
+            ExprKind::Call(call) => self.lower_app_expr(call),
             ExprKind::Let(block) => self.lower_let_expr(block),
-            ExprKind::Ty(expr, ty) => self.lower_ty_expr(expr, ty),
+            ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
         };
 
         hir::expr::Expr::new(kind, expr.span())
@@ -175,8 +176,7 @@ impl<'a> Lower<'a> {
 
     fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
         match kind {
-            IntKind::Unknown => DEFAULT_INT_KIND,
-            IntKind::Inferred(_id) => todo!(),
+            IntKind::Unknown => todo!(),
             IntKind::U8 => hir::expr::IntKind::U8,
             IntKind::U16 => hir::expr::IntKind::U16,
             IntKind::U32 => hir::expr::IntKind::U32,
@@ -192,8 +192,7 @@ impl<'a> Lower<'a> {
 
     fn lower_float_kind(&self, kind: FloatKind) -> hir::expr::FloatKind {
         match kind {
-            FloatKind::Unknown => DEFAULT_FLOAT_KIND,
-            FloatKind::Inferred(_id) => todo!(),
+            FloatKind::Unknown => todo!(),
             FloatKind::F32 => hir::expr::FloatKind::F32,
             FloatKind::F64 => hir::expr::FloatKind::F64,
         }
@@ -208,45 +207,40 @@ impl<'a> Lower<'a> {
         })
     }
 
-    fn lower_path_expr(&mut self, path: &PR<Path>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Path(PathExpr(lower_pr!(self, path, lower_path)))
+    fn lower_path_expr(&mut self, path: &PathExpr) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Path(hir::expr::PathExpr(lower_pr!(self, &path.0, lower_path)))
     }
 
     fn lower_block_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Block(lower_pr!(self, block, lower_block))
     }
 
-    fn lower_infix_expr(
-        &mut self,
-        lhs: &PR<N<Expr>>,
-        op: &InfixOp,
-        rhs: &PR<N<Expr>>,
-    ) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Infix(Infix {
-            lhs: lower_pr_boxed!(self, lhs, lower_expr),
-            op: op.clone(),
-            rhs: lower_pr_boxed!(self, rhs, lower_expr),
+    fn lower_infix_expr(&mut self, infix: &Infix) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Infix(hir::expr::Infix {
+            lhs: lower_pr_boxed!(self, &infix.lhs, lower_expr),
+            op: infix.op,
+            rhs: lower_pr_boxed!(self, &infix.rhs, lower_expr),
         })
     }
 
-    fn lower_prefix_expr(&mut self, op: &PrefixOp, rhs: &PR<N<Expr>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Prefix(Prefix {
-            op: op.clone(),
-            rhs: lower_pr_boxed!(self, rhs, lower_expr),
+    fn lower_prefix_expr(&mut self, prefix: &Prefix) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Prefix(hir::expr::Prefix {
+            op: prefix.op,
+            rhs: lower_pr_boxed!(self, &prefix.rhs, lower_expr),
         })
     }
 
-    fn lower_abs_expr(&mut self, param: &PR<Pat>, body: &PR<N<Expr>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Lambda(Lambda {
-            param: lower_pr!(self, param, lower_pat),
-            body: lower_pr_boxed!(self, body, lower_expr),
+    fn lower_lambda_expr(&mut self, lambda: &Lambda) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Lambda(hir::expr::Lambda {
+            param: lower_pr!(self, &lambda.param, lower_pat),
+            body: lower_pr_boxed!(self, &lambda.body, lower_expr),
         })
     }
 
-    fn lower_app_expr(&mut self, lhs: &PR<N<Expr>>, arg: &PR<N<Expr>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Call(FuncCall {
-            lhs: lower_pr_boxed!(self, lhs, lower_expr),
-            arg: lower_pr_boxed!(self, arg, lower_expr),
+    fn lower_app_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Call(hir::expr::Call {
+            lhs: lower_pr_boxed!(self, &call.lhs, lower_expr),
+            arg: lower_pr_boxed!(self, &call.arg, lower_expr),
         })
     }
 
@@ -254,10 +248,10 @@ impl<'a> Lower<'a> {
         hir::expr::ExprKind::Let(lower_pr!(self, block, lower_block))
     }
 
-    fn lower_ty_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Ty(TyExpr {
-            expr: lower_pr_boxed!(self, expr, lower_expr),
-            ty: lower_pr!(self, ty, lower_ty),
+    fn lower_ty_expr(&mut self, ty_expr: &TyExpr) -> hir::expr::ExprKind {
+        hir::expr::ExprKind::Ty(hir::expr::TyExpr {
+            expr: lower_pr_boxed!(self, &ty_expr.expr, lower_expr),
+            ty: lower_pr!(self, &ty_expr.ty, lower_ty),
         })
     }
 

@@ -1,11 +1,16 @@
 use std::fmt::Display;
 
 use crate::{
-    hir::expr::{Block, Expr, ExprKind, Lit},
+    ast::{
+        self,
+        expr::{Block, Expr, ExprKind, Lit, TyExpr},
+        Path,
+    },
+    parser::token,
     span::span::{Ident, Kw, Symbol},
 };
 
-use super::ty::{PrimTy, Ty, TyError, TyKind, TyResult};
+use super::ty::{FloatKind, IntKind, PrimTy, Ty, TyError, TyKind, TyResult};
 
 #[derive(Clone)]
 pub enum CtxItem {
@@ -78,7 +83,7 @@ impl Ctx {
                 if ident1 == ident2 =>
             {
                 true
-            }
+            },
             _ => false,
         });
 
@@ -128,7 +133,7 @@ impl Ctx {
         for item in right {
             match item {
                 CtxItem::Existential(ident, ty) if ty.is_none() => names.push(ident),
-                _ => {}
+                _ => {},
             }
         }
 
@@ -140,11 +145,45 @@ impl Ctx {
         for item in &self.items {
             match item {
                 CtxItem::Existential(_, solution) if solution.is_none() => return false,
-                _ => {}
+                _ => {},
             }
         }
 
         true
+    }
+
+    // Conversion //
+    fn conv(&self, ty: ast::ty::Ty) -> Ty {
+        match ty.kind() {
+            ast::ty::TyKind::Unit => Ty::new(TyKind::Unit),
+            ast::ty::TyKind::Path(path) => todo!(),
+            ast::ty::TyKind::Func(_, _) => todo!(),
+            ast::ty::TyKind::Paren(_) => todo!(),
+        }
+    }
+
+    fn conv_int_kind(&self, kind: token::IntKind) -> IntKind {
+        match kind {
+            token::IntKind::Unknown => todo!(),
+            token::IntKind::U8 => IntKind::U8,
+            token::IntKind::U16 => IntKind::U16,
+            token::IntKind::U32 => IntKind::U32,
+            token::IntKind::U64 => IntKind::U64,
+            token::IntKind::Uint => IntKind::Uint,
+            token::IntKind::I8 => IntKind::I8,
+            token::IntKind::I16 => IntKind::I16,
+            token::IntKind::I32 => IntKind::I32,
+            token::IntKind::I64 => IntKind::I64,
+            token::IntKind::Int => IntKind::Int,
+        }
+    }
+
+    fn conv_float_kind(&self, kind: token::FloatKind) -> FloatKind {
+        match kind {
+            token::FloatKind::Unknown => todo!(),
+            token::FloatKind::F32 => FloatKind::F32,
+            token::FloatKind::F64 => FloatKind::F64,
+        }
     }
 
     // Types //
@@ -156,25 +195,25 @@ impl Ctx {
                 } else {
                     Err(TyError())
                 }
-            }
+            },
             TyKind::Existential(ident) => {
                 if self.contains(CtxItemName::Existential(*ident)) {
                     Ok(())
                 } else {
                     Err(TyError())
                 }
-            }
+            },
             TyKind::Func(param_ty, return_ty) => {
                 self.ty_wf(param_ty)?;
                 self.ty_wf(return_ty)
-            }
+            },
             TyKind::Forall(ident, ty) => {
                 let marker_name = Ident::synthetic(Symbol::from_kw(Kw::M));
                 self.enter(marker_name, vec![CtxItem::Var(*ident)]);
                 self.ty_wf(&ty.open_forall(Ty::new(TyKind::Var(*ident))))?;
                 self.leave(marker_name);
                 Ok(())
-            }
+            },
             _ => Err(TyError()),
         }
     }
@@ -186,26 +225,14 @@ impl Ctx {
             ExprKind::Lit(lit) => {
                 let lit_ty = match lit {
                     Lit::Bool(_) => PrimTy::Bool,
-                    Lit::Int(_, kind) => PrimTy::Int(*kind),
-                    Lit::Float(_, kind) => PrimTy::Float(*kind),
+                    Lit::Int(_, kind) => PrimTy::Int(self.conv_int_kind(*kind)),
+                    Lit::Float(_, kind) => PrimTy::Float(self.conv_float_kind(*kind)),
                     Lit::String(_) => PrimTy::String,
                 };
 
                 Ok((Ty::lit(lit_ty), self.clone()))
-            }
-            ExprKind::Path(path) => {
-                if let Some(item) = self.lookup(CtxItemName::TypedTerm(path.0.target_name())) {
-                    Ok((
-                        match item {
-                            CtxItem::TypedTerm(_, ty) => ty.clone(),
-                            _ => unreachable!(),
-                        },
-                        self.clone(),
-                    ))
-                } else {
-                    Err(TyError())
-                }
-            }
+            },
+            ExprKind::Path(path) => self.synth_path(path.0.as_ref().unwrap()),
             ExprKind::Block(_) => todo!(),
             ExprKind::Infix(_) => todo!(),
             ExprKind::Prefix(_) => todo!(),
@@ -214,6 +241,24 @@ impl Ctx {
             ExprKind::Let(_) => todo!(),
             ExprKind::Ty(_) => todo!(),
         }
+    }
+
+    fn synth_path(&self, path: &Path) -> TyResult<(Ty, Ctx)> {
+        if let Some(item) = self.lookup(CtxItemName::TypedTerm(path.target_name())) {
+            Ok((
+                match item {
+                    CtxItem::TypedTerm(_, ty) => ty.clone(),
+                    _ => unreachable!(),
+                },
+                self.clone(),
+            ))
+        } else {
+            Err(TyError())
+        }
+    }
+
+    fn synth_ty_expr(&self, ty_expr: &TyExpr) -> TyResult<(Ty, Ctx)> {
+        todo!()
     }
 
     fn synth_block(&self, _block: Block) -> TyResult<(Ty, Ctx)> {

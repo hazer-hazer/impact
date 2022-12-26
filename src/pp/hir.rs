@@ -1,6 +1,6 @@
 use crate::{
     hir::{
-        expr::{Block, FuncCall, Infix, Lambda, Lit, Prefix, TyExpr},
+        expr::{Block, Call, Infix, Lambda, Lit, Prefix, TyExpr},
         item::{Decl, Mod, TypeItem},
         stmt::{Stmt, StmtKind},
         ty::Ty,
@@ -98,7 +98,7 @@ impl<'a> HirVisitor for AstLikePP<'a> {
         self.visit_expr(&lambda.body);
     }
 
-    fn visit_call_expr(&mut self, call: &FuncCall) {
+    fn visit_call_expr(&mut self, call: &Call) {
         self.visit_expr(&call.lhs);
         self.sp();
         self.visit_expr(&call.arg);

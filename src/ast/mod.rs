@@ -9,11 +9,11 @@ use self::item::Item;
 
 pub mod expr;
 pub mod item;
+pub mod pat;
 pub mod stmt;
 pub mod ty;
 pub mod validator;
 pub mod visitor;
-pub mod pat;
 
 pub type N<T> = Box<T>;
 
@@ -170,7 +170,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Path {
     id: NodeId,
     segments: Vec<Ident>,
@@ -205,6 +205,10 @@ impl Path {
             .map(|seg| seg.span())
             .reduce(|prefix, seg| prefix.to(seg))
             .unwrap()
+    }
+
+    pub fn target_name(&self) -> Ident {
+        *self.segments().last().unwrap()
     }
 }
 

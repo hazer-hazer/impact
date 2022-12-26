@@ -1,7 +1,10 @@
 use crate::span::span::Ident;
 
 use super::{
-    expr::{Block, Expr, ExprKind, InfixOp, Lit, PrefixOp},
+    expr::{
+        Block, Call, Expr, ExprKind, Infix, InfixOp, Lambda, Lit, PathExpr, Prefix, PrefixOp,
+        TyExpr,
+    },
     item::{Item, ItemKind},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
@@ -117,12 +120,12 @@ pub trait AstVisitor {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
-            ExprKind::Infix(lhs, op, rhs) => self.visit_infix_expr(lhs, op, rhs),
-            ExprKind::Prefix(op, rhs) => self.visit_prefix_expr(op, rhs),
-            ExprKind::App(lhs, arg) => self.visit_app_expr(lhs, arg),
+            ExprKind::Infix(infix) => self.visit_infix_expr(infix),
+            ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix),
+            ExprKind::Call(call) => self.visit_app_expr(call),
             ExprKind::Let(block) => self.visit_let_expr(block),
-            ExprKind::Abs(param, body) => self.visit_abs_expr(param, body),
-            ExprKind::Ty(expr, ty) => self.visit_type_expr(expr, ty),
+            ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
+            ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
         }
     }
 
@@ -130,40 +133,40 @@ pub trait AstVisitor {
 
     fn visit_lit_expr(&mut self, _: &Lit) {}
 
-    fn visit_path_expr(&mut self, path: &PR<Path>) {
-        walk_pr!(self, path, visit_path)
+    fn visit_path_expr(&mut self, path: &PathExpr) {
+        walk_pr!(self, &path.0, visit_path)
     }
 
     fn visit_block_expr(&mut self, block: &PR<Block>) {
         walk_pr!(self, block, visit_block)
     }
 
-    fn visit_infix_expr(&mut self, lhs: &PR<N<Expr>>, _: &InfixOp, rhs: &PR<N<Expr>>) {
-        walk_pr!(self, lhs, visit_expr);
-        walk_pr!(self, rhs, visit_expr);
+    fn visit_infix_expr(&mut self, infix: &Infix) {
+        walk_pr!(self, &infix.lhs, visit_expr);
+        walk_pr!(self, &infix.rhs, visit_expr);
     }
 
-    fn visit_prefix_expr(&mut self, _: &PrefixOp, rhs: &PR<N<Expr>>) {
-        walk_pr!(self, rhs, visit_expr);
+    fn visit_prefix_expr(&mut self, prefix: &Prefix) {
+        walk_pr!(self, &prefix.rhs, visit_expr);
     }
 
-    fn visit_app_expr(&mut self, lhs: &PR<N<Expr>>, arg: &PR<N<Expr>>) {
-        walk_pr!(self, lhs, visit_expr);
-        walk_pr!(self, arg, visit_expr);
+    fn visit_app_expr(&mut self, call: &Call) {
+        walk_pr!(self, &call.lhs, visit_expr);
+        walk_pr!(self, &call.arg, visit_expr);
     }
 
-    fn visit_abs_expr(&mut self, param: &PR<Pat>, body: &PR<N<Expr>>) {
-        walk_pr!(self, param, visit_pat);
-        walk_pr!(self, body, visit_expr);
+    fn visit_lambda_expr(&mut self, lambda: &Lambda) {
+        walk_pr!(self, &lambda.param, visit_pat);
+        walk_pr!(self, &lambda.body, visit_expr);
     }
 
     fn visit_let_expr(&mut self, block: &PR<Block>) {
         walk_pr!(self, block, visit_block)
     }
 
-    fn visit_type_expr(&mut self, expr: &PR<N<Expr>>, ty: &PR<N<Ty>>) {
-        walk_pr!(self, expr, visit_expr);
-        walk_pr!(self, ty, visit_ty);
+    fn visit_type_expr(&mut self, ty_expr: &TyExpr) {
+        walk_pr!(self, &ty_expr.expr, visit_expr);
+        walk_pr!(self, &ty_expr.ty, visit_ty);
     }
 
     // Types //

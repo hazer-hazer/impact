@@ -1,7 +1,7 @@
 use crate::span::span::Ident;
 
 use super::{
-    expr::{Block, Expr, ExprKind, FuncCall, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
+    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
     item::{Decl, Item, ItemKind, Mod, TypeItem},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
@@ -110,7 +110,7 @@ pub trait HirVisitor {
         self.visit_expr(&prefix.rhs);
     }
 
-    fn visit_call_expr(&mut self, call: &FuncCall) {
+    fn visit_call_expr(&mut self, call: &Call) {
         self.visit_expr(&call.lhs);
         self.visit_expr(&call.arg);
     }

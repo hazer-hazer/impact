@@ -2,7 +2,10 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
-        expr::{is_block_ended, Block, Expr, ExprKind, InfixOpKind, Lit, PrefixOpKind},
+        expr::{
+            is_block_ended, Block, Call, Expr, ExprKind, Infix, InfixOpKind, Lambda, Lit, PathExpr,
+            Prefix, PrefixOpKind, TyExpr,
+        },
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -12,11 +15,12 @@ use crate::{
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    parser::token,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
 };
 
-use super::token::{Infix, Punct, Token, TokenCmp, TokenKind, TokenStream};
+use super::token::{Punct, Token, TokenCmp, TokenKind, TokenStream};
 
 #[derive(Debug, PartialEq)]
 enum ParseEntryKind {
@@ -610,11 +614,14 @@ impl Parser {
     fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
         const PREC_TABLE: &[&[TokenCmp]] = &[
             &[TokenCmp::Punct(Punct::Colon)],
-            &[TokenCmp::Infix(Infix::Plus), TokenCmp::Infix(Infix::Minus)],
             &[
-                TokenCmp::Infix(Infix::Mul),
-                TokenCmp::Infix(Infix::Div),
-                TokenCmp::Infix(Infix::Mod),
+                TokenCmp::Infix(token::Infix::Plus),
+                TokenCmp::Infix(token::Infix::Minus),
+            ],
+            &[
+                TokenCmp::Infix(token::Infix::Mul),
+                TokenCmp::Infix(token::Infix::Div),
+                TokenCmp::Infix(token::Infix::Mod),
             ],
         ];
 
@@ -636,7 +643,7 @@ impl Parser {
 
                 lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
-                    ExprKind::Ty(lhs, ty),
+                    ExprKind::Ty(TyExpr { expr: lhs, ty }),
                     self.close_span(lo),
                 )));
 
@@ -651,7 +658,11 @@ impl Parser {
 
                     lhs = Ok(Box::new(Expr::new(
                         self.next_node_id(),
-                        ExprKind::Infix(lhs, InfixOpKind::from_tok(op), rhs),
+                        ExprKind::Infix(Infix {
+                            lhs,
+                            op: InfixOpKind::from_tok(op),
+                            rhs,
+                        }),
                         self.close_span(lo),
                     )));
                 } else {
@@ -684,7 +695,10 @@ impl Parser {
 
             Some(Ok(Box::new(Expr::new(
                 self.next_node_id(),
-                ExprKind::Prefix(PrefixOpKind::from_tok(&op), rhs),
+                ExprKind::Prefix(Prefix {
+                    op: PrefixOpKind::from_tok(&op),
+                    rhs,
+                }),
                 op.span.to(lo),
             ))))
         } else {
@@ -705,7 +719,7 @@ impl Parser {
 
                 Some(Ok(Box::new(Expr::new(
                     self.next_node_id(),
-                    ExprKind::App(lhs, arg),
+                    ExprKind::Call(Call { lhs, arg }),
                     self.close_span(lo),
                 ))))
             } else {
@@ -733,9 +747,9 @@ impl Parser {
             TokenKind::Int(val, kind) => (Some(Ok(ExprKind::Lit(Lit::Int(val, kind)))), true),
             TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
             TokenKind::Ident(_) => (
-                Some(Ok(ExprKind::Path(
+                Some(Ok(ExprKind::Path(PathExpr(
                     self.parse_path("[BUG] First identifier in path expression"),
-                ))),
+                )))),
                 false,
             ),
 
@@ -820,7 +834,7 @@ impl Parser {
 
         Some(Ok(Box::new(Expr::new(
             self.next_node_id(),
-            ExprKind::Abs(param, body),
+            ExprKind::Lambda(Lambda { param, body }),
             self.close_span(lo),
         ))))
     }
