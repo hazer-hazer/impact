@@ -40,8 +40,8 @@ impl Scope {
     }
 }
 
-pub struct NameResolver<'a> {
-    ast: &'a AST,
+pub struct NameResolver<'ast> {
+    ast: &'ast AST<'ast>,
     scopes: Vec<Scope>,
     nearest_mod_item: ModuleId, // Nearest `mod` item
     locals_spans: NodeMap<Span>,
@@ -49,8 +49,8 @@ pub struct NameResolver<'a> {
     sess: Session,
 }
 
-impl<'a> NameResolver<'a> {
-    pub fn new(sess: Session, ast: &'a AST) -> Self {
+impl<'ast> NameResolver<'ast> {
+    pub fn new(sess: Session, ast: &'ast AST<'ast>) -> Self {
         Self {
             ast,
             scopes: Default::default(),
@@ -183,12 +183,12 @@ impl<'a> MessageHolder for NameResolver<'a> {
     }
 }
 
-impl<'a> AstVisitor for NameResolver<'a> {
-    fn visit_err(&mut self, _: &ErrorNode) {}
+impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
+    fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
     // visit_let: We don't have locals for now
 
-    fn visit_item(&mut self, item: &Item) {
+    fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
             ItemKind::Mod(name, items) => {
                 let module_id =
@@ -213,19 +213,19 @@ impl<'a> AstVisitor for NameResolver<'a> {
         }
     }
 
-    fn visit_pat(&mut self, pat: &Pat) {
+    fn visit_pat(&mut self, pat: &'ast Pat) {
         match pat.kind() {
             PatKind::Ident(ident) => self.define_var(pat.id(), ident.as_ref().unwrap()),
         }
     }
 
-    fn visit_block(&mut self, block: &Block) {
+    fn visit_block(&mut self, block: &'ast Block) {
         self.enter_module_scope(ModuleId::Block(block.id()));
         walk_each_pr!(self, block.stmts(), visit_stmt);
         self.exit_scope();
     }
 
-    fn visit_path(&mut self, path: &Path) {
+    fn visit_path(&mut self, path: &'ast Path) {
         let res = self.resolve_path(path);
 
         verbose!("Resolved path `{}` as {}", path, res);
@@ -234,7 +234,7 @@ impl<'a> AstVisitor for NameResolver<'a> {
     }
 }
 
-impl<'a> Stage<()> for NameResolver<'a> {
+impl<'ast> Stage<()> for NameResolver<'ast> {
     fn run(mut self) -> StageOutput<()> {
         self.enter_module_scope(ROOT_MODULE_ID);
         self.visit_ast(self.ast);

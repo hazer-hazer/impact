@@ -11,8 +11,6 @@ pub enum DefKind {
     Type,
     Mod,
     Func,
-    Var,
-    Param,
 }
 
 impl DefKind {
@@ -20,7 +18,7 @@ impl DefKind {
         match kind {
             ItemKind::Type(_, _) => DefKind::Type,
             ItemKind::Mod(_, _) => DefKind::Mod,
-            ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Var,
+            ItemKind::Decl(_, params, _) if params.is_empty() => unreachable!(),
             ItemKind::Decl(_, _, _) => DefKind::Func,
         }
     }
@@ -30,8 +28,6 @@ impl DefKind {
             DefKind::Type => Namespace::Type,
             DefKind::Mod => Namespace::Type,
             DefKind::Func => Namespace::Value,
-            DefKind::Var => Namespace::Value,
-            DefKind::Param => Namespace::Value,
         }
     }
 }
@@ -45,8 +41,6 @@ impl Display for DefKind {
                 DefKind::Type => "type alias",
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
-                DefKind::Var => "var",
-                DefKind::Param => "function parameter",
             }
         )
     }

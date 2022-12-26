@@ -4,9 +4,14 @@ use crate::{
     ast::{
         self,
         expr::{Block, Expr, ExprKind, Lit, TyExpr},
-        Path,
+        Path, WithNodeId,
     },
     parser::token,
+    resolve::{
+        def::DefKind,
+        res::{NamePath, ResKind},
+    },
+    session::Session,
     span::span::{Ident, Kw, Symbol},
 };
 
@@ -46,13 +51,17 @@ impl Display for CtxItem {
 }
 
 #[derive(Clone)]
-pub struct Ctx {
+pub struct Ctx<'ast> {
     items: Vec<CtxItem>,
+    sess: &'ast Session,
 }
 
-impl Ctx {
-    pub fn initial() -> Self {
-        Self { items: vec![] }
+impl<'a> Ctx<'a> {
+    pub fn initial(sess: &'a Session) -> Self {
+        Self {
+            items: vec![],
+            sess,
+        }
     }
 
     // Context items //
@@ -159,6 +168,21 @@ impl Ctx {
             ast::ty::TyKind::Path(path) => todo!(),
             ast::ty::TyKind::Func(_, _) => todo!(),
             ast::ty::TyKind::Paren(_) => todo!(),
+        }
+    }
+
+    fn conv_path(&self, path: &ast::Path) -> Ty {
+        let res = self.sess.res.get(NamePath::new(path.id())).unwrap();
+        match res.kind() {
+            ResKind::Def(def_id) => {
+                let def = self.sess.def_table.get_def(*def_id).unwrap();
+                match def.kind() {
+                    DefKind::Type => todo!(),
+                    DefKind::Mod => todo!(),
+                    DefKind::Func => todo!(),
+                }
+            },
+            _ => unreachable!(),
         }
     }
 

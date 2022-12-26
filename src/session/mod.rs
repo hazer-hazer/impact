@@ -1,5 +1,5 @@
 use crate::{
-    ast::{ty::Ty, AstMetadata, NodeId, NodeMap},
+    ast::{ty::Ty, AstMap, AstMetadata, AstNode, NodeId, NodeMap, AST, DUMMY_NODE_ID},
     config::config::Config,
     interface::{interface::InterruptionReason, writer::Writer},
     message::{
@@ -211,7 +211,6 @@ pub struct Session {
     ast_metadata: AstMetadata,
     pub def_table: DefTable,
     pub res: Resolutions,
-    pub ty_aliases: NodeMap<Ty>,
 }
 
 impl Session {
@@ -223,7 +222,6 @@ impl Session {
             ast_metadata: Default::default(),
             def_table: Default::default(),
             res: Resolutions::default(),
-            ty_aliases: Default::default(),
         }
     }
 
@@ -235,7 +233,7 @@ impl Session {
         &self.config
     }
 
-    // AST metadata API //
+    // AST API //
     pub fn next_node_id(&mut self) -> NodeId {
         self.ast_metadata.next_node_id()
     }
@@ -254,7 +252,7 @@ pub struct StageOutput<T> {
 
 pub type StageResult<T> = Result<(T, Session), (InterruptionReason, Session)>;
 
-impl<T> StageOutput<T> {
+impl<'ast, T> StageOutput<T> {
     pub fn new(sess: Session, data: T, messages: MessageStorage) -> Self {
         Self {
             sess,

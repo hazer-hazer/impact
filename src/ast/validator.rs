@@ -47,23 +47,23 @@ impl<'a> StrExtension for &'a str {
     }
 }
 
-pub struct AstValidator<'a> {
+pub struct AstValidator<'ast> {
+    ast: &'ast AST<'ast>,
     sess: Session,
-    ast: &'a AST,
     msg: MessageStorage,
 }
 
-impl<'a> MessageHolder for AstValidator<'a> {
+impl<'ast> MessageHolder for AstValidator<'ast> {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl<'a> AstValidator<'a> {
-    pub fn new(sess: Session, ast: &'a AST) -> Self {
+impl<'ast> AstValidator<'ast> {
+    pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
-            sess,
             ast,
+            sess,
             msg: MessageStorage::default(),
         }
     }
@@ -176,12 +176,12 @@ impl<'a> AstValidator<'a> {
     }
 }
 
-impl<'a> AstVisitor for AstValidator<'a> {
-    fn visit_err(&mut self, _: &ErrorNode) {
+impl<'a> AstVisitor<'a> for AstValidator<'a> {
+    fn visit_err(&mut self, _: &'a ErrorNode) {
         panic!("Error node in AstValidator")
     }
 
-    fn visit_item(&mut self, item: &Item) {
+    fn visit_item(&mut self, item: &'a Item) {
         match item.kind() {
             ItemKind::Type(name, ty) => {
                 self.validate_typename(name.as_ref().unwrap(), NameKind::Type);
@@ -204,7 +204,7 @@ impl<'a> AstVisitor for AstValidator<'a> {
     }
 }
 
-impl<'a> Stage<()> for AstValidator<'a> {
+impl<'ast> Stage<()> for AstValidator<'ast> {
     fn run(mut self) -> StageOutput<()> {
         self.visit_ast(self.ast);
         StageOutput::new(self.sess, (), self.msg)

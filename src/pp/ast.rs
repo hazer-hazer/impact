@@ -39,8 +39,8 @@ macro_rules! walk_each_pr_delim {
     };
 }
 
-impl<'a> AstVisitor for AstLikePP<'a> {
-    fn visit_err(&mut self, err: &ErrorNode) {
+impl<'ast> AstVisitor<'ast> for AstLikePP<'ast> {
+    fn visit_err(&mut self, err: &'ast ErrorNode) {
         if let Some(parsed) = err.parsed() {
             self.string(parsed);
             self.out.push(' ');
@@ -49,12 +49,12 @@ impl<'a> AstVisitor for AstLikePP<'a> {
         self.out.push_str("[ERROR]")
     }
 
-    fn visit_ast(&mut self, ast: &AST) {
+    fn visit_ast(&mut self, ast: &'ast AST) {
         walk_each_pr_delim!(self, ast.items(), visit_item, "\n")
     }
 
     // Statements //
-    fn visit_stmt(&mut self, stmt: &Stmt) {
+    fn visit_stmt(&mut self, stmt: &'ast Stmt) {
         match stmt.kind() {
             StmtKind::Expr(expr) => walk_pr!(self, expr, visit_expr),
             StmtKind::Item(item) => walk_pr!(self, item, visit_item),
@@ -62,14 +62,14 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     // Items //
-    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>, id: NodeId) {
+    fn visit_type_item(&mut self, name: &'ast PR<Ident>, ty: &'ast PR<N<Ty>>, id: NodeId) {
         self.kw(Kw::Type);
         walk_pr!(self, name, name, id);
         self.punct(Punct::Assign);
         walk_pr!(self, ty, visit_ty);
     }
 
-    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>, id: NodeId) {
+    fn visit_mod_item(&mut self, name: &'ast PR<Ident>, items: &'ast Vec<PR<N<Item>>>, id: NodeId) {
         self.kw(Kw::Mod);
         walk_pr!(self, name, name, id);
         self.nl();
@@ -78,9 +78,9 @@ impl<'a> AstVisitor for AstLikePP<'a> {
 
     fn visit_decl_item(
         &mut self,
-        name: &PR<Ident>,
-        params: &Vec<PR<Pat>>,
-        body: &PR<N<Expr>>,
+        name: &'ast PR<Ident>,
+        params: &'ast Vec<PR<Pat>>,
+        body: &'ast PR<N<Expr>>,
         id: NodeId,
     ) {
         walk_pr!(self, name, name, id);
@@ -93,7 +93,7 @@ impl<'a> AstVisitor for AstLikePP<'a> {
     }
 
     // Patterns //
-    fn visit_pat(&mut self, pat: &Pat) {
+    fn visit_pat(&mut self, pat: &'ast Pat) {
         match pat.kind() {
             PatKind::Ident(ident) => walk_pr!(self, ident, name, pat.id()),
         }
@@ -104,40 +104,40 @@ impl<'a> AstVisitor for AstLikePP<'a> {
         self.str("()");
     }
 
-    fn visit_lit_expr(&mut self, lit: &Lit) {
+    fn visit_lit_expr(&mut self, lit: &'ast Lit) {
         self.string(lit);
     }
 
-    fn visit_infix_expr(&mut self, infix: &Infix) {
+    fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
         self.infix(&infix.op);
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 
-    fn visit_prefix_expr(&mut self, prefix: &Prefix) {
+    fn visit_prefix_expr(&mut self, prefix: &'ast Prefix) {
         self.prefix(&prefix.op);
         walk_pr!(self, &prefix.rhs, visit_expr);
     }
 
-    fn visit_lambda_expr(&mut self, lambda: &Lambda) {
+    fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
         self.punct(Punct::Backslash);
         walk_pr!(self, &lambda.param, visit_pat);
         self.punct(Punct::Arrow);
         walk_pr!(self, &lambda.body, visit_expr);
     }
 
-    fn visit_app_expr(&mut self, call: &Call) {
+    fn visit_app_expr(&mut self, call: &'ast Call) {
         walk_pr!(self, &call.lhs, visit_expr);
         self.sp();
         walk_pr!(self, &call.arg, visit_expr);
     }
 
-    fn visit_let_expr(&mut self, block: &PR<Block>) {
+    fn visit_let_expr(&mut self, block: &'ast PR<Block>) {
         self.kw(Kw::Let);
         walk_pr!(self, block, visit_block);
     }
 
-    fn visit_type_expr(&mut self, ty_expr: &TyExpr) {
+    fn visit_type_expr(&mut self, ty_expr: &'ast TyExpr) {
         walk_pr!(self, &ty_expr.expr, visit_expr);
         self.punct(Punct::Colon);
         walk_pr!(self, &ty_expr.ty, visit_ty);
@@ -148,28 +148,28 @@ impl<'a> AstVisitor for AstLikePP<'a> {
         self.str("()");
     }
 
-    fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) {
+    fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {
         walk_pr!(self, param_ty, visit_ty);
         self.punct(Punct::Arrow);
         walk_pr!(self, return_ty, visit_ty);
     }
 
-    fn visit_paren_ty(&mut self, inner: &PR<N<Ty>>) {
+    fn visit_paren_ty(&mut self, inner: &'ast PR<N<Ty>>) {
         self.punct(Punct::LParen);
         walk_pr!(self, inner, visit_ty);
         self.punct(Punct::RParen);
     }
 
     // Fragments //
-    fn visit_ident(&mut self, ident: &Ident) {
+    fn visit_ident(&mut self, ident: &'ast Ident) {
         self.string(ident);
     }
 
-    fn visit_path(&mut self, path: &Path) {
+    fn visit_path(&mut self, path: &'ast Path) {
         self.path(path)
     }
 
-    fn visit_block(&mut self, block: &Block) {
+    fn visit_block(&mut self, block: &'ast Block) {
         self.nl();
         walk_block!(self, block.stmts(), visit_stmt);
     }

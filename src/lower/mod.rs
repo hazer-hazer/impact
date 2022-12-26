@@ -56,17 +56,17 @@ macro_rules! lower_each_pr {
     };
 }
 
-pub struct Lower<'a> {
+pub struct Lower<'ast> {
     sess: Session,
-    ast: &'a AST,
+    ast: &'ast AST<'ast>,
     msg: MessageStorage,
 }
 
-impl<'a> Lower<'a> {
-    pub fn new(sess: Session, ast: &'a AST) -> Self {
+impl<'ast> Lower<'ast> {
+    pub fn new(sess: Session, ast: &'ast AST<'ast>) -> Self {
         Self {
-            sess,
             ast,
+            sess,
             msg: Default::default(),
         }
     }
@@ -308,7 +308,7 @@ impl<'a> Lower<'a> {
     }
 }
 
-impl<'a> Stage<HIR> for Lower<'a> {
+impl<'ast> Stage<HIR> for Lower<'ast> {
     fn run(mut self) -> StageOutput<HIR> {
         let hir = self.lower_ast();
         StageOutput::new(self.sess, hir, self.msg)

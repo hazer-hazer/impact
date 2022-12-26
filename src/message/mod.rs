@@ -11,7 +11,7 @@ pub mod message;
 pub mod term_emitter;
 
 pub trait MessageEmitter {
-    fn emit<T>(&mut self, output: StageOutput<T>, stop_on_error: bool) -> StageResult<T> {
+    fn emit<'ast, T>(&mut self, output: StageOutput<T>, stop_on_error: bool) -> StageResult<T> {
         let messages = output.messages;
 
         if cfg!(feature = "verbose_debug") {

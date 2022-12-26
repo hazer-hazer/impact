@@ -13,21 +13,21 @@ use crate::{
 
 use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};
 
-pub struct DefCollector<'a> {
+pub struct DefCollector<'ast> {
     sess: Session,
-    ast: &'a AST,
+    ast: &'ast AST<'ast>,
     current_module: ModuleId,
     msg: MessageStorage,
 }
 
-impl<'a> MessageHolder for DefCollector<'a> {
+impl<'ast> MessageHolder for DefCollector<'ast> {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl<'a> DefCollector<'a> {
-    pub fn new(sess: Session, ast: &'a AST) -> Self {
+impl<'ast> DefCollector<'ast> {
+    pub fn new(sess: Session, ast: &'ast AST<'ast>) -> Self {
         Self {
             sess,
             ast,
@@ -80,10 +80,10 @@ impl<'a> DefCollector<'a> {
     }
 }
 
-impl<'a> AstVisitor for DefCollector<'a> {
-    fn visit_err(&mut self, _: &ErrorNode) {}
+impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
+    fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
-    fn visit_item(&mut self, item: &Item) {
+    fn visit_item(&mut self, item: &'ast Item) {
         // Do not collect variables, they are defined and resolved in NameResolver
         match item.kind() {
             ItemKind::Decl(name, params, body) if params.is_empty() => {
@@ -113,14 +113,14 @@ impl<'a> AstVisitor for DefCollector<'a> {
         }
     }
 
-    fn visit_block(&mut self, block: &ast::expr::Block) -> () {
+    fn visit_block(&mut self, block: &'ast ast::expr::Block) -> () {
         self.enter_block_module(block.id());
         walk_each_pr!(self, block.stmts(), visit_stmt);
         self.exit_module();
     }
 }
 
-impl<'a> Stage<()> for DefCollector<'a> {
+impl<'ast> Stage<()> for DefCollector<'ast> {
     fn run(mut self) -> StageOutput<()> {
         self.sess.def_table.add_root_module();
         self.visit_ast(self.ast);

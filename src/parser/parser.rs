@@ -10,7 +10,7 @@ use crate::{
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
+        AstMapFiller, ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
     },
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
@@ -90,7 +90,7 @@ pub struct Parser {
     parse_entry: Option<usize>,
 }
 
-impl MessageHolder for Parser {
+impl<'ast> MessageHolder for Parser {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
@@ -898,7 +898,7 @@ impl Parser {
         }
     }
 
-    fn parse(&mut self) -> AST {
+    fn parse<'ast>(&mut self) -> AST<'ast> {
         let mut items = vec![];
 
         let pe = self.enter_entity(ParseEntryKind::Expect, "top-level item list");
@@ -1269,9 +1269,9 @@ impl Parser {
     }
 }
 
-impl<'a> Stage<AST> for Parser {
-    fn run(mut self) -> StageOutput<AST> {
-        let ast = self.parse();
+impl<'ast> Stage<AST<'ast>> for Parser {
+    fn run(mut self) -> StageOutput<AST<'ast>> {
+        let ast: AST<'ast> = self.parse();
         StageOutput::new(self.sess, ast, self.msg)
     }
 }

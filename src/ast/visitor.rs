@@ -46,31 +46,31 @@ pub(crate) use walk_each_pr;
 ///  me to use visitors both for PP and walking in some stages where we don't need to implement visitor
 ///  for all nodes.
 /// So keep in mind implementing all visitors you need or
-pub trait AstVisitor {
-    fn visit_err(&mut self, _: &ErrorNode);
+pub trait AstVisitor<'ast> {
+    fn visit_err(&mut self, _: &'ast ErrorNode);
 
-    fn visit_ast(&mut self, ast: &AST) {
+    fn visit_ast(&mut self, ast: &'ast AST) {
         walk_each_pr!(self, ast.items(), visit_item);
     }
 
     // Statements //
-    fn visit_stmt(&mut self, stmt: &Stmt) {
+    fn visit_stmt(&mut self, stmt: &'ast Stmt) {
         match stmt.kind() {
             StmtKind::Expr(expr) => self.visit_expr_stmt(expr),
             StmtKind::Item(item) => self.visit_item_stmt(item),
         }
     }
 
-    fn visit_expr_stmt(&mut self, expr: &PR<N<Expr>>) {
+    fn visit_expr_stmt(&mut self, expr: &'ast PR<N<Expr>>) {
         walk_pr!(self, expr, visit_expr)
     }
 
-    fn visit_item_stmt(&mut self, item: &PR<N<Item>>) {
+    fn visit_item_stmt(&mut self, item: &'ast PR<N<Item>>) {
         walk_pr!(self, item, visit_item)
     }
 
     // Items //
-    fn visit_item(&mut self, item: &Item) {
+    fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
             ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
@@ -80,21 +80,21 @@ pub trait AstVisitor {
         }
     }
 
-    fn visit_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>, _: NodeId) {
+    fn visit_type_item(&mut self, name: &'ast PR<Ident>, ty: &'ast PR<N<Ty>>, _: NodeId) {
         walk_pr!(self, name, visit_ident);
         walk_pr!(self, ty, visit_ty);
     }
 
-    fn visit_mod_item(&mut self, name: &PR<Ident>, items: &Vec<PR<N<Item>>>, _: NodeId) {
+    fn visit_mod_item(&mut self, name: &'ast PR<Ident>, items: &'ast Vec<PR<N<Item>>>, _: NodeId) {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, items, visit_item);
     }
 
     fn visit_decl_item(
         &mut self,
-        name: &PR<Ident>,
-        params: &Vec<PR<Pat>>,
-        body: &PR<N<Expr>>,
+        name: &'ast PR<Ident>,
+        params: &'ast Vec<PR<Pat>>,
+        body: &'ast PR<N<Expr>>,
         _: NodeId,
     ) {
         walk_pr!(self, name, visit_ident);
@@ -103,18 +103,18 @@ pub trait AstVisitor {
     }
 
     // Patterns //
-    fn visit_pat(&mut self, pat: &Pat) {
+    fn visit_pat(&mut self, pat: &'ast Pat) {
         match pat.kind() {
             PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
         }
     }
 
-    fn visit_ident_pat(&mut self, ident: &Ident) {
+    fn visit_ident_pat(&mut self, ident: &'ast Ident) {
         self.visit_ident(ident);
     }
 
     // Expressions //
-    fn visit_expr(&mut self, expr: &Expr) {
+    fn visit_expr(&mut self, expr: &'ast Expr) {
         match expr.kind() {
             ExprKind::Unit => self.visit_unit_expr(),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
@@ -131,46 +131,46 @@ pub trait AstVisitor {
 
     fn visit_unit_expr(&mut self) {}
 
-    fn visit_lit_expr(&mut self, _: &Lit) {}
+    fn visit_lit_expr(&mut self, _: &'ast Lit) {}
 
-    fn visit_path_expr(&mut self, path: &PathExpr) {
+    fn visit_path_expr(&mut self, path: &'ast PathExpr) {
         walk_pr!(self, &path.0, visit_path)
     }
 
-    fn visit_block_expr(&mut self, block: &PR<Block>) {
+    fn visit_block_expr(&mut self, block: &'ast PR<Block>) {
         walk_pr!(self, block, visit_block)
     }
 
-    fn visit_infix_expr(&mut self, infix: &Infix) {
+    fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 
-    fn visit_prefix_expr(&mut self, prefix: &Prefix) {
+    fn visit_prefix_expr(&mut self, prefix: &'ast Prefix) {
         walk_pr!(self, &prefix.rhs, visit_expr);
     }
 
-    fn visit_app_expr(&mut self, call: &Call) {
+    fn visit_app_expr(&mut self, call: &'ast Call) {
         walk_pr!(self, &call.lhs, visit_expr);
         walk_pr!(self, &call.arg, visit_expr);
     }
 
-    fn visit_lambda_expr(&mut self, lambda: &Lambda) {
+    fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
         walk_pr!(self, &lambda.param, visit_pat);
         walk_pr!(self, &lambda.body, visit_expr);
     }
 
-    fn visit_let_expr(&mut self, block: &PR<Block>) {
+    fn visit_let_expr(&mut self, block: &'ast PR<Block>) {
         walk_pr!(self, block, visit_block)
     }
 
-    fn visit_type_expr(&mut self, ty_expr: &TyExpr) {
+    fn visit_type_expr(&mut self, ty_expr: &'ast TyExpr) {
         walk_pr!(self, &ty_expr.expr, visit_expr);
         walk_pr!(self, &ty_expr.ty, visit_ty);
     }
 
     // Types //
-    fn visit_ty(&mut self, ty: &Ty) {
+    fn visit_ty(&mut self, ty: &'ast Ty) {
         match ty.kind() {
             TyKind::Unit => self.visit_unit_ty(),
             TyKind::Path(path) => self.visit_path_ty(path),
@@ -181,25 +181,25 @@ pub trait AstVisitor {
 
     fn visit_unit_ty(&mut self) {}
 
-    fn visit_path_ty(&mut self, path: &PR<Path>) {
+    fn visit_path_ty(&mut self, path: &'ast PR<Path>) {
         walk_pr!(self, path, visit_path)
     }
 
-    fn visit_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) {
+    fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {
         walk_pr!(self, param_ty, visit_ty);
         walk_pr!(self, return_ty, visit_ty)
     }
 
-    fn visit_paren_ty(&mut self, inner: &PR<N<Ty>>) {
+    fn visit_paren_ty(&mut self, inner: &'ast PR<N<Ty>>) {
         walk_pr!(self, inner, visit_ty)
     }
 
     // Fragments //
-    fn visit_ident(&mut self, _: &Ident) {}
+    fn visit_ident(&mut self, _: &'ast Ident) {}
 
-    fn visit_path(&mut self, _: &Path) {}
+    fn visit_path(&mut self, _: &'ast Path) {}
 
-    fn visit_block(&mut self, block: &Block) {
+    fn visit_block(&mut self, block: &'ast Block) {
         walk_each_pr!(self, block.stmts(), visit_stmt);
     }
 }

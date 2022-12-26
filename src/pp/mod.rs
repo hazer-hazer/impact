@@ -34,10 +34,10 @@ const ALLOWED_COLORS: &[Color] = &[
     Color::BrightMagenta,
 ];
 
-pub struct AstLikePP<'a> {
+pub struct AstLikePP<'ast> {
     out: String,
     indent_level: u32,
-    sess: &'a Session,
+    sess: &'ast Session,
     mode: AstPPMode,
 
     // Name highlighter mode //

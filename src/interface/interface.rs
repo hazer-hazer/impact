@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::{validator::AstValidator, visitor::AstVisitor, NodeId},
+    ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, NodeId},
     cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
@@ -50,15 +50,15 @@ impl Display for InterruptionReason {
     }
 }
 
-pub type InterruptResult = Result<Session, (InterruptionReason, Session)>;
-pub type UnitInterruptResult = Result<Session, (InterruptionReason, Session)>;
+pub type InterruptResult<'ast> = Result<Session, (InterruptionReason, Session)>;
+pub type UnitInterruptResult<'ast> = Result<Session, (InterruptionReason, Session)>;
 
-impl Interface {
+impl<'ast> Interface {
     pub fn new(config: Config) -> Self {
         Self { config }
     }
 
-    pub fn compile_single_source(self, source: Source) -> InterruptResult {
+    pub fn compile_single_source(self, source: Source) -> InterruptResult<'ast> {
         let mut sess = Session::new(self.config.clone());
 
         // Debug info //
@@ -114,7 +114,10 @@ impl Interface {
             );
         }
 
-        let (ast, sess) = parse_result.emit(true)?;
+        let (mut ast, sess) = parse_result.emit(true)?;
+
+        let map = AstMapFiller::new().fill(&ast);
+        ast.set_map(map);
 
         let sess = self.should_stop(sess, stage)?;
 
@@ -189,7 +192,7 @@ impl Interface {
         Ok(sess)
     }
 
-    fn should_stop(&self, sess: Session, stage: StageName) -> UnitInterruptResult {
+    fn should_stop<'a>(&self, sess: Session, stage: StageName) -> UnitInterruptResult<'a> {
         if self.config.compilation_depth() <= stage {
             Err((InterruptionReason::ConfiguredStop, sess))
         } else {

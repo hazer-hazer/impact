@@ -64,7 +64,7 @@ impl LexerCharCheck for char {
     }
 }
 
-impl MessageHolder for Lexer {
+impl<'ast> MessageHolder for Lexer {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
