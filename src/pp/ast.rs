@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, Infix, InfixOp, Lambda, Lit, Prefix, PrefixOp, TyExpr},
+        expr::{Block, Call, Expr, Infix, Lambda, Lit, Prefix, TyExpr},
         item::Item,
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},

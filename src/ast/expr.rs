@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display};
 
 use crate::{
     parser::token::{self, FloatKind, IntKind, Token, TokenKind},

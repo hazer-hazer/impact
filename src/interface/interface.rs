@@ -116,7 +116,7 @@ impl<'ast> Interface {
 
         let (ast, sess) = parse_result.emit(true)?;
 
-        let mapped_ast = MappedAst::new(&ast, AstMapFiller::new().fill(&ast));
+        let _mapped_ast = MappedAst::new(&ast, AstMapFiller::new().fill(&ast));
 
         let sess = self.should_stop(sess, stage)?;
 

@@ -2,12 +2,12 @@ use crate::{
     ast::{
         self,
         expr::{Block, Expr, ExprKind, Lit, TyExpr},
-        MappedAst, NodeMap, Path, WithNodeId,
+        MappedAst, Path, WithNodeId,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     parser::token,
     resolve::{
-        def::DefKind,
+        def::{DefKind, DefMap},
         res::{NamePath, ResKind},
     },
     session::{Session, Stage, StageOutput},
@@ -15,8 +15,8 @@ use crate::{
 };
 
 use self::{
-    ctx::{Ctx, CtxItem, CtxItemName},
-    ty::{FloatKind, IntKind, PrimTy, Ty, TyCtx, TyError, TyKind, TyResult},
+    ctx::{Ctx, CtxItem},
+    ty::{FloatKind, IntKind, PrimTy, Ty, TyCtx, TyError, TyResult},
 };
 
 pub mod ctx;
@@ -26,6 +26,8 @@ struct Typecker<'ast> {
     tyctx: TyCtx,
 
     ast: MappedAst<'ast>,
+
+    def_types: DefMap<Ty>,
 
     msg: MessageStorage,
     sess: Session,
@@ -51,11 +53,21 @@ impl<'ast> Typecker<'ast> {
     fn conv_path(&mut self, path: &ast::Path) -> Ty {
         let res = self.sess.res.get(NamePath::new(path.id())).unwrap();
         match res.kind() {
-            ResKind::Def(def_id) => {
-                let def = self.sess.def_table.get_def(*def_id).unwrap();
+            &ResKind::Def(def_id) => {
+                let def = self.sess.def_table.get_def(def_id).unwrap();
                 match def.kind() {
                     DefKind::TyAlias => {
-                        todo!()
+                        let ty_alias = self
+                            .ast
+                            .map()
+                            .item(self.sess.def_table.get_node_id(def_id).unwrap());
+                        let ty = match ty_alias.kind() {
+                            ast::item::ItemKind::Type(_, ty) => ty.as_ref().unwrap(),
+                            _ => unreachable!(),
+                        };
+                        let ty = self.conv(ty);
+                        self.def_types.insert(def_id, ty);
+                        ty
                     },
 
                     // Non-type definitions from type namespace
@@ -136,7 +148,7 @@ impl<'ast> Typecker<'ast> {
         }
     }
 
-    fn synth_ty_expr(&self, ty_expr: &TyExpr) -> TyResult<(Ty, Ctx)> {
+    fn synth_ty_expr(&self, _ty_expr: &TyExpr) -> TyResult<(Ty, Ctx)> {
         todo!()
     }
 
@@ -146,7 +158,7 @@ impl<'ast> Typecker<'ast> {
 }
 
 impl<'ast> Stage<()> for Typecker<'ast> {
-    fn run(mut self) -> StageOutput<()> {
+    fn run(self) -> StageOutput<()> {
         StageOutput::new(self.sess, (), self.msg)
     }
 }

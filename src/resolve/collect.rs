@@ -1,6 +1,5 @@
 use crate::{
     ast::{
-        self,
         item::{Item, ItemKind},
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, WithNodeId, AST, expr::Block,

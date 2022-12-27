@@ -1,22 +1,8 @@
 use std::fmt::Display;
 
-use crate::{
-    ast::{
-        self,
-        expr::{Block, Expr, ExprKind, Lit, TyExpr},
-        MappedAst, Path, WithNodeId,
-    },
-    cli::color::Colorize,
-    parser::token,
-    resolve::{
-        def::DefKind,
-        res::{NamePath, ResKind},
-    },
-    session::Session,
-    span::span::{Ident, Kw, Symbol},
-};
+use crate::{cli::color::Colorize, span::span::Ident};
 
-use super::ty::{FloatKind, IntKind, PrimTy, Ty, TyError, TyKind, TyResult};
+use super::ty::Ty;
 
 pub type ExistentialIdInner = u32;
 

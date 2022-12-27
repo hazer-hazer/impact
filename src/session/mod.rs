@@ -1,5 +1,5 @@
 use crate::{
-    ast::{ty::Ty, AstMap, AstMetadata, AstNode, NodeId, NodeMap, AST, DUMMY_NODE_ID},
+    ast::{AstMetadata, NodeId},
     config::config::Config,
     interface::{interface::InterruptionReason, writer::Writer},
     message::{
@@ -7,7 +7,10 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    resolve::{def::DefTable, res::Resolutions},
+    resolve::{
+        def::DefTable,
+        res::{NamePath, Resolutions},
+    },
     span::span::{Span, SpanPos},
 };
 

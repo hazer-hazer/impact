@@ -318,6 +318,14 @@ impl<'ast> MappedAst<'ast> {
     pub fn new(ast: &'ast AST, map: AstMap<'ast>) -> Self {
         Self { ast, map }
     }
+
+    pub fn map(&self) -> &AstMap<'ast> {
+        &self.map
+    }
+
+    pub fn ast(&self) -> &AST {
+        self.ast
+    }
 }
 
 impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {

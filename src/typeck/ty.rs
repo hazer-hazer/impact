@@ -5,9 +5,7 @@ use std::{
 };
 
 use crate::{
-    ast,
     cli::color::Colorize,
-    parser::token,
     span::span::{Ident, Kw, Symbol},
 };
 
@@ -363,7 +361,7 @@ impl TyCtx {
             &TyKind::Forall(ident, body) => {
                 let body = self.apply_ctx(body);
                 self.forall(ident, body)
-            }
+            },
         }
     }
 
@@ -405,7 +403,9 @@ impl TyCtx {
             &TyKind::Forall(ident, body) => {
                 let marker_name = Ident::synthetic(Symbol::from_kw(Kw::M));
                 self.ctx.enter(marker_name, vec![CtxItem::Var(ident)]);
-                self.ty_wf(self.open_forall(body, self.var(ident)))?;
+                let alpha = self.var(ident);
+                let open_forall = self.open_forall(body, alpha);
+                self.ty_wf(open_forall)?;
                 self.ctx.leave(marker_name);
                 Ok(())
             },

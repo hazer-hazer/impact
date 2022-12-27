@@ -2,7 +2,7 @@ use crate::span::span::Ident;
 
 use super::{
     expr::{
-        Block, Call, Expr, ExprKind, Infix, InfixOp, Lambda, Lit, PathExpr, Prefix, PrefixOp,
+        Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix,
         TyExpr,
     },
     item::{Item, ItemKind},
