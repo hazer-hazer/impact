@@ -13,12 +13,12 @@
 
 // pub struct Expander<'ast> {
 //     sess: Session,
-//     ast: &'ast AST,
+//     ast: &AST,
 //     msg: MessageStorage,
 // }
 
 // impl<'ast> Expander<'ast> {
-//     pub fn new(sess: Session, ast: &'ast AST, msg: MessageStorage) -> Self {
+//     pub fn new(sess: Session, ast: &AST, msg: MessageStorage) -> Self {
 //         Self { sess, ast, msg }
 //     }
 

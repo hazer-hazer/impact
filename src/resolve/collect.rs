@@ -3,7 +3,7 @@ use crate::{
         self,
         item::{Item, ItemKind},
         visitor::{walk_each_pr, AstVisitor},
-        ErrorNode, NodeId, WithNodeId, AST,
+        ErrorNode, NodeId, WithNodeId, AST, expr::Block,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -113,7 +113,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
         }
     }
 
-    fn visit_block(&mut self, block: &'ast ast::expr::Block) -> () {
+    fn visit_block(&mut self, block: &'ast Block) -> () {
         self.enter_block_module(block.id());
         walk_each_pr!(self, block.stmts(), visit_stmt);
         self.exit_module();

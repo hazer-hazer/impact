@@ -176,12 +176,12 @@ impl<'ast> AstValidator<'ast> {
     }
 }
 
-impl<'a> AstVisitor<'a> for AstValidator<'a> {
-    fn visit_err(&mut self, _: &'a ErrorNode) {
+impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
+    fn visit_err(&mut self, _: &'ast ErrorNode) {
         panic!("Error node in AstValidator")
     }
 
-    fn visit_item(&mut self, item: &'a Item) {
+    fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
             ItemKind::Type(name, ty) => {
                 self.validate_typename(name.as_ref().unwrap(), NameKind::Type);

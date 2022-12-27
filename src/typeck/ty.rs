@@ -1,13 +1,22 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    fmt::{Display, Formatter},
+    hash::{Hash, Hasher},
+};
 
-use crate::{span::span::Ident, ast, parser::token};
+use crate::{
+    ast,
+    cli::color::Colorize,
+    parser::token,
+    span::span::{Ident, Kw, Symbol},
+};
 
-use super::ctx::{Ctx, CtxItem, CtxItemName};
+use super::ctx::{Ctx, CtxItem, CtxItemName, ExistentialId, ExistentialIdInner};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TypeVarId(pub usize);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum IntKind {
     U8,
     U16,
@@ -34,7 +43,7 @@ impl IntKind {
 }
 
 impl Display for IntKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
@@ -54,7 +63,7 @@ impl Display for IntKind {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum FloatKind {
     F32,
     F64,
@@ -63,7 +72,7 @@ pub enum FloatKind {
 pub const DEFAULT_FLOAT_KIND: FloatKind = FloatKind::F32;
 
 impl Display for FloatKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
@@ -75,7 +84,7 @@ impl Display for FloatKind {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum PrimTy {
     Bool,
     Int(IntKind),
@@ -84,7 +93,7 @@ pub enum PrimTy {
 }
 
 impl Display for PrimTy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             PrimTy::Bool => write!(f, "bool"),
             PrimTy::String => write!(f, "string"),
@@ -94,22 +103,50 @@ impl Display for PrimTy {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TyId(u32);
+
+pub type Ty = TyId;
+
+impl TyId {
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+
+    pub fn from_usize(id: usize) -> Self {
+        assert!(id < u32::MAX as usize);
+        Self::new(id as u32)
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl Display for TyId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!(":{}", self.0).bright_yellow())
+    }
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
+    Error,
+
     Unit,
     Lit(PrimTy),
     Var(Ident),
-    Existential(Ident),
-    Func(Box<Ty>, Box<Ty>),
-    Forall(Ident, Box<Ty>),
+    Existential(ExistentialId),
+    Func(Ty, Ty),
+    Forall(Ident, Ty),
 }
 
-#[derive(Clone)]
-pub struct Ty {
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct TyS {
     kind: TyKind,
 }
 
-impl Ty {
+impl TyS {
     pub fn new(kind: TyKind) -> Self {
         Self { kind }
     }
@@ -118,17 +155,19 @@ impl Ty {
         Self::new(TyKind::Lit(lit_ty))
     }
 
+    pub fn error() -> Self {
+        Self::new(TyKind::Error)
+    }
+
     pub fn kind(&self) -> &TyKind {
         &self.kind
     }
 }
 
-pub struct TyError();
-pub type TyResult<T> = Result<T, TyError>;
-
-impl Display for Ty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for TyS {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.kind() {
+            TyKind::Error => write!(f, "[ERROR]"),
             TyKind::Unit => write!(f, "()"),
             TyKind::Lit(lit) => write!(f, "{}", lit),
             TyKind::Var(ident) => write!(f, "{}", ident),
@@ -139,89 +178,238 @@ impl Display for Ty {
     }
 }
 
-impl Ty {
-    pub fn is_mono(&self) -> bool {
-        match self.kind() {
-            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) | TyKind::Existential(_) => true,
-            TyKind::Func(param_ty, return_ty) => param_ty.is_mono() && return_ty.is_mono(),
+pub struct TyError();
+pub type TyResult<T> = Result<T, TyError>;
+
+#[derive(Default)]
+pub struct TyInterner {
+    map: HashMap<u64, TyId>,
+    types: Vec<TyS>,
+}
+
+impl TyInterner {
+    fn hash(ty: &TyS) -> u64 {
+        let mut state = DefaultHasher::new();
+        ty.hash(&mut state);
+        state.finish()
+    }
+
+    fn intern(&mut self, ty: TyS) -> TyId {
+        let hash = Self::hash(&ty);
+
+        if let Some(id) = self.map.get(&hash) {
+            return *id;
+        }
+
+        let id = TyId::from_usize(self.types.len());
+
+        self.map.insert(hash, id);
+        self.types.push(ty);
+
+        id
+    }
+}
+
+pub struct TyCtx {
+    interner: TyInterner,
+    ctx: Ctx,
+    existential: ExistentialIdInner,
+}
+
+impl TyCtx {
+    pub fn new() -> Self {
+        Self {
+            interner: Default::default(),
+            ctx: Ctx::initial(),
+            existential: 0,
+        }
+    }
+
+    pub fn ty(&self, ty: Ty) -> &TyS {
+        self.interner.types.get(ty.as_usize()).unwrap()
+    }
+
+    // Type context //
+    pub fn fresh_ex(&mut self) -> ExistentialId {
+        let ex = ExistentialId::new(self.existential);
+        self.existential += 1;
+        ex
+    }
+
+    pub fn lookup_typed_term(&self, name: Ident) -> Option<&CtxItem> {
+        self.ctx.lookup(CtxItemName::TypedTerm(name))
+    }
+
+    // Constructors //
+    pub fn intern(&mut self, ty: TyS) -> Ty {
+        self.interner.intern(ty)
+    }
+
+    pub fn unit(&mut self) -> Ty {
+        self.interner.intern(TyS::new(TyKind::Unit))
+    }
+
+    pub fn error(&mut self) -> Ty {
+        self.interner.intern(TyS::new(TyKind::Error))
+    }
+
+    pub fn var(&mut self, ident: Ident) -> Ty {
+        self.interner.intern(TyS::new(TyKind::Var(ident)))
+    }
+
+    pub fn lit(&mut self, prim: PrimTy) -> Ty {
+        self.interner.intern(TyS::new(TyKind::Lit(prim)))
+    }
+
+    pub fn func(&mut self, param: Ty, ret: Ty) -> Ty {
+        self.intern(TyS::new(TyKind::Func(param, ret)))
+    }
+
+    pub fn forall(&mut self, alpha: Ident, body: Ty) -> Ty {
+        self.intern(TyS::new(TyKind::Forall(alpha, body)))
+    }
+
+    // Type API //
+    pub fn is_mono(&self, ty: Ty) -> bool {
+        match self.ty(ty).kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Lit(_)
+            | TyKind::Var(_)
+            | TyKind::Existential(_) => true,
+            TyKind::Func(param_ty, return_ty) => {
+                self.is_mono(*param_ty) && self.is_mono(*return_ty)
+            },
             TyKind::Forall(_, _) => false,
         }
     }
 
     /// Substitute
-    pub fn substitute(&self, name: Ident, with: Ty) -> Ty {
-        match self.kind() {
-            TyKind::Unit | TyKind::Lit(_) => self.clone(),
-            TyKind::Var(ident) => {
-                if name == *ident {
-                    with.clone()
+    pub fn substitute(&mut self, ty: Ty, name: Ident, with: Ty) -> Ty {
+        match self.ty(ty).kind() {
+            TyKind::Error | TyKind::Unit | TyKind::Lit(_) => ty,
+            &TyKind::Var(ident) => {
+                if name == ident {
+                    with
                 } else {
-                    self.clone()
+                    ty
                 }
-            }
-            TyKind::Existential(_) => self.clone(),
-            TyKind::Func(param_ty, return_ty) => Ty::new(TyKind::Func(
-                Box::new(param_ty.substitute(name, with.clone())),
-                Box::new(return_ty.substitute(name, with.clone())),
-            )),
-            TyKind::Forall(ident, ty) => Ty::new(if name == *ident {
-                TyKind::Forall(*ident, Box::new(with.clone()))
-            } else {
-                TyKind::Forall(*ident, Box::new(ty.substitute(name, with)))
-            }),
+            },
+            TyKind::Existential(_) => ty,
+            &TyKind::Func(param_ty, return_ty) => {
+                let param = self.substitute(param_ty, name, with);
+                let ret = self.substitute(return_ty, name, with);
+                self.func(param, ret)
+            },
+            &TyKind::Forall(ident, body) => {
+                if name == ident {
+                    self.forall(ident, with)
+                } else {
+                    let subst = self.substitute(body, name, with);
+                    self.forall(ident, subst)
+                }
+            },
         }
     }
 
     /// Substitute all occurrences of universally quantified type inside it body
-    pub fn open_forall(&self, _subst: Ty) -> Ty {
-        match self.kind() {
-            TyKind::Forall(ident, ty) => self.substitute(*ident, *ty.clone()),
+    pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
+        match self.ty(ty).kind() {
+            &TyKind::Forall(ident, body) => self.substitute(ty, ident, body),
             _ => unreachable!(),
         }
     }
 
-    pub fn substitute_existentials(&self, existentials: &HashMap<Ident, Ty>) -> Ty {
-        match self.kind() {
-            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => self.clone(),
-            TyKind::Existential(ident) => match existentials.get(ident) {
-                Some(ty) => ty.clone(),
-                None => self.clone(),
+    // pub fn substitute_existentials(&self, existentials: &HashMap<Ident, Ty>) -> Ty {
+    //     match self.kind() {
+    //         TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => self.clone(),
+    //         TyKind::Existential(id) => match existentials.get(ident) {
+    //             Some(ty) => ty.clone(),
+    //             None => self.clone(),
+    //         },
+    //         TyKind::Func(param_ty, return_ty) => Ty::new(TyKind::Func(
+    //             Box::new(param_ty.substitute_existentials(existentials)),
+    //             Box::new(return_ty.substitute_existentials(existentials)),
+    //         )),
+    //         TyKind::Forall(ident, ty) => Ty::new(TyKind::Forall(
+    //             *ident,
+    //             Box::new(ty.substitute_existentials(existentials)),
+    //         )),
+    //     }
+    // }
+
+    pub fn apply_ctx(&mut self, ty: Ty) -> Ty {
+        match self.ty(ty).kind() {
+            TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => ty,
+            TyKind::Existential(id) => match self.ctx.lookup(CtxItemName::Existential(*id)) {
+                Some(item) => match item {
+                    CtxItem::TypedTerm(_, ty) => ty.clone(),
+                    CtxItem::Existential(_, ety) => {
+                        if let Some(ty) = ety {
+                            ty.clone()
+                        } else {
+                            ty
+                        }
+                    },
+                    _ => ty,
+                },
+                None => ty,
             },
-            TyKind::Func(param_ty, return_ty) => Ty::new(TyKind::Func(
-                Box::new(param_ty.substitute_existentials(existentials)),
-                Box::new(return_ty.substitute_existentials(existentials)),
-            )),
-            TyKind::Forall(ident, ty) => Ty::new(TyKind::Forall(
-                *ident,
-                Box::new(ty.substitute_existentials(existentials)),
-            )),
+            &TyKind::Func(param_ty, return_ty) => {
+                let param = self.apply_ctx(param_ty);
+                let ret = self.apply_ctx(return_ty);
+                self.func(param, ret)
+            },
+            &TyKind::Forall(ident, body) => {
+                let body = self.apply_ctx(body);
+                self.forall(ident, body)
+            }
         }
     }
 
-    pub fn apply_ctx(&self, ctx: &Ctx) -> Ty {
-        match self.kind() {
-            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => self.clone(),
-            TyKind::Existential(ident) => match ctx.lookup(CtxItemName::Existential(*ident)) {
-                Some(item) => match item {
-                    CtxItem::TypedTerm(_, ty) => ty.clone(),
-                    CtxItem::Existential(_, ty) => {
-                        if let Some(ty) = ty {
-                            ty.clone()
-                        } else {
-                            self.clone()
-                        }
-                    }
-                    _ => self.clone(),
-                },
-                None => self.clone(),
+    pub fn occurs_in(&self, ty: Ty, name: Ident) -> bool {
+        match self.ty(ty).kind() {
+            TyKind::Error | TyKind::Unit | TyKind::Lit(_) => false,
+            TyKind::Var(name_) if name_.sym() == name.sym() => true,
+            TyKind::Var(_) => false,
+            TyKind::Existential(_) => {
+                // TODO: Is this right?!
+                false
             },
-            TyKind::Func(param_ty, return_ty) => Ty::new(TyKind::Func(
-                Box::new(param_ty.apply_ctx(ctx)),
-                Box::new(return_ty.apply_ctx(ctx)),
-            )),
-            TyKind::Forall(ident, ty) => {
-                Ty::new(TyKind::Forall(*ident, Box::new(ty.apply_ctx(ctx))))
-            }
+            &TyKind::Func(param, ret) => self.occurs_in(param, name) || self.occurs_in(ret, name),
+            &TyKind::Forall(alpha, _) if alpha.sym() == name.sym() => true,
+            &TyKind::Forall(_, body) => self.occurs_in(body, name),
+        }
+    }
+
+    pub fn ty_wf(&mut self, ty: Ty) -> TyResult<()> {
+        match self.ty(ty).kind() {
+            &TyKind::Var(ident) => {
+                if self.ctx.contains(CtxItemName::Var(ident)) {
+                    Ok(())
+                } else {
+                    Err(TyError())
+                }
+            },
+            &TyKind::Existential(ident) => {
+                if self.ctx.contains(CtxItemName::Existential(ident)) {
+                    Ok(())
+                } else {
+                    Err(TyError())
+                }
+            },
+            &TyKind::Func(param_ty, return_ty) => {
+                self.ty_wf(param_ty)?;
+                self.ty_wf(return_ty)
+            },
+            &TyKind::Forall(ident, body) => {
+                let marker_name = Ident::synthetic(Symbol::from_kw(Kw::M));
+                self.ctx.enter(marker_name, vec![CtxItem::Var(ident)]);
+                self.ty_wf(self.open_forall(body, self.var(ident)))?;
+                self.ctx.leave(marker_name);
+                Ok(())
+            },
+            _ => Err(TyError()),
         }
     }
 }

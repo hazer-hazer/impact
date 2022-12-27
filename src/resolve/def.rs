@@ -8,7 +8,7 @@ use crate::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum DefKind {
-    Type,
+    TyAlias,
     Mod,
     Func,
 }
@@ -16,7 +16,7 @@ pub enum DefKind {
 impl DefKind {
     pub fn from_item_kind(kind: &ItemKind) -> DefKind {
         match kind {
-            ItemKind::Type(_, _) => DefKind::Type,
+            ItemKind::Type(_, _) => DefKind::TyAlias,
             ItemKind::Mod(_, _) => DefKind::Mod,
             ItemKind::Decl(_, params, _) if params.is_empty() => unreachable!(),
             ItemKind::Decl(_, _, _) => DefKind::Func,
@@ -25,7 +25,7 @@ impl DefKind {
 
     pub fn namespace(&self) -> Namespace {
         match self {
-            DefKind::Type => Namespace::Type,
+            DefKind::TyAlias => Namespace::Type,
             DefKind::Mod => Namespace::Type,
             DefKind::Func => Namespace::Value,
         }
@@ -38,7 +38,7 @@ impl Display for DefKind {
             f,
             "{}",
             match self {
-                DefKind::Type => "type alias",
+                DefKind::TyAlias => "type alias",
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
             }

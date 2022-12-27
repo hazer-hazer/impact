@@ -776,6 +776,8 @@ impl Parser {
     }
 
     fn parse_path(&mut self, expected: &str) -> PR<Path> {
+        let lo = self.span();
+
         let pe = self.enter_entity(ParseEntryKind::Expect, "path");
 
         // If no first identifier present then it's "expected path" error, not "expected identifier"
@@ -786,7 +788,11 @@ impl Parser {
 
         self.exit_parsed_entity(pe);
 
-        Ok(Path::new(self.next_node_id(), segments))
+        Ok(Path::new(
+            self.next_node_id(),
+            segments,
+            self.close_span(lo),
+        ))
     }
 
     fn parse_block(&mut self) -> PR<Block> {

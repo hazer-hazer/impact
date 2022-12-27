@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, NodeId},
+    ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, MappedAst, NodeId},
     cli::verbose,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
@@ -116,7 +116,7 @@ impl<'ast> Interface {
 
         let (ast, sess) = parse_result.emit(true)?;
 
-        let ast = AstMapFiller::new().fill(ast);
+        let mapped_ast = MappedAst::new(&ast, AstMapFiller::new().fill(&ast));
 
         let sess = self.should_stop(sess, stage)?;
 

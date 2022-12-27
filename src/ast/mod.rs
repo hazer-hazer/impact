@@ -7,7 +7,7 @@ use crate::{
 };
 
 use self::{
-    expr::{Block, Expr},
+    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
     item::Item,
     pat::Pat,
     stmt::Stmt,
@@ -102,7 +102,7 @@ pub struct AST {
     items: Vec<PR<N<Item>>>,
 }
 
-impl<'ast> AST {
+impl AST {
     pub fn new(items: Vec<PR<N<Item>>>) -> Self {
         Self { items }
     }
@@ -181,11 +181,12 @@ where
 pub struct Path {
     id: NodeId,
     segments: Vec<Ident>,
+    span: Span,
 }
 
 impl Path {
-    pub fn new(id: NodeId, segments: Vec<Ident>) -> Self {
-        Self { id, segments }
+    pub fn new(id: NodeId, segments: Vec<Ident>, span: Span) -> Self {
+        Self { id, segments, span }
     }
 
     pub fn segments(&self) -> &Vec<Ident> {
@@ -225,6 +226,12 @@ impl WithNodeId for Path {
     }
 }
 
+impl WithSpan for Path {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -259,7 +266,7 @@ macro_rules! impl_ast_map_get {
     ($($method: ident $type: tt),*) => {
         impl<'ast> AstMap<'ast> {
             $(
-                pub fn $method(&self, id: NodeId) -> &'ast $type {
+                pub fn $method(&self, id: NodeId) -> &$type {
                     match self.map.get(&id) {
                         Some(node) => {
                             match node {
@@ -296,13 +303,24 @@ impl<'ast> AstMapFiller<'ast> {
         }
     }
 
-    pub fn fill(mut self, ast: AST) -> AST {
+    pub fn fill(mut self, ast: &'ast AST) -> AstMap<'ast> {
         self.visit_ast(&ast);
-        ast
+        self.map
     }
 }
 
-impl<'ast> AstVisitor<'ast> for AstMapFiller<'a> {
+pub struct MappedAst<'ast> {
+    ast: &'ast AST,
+    map: AstMap<'ast>,
+}
+
+impl<'ast> MappedAst<'ast> {
+    pub fn new(ast: &'ast AST, map: AstMap<'ast>) -> Self {
+        Self { ast, map }
+    }
+}
+
+impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
     fn visit_stmt(&mut self, stmt: &'ast Stmt) {
         self.map.map.insert(stmt.id(), AstNode::Stmt(stmt));
         match stmt.kind() {
@@ -366,24 +384,24 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'a> {
     fn visit_expr(&mut self, expr: &'ast Expr) {
         self.map.map.insert(expr.id(), AstNode::Expr(expr));
         match expr.kind() {
-            expr::ExprKind::Unit => self.visit_unit_expr(),
-            expr::ExprKind::Lit(lit) => self.visit_lit_expr(lit),
-            expr::ExprKind::Path(path) => self.visit_path_expr(path),
-            expr::ExprKind::Block(block) => self.visit_block_expr(block),
-            expr::ExprKind::Infix(infix) => self.visit_infix_expr(infix),
-            expr::ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix),
-            expr::ExprKind::Call(call) => self.visit_app_expr(call),
-            expr::ExprKind::Let(block) => self.visit_let_expr(block),
-            expr::ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
-            expr::ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
+            ExprKind::Unit => self.visit_unit_expr(),
+            ExprKind::Lit(lit) => self.visit_lit_expr(lit),
+            ExprKind::Path(path) => self.visit_path_expr(path),
+            ExprKind::Block(block) => self.visit_block_expr(block),
+            ExprKind::Infix(infix) => self.visit_infix_expr(infix),
+            ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix),
+            ExprKind::Call(call) => self.visit_app_expr(call),
+            ExprKind::Let(block) => self.visit_let_expr(block),
+            ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
+            ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
         }
     }
 
     fn visit_unit_expr(&mut self) {}
 
-    fn visit_lit_expr(&mut self, _: &'ast expr::Lit) {}
+    fn visit_lit_expr(&mut self, _: &'ast Lit) {}
 
-    fn visit_path_expr(&mut self, path: &'ast expr::PathExpr) {
+    fn visit_path_expr(&mut self, path: &'ast PathExpr) {
         walk_pr!(self, &path.0, visit_path)
     }
 
@@ -391,21 +409,21 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'a> {
         walk_pr!(self, block, visit_block)
     }
 
-    fn visit_infix_expr(&mut self, infix: &'ast expr::Infix) {
+    fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 
-    fn visit_prefix_expr(&mut self, prefix: &'ast expr::Prefix) {
+    fn visit_prefix_expr(&mut self, prefix: &'ast Prefix) {
         walk_pr!(self, &prefix.rhs, visit_expr);
     }
 
-    fn visit_app_expr(&mut self, call: &'ast expr::Call) {
+    fn visit_app_expr(&mut self, call: &'ast Call) {
         walk_pr!(self, &call.lhs, visit_expr);
         walk_pr!(self, &call.arg, visit_expr);
     }
 
-    fn visit_lambda_expr(&mut self, lambda: &'ast expr::Lambda) {
+    fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
         walk_pr!(self, &lambda.param, visit_pat);
         walk_pr!(self, &lambda.body, visit_expr);
     }
@@ -414,7 +432,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'a> {
         walk_pr!(self, block, visit_block)
     }
 
-    fn visit_type_expr(&mut self, ty_expr: &'ast expr::TyExpr) {
+    fn visit_type_expr(&mut self, ty_expr: &'ast TyExpr) {
         walk_pr!(self, &ty_expr.expr, visit_expr);
         walk_pr!(self, &ty_expr.ty, visit_ty);
     }
@@ -460,4 +478,4 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'a> {
     }
 }
 
-// visit_(\w+)\(&mut self, (\w+): &
+//
