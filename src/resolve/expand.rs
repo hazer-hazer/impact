@@ -13,7 +13,7 @@
 
 // pub struct Expander<'ast> {
 //     sess: Session,
-//     ast: &'ast AST<'ast>,
+//     ast: &'ast AST,
 //     msg: MessageStorage,
 // }
 

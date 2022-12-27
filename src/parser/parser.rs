@@ -898,7 +898,7 @@ impl Parser {
         }
     }
 
-    fn parse<'ast>(&mut self) -> AST<'ast> {
+    fn parse<'ast>(&mut self) -> AST {
         let mut items = vec![];
 
         let pe = self.enter_entity(ParseEntryKind::Expect, "top-level item list");
@@ -1269,9 +1269,9 @@ impl Parser {
     }
 }
 
-impl<'ast> Stage<AST<'ast>> for Parser {
-    fn run(mut self) -> StageOutput<AST<'ast>> {
-        let ast: AST<'ast> = self.parse();
+impl<'ast> Stage<AST> for Parser {
+    fn run(mut self) -> StageOutput<AST> {
+        let ast: AST = self.parse();
         StageOutput::new(self.sess, ast, self.msg)
     }
 }

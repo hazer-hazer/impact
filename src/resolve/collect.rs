@@ -15,7 +15,7 @@ use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};
 
 pub struct DefCollector<'ast> {
     sess: Session,
-    ast: &'ast AST<'ast>,
+    ast: &'ast AST,
     current_module: ModuleId,
     msg: MessageStorage,
 }
@@ -27,7 +27,7 @@ impl<'ast> MessageHolder for DefCollector<'ast> {
 }
 
 impl<'ast> DefCollector<'ast> {
-    pub fn new(sess: Session, ast: &'ast AST<'ast>) -> Self {
+    pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             sess,
             ast,

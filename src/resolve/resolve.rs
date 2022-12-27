@@ -41,7 +41,7 @@ impl Scope {
 }
 
 pub struct NameResolver<'ast> {
-    ast: &'ast AST<'ast>,
+    ast: &'ast AST,
     scopes: Vec<Scope>,
     nearest_mod_item: ModuleId, // Nearest `mod` item
     locals_spans: NodeMap<Span>,
@@ -50,7 +50,7 @@ pub struct NameResolver<'ast> {
 }
 
 impl<'ast> NameResolver<'ast> {
-    pub fn new(sess: Session, ast: &'ast AST<'ast>) -> Self {
+    pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
             scopes: Default::default(),

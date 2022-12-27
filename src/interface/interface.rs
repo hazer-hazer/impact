@@ -114,10 +114,9 @@ impl<'ast> Interface {
             );
         }
 
-        let (mut ast, sess) = parse_result.emit(true)?;
+        let (ast, sess) = parse_result.emit(true)?;
 
-        let map = AstMapFiller::new().fill(&ast);
-        ast.set_map(map);
+        let ast = AstMapFiller::new().fill(ast);
 
         let sess = self.should_stop(sess, stage)?;
 

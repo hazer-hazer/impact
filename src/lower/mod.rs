@@ -58,12 +58,12 @@ macro_rules! lower_each_pr {
 
 pub struct Lower<'ast> {
     sess: Session,
-    ast: &'ast AST<'ast>,
+    ast: &'ast AST,
     msg: MessageStorage,
 }
 
 impl<'ast> Lower<'ast> {
-    pub fn new(sess: Session, ast: &'ast AST<'ast>) -> Self {
+    pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
             sess,

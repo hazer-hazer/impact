@@ -98,25 +98,17 @@ impl Display for NodeId {
 
 pub type NodeMap<T> = HashMap<NodeId, T>;
 
-pub struct AST<'ast> {
-    map: AstMap<'ast>,
+pub struct AST {
     items: Vec<PR<N<Item>>>,
 }
 
-impl<'ast> AST<'ast> {
+impl<'ast> AST {
     pub fn new(items: Vec<PR<N<Item>>>) -> Self {
-        Self {
-            map: Default::default(),
-            items,
-        }
+        Self { items }
     }
 
     pub fn items(&self) -> &[PR<N<Item>>] {
         self.items.as_ref()
-    }
-
-    pub fn set_map(&mut self, map: AstMap<'ast>) {
-        self.map = map;
     }
 }
 
@@ -304,13 +296,13 @@ impl<'ast> AstMapFiller<'ast> {
         }
     }
 
-    pub fn fill(mut self, ast: &'ast AST<'ast>) -> AstMap<'ast> {
-        self.visit_ast(ast);
-        self.map
+    pub fn fill(mut self, ast: AST) -> AST {
+        self.visit_ast(&ast);
+        ast
     }
 }
 
-impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
+impl<'ast> AstVisitor<'ast> for AstMapFiller<'a> {
     fn visit_stmt(&mut self, stmt: &'ast Stmt) {
         self.map.map.insert(stmt.id(), AstNode::Stmt(stmt));
         match stmt.kind() {

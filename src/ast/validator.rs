@@ -48,7 +48,7 @@ impl<'a> StrExtension for &'a str {
 }
 
 pub struct AstValidator<'ast> {
-    ast: &'ast AST<'ast>,
+    ast: &'ast AST,
     sess: Session,
     msg: MessageStorage,
 }
