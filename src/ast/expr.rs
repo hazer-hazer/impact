@@ -1,4 +1,4 @@
-use std::{fmt::Display};
+use std::fmt::Display;
 
 use crate::{
     parser::token::{self, FloatKind, IntKind, Token, TokenKind},
@@ -65,7 +65,7 @@ impl NodeKindStr for Expr {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Lit {
     Bool(bool),
     Int(u64, IntKind),

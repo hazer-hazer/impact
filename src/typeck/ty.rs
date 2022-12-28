@@ -5,7 +5,9 @@ use std::{
 };
 
 use crate::{
+    ast::expr::Lit,
     cli::color::Colorize,
+    parser::token,
     span::span::{Ident, Kw, Symbol},
 };
 
@@ -27,6 +29,24 @@ pub enum IntKind {
     I32,
     I64,
     Int,
+}
+
+impl From<token::IntKind> for IntKind {
+    fn from(kind: token::IntKind) -> Self {
+        match kind {
+            token::IntKind::Unknown => todo!(),
+            token::IntKind::U8 => Self::U8,
+            token::IntKind::U16 => Self::U16,
+            token::IntKind::U32 => Self::U32,
+            token::IntKind::U64 => Self::U64,
+            token::IntKind::Uint => Self::Uint,
+            token::IntKind::I8 => Self::I8,
+            token::IntKind::I16 => Self::I16,
+            token::IntKind::I32 => Self::I32,
+            token::IntKind::I64 => Self::I64,
+            token::IntKind::Int => Self::Int,
+        }
+    }
 }
 
 pub const DEFAULT_INT_KIND: IntKind = IntKind::I32;
@@ -67,6 +87,16 @@ pub enum FloatKind {
     F64,
 }
 
+impl From<token::FloatKind> for FloatKind {
+    fn from(kind: token::FloatKind) -> Self {
+        match kind {
+            token::FloatKind::Unknown => todo!(),
+            token::FloatKind::F32 => Self::F32,
+            token::FloatKind::F64 => Self::F64,
+        }
+    }
+}
+
 pub const DEFAULT_FLOAT_KIND: FloatKind = FloatKind::F32;
 
 impl Display for FloatKind {
@@ -88,6 +118,17 @@ pub enum PrimTy {
     Int(IntKind),
     Float(FloatKind),
     String,
+}
+
+impl From<&Lit> for PrimTy {
+    fn from(lit: &Lit) -> Self {
+        match lit {
+            Lit::Bool(_) => Self::Bool,
+            Lit::Int(_, kind) => Self::Int(IntKind::from(*kind)),
+            Lit::Float(_, kind) => Self::Float(FloatKind::from(*kind)),
+            Lit::String(_) => Self::String,
+        }
+    }
 }
 
 impl Display for PrimTy {
@@ -234,8 +275,15 @@ impl TyCtx {
         ex
     }
 
-    pub fn lookup_typed_term(&self, name: Ident) -> Option<&CtxItem> {
-        self.ctx.lookup(CtxItemName::TypedTerm(name))
+    pub fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
+        if let Some(item) = self.ctx.lookup(CtxItemName::TypedTerm(name)) {
+            match item {
+                &CtxItem::TypedTerm(_, ty) => Some(ty),
+                _ => unreachable!(),
+            }
+        } else {
+            None
+        }
     }
 
     // Constructors //
@@ -411,5 +459,9 @@ impl TyCtx {
             },
             _ => Err(TyError()),
         }
+    }
+
+    pub fn ctx(&mut self) -> &mut Ctx {
+        &mut self.ctx
     }
 }
