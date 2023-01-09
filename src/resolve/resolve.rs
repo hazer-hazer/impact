@@ -11,7 +11,7 @@ use crate::{
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Span, Symbol},
+    span::span::{Ident, Span, Symbol, WithSpan},
 };
 
 use super::{
@@ -125,7 +125,7 @@ impl<'ast> NameResolver<'ast> {
         // TODO: When generics added, don't resolve local if segment has generics
         if segments.len() == 1 {
             // TODO: Assert that segment is lowercase for local variable?
-            if let Some(local) = self.resolve_local(&segments[0]) {
+            if let Some(local) = self.resolve_local(segments[0].expect_name()) {
                 return local;
             }
         }
@@ -134,11 +134,11 @@ impl<'ast> NameResolver<'ast> {
 
         for seg_index in 0..segments.len() {
             let seg = segments[seg_index];
-            let seg_name = seg.sym();
+            let seg_name = seg.expect_name().sym();
             let is_target = seg_index == segments.len() - 1;
 
             // Path prefix segments must be type identifiers
-            if !is_target && !seg.is_ty() {
+            if !is_target && !seg.expect_name().is_ty() {
                 MessageBuilder::error()
                     .span(path.prefix_span(seg_index))
                     .text(format!("Invalid path `{}`", path))
@@ -150,7 +150,7 @@ impl<'ast> NameResolver<'ast> {
                 return Res::error();
             }
 
-            let def = match search_mod.get_by_ident(&seg) {
+            let def = match search_mod.get_by_ident(seg.expect_name()) {
                 Some(def) => def,
                 None => {
                     let prefix = path.prefix_str(seg_index);

@@ -1,17 +1,15 @@
 use crate::{
     ast::{
-        expr::{
-            Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix,
-            TyExpr,
-        },
+        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        Path, WithNodeId, AST, N, PR,
+        Path, PathSeg, WithNodeId, AST, N, PR,
     },
     hir::{
         self,
+        arena::Arena,
         item::{Decl, Mod, TypeItem},
         HIR,
     },
@@ -22,15 +20,6 @@ use crate::{
     span::span::{Ident, WithSpan},
 };
 
-macro_rules! lower_pr_boxed {
-    ($self: ident, $pr: expr, $lower: ident) => {
-        match $pr {
-            Ok(node) => Box::new($self.$lower(node)),
-            Err(err) => panic!("Error node on lower stage {}", err),
-        }
-    };
-}
-
 macro_rules! lower_pr {
     ($self: ident, $pr: expr, $lower: ident) => {
         match $pr {
@@ -40,44 +29,38 @@ macro_rules! lower_pr {
     };
 }
 
-macro_rules! lower_each_pr_boxed {
-    ($self: ident, $prs: expr, $lower: ident) => {
-        $prs.iter()
-            .map(|pr| lower_pr_boxed!($self, pr, $lower))
-            .collect::<Vec<_>>()
-    };
-}
-
 macro_rules! lower_each_pr {
     ($self: ident, $prs: expr, $lower: ident) => {
         $prs.iter()
             .map(|pr| lower_pr!($self, pr, $lower))
-            .collect::<Vec<_>>()
+            .collect::<&[_]>()
     };
 }
 
-pub struct Lower<'ast> {
+pub struct Lower<'ast, 'hir> {
     sess: Session,
     ast: &'ast AST,
     msg: MessageStorage,
+    arena: Arena<'hir>,
 }
 
-impl<'ast> Lower<'ast> {
+impl<'ast, 'hir> Lower<'ast, 'hir> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
             sess,
             msg: Default::default(),
+            arena: Arena::default(),
         }
     }
 
     fn lower_ast(&mut self) -> HIR {
-        HIR::new(lower_each_pr_boxed!(self, self.ast.items(), lower_item))
+        HIR {}
     }
 
     // Statements //
-    fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
-        match stmt.kind() {
+    fn lower_stmt(&mut self, stmt: &Stmt) -> &'hir hir::stmt::Stmt<'hir> {
+        self.arena.alloc(match stmt.kind() {
             StmtKind::Expr(expr) => hir::stmt::Stmt::new(
                 hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
                 stmt.span(),
@@ -86,24 +69,27 @@ impl<'ast> Lower<'ast> {
                 hir::stmt::StmtKind::Item(lower_pr!(self, item, lower_item)),
                 stmt.span(),
             ),
-        }
+        })
     }
 
     // Items //
-    fn lower_item(&mut self, item: &Item) -> hir::item::Item {
+    fn lower_item(&mut self, item: &Item) -> &'hir hir::item::Item<'hir> {
         let kind = match item.kind() {
             ItemKind::Type(name, ty) => self.lower_type_item(name, ty),
             ItemKind::Mod(name, items) => self.lower_mod_item(name, items),
             ItemKind::Decl(name, params, body) => self.lower_decl_item(name, params, body),
         };
 
-        hir::item::Item::new(kind, item.span())
+        let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
+
+        self.arena
+            .alloc(hir::item::Item::new(def_id, kind, item.span()))
     }
 
     fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
         hir::item::ItemKind::Type(TypeItem {
             name: lower_pr!(self, name, lower_ident),
-            ty: lower_pr_boxed!(self, ty, lower_ty),
+            ty: lower_pr!(self, ty, lower_ty),
         })
     }
 
@@ -135,29 +121,29 @@ impl<'ast> Lower<'ast> {
                 value: params
                     .iter()
                     .rfold(lower_pr!(self, body, lower_expr), |body, param| {
-                        hir::expr::Expr::new(
+                        self.arena.alloc(hir::expr::Expr::new(
                             hir::expr::ExprKind::Lambda(hir::expr::Lambda {
                                 param: lower_pr!(self, param, lower_pat),
-                                body: Box::new(body),
+                                body,
                             }),
                             param.span(),
-                        )
+                        ))
                     }),
             })
         }
     }
 
     // Patterns //
-    fn lower_pat(&mut self, pat: &Pat) -> hir::pat::Pat {
+    fn lower_pat(&mut self, pat: &Pat) -> &'hir hir::pat::Pat<'hir> {
         let kind = match pat.kind() {
             PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
         };
 
-        hir::pat::Pat::new(kind, pat.span())
+        self.arena.alloc(hir::pat::Pat::new(kind, pat.span()))
     }
 
     // Expressions //
-    fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
+    fn lower_expr(&mut self, expr: &Expr) -> &'hir hir::expr::Expr<'hir> {
         let kind = match expr.kind() {
             ExprKind::Unit => hir::expr::ExprKind::Unit,
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
@@ -171,7 +157,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
         };
 
-        hir::expr::Expr::new(kind, expr.span())
+        self.arena.alloc(hir::expr::Expr::new(kind, expr.span()))
     }
 
     fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
@@ -217,30 +203,30 @@ impl<'ast> Lower<'ast> {
 
     fn lower_infix_expr(&mut self, infix: &Infix) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Infix(hir::expr::Infix {
-            lhs: lower_pr_boxed!(self, &infix.lhs, lower_expr),
+            lhs: lower_pr!(self, &infix.lhs, lower_expr),
             op: infix.op,
-            rhs: lower_pr_boxed!(self, &infix.rhs, lower_expr),
+            rhs: lower_pr!(self, &infix.rhs, lower_expr),
         })
     }
 
     fn lower_prefix_expr(&mut self, prefix: &Prefix) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Prefix(hir::expr::Prefix {
             op: prefix.op,
-            rhs: lower_pr_boxed!(self, &prefix.rhs, lower_expr),
+            rhs: lower_pr!(self, &prefix.rhs, lower_expr),
         })
     }
 
     fn lower_lambda_expr(&mut self, lambda: &Lambda) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Lambda(hir::expr::Lambda {
             param: lower_pr!(self, &lambda.param, lower_pat),
-            body: lower_pr_boxed!(self, &lambda.body, lower_expr),
+            body: lower_pr!(self, &lambda.body, lower_expr),
         })
     }
 
     fn lower_app_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Call(hir::expr::Call {
-            lhs: lower_pr_boxed!(self, &call.lhs, lower_expr),
-            arg: lower_pr_boxed!(self, &call.arg, lower_expr),
+            lhs: lower_pr!(self, &call.lhs, lower_expr),
+            arg: lower_pr!(self, &call.arg, lower_expr),
         })
     }
 
@@ -250,13 +236,13 @@ impl<'ast> Lower<'ast> {
 
     fn lower_ty_expr(&mut self, ty_expr: &TyExpr) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Ty(hir::expr::TyExpr {
-            expr: lower_pr_boxed!(self, &ty_expr.expr, lower_expr),
+            expr: lower_pr!(self, &ty_expr.expr, lower_expr),
             ty: lower_pr!(self, &ty_expr.ty, lower_ty),
         })
     }
 
     // Types //
-    fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
+    fn lower_ty(&mut self, ty: &Ty) -> &'hir hir::ty::Ty<'hir> {
         let kind = match ty.kind() {
             TyKind::Unit => self.lower_unit_ty(),
             TyKind::Path(path) => self.lower_path_ty(path),
@@ -264,7 +250,7 @@ impl<'ast> Lower<'ast> {
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
         };
 
-        hir::ty::Ty::new(kind, ty.span())
+        self.arena.alloc(hir::ty::Ty::new(kind, ty.span()))
     }
 
     fn lower_unit_ty(&mut self) -> hir::ty::TyKind {
@@ -277,8 +263,8 @@ impl<'ast> Lower<'ast> {
 
     fn lower_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> hir::ty::TyKind {
         hir::ty::TyKind::Func(
-            lower_pr_boxed!(self, param_ty, lower_ty),
-            lower_pr_boxed!(self, return_ty, lower_ty),
+            lower_pr!(self, param_ty, lower_ty),
+            lower_pr!(self, return_ty, lower_ty),
         )
     }
 
@@ -287,28 +273,40 @@ impl<'ast> Lower<'ast> {
         *ident
     }
 
-    fn lower_path(&mut self, path: &Path) -> hir::Path {
-        hir::Path::new(
+    fn lower_path(&mut self, path: &Path) -> &'hir hir::Path<'hir> {
+        self.arena.alloc(hir::Path::new(
             self.sess.res.get(NamePath::new(path.id())).unwrap(),
-            path.segments().clone(),
-        )
+            &path
+                .segments()
+                .iter()
+                .map(|seg| self.lower_path_seg(seg))
+                .collect::<Vec<_>>(),
+            path.span(),
+        ))
     }
 
-    fn lower_block(&mut self, block: &Block) -> hir::expr::Block {
+    fn lower_path_seg(&mut self, seg: &PathSeg) -> &'hir hir::PathSeg {
+        self.arena.alloc(hir::PathSeg::new(
+            self.lower_ident(seg.expect_name()),
+            seg.span(),
+        ))
+    }
+
+    fn lower_block(&mut self, block: &Block) -> &'hir hir::expr::Block<'hir> {
         assert!(!block.stmts().is_empty());
 
         let stmts = lower_each_pr!(self, block.stmts()[0..block.stmts().len() - 1], lower_stmt);
 
         let expr = match block.stmts().last().unwrap().as_ref().unwrap().kind() {
-            StmtKind::Expr(expr) => Some(lower_pr_boxed!(self, expr, lower_expr)),
+            StmtKind::Expr(expr) => Some(lower_pr!(self, expr, lower_expr)),
             StmtKind::Item(_) => None,
         };
 
-        hir::expr::Block::new(stmts, expr)
+        self.arena.alloc(hir::expr::Block::new(stmts, expr))
     }
 }
 
-impl<'ast> Stage<HIR> for Lower<'ast> {
+impl<'ast, 'hir> Stage<HIR> for Lower<'ast, 'hir> {
     fn run(mut self) -> StageOutput<HIR> {
         let hir = self.lower_ast();
         StageOutput::new(self.sess, hir, self.msg)

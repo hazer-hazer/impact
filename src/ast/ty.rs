@@ -1,11 +1,8 @@
 use std::fmt::Display;
 
-use crate::{
-    hir::N,
-    span::span::{Span, WithSpan},
-};
+use crate::span::span::{Span, WithSpan};
 
-use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, PR};
+use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, N, PR};
 
 #[derive(Debug, Clone)]
 pub struct Ty {

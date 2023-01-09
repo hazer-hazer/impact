@@ -1,13 +1,13 @@
 use crate::span::span::{Span, WithSpan};
 
-use super::{Path, N};
+use super::Path;
 
-pub struct Ty {
-    kind: TyKind,
+pub struct Ty<'hir> {
+    kind: TyKind<'hir>,
     span: Span,
 }
 
-impl Ty {
+impl<'hir> Ty<'hir> {
     pub fn new(kind: TyKind, span: Span) -> Self {
         Self { kind, span }
     }
@@ -17,14 +17,14 @@ impl Ty {
     }
 }
 
-impl WithSpan for Ty {
+impl<'hir> WithSpan for Ty<'hir> {
     fn span(&self) -> Span {
         self.span
     }
 }
 
-pub enum TyKind {
+pub enum TyKind<'hir> {
     Unit,
-    Path(Path),
-    Func(N<Ty>, N<Ty>),
+    Path(&'hir Path<'hir>),
+    Func(&'hir Ty<'hir>, &'hir Ty<'hir>),
 }

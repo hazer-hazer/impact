@@ -1,11 +1,12 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
+    dt::arena::declare_arena,
     resolve::res::Res,
-    span::span::{Ident, Span, WithSpan},
+    span::span::{Ident, Span},
 };
 
-use self::item::Item;
+use self::item::{Item, ItemId};
 
 /**
  * HIR is nothing more than just an unwrapped version of AST, i.e. freed of parse results.
@@ -17,56 +18,61 @@ pub mod stmt;
 pub mod ty;
 pub mod visitor;
 
-pub type N<T> = Box<T>;
-
-pub struct HIR {
-    items: Vec<N<Item>>,
+declare_arena! {
+    expr: super::expr::Expr<'a>,
+    item: super::item::Item<'a>,
+    pat: super::pat::Pat<'a>,
+    stmt: super::stmt::Stmt<'a>,
+    ty: super::ty::Ty<'a>,
+    block: super::expr::Block<'a>,
+    path: super::Path<'a>,
+    path_seg: super::PathSeg,
 }
 
-impl HIR {
-    pub fn new(items: Vec<N<Item>>) -> Self {
-        Self { items }
-    }
+pub struct HIR {}
 
-    pub fn items(&self) -> &[N<Item>] {
-        self.items.as_ref()
+pub struct PathSeg {
+    ident: Ident,
+    span: Span,
+}
+
+impl PathSeg {
+    pub fn new(ident: Ident, span: Span) -> Self {
+        Self { ident, span }
     }
 }
 
-pub struct Path {
+impl Display for PathSeg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.ident)
+    }
+}
+
+pub struct Path<'hir> {
     res: Res,
-    segments: Vec<Ident>,
+    segments: &'hir [&'hir PathSeg],
+    span: Span,
 }
 
-impl Path {
-    pub fn new(res: Res, segments: Vec<Ident>) -> Self {
-        Self { res, segments }
+impl<'hir> Path<'hir> {
+    pub fn new(res: Res, segments: &'hir [&'hir PathSeg], span: Span) -> Self {
+        Self {
+            res,
+            segments,
+            span,
+        }
     }
 
     pub fn res(&self) -> &Res {
         &self.res
     }
 
-    pub fn segments(&self) -> &[Ident] {
+    pub fn segments(&self) -> &[&PathSeg] {
         self.segments.as_ref()
     }
-
-    pub fn target_name(&self) -> Ident {
-        self.segments().last().copied().unwrap()
-    }
 }
 
-impl WithSpan for Path {
-    fn span(&self) -> Span {
-        self.segments()
-            .iter()
-            .map(|seg| seg.span())
-            .reduce(|prefix, seg| prefix.to(seg))
-            .unwrap()
-    }
-}
-
-impl Display for Path {
+impl<'hir> Display for Path<'hir> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

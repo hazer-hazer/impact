@@ -5,7 +5,7 @@ use crate::{
         stmt::{Stmt, StmtKind},
         ty::Ty,
         visitor::HirVisitor,
-        Path, HIR, N,
+        Path, HIR,
     },
     parser::token::Punct,
     span::span::{Ident, Kw},
@@ -39,7 +39,7 @@ macro_rules! walk_each_delim {
 impl<'a> HirVisitor for AstLikePP<'a> {
     fn visit_hir(&mut self, hir: &HIR) {
         self.line("== HIR ==");
-        walk_each_delim!(self, hir.items(), visit_item, "\n")
+        // walk_each_delim!(self, hir.items(), visit_item, "\n")
     }
 
     // Statements //
@@ -120,7 +120,7 @@ impl<'a> HirVisitor for AstLikePP<'a> {
         self.str("()");
     }
 
-    fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) {
+    fn visit_func_ty(&mut self, param_ty: &Ty, return_ty: &Ty) {
         self.visit_ty(param_ty);
         self.punct(Punct::Arrow);
         self.visit_ty(return_ty);

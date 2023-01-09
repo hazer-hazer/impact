@@ -5,7 +5,7 @@ use crate::{
     span::span::{Span, Symbol, WithSpan},
 };
 
-use super::{pat::Pat, stmt::Stmt, ty::Ty, Path, N};
+use super::{pat::Pat, stmt::Stmt, ty::Ty, Path};
 
 pub use crate::typeck::ty::{FloatKind, IntKind};
 
@@ -27,12 +27,12 @@ impl Display for Lit {
     }
 }
 
-pub struct Expr {
-    kind: ExprKind,
+pub struct Expr<'hir> {
+    kind: ExprKind<'hir>,
     span: Span,
 }
 
-impl Expr {
+impl<'hir> Expr<'hir> {
     pub fn new(kind: ExprKind, span: Span) -> Self {
         Self { kind, span }
     }
@@ -42,68 +42,77 @@ impl Expr {
     }
 }
 
-impl WithSpan for Expr {
+impl<'hir> WithSpan for Expr<'hir> {
     fn span(&self) -> Span {
         self.span
     }
 }
 
-pub struct Block {
-    stmts: Vec<Stmt>,
-    expr: Option<N<Expr>>,
+pub struct Block<'hir> {
+    stmts: &'hir [&'hir Stmt<'hir>],
+    expr: Option<&'hir Expr<'hir>>,
 }
 
-impl Block {
-    pub fn new(stmts: Vec<Stmt>, expr: Option<N<Expr>>) -> Self {
+impl<'hir> Block<'hir> {
+    pub fn new(stmts: &'hir [&'hir Stmt<'hir>], expr: Option<&Expr>) -> Self {
         Self { stmts, expr }
     }
 
-    pub fn stmts(&self) -> &[Stmt] {
+    pub fn stmts(&self) -> &[&Stmt] {
         self.stmts.as_ref()
     }
 
-    pub fn expr(&self) -> Option<&N<Expr>> {
-        self.expr.as_ref()
+    pub fn expr(&self) -> Option<&Expr> {
+        self.expr
     }
 }
 
-pub struct PathExpr(pub Path);
+pub struct PathExpr<'hir>(pub Path<'hir>);
 
-pub struct Lambda {
-    pub param: Pat,
-    pub body: N<Expr>,
+pub struct Lambda<'hir> {
+    pub param: &'hir Pat<'hir>,
+    pub body: &'hir Expr<'hir>,
 }
 
-pub struct TyExpr {
-    pub expr: N<Expr>,
-    pub ty: Ty,
+pub struct TyExpr<'hir> {
+    pub expr: &'hir Expr<'hir>,
+    pub ty: &'hir Ty<'hir>,
 }
 
-pub struct Call {
-    pub lhs: N<Expr>,
-    pub arg: N<Expr>,
+pub struct Call<'hir> {
+    pub lhs: &'hir Expr<'hir>,
+    pub arg: &'hir Expr<'hir>,
 }
 
-pub struct Infix {
-    pub lhs: N<Expr>,
+pub struct Infix<'hir> {
+    pub lhs: &'hir Expr<'hir>,
     pub op: InfixOp,
-    pub rhs: N<Expr>,
+    pub rhs: &'hir Expr<'hir>,
 }
 
-pub struct Prefix {
+pub struct Prefix<'hir> {
     pub op: PrefixOp,
-    pub rhs: N<Expr>,
+    pub rhs: &'hir Expr<'hir>,
 }
 
-pub enum ExprKind {
+pub enum ExprKind<'hir> {
     Unit,
     Lit(Lit),
-    Path(PathExpr),
-    Block(Block),
-    Infix(Infix),
-    Prefix(Prefix),
-    Lambda(Lambda),
-    Call(Call),
-    Let(Block),
-    Ty(TyExpr),
+    Path(PathExpr<'hir>),
+    Block(&'hir Block<'hir>),
+    Infix(Infix<'hir>),
+    Prefix(Prefix<'hir>),
+    Lambda(Lambda<'hir>),
+    Call(Call<'hir>),
+    Let(&'hir Block<'hir>),
+    Ty(TyExpr<'hir>),
+}
+
+pub struct Param<'hir> {
+    pat: &'hir Pat<'hir>,
+}
+
+pub struct Body<'hir> {
+    params: &'hir [Param<'hir>],
+    value: &'hir Expr<'hir>,
 }

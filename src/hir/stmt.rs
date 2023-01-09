@@ -2,12 +2,12 @@ use crate::span::span::{Span, WithSpan};
 
 use super::{expr::Expr, item::Item};
 
-pub struct Stmt {
-    kind: StmtKind,
+pub struct Stmt<'hir> {
+    kind: StmtKind<'hir>,
     span: Span,
 }
 
-impl Stmt {
+impl<'hir> Stmt<'hir> {
     pub fn new(kind: StmtKind, span: Span) -> Self {
         Self { kind, span }
     }
@@ -17,13 +17,13 @@ impl Stmt {
     }
 }
 
-impl WithSpan for Stmt {
+impl<'hir> WithSpan for Stmt<'hir> {
     fn span(&self) -> Span {
         self.span
     }
 }
 
-pub enum StmtKind {
-    Expr(Expr),
-    Item(Item),
+pub enum StmtKind<'hir> {
+    Expr(&'hir Expr<'hir>),
+    Item(&'hir Item<'hir>),
 }

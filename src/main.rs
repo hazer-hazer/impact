@@ -14,6 +14,7 @@ mod ast;
 mod cli;
 // mod codegen;
 mod config;
+mod dt;
 mod hir;
 mod interface;
 mod lower;

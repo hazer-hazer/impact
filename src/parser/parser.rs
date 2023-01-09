@@ -9,7 +9,8 @@ use crate::{
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
-        ty::{Ty, TyKind}, ErrorNode, NodeId, NodeKindStr, Path, AST, N, PR,
+        ty::{Ty, TyKind},
+        ErrorNode, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
     },
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
@@ -780,9 +781,9 @@ impl Parser {
         let pe = self.enter_entity(ParseEntryKind::Expect, "path");
 
         // If no first identifier present then it's "expected path" error, not "expected identifier"
-        let mut segments = vec![self.parse_ident(expected)?];
+        let mut segments = vec![self.parse_path_seg()];
         while self.skip(TokenCmp::Punct(Punct::Dot)).is_some() {
-            segments.push(self.parse_ident("path segment (identifier)")?);
+            segments.push(self.parse_path_seg());
         }
 
         self.exit_parsed_entity(pe);
@@ -792,6 +793,11 @@ impl Parser {
             segments,
             self.close_span(lo),
         ))
+    }
+
+    fn parse_path_seg(&mut self) -> PathSeg {
+        let lo = self.span();
+        PathSeg::new(self.parse_ident("path segment"), self.close_span(lo))
     }
 
     fn parse_block(&mut self) -> PR<Block> {

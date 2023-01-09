@@ -178,25 +178,49 @@ where
 }
 
 #[derive(Debug, Clone)]
+pub struct PathSeg {
+    name: PR<Ident>,
+    span: Span,
+}
+
+impl PathSeg {
+    pub fn new(name: PR<Ident>, span: Span) -> Self {
+        Self { name, span }
+    }
+
+    pub fn expect_name(&self) -> &Ident {
+        self.name.as_ref().unwrap()
+    }
+}
+
+impl Display for PathSeg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", pr_display(&self.name))
+    }
+}
+
+impl WithSpan for PathSeg {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Path {
     id: NodeId,
-    segments: Vec<Ident>,
+    segments: Vec<PathSeg>,
     span: Span,
 }
 
 impl Path {
-    pub fn new(id: NodeId, segments: Vec<Ident>, span: Span) -> Self {
+    pub fn new(id: NodeId, segments: Vec<PathSeg>, span: Span) -> Self {
         Self { id, segments, span }
-    }
-
-    pub fn segments(&self) -> &Vec<Ident> {
-        &self.segments
     }
 
     pub fn prefix_str(&self, to: usize) -> String {
         let prefix = self.segments()[0..to]
             .iter()
-            .map(|seg| format!("{}", seg))
+            .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(".");
 
@@ -216,7 +240,11 @@ impl Path {
     }
 
     pub fn target_name(&self) -> Ident {
-        *self.segments().last().unwrap()
+        self.segments().last().unwrap().name.unwrap()
+    }
+
+    pub fn segments(&self) -> &[PathSeg] {
+        self.segments.as_ref()
     }
 }
 
@@ -239,7 +267,7 @@ impl Display for Path {
             "{}",
             self.segments()
                 .iter()
-                .map(|seg| format!("{}", seg))
+                .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(".")
         )

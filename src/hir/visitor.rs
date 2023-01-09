@@ -6,7 +6,7 @@ use super::{
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind},
-    Path, HIR, N,
+    Path, HIR,
 };
 
 macro_rules! walk_each {
@@ -19,7 +19,7 @@ macro_rules! walk_each {
 
 pub trait HirVisitor {
     fn visit_hir(&mut self, hir: &HIR) {
-        walk_each!(self, hir.items(), visit_item);
+        // walk_each!(self, hir.items(), visit_item);
     }
 
     // Statements //
@@ -54,7 +54,7 @@ pub trait HirVisitor {
 
     fn visit_mod_item(&mut self, mod_item: &Mod) {
         self.visit_ident(&mod_item.name);
-        walk_each!(self, &mod_item.items, visit_item);
+        walk_each!(self, mod_item.items, visit_item);
     }
 
     fn visit_decl_item(&mut self, decl: &Decl) {
@@ -144,7 +144,7 @@ pub trait HirVisitor {
         self.visit_path(path)
     }
 
-    fn visit_func_ty(&mut self, param_ty: &N<Ty>, return_ty: &N<Ty>) {
+    fn visit_func_ty(&mut self, param_ty: &Ty, return_ty: &Ty) {
         self.visit_ty(param_ty);
         self.visit_ty(return_ty);
     }
