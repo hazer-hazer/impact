@@ -8,7 +8,7 @@ pub struct Stmt<'hir> {
 }
 
 impl<'hir> Stmt<'hir> {
-    pub fn new(kind: StmtKind, span: Span) -> Self {
+    pub fn new(kind: StmtKind<'hir>, span: Span) -> Self {
         Self { kind, span }
     }
 

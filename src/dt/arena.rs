@@ -7,30 +7,41 @@ macro_rules! declare_arena {
             }
 
             impl<T> TypedArena<T> {
-                fn alloc(&mut self, value: T) -> &mut T {
+                fn new() -> Self {
+                    Self {
+                        items: Vec::new(),
+                    }
+                }
+
+                pub fn alloc(&mut self, value: T) -> &mut T {
                     self.items.push(value);
                     self.items.last_mut().unwrap()
                 }
             }
 
-            #[derive(Default)]
-            pub struct Arena<'a> {
-                $($name: TypedArena<$ty>),*
+            pub struct Arena<'ar> {
+                $($name: TypedArena<$ty>,)*
             }
 
-            impl<'a> Arena<'a> {
-                pub fn alloc<T: Allocatable<'a>>(&mut self, value: T) -> &mut T {
+            impl<'ar> Arena<'ar> {
+                pub fn new() -> Self {
+                    Self {
+                        $($name: TypedArena::new(),)*
+                    }
+                }
+
+                pub fn alloc<T: Allocatable<'ar>>(&mut self, value: T) -> &'ar mut T {
                     value.alloc_on(self)
                 }
             }
 
-            pub trait Allocatable<'a>: Sized + 'a {
-                fn alloc_on(self, arena: &mut Arena) -> &'a mut Self;
+            pub trait Allocatable<'ar>: Sized {
+                fn alloc_on<'a>(self, arena: &'a mut Arena<'ar>) -> &'a mut Self;
             }
 
             $(
-                impl<'a> Allocatable<'a> for $ty {
-                    fn alloc_on(self, arena: &mut Arena) -> &'a mut Self {
+                impl<'ar> Allocatable<'ar> for $ty {
+                    fn alloc_on<'a>(self, arena: &'a mut Arena<'ar>) -> &'a mut Self {
                         arena.$name.alloc(self)
                     }
                 }

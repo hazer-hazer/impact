@@ -33,7 +33,7 @@ pub struct Expr<'hir> {
 }
 
 impl<'hir> Expr<'hir> {
-    pub fn new(kind: ExprKind, span: Span) -> Self {
+    pub fn new(kind: ExprKind<'hir>, span: Span) -> Self {
         Self { kind, span }
     }
 
@@ -54,7 +54,7 @@ pub struct Block<'hir> {
 }
 
 impl<'hir> Block<'hir> {
-    pub fn new(stmts: &'hir [&'hir Stmt<'hir>], expr: Option<&Expr>) -> Self {
+    pub fn new(stmts: &'hir [&'hir Stmt<'hir>], expr: Option<&'hir Expr>) -> Self {
         Self { stmts, expr }
     }
 
@@ -67,7 +67,7 @@ impl<'hir> Block<'hir> {
     }
 }
 
-pub struct PathExpr<'hir>(pub Path<'hir>);
+pub struct PathExpr<'hir>(pub &'hir Path<'hir>);
 
 pub struct Lambda<'hir> {
     pub param: &'hir Pat<'hir>,

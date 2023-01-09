@@ -48,7 +48,7 @@ pub struct Item<'hir> {
 }
 
 impl<'hir> Item<'hir> {
-    pub fn new(def_id: DefId, kind: ItemKind, span: Span) -> Self {
+    pub fn new(def_id: DefId, kind: ItemKind<'hir>, span: Span) -> Self {
         Self { def_id, kind, span }
     }
 

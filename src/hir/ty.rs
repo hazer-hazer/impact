@@ -8,7 +8,7 @@ pub struct Ty<'hir> {
 }
 
 impl<'hir> Ty<'hir> {
-    pub fn new(kind: TyKind, span: Span) -> Self {
+    pub fn new(kind: TyKind<'hir>, span: Span) -> Self {
         Self { kind, span }
     }
 

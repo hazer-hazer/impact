@@ -12,7 +12,7 @@ pub struct Pat<'hir> {
 }
 
 impl<'hir> Pat<'hir> {
-    pub fn new(kind: PatKind, span: Span) -> Self {
+    pub fn new(kind: PatKind<'hir>, span: Span) -> Self {
         Self { kind, span }
     }
 

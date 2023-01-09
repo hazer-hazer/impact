@@ -19,13 +19,13 @@ pub mod ty;
 pub mod visitor;
 
 declare_arena! {
-    expr: super::expr::Expr<'a>,
-    item: super::item::Item<'a>,
-    pat: super::pat::Pat<'a>,
-    stmt: super::stmt::Stmt<'a>,
-    ty: super::ty::Ty<'a>,
-    block: super::expr::Block<'a>,
-    path: super::Path<'a>,
+    expr: super::expr::Expr<'ar>,
+    item: super::item::Item<'ar>,
+    pat: super::pat::Pat<'ar>,
+    stmt: super::stmt::Stmt<'ar>,
+    ty: super::ty::Ty<'ar>,
+    block: super::expr::Block<'ar>,
+    path: super::Path<'ar>,
     path_seg: super::PathSeg,
 }
 
