@@ -30,7 +30,7 @@ macro_rules! declare_arena {
                     }
                 }
 
-                pub fn alloc<T: Allocatable<'ar>>(&mut self, value: T) -> &'ar mut T {
+                pub fn alloc<T: Allocatable<'ar>>(&'ar mut self, value: T) -> &'ar mut T {
                     value.alloc_on(self)
                 }
             }

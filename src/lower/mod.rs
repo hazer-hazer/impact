@@ -9,7 +9,6 @@ use crate::{
     },
     hir::{
         self,
-        arena::Arena,
         item::{Decl, Mod, TypeItem},
         HIR,
     },
@@ -40,7 +39,6 @@ macro_rules! lower_each_pr {
 
 pub struct Lower<'hir> {
     ctx: GlobalCtx<'hir>,
-    arena: &'hir mut Arena<'hir>,
     sess: Session,
     msg: MessageStorage,
 }
@@ -49,7 +47,6 @@ impl<'hir> Lower<'hir> {
     pub fn new(sess: Session, ctx: GlobalCtx<'hir>) -> Self {
         Self {
             ctx,
-            arena: &mut ctx.hir_arena,
             sess,
             msg: Default::default(),
         }
@@ -61,7 +58,7 @@ impl<'hir> Lower<'hir> {
 
     // Statements //
     fn lower_stmt(&'hir mut self, stmt: &Stmt) -> &'hir hir::stmt::Stmt<'hir> {
-        self.arena.alloc(match stmt.kind() {
+        self.ctx.hir_arena.alloc(match stmt.kind() {
             StmtKind::Expr(expr) => hir::stmt::Stmt::new(
                 hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
                 stmt.span(),
@@ -83,7 +80,7 @@ impl<'hir> Lower<'hir> {
 
         let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
 
-        self.arena
+        self.ctx.hir_arena
             .alloc(hir::item::Item::new(def_id, kind, item.span()))
     }
 
@@ -132,7 +129,7 @@ impl<'hir> Lower<'hir> {
             let mut value = self.lower_expr(&body.unwrap());
             for param in params.iter().rev() {
                 let param = self.lower_pat(&param.unwrap());
-                value = self.arena.alloc(hir::expr::Expr::new(
+                value = self.ctx.hir_arena.alloc(hir::expr::Expr::new(
                     hir::expr::ExprKind::Lambda(hir::expr::Lambda { param, body: value }),
                     param.span(),
                 ))
@@ -150,7 +147,7 @@ impl<'hir> Lower<'hir> {
             PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
         };
 
-        self.arena.alloc(hir::pat::Pat::new(kind, pat.span()))
+        self.ctx.hir_arena.alloc(hir::pat::Pat::new(kind, pat.span()))
     }
 
     fn lower_pats(&'hir mut self, ast_pats: &Vec<PR<Pat>>) -> &'hir [&'hir hir::pat::Pat<'hir>] {
@@ -176,7 +173,7 @@ impl<'hir> Lower<'hir> {
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
         };
 
-        self.arena.alloc(hir::expr::Expr::new(kind, expr.span()))
+        self.ctx.hir_arena.alloc(hir::expr::Expr::new(kind, expr.span()))
     }
 
     fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
@@ -212,7 +209,7 @@ impl<'hir> Lower<'hir> {
         })
     }
 
-    fn lower_path_expr(&mut self, path: &PathExpr) -> hir::expr::ExprKind<'hir> {
+    fn lower_path_expr(&'hir mut self, path: &PathExpr) -> hir::expr::ExprKind<'hir> {
         hir::expr::ExprKind::Path(hir::expr::PathExpr(lower_pr!(self, &path.0, lower_path)))
     }
 
@@ -269,14 +266,14 @@ impl<'hir> Lower<'hir> {
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
         };
 
-        self.arena.alloc(hir::ty::Ty::new(kind, ty.span()))
+        self.ctx.hir_arena.alloc(hir::ty::Ty::new(kind, ty.span()))
     }
 
     fn lower_unit_ty(&mut self) -> hir::ty::TyKind<'hir> {
         hir::ty::TyKind::Unit
     }
 
-    fn lower_path_ty(&mut self, path: &PR<Path>) -> hir::ty::TyKind<'hir> {
+    fn lower_path_ty(&'hir mut self, path: &PR<Path>) -> hir::ty::TyKind<'hir> {
         hir::ty::TyKind::Path(lower_pr!(self, path, lower_path))
     }
 
@@ -296,20 +293,21 @@ impl<'hir> Lower<'hir> {
         *ident
     }
 
-    fn lower_path(&mut self, path: &Path) -> &'hir hir::Path<'hir> {
-        self.arena.alloc(hir::Path::new(
+    fn lower_path(&'hir mut self, path: &Path) -> &'hir hir::Path<'hir> {
+        let mut segs = vec![];
+        for seg in path.segments() {
+            segs.push(self.lower_path_seg(seg));
+        }
+
+        self.ctx.hir_arena.alloc(hir::Path::new(
             self.sess.res.get(NamePath::new(path.id())).unwrap(),
-            &path
-                .segments()
-                .iter()
-                .map(|seg| self.lower_path_seg(seg))
-                .collect::<Vec<_>>(),
+            &segs,
             path.span(),
         ))
     }
 
-    fn lower_path_seg(&mut self, seg: &PathSeg) -> &'hir hir::PathSeg {
-        self.arena.alloc(hir::PathSeg::new(
+    fn lower_path_seg(&'hir mut self, seg: &PathSeg) -> &'hir hir::PathSeg {
+        self.ctx.hir_arena.alloc(hir::PathSeg::new(
             self.lower_ident(seg.expect_name()),
             seg.span(),
         ))
@@ -328,7 +326,7 @@ impl<'hir> Lower<'hir> {
             StmtKind::Item(_) => None,
         };
 
-        self.arena.alloc(hir::expr::Block::new(&stmts, expr))
+        self.ctx.hir_arena.alloc(hir::expr::Block::new(&stmts, expr))
     }
 }
 
