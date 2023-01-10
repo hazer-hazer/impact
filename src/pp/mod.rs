@@ -34,7 +34,7 @@ const ALLOWED_COLORS: &[Color] = &[
     Color::BrightMagenta,
 ];
 
-pub struct AstLikePP<'a> {
+pub struct AstLikePP<'a, D = ()> {
     out: String,
     indent_level: u32,
     sess: &'a Session,
@@ -45,9 +45,11 @@ pub struct AstLikePP<'a> {
     /// NodeId of item -> Color
     /// Resolution gives us item NodeId
     names_colors: NodeMap<Color>,
+
+    data: D,
 }
 
-impl<'a> AstLikePP<'a> {
+impl<'a> AstLikePP<'a, ()> {
     pub fn new(sess: &'a Session, mode: AstPPMode) -> Self {
         Self {
             out: String::new(),
@@ -56,6 +58,21 @@ impl<'a> AstLikePP<'a> {
             mode,
             last_color_index: 0,
             names_colors: Default::default(),
+            data: (),
+        }
+    }
+}
+
+impl<'a, D> AstLikePP<'a, D> {
+    pub fn with_data(sess: &'a Session, mode: AstPPMode, data: D) -> Self {
+        Self {
+            out: String::new(),
+            indent_level: 0,
+            sess,
+            mode,
+            last_color_index: 0,
+            names_colors: Default::default(),
+            data,
         }
     }
 

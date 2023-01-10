@@ -133,7 +133,7 @@ impl<'ast> NameResolver<'ast> {
         let mut search_mod = self.sess.def_table.get_module(self.nearest_mod_item);
 
         for seg_index in 0..segments.len() {
-            let seg = segments[seg_index];
+            let seg = &segments[seg_index];
             let seg_name = seg.expect_name().sym();
             let is_target = seg_index == segments.len() - 1;
 

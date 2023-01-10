@@ -775,7 +775,7 @@ impl Parser {
         kind.map(|k| k.map(|k| Box::new(Expr::new(self.next_node_id(), k, span))))
     }
 
-    fn parse_path(&mut self, expected: &str) -> PR<Path> {
+    fn parse_path(&mut self, _expected: &str) -> PR<Path> {
         let lo = self.span();
 
         let pe = self.enter_entity(ParseEntryKind::Expect, "path");

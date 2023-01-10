@@ -1,18 +1,16 @@
 use crate::span::span::{Ident, Span, WithSpan};
 
-pub enum PatKind<'hir> {
+pub enum PatKind {
     Ident(Ident),
-
-    _RefStub(&'hir Pat<'hir>),
 }
 
-pub struct Pat<'hir> {
-    kind: PatKind<'hir>,
+pub struct Pat {
+    kind: PatKind,
     span: Span,
 }
 
-impl<'hir> Pat<'hir> {
-    pub fn new(kind: PatKind<'hir>, span: Span) -> Self {
+impl Pat {
+    pub fn new(kind: PatKind, span: Span) -> Self {
         Self { kind, span }
     }
 
@@ -21,7 +19,7 @@ impl<'hir> Pat<'hir> {
     }
 }
 
-impl<'hir> WithSpan for Pat<'hir> {
+impl WithSpan for Pat {
     fn span(&self) -> Span {
         self.span
     }

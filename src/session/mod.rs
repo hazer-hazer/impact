@@ -9,7 +9,7 @@ use crate::{
     },
     resolve::{
         def::DefTable,
-        res::{NamePath, Resolutions},
+        res::{Resolutions},
     },
     span::span::{Span, SpanPos},
 };

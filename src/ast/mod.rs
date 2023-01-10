@@ -240,7 +240,14 @@ impl Path {
     }
 
     pub fn target_name(&self) -> Ident {
-        self.segments().last().unwrap().name.unwrap()
+        *self
+            .segments()
+            .last()
+            .as_ref()
+            .unwrap()
+            .name
+            .as_ref()
+            .unwrap()
     }
 
     pub fn segments(&self) -> &[PathSeg] {

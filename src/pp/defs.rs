@@ -11,7 +11,7 @@ pub trait DefPrinter {
     fn _pp_mod(&mut self, module: &Module);
 }
 
-impl<'a> DefPrinter for AstLikePP<'a> {
+impl<'a> DefPrinter for AstLikePP<'a, ()> {
     fn pp_defs(&mut self) {
         self.line("== Definitions ==");
         self.sess

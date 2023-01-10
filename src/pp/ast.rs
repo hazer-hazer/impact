@@ -39,7 +39,7 @@ macro_rules! walk_each_pr_delim {
     };
 }
 
-impl<'ast> AstVisitor<'ast> for AstLikePP<'ast> {
+impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_err(&mut self, err: &'ast ErrorNode) {
         if let Some(parsed) = err.parsed() {
             self.string(parsed);

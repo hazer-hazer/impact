@@ -4,11 +4,15 @@ use crate::{
     ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, MappedAst, NodeId},
     cli::verbose,
     config::config::{Config, StageName},
-    hir::{arena::Arena, visitor::HirVisitor},
-    interface::{ctx::GlobalCtx, writer::outln},
+    hir::visitor::HirVisitor,
+    interface::writer::outln,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
-    pp::{defs::DefPrinter, AstLikePP, AstPPMode},
+    pp::{
+        defs::DefPrinter,
+        hir::{self, HirPP},
+        AstLikePP, AstPPMode,
+    },
     resolve::{
         collect::DefCollector,
         def::{DefId, ModuleId},
@@ -175,16 +179,14 @@ impl<'ast> Interface {
         let sess = self.should_stop(sess, stage)?;
 
         // Lowering //
-        let ctx = GlobalCtx::new(&ast);
-
         verbose!("=== Lowering ===");
         let stage = StageName::Lower;
-        let ((hir, ctx), mut sess) = Lower::new(sess, ctx).run_and_emit(true)?;
+        let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
         if sess.config().check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
-            pp.visit_hir(&hir);
-            let hir = pp.get_string();
+            let mut pp = HirPP::new(&sess, &hir);
+            pp.visit_hir();
+            let hir = pp.pp.get_string();
             outln!(sess.writer, "Printing HIR after parsing\n{}", hir);
         }
 

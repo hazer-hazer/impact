@@ -3,7 +3,7 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{expr::Expr, ty::Ty};
+use super::{expr::Expr, ty::Ty, N};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ItemId(DefId);
@@ -11,6 +11,10 @@ pub struct ItemId(DefId);
 impl ItemId {
     pub fn new(def_id: DefId) -> Self {
         ItemId(def_id)
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.0.as_usize()
     }
 }
 
@@ -20,35 +24,35 @@ impl Into<DefId> for ItemId {
     }
 }
 
-pub struct TypeItem<'hir> {
+pub struct TypeItem {
     pub name: Ident,
-    pub ty: &'hir Ty<'hir>,
+    pub ty: N<Ty>,
 }
 
-pub struct Mod<'hir> {
+pub struct Mod {
     pub name: Ident,
-    pub items: &'hir [&'hir Item<'hir>],
+    pub items: Vec<ItemId>,
 }
 
-pub struct Decl<'hir> {
+pub struct Decl {
     pub name: Ident,
-    pub value: &'hir Expr<'hir>,
+    pub value: N<Expr>,
 }
 
-pub enum ItemKind<'hir> {
-    Type(TypeItem<'hir>),
-    Mod(Mod<'hir>),
-    Decl(Decl<'hir>),
+pub enum ItemKind {
+    Type(TypeItem),
+    Mod(Mod),
+    Decl(Decl),
 }
 
-pub struct Item<'hir> {
+pub struct Item {
     def_id: DefId,
-    kind: ItemKind<'hir>,
+    kind: ItemKind,
     span: Span,
 }
 
-impl<'hir> Item<'hir> {
-    pub fn new(def_id: DefId, kind: ItemKind<'hir>, span: Span) -> Self {
+impl Item {
+    pub fn new(def_id: DefId, kind: ItemKind, span: Span) -> Self {
         Self { def_id, kind, span }
     }
 
@@ -63,9 +67,13 @@ impl<'hir> Item<'hir> {
     pub fn kind(&self) -> &ItemKind {
         &self.kind
     }
+
+    pub fn def_id(&self) -> DefId {
+        self.def_id
+    }
 }
 
-impl<'hir> WithSpan for Item<'hir> {
+impl WithSpan for Item {
     fn span(&self) -> Span {
         self.span
     }

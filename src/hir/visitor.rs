@@ -2,7 +2,7 @@ use crate::span::span::Ident;
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
-    item::{Decl, Item, ItemKind, Mod, TypeItem},
+    item::{Decl, Item, ItemId, ItemKind, Mod, TypeItem},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind},
@@ -18,8 +18,10 @@ macro_rules! walk_each {
 }
 
 pub trait HirVisitor {
-    fn visit_hir(&mut self, hir: &HIR) {
-        // walk_each!(self, hir.items(), visit_item);
+    fn hir(&self) -> &HIR;
+
+    fn visit_hir(&mut self) {
+        walk_each!(self, &self.hir().root.items, visit_item_stmt);
     }
 
     // Statements //
@@ -34,18 +36,12 @@ pub trait HirVisitor {
         self.visit_expr(expr)
     }
 
-    fn visit_item_stmt(&mut self, item: &Item) {
-        self.visit_item(item)
+    fn visit_item_stmt(&mut self, id: &ItemId) {
+        self.visit_item(*id)
     }
 
     // Items //
-    fn visit_item(&mut self, item: &Item) {
-        match item.kind() {
-            ItemKind::Type(ty_item) => self.visit_type_item(ty_item),
-            ItemKind::Mod(mod_item) => self.visit_mod_item(mod_item),
-            ItemKind::Decl(decl) => self.visit_decl_item(decl),
-        }
-    }
+    fn visit_item(&mut self, id: ItemId);
 
     fn visit_type_item(&mut self, ty_item: &TypeItem) {
         self.visit_ident(&ty_item.name);
@@ -54,7 +50,7 @@ pub trait HirVisitor {
 
     fn visit_mod_item(&mut self, mod_item: &Mod) {
         self.visit_ident(&mod_item.name);
-        walk_each!(self, mod_item.items, visit_item);
+        walk_each!(self, &mod_item.items, visit_item_stmt);
     }
 
     fn visit_decl_item(&mut self, decl: &Decl) {

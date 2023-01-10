@@ -1,14 +1,14 @@
 use crate::span::span::{Span, WithSpan};
 
-use super::{expr::Expr, item::Item};
+use super::{expr::Expr, item::{Item, ItemId}, N};
 
-pub struct Stmt<'hir> {
-    kind: StmtKind<'hir>,
+pub struct Stmt {
+    kind: StmtKind,
     span: Span,
 }
 
-impl<'hir> Stmt<'hir> {
-    pub fn new(kind: StmtKind<'hir>, span: Span) -> Self {
+impl Stmt {
+    pub fn new(kind: StmtKind, span: Span) -> Self {
         Self { kind, span }
     }
 
@@ -17,13 +17,13 @@ impl<'hir> Stmt<'hir> {
     }
 }
 
-impl<'hir> WithSpan for Stmt<'hir> {
+impl WithSpan for Stmt {
     fn span(&self) -> Span {
         self.span
     }
 }
 
-pub enum StmtKind<'hir> {
-    Expr(&'hir Expr<'hir>),
-    Item(&'hir Item<'hir>),
+pub enum StmtKind {
+    Expr(N<Expr>),
+    Item(ItemId),
 }

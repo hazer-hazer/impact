@@ -12,7 +12,7 @@ use crate::{
         res::{NamePath, ResKind},
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Spanned, WithSpan},
+    span::span::{WithSpan},
 };
 
 use self::{
@@ -169,11 +169,11 @@ impl<'ast> Typecker<'ast> {
 
     fn synth_item(&self, item: &Item) -> TyResult<Ty> {
         match item.kind() {
-            ItemKind::Type(name, ty) => {
+            ItemKind::Type(_name, _ty) => {
                 todo!()
             },
-            ItemKind::Mod(name, items) => todo!(),
-            ItemKind::Decl(name, params, body) => todo!(),
+            ItemKind::Mod(_name, _items) => todo!(),
+            ItemKind::Decl(_name, _params, _body) => todo!(),
         }
     }
 
@@ -194,7 +194,7 @@ impl<'ast> Typecker<'ast> {
                 Ok(())
             },
 
-            (ExprKind::Lambda(lambda), TyKind::Func(param_ty, ret_ty)) => {
+            (ExprKind::Lambda(_lambda), TyKind::Func(_param_ty, _ret_ty)) => {
                 // let typed_param = CtxItem::TypedTerm(lambda.param.as_ref().unwrap(), *param_ty);
                 // self.tyctx.ctx().add(typed_param);
 
@@ -260,19 +260,19 @@ impl<'ast> Typecker<'ast> {
                 self.subtype(ret, ret_)
             },
 
-            (&TyKind::Forall(alpha, body), _) => {
+            (&TyKind::Forall(_alpha, _body), _) => {
                 todo!()
             },
 
-            (_, &TyKind::Forall(alpha, body)) => {
+            (_, &TyKind::Forall(_alpha, _body)) => {
                 todo!()
             },
 
-            (&TyKind::Existential(id), _) => {
+            (&TyKind::Existential(_id), _) => {
                 todo!()
             },
 
-            (_, &TyKind::Existential(id)) => {
+            (_, &TyKind::Existential(_id)) => {
                 todo!()
             },
 

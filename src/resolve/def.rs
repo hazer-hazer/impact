@@ -351,6 +351,10 @@ impl DefTable {
         self.defs.as_ref()
     }
 
+    pub fn defs_count(&self) -> usize {
+        self.defs.len()
+    }
+
     pub fn blocks(&self) -> &NodeMap<Module> {
         &self.blocks
     }
