@@ -8,11 +8,7 @@ use crate::{
     interface::writer::outln,
     lower::Lower,
     parser::{lexer::Lexer, parser::Parser},
-    pp::{
-        defs::DefPrinter,
-        hir::{self, HirPP},
-        AstLikePP, AstPPMode,
-    },
+    pp::{defs::DefPrinter, hir::HirPP, AstLikePP, AstPPMode},
     resolve::{
         collect::DefCollector,
         def::{DefId, ModuleId},
@@ -184,8 +180,8 @@ impl<'ast> Interface {
         let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
         if sess.config().check_pp_stage(stage) {
-            let mut pp = HirPP::new(&sess, &hir);
-            pp.visit_hir();
+            let mut pp = HirPP::new(&sess);
+            pp.visit_hir(&hir);
             let hir = pp.pp.get_string();
             outln!(sess.writer, "Printing HIR after parsing\n{}", hir);
         }

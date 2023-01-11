@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    ast::{NodeId, NodeMap, WithNodeId},
+    ast::{NodeId},
     resolve::res::Res,
     span::span::{Ident, Span},
 };

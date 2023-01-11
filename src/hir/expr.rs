@@ -31,13 +31,18 @@ impl Display for Lit {
 }
 
 pub struct Expr {
+    node_id: NodeId,
     kind: ExprKind,
     span: Span,
 }
 
 impl Expr {
-    pub fn new(kind: ExprKind, span: Span) -> Self {
-        Self { kind, span }
+    pub fn new(node_id: NodeId, kind: ExprKind, span: Span) -> Self {
+        Self {
+            node_id,
+            kind,
+            span,
+        }
     }
 
     pub fn kind(&self) -> &ExprKind {
@@ -45,11 +50,11 @@ impl Expr {
     }
 }
 
-// impl WithNodeId for Expr {
-//     fn id(&self) -> NodeId {
-//         self.node_id
-//     }
-// }
+impl WithNodeId for Expr {
+    fn id(&self) -> NodeId {
+        self.node_id
+    }
+}
 
 impl WithSpan for Expr {
     fn span(&self) -> Span {
@@ -58,13 +63,18 @@ impl WithSpan for Expr {
 }
 
 pub struct Block {
+    node_id: NodeId,
     stmts: Vec<Stmt>,
     expr: Option<N<Expr>>,
 }
 
 impl Block {
-    pub fn new(stmts: Vec<Stmt>, expr: Option<N<Expr>>) -> Self {
-        Self { stmts, expr }
+    pub fn new(node_id: NodeId, stmts: Vec<Stmt>, expr: Option<N<Expr>>) -> Self {
+        Self {
+            node_id,
+            stmts,
+            expr,
+        }
     }
 
     pub fn stmts(&self) -> &[Stmt] {

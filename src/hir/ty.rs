@@ -1,15 +1,23 @@
-use crate::span::span::{Span, WithSpan};
+use crate::{
+    ast::NodeId,
+    span::span::{Span, WithSpan},
+};
 
 use super::{Path, N};
 
 pub struct Ty {
+    node_id: NodeId,
     kind: TyKind,
     span: Span,
 }
 
 impl Ty {
-    pub fn new(kind: TyKind, span: Span) -> Self {
-        Self { kind, span }
+    pub fn new(node_id: NodeId, kind: TyKind, span: Span) -> Self {
+        Self {
+            node_id,
+            kind,
+            span,
+        }
     }
 
     pub fn kind(&self) -> &TyKind {

@@ -1,4 +1,5 @@
 use crate::{
+    ast::NodeId,
     resolve::def::DefId,
     span::span::{Ident, Span, WithSpan},
 };
@@ -46,14 +47,20 @@ pub enum ItemKind {
 }
 
 pub struct Item {
+    node_id: NodeId,
     def_id: DefId,
     kind: ItemKind,
     span: Span,
 }
 
 impl Item {
-    pub fn new(def_id: DefId, kind: ItemKind, span: Span) -> Self {
-        Self { def_id, kind, span }
+    pub fn new(node_id: NodeId, def_id: DefId, kind: ItemKind, span: Span) -> Self {
+        Self {
+            node_id,
+            def_id,
+            kind,
+            span,
+        }
     }
 
     pub fn name(&self) -> Ident {

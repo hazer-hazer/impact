@@ -10,7 +10,7 @@ use crate::{
     hir::{
         self,
         item::{Decl, ItemId, Mod, TypeItem},
-        Root, HIR,
+        HIR,
     },
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
@@ -71,10 +71,12 @@ impl<'ast> Lower<'ast> {
     fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
         match stmt.kind() {
             StmtKind::Expr(expr) => hir::stmt::Stmt::new(
+                stmt.id(),
                 hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
                 stmt.span(),
             ),
             StmtKind::Item(item) => hir::stmt::Stmt::new(
+                stmt.id(),
                 hir::stmt::StmtKind::Item(lower_pr!(self, item, lower_item)),
                 stmt.span(),
             ),
@@ -92,7 +94,7 @@ impl<'ast> Lower<'ast> {
         let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
 
         self.hir
-            .add_item(hir::item::Item::new(def_id, kind, item.span()))
+            .add_item(hir::item::Item::new(item.id(), def_id, kind, item.span()))
     }
 
     fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
@@ -130,6 +132,7 @@ impl<'ast> Lower<'ast> {
                 let param = lower_pr!(self, param, lower_pat);
                 let span = param.span().to(body.span());
                 value = Box::new(hir::expr::Expr::new(
+                    self.sess.next_node_id(),
                     hir::expr::ExprKind::Lambda(hir::expr::Lambda { param, body: value }),
                     span,
                 ))
@@ -147,7 +150,7 @@ impl<'ast> Lower<'ast> {
             PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
         };
 
-        hir::pat::Pat::new(kind, pat.span())
+        hir::pat::Pat::new(pat.id(), kind, pat.span())
     }
 
     // Expressions //
@@ -165,7 +168,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
         };
 
-        Box::new(hir::expr::Expr::new(kind, expr.span()))
+        Box::new(hir::expr::Expr::new(expr.id(), kind, expr.span()))
     }
 
     fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
@@ -258,7 +261,7 @@ impl<'ast> Lower<'ast> {
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
         };
 
-        Box::new(hir::ty::Ty::new(kind, ty.span()))
+        Box::new(hir::ty::Ty::new(ty.id(), kind, ty.span()))
     }
 
     fn lower_unit_ty(&mut self) -> hir::ty::TyKind {
@@ -306,7 +309,7 @@ impl<'ast> Lower<'ast> {
             StmtKind::Item(_) => None,
         };
 
-        hir::expr::Block::new(stmts, expr)
+        hir::expr::Block::new(block.id(), stmts, expr)
     }
 }
 
