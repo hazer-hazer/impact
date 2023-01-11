@@ -1,10 +1,6 @@
 use crate::{
-    ast::{
-        self,
-        expr::{Block, Expr, ExprKind, Lit, TyExpr},
-        item::{Item, ItemKind},
-        MappedAst, NodeId, Path, WithNodeId,
-    },
+    ast::WithNodeId,
+    hir::{self, HIR},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     parser::token,
     resolve::{
@@ -12,7 +8,7 @@ use crate::{
         res::{NamePath, ResKind},
     },
     session::{Session, Stage, StageOutput},
-    span::span::{WithSpan},
+    span::span::WithSpan,
 };
 
 use self::{
@@ -23,10 +19,10 @@ use self::{
 pub mod ctx;
 pub mod ty;
 
-struct Typecker<'ast> {
+struct Typecker<'hir> {
     tyctx: TyCtx,
 
-    ast: MappedAst<'ast>,
+    hir: &'hir HIR,
 
     def_types: DefMap<Ty>,
 
@@ -34,31 +30,25 @@ struct Typecker<'ast> {
     sess: Session,
 }
 
-impl<'ast> MessageHolder for Typecker<'ast> {
+impl<'hir> MessageHolder for Typecker<'hir> {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl<'ast> Typecker<'ast> {
+impl<'hir> Typecker<'hir> {
     // Conversion //
-    fn conv(&mut self, ty_node_id: NodeId) -> Ty {
+    fn conv(&mut self, ty: &hir::ty::Ty) -> Ty {
         // TODO: Allow recursive?
 
-        let ty = self.ast.map().ty(ty_node_id);
         match ty.kind() {
-            ast::ty::TyKind::Unit => self.tyctx.unit(),
-            ast::ty::TyKind::Path(path) => {
-                let path_node_id = path.as_ref().unwrap().id();
-                self.conv_path(path_node_id)
-            },
-            ast::ty::TyKind::Func(_, _) => todo!(),
-            ast::ty::TyKind::Paren(_) => todo!(),
+            hir::ty::TyKind::Unit => self.tyctx.unit(),
+            hir::ty::TyKind::Path(path) => self.conv_path(path),
+            hir::ty::TyKind::Func(_, _) => todo!(),
         }
     }
 
-    fn conv_path(&mut self, path_node_id: NodeId) -> Ty {
-        let path = self.ast.map().path(path_node_id);
+    fn conv_path(&mut self, path: &hir::Path) -> Ty {
         let res = self.sess.res.get(NamePath::new(path.id())).unwrap();
         match res.kind() {
             &ResKind::Def(def_id) => {

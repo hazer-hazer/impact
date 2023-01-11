@@ -1,7 +1,10 @@
+/*!
+ * HIR is nothing more than just an unwrapped version of AST, i.e. freed of parse results.
+ */
 use std::{collections::HashMap, fmt::Display};
 
 use crate::{
-    ast::{NodeId},
+    ast::{NodeId, WithNodeId},
     resolve::res::Res,
     span::span::{Ident, Span},
 };
@@ -11,9 +14,6 @@ use self::{
     item::{Item, ItemId},
 };
 
-/**
- * HIR is nothing more than just an unwrapped version of AST, i.e. freed of parse results.
- */
 pub mod expr;
 pub mod item;
 pub mod pat;
@@ -22,6 +22,12 @@ pub mod ty;
 pub mod visitor;
 
 type N<T> = Box<T>;
+
+pub struct OwnerId(u32);
+
+pub struct HirId {
+    owner: OwnerId,
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
 pub struct BodyId(NodeId);
@@ -121,14 +127,22 @@ impl Display for PathSeg {
 }
 
 pub struct Path {
+    node_id: NodeId,
     res: Res,
     segments: Vec<PathSeg>,
     span: Span,
 }
 
+impl WithNodeId for Path {
+    fn id(&self) -> NodeId {
+        self.node_id
+    }
+}
+
 impl Path {
-    pub fn new(res: Res, segments: Vec<PathSeg>, span: Span) -> Self {
+    pub fn new(node_id: NodeId, res: Res, segments: Vec<PathSeg>, span: Span) -> Self {
         Self {
+            node_id,
             res,
             segments,
             span,
