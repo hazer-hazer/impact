@@ -11,15 +11,14 @@ use crate::{
         def::DefTable,
         res::{Resolutions},
     },
-    span::span::{Span, SpanPos},
+    span::span::{Span, SpanPos}, dt::idx::declare_idx,
 };
 
 /**
  * Session is a compilation context passed through all stages of compilation.
  */
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct SourceId(u32);
+declare_idx!(SourceId, u32, "source")
 
 pub const DUMMY_SOURCE_ID: SourceId = SourceId(u32::MAX);
 

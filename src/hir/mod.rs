@@ -5,6 +5,8 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     ast::{NodeId, WithNodeId},
+    cli::color::Color,
+    dt::idx::declare_idx,
     resolve::res::Res,
     span::span::{Ident, Span},
 };
@@ -29,18 +31,7 @@ pub struct HirId {
     owner: OwnerId,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
-pub struct BodyId(NodeId);
-
-impl BodyId {
-    pub fn new(node_id: NodeId) -> Self {
-        Self(node_id)
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.0.as_usize()
-    }
-}
+declare_idx!(BodyId, NodeId, "#", Color::Green);
 
 pub struct Body {
     value: N<Expr>,

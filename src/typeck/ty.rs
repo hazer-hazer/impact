@@ -6,7 +6,8 @@ use std::{
 
 use crate::{
     ast::expr::Lit,
-    cli::color::Colorize,
+    cli::color::{Color, Colorize},
+    dt::idx::declare_idx,
     parser::token,
     span::span::{Ident, Kw, Symbol},
 };
@@ -142,31 +143,9 @@ impl Display for PrimTy {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TyId(u32);
+declare_idx!(TyId, u32, "#", Color::BrightYellow);
 
 pub type Ty = TyId;
-
-impl TyId {
-    pub fn new(id: u32) -> Self {
-        Self(id)
-    }
-
-    pub fn from_usize(id: usize) -> Self {
-        assert!(id < u32::MAX as usize);
-        Self::new(id as u32)
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl Display for TyId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format!(":{}", self.0).bright_yellow())
-    }
-}
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {

@@ -2,7 +2,8 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     ast::visitor::walk_each_pr,
-    cli::color::Colorize,
+    cli::color::{Color, Colorize},
+    dt::idx::declare_idx,
     span::span::{Ident, Span, WithSpan},
 };
 
@@ -71,29 +72,12 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
-pub struct NodeId(u32);
-
-impl NodeId {
-    pub fn new(id: u32) -> Self {
-        Self(id)
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
+declare_idx!(NodeId, u32, "#", Color::Blue);
 
 pub const DUMMY_NODE_ID: NodeId = NodeId(u32::MAX);
 
 pub trait WithNodeId {
     fn id(&self) -> NodeId;
-}
-
-impl Display for NodeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format!("#{}", self.as_usize()).blue())
-    }
 }
 
 pub type NodeMap<T> = HashMap<NodeId, T>;

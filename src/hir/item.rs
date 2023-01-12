@@ -1,29 +1,15 @@
 use crate::{
     ast::NodeId,
+    cli::color::Color,
+    cli::color::Colorize,
+    dt::idx::declare_idx,
     resolve::def::DefId,
     span::span::{Ident, Span, WithSpan},
 };
 
 use super::{expr::Expr, ty::Ty, N};
 
-#[derive(Debug, Clone, Copy)]
-pub struct ItemId(DefId);
-
-impl ItemId {
-    pub fn new(def_id: DefId) -> Self {
-        ItemId(def_id)
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.0.as_usize()
-    }
-}
-
-impl Into<DefId> for ItemId {
-    fn into(self) -> DefId {
-        self.0
-    }
-}
+declare_idx!(ItemId, DefId, "#", Color::Yellow);
 
 pub struct TypeItem {
     pub name: Ident,

@@ -2,7 +2,8 @@ use std::{array, collections::HashMap, fmt::Display};
 
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID},
-    cli::color::Colorize,
+    cli::color::{Color, Colorize},
+    dt::idx::declare_idx,
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 
@@ -46,24 +47,7 @@ impl Display for DefKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub struct DefId(u32);
-
-impl DefId {
-    pub fn new(id: u32) -> Self {
-        Self(id)
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl Display for DefId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format!("#{}", self.as_usize()).magenta())
-    }
-}
+declare_idx!(DefId, u32, "#", Color::Magenta);
 
 pub const ROOT_DEF_ID: DefId = DefId(0);
 
