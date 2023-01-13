@@ -3,12 +3,12 @@ use std::fmt::Display;
 use crate::{
     ast::{
         expr::{InfixOp, PrefixOp},
-        NodeId, WithNodeId,
+        NodeId,
     },
     span::span::{Span, Symbol, WithSpan},
 };
 
-use super::{pat::Pat, stmt::Stmt, ty::Ty, Path, N};
+use super::{pat::Pat, stmt::Stmt, ty::Ty, HirId, Path, N};
 
 pub use crate::typeck::ty::{FloatKind, IntKind};
 
@@ -31,28 +31,18 @@ impl Display for Lit {
 }
 
 pub struct Expr {
-    node_id: NodeId,
+    id: HirId,
     kind: ExprKind,
     span: Span,
 }
 
 impl Expr {
-    pub fn new(node_id: NodeId, kind: ExprKind, span: Span) -> Self {
-        Self {
-            node_id,
-            kind,
-            span,
-        }
+    pub fn new(id: HirId, kind: ExprKind, span: Span) -> Self {
+        Self { id, kind, span }
     }
 
     pub fn kind(&self) -> &ExprKind {
         &self.kind
-    }
-}
-
-impl WithNodeId for Expr {
-    fn id(&self) -> NodeId {
-        self.node_id
     }
 }
 

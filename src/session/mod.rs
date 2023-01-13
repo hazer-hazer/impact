@@ -1,36 +1,25 @@
+/*!
+ * Session is a compilation context passed through all stages of compilation.
+ */
+
 use crate::{
     ast::{AstMetadata, NodeId},
+    cli::color::{Color, Colorize},
     config::config::Config,
+    dt::idx::declare_idx,
     interface::{interface::InterruptionReason, writer::Writer},
     message::{
         message::{Message, MessageStorage},
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    resolve::{
-        def::DefTable,
-        res::{Resolutions},
-    },
-    span::span::{Span, SpanPos}, dt::idx::declare_idx,
+    resolve::{def::DefTable, res::Resolutions},
+    span::span::{Span, SpanPos},
 };
 
-/**
- * Session is a compilation context passed through all stages of compilation.
- */
-
-declare_idx!(SourceId, u32, "source")
+declare_idx!(SourceId, u32, "source[{}]", Color::White);
 
 pub const DUMMY_SOURCE_ID: SourceId = SourceId(u32::MAX);
-
-impl SourceId {
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-
-    pub fn is_dummy(&self) -> bool {
-        *self == DUMMY_SOURCE_ID
-    }
-}
 
 /// Computed information about line, use not for storage but as a helper
 #[derive(Debug)]

@@ -5,9 +5,9 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     ast::{NodeId, WithNodeId},
-    cli::color::Color,
+    cli::color::{Color, Colorize},
     dt::idx::declare_idx,
-    resolve::res::Res,
+    resolve::{def::DefId, res::Res},
     span::span::{Ident, Span},
 };
 
@@ -25,13 +25,58 @@ pub mod visitor;
 
 type N<T> = Box<T>;
 
-pub struct OwnerId(u32);
+declare_idx!(OwnerId, DefId, "owner{}", Color::BrightCyan);
+declare_idx!(BodyId, HirId, "body{}", Color::Green);
+declare_idx!(OwnerChildId, u32, "owner_child#{}", Color::Cyan);
 
-pub struct HirId {
-    owner: OwnerId,
+type OwnerChildrenMap<T> = HashMap<OwnerChildId, T>;
+
+
+enum Node {
+
 }
 
-declare_idx!(BodyId, NodeId, "#", Color::Green);
+struct Owner<'hir> {
+    bodies: OwnerChildrenMap<&'hir Body>,
+
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HirId {
+    owner: OwnerId,
+    id: OwnerChildId,
+}
+
+impl HirId {
+    pub fn new(owner: OwnerId, id: OwnerChildId) -> Self {
+        Self { owner, id }
+    }
+
+    pub fn new_owner(def_id: DefId) -> Self {
+        Self {
+            owner: OwnerId(def_id),
+            id: OwnerChildId(0),
+        }
+    }
+
+    pub fn as_owner(&self) -> Option<OwnerId> {
+        if self.is_owner() {
+            Some(self.owner)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_owner(&self) -> bool {
+        self.id.as_usize() == 0
+    }
+}
+
+impl Display for HirId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.owner, self.id)
+    }
+}
 
 pub struct Body {
     value: N<Expr>,
@@ -73,15 +118,14 @@ impl HIR {
     }
 
     pub fn add_item(&mut self, item: Item) -> ItemId {
-        let id = ItemId::new(item.def_id());
+        let id = ItemId::new(item.owner_id());
 
         self.items.insert(item.def_id().as_usize(), item);
 
         id
     }
 
-    pub fn add_body(&mut self, node_id: NodeId, body: Body) -> BodyId {
-        let id = BodyId::new(node_id);
+    pub fn add_body(&mut self, id: BodyId, body: Body) -> BodyId {
         self.bodies.insert(id, body);
         id
     }

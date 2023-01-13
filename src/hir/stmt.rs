@@ -3,21 +3,17 @@ use crate::{
     span::span::{Span, WithSpan},
 };
 
-use super::{expr::Expr, item::ItemId, N};
+use super::{expr::Expr, item::ItemId, HirId, N};
 
 pub struct Stmt {
-    node_id: NodeId,
+    id: HirId,
     kind: StmtKind,
     span: Span,
 }
 
 impl Stmt {
-    pub fn new(node_id: NodeId, kind: StmtKind, span: Span) -> Self {
-        Self {
-            node_id,
-            kind,
-            span,
-        }
+    pub fn new(id: HirId, kind: StmtKind, span: Span) -> Self {
+        Self { id, kind, span }
     }
 
     pub fn kind(&self) -> &StmtKind {

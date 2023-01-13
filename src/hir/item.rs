@@ -7,9 +7,9 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{expr::Expr, ty::Ty, N};
+use super::{expr::Expr, ty::Ty, OwnerId, N};
 
-declare_idx!(ItemId, DefId, "#", Color::Yellow);
+declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 
 pub struct TypeItem {
     pub name: Ident,
@@ -33,17 +33,15 @@ pub enum ItemKind {
 }
 
 pub struct Item {
-    node_id: NodeId,
-    def_id: DefId,
+    owner_id: OwnerId,
     kind: ItemKind,
     span: Span,
 }
 
 impl Item {
-    pub fn new(node_id: NodeId, def_id: DefId, kind: ItemKind, span: Span) -> Self {
+    pub fn new(owner_id: OwnerId, kind: ItemKind, span: Span) -> Self {
         Self {
-            node_id,
-            def_id,
+            owner_id,
             kind,
             span,
         }
@@ -62,7 +60,11 @@ impl Item {
     }
 
     pub fn def_id(&self) -> DefId {
-        self.def_id
+        self.owner_id.into()
+    }
+
+    pub fn owner_id(&self) -> OwnerId {
+        self.owner_id
     }
 }
 

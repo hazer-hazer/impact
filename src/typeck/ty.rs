@@ -143,7 +143,7 @@ impl Display for PrimTy {
     }
 }
 
-declare_idx!(TyId, u32, "#", Color::BrightYellow);
+declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 
 pub type Ty = TyId;
 
@@ -219,7 +219,7 @@ impl TyInterner {
             return *id;
         }
 
-        let id = TyId::from_usize(self.types.len());
+        let id = TyId::from(self.types.len());
 
         self.map.insert(hash, id);
         self.types.push(ty);

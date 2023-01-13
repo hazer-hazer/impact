@@ -3,21 +3,17 @@ use crate::{
     span::span::{Span, WithSpan},
 };
 
-use super::{Path, N};
+use super::{HirId, Path, N};
 
 pub struct Ty {
-    node_id: NodeId,
+    id: HirId,
     kind: TyKind,
     span: Span,
 }
 
 impl Ty {
-    pub fn new(node_id: NodeId, kind: TyKind, span: Span) -> Self {
-        Self {
-            node_id,
-            kind,
-            span,
-        }
+    pub fn new(id: HirId, kind: TyKind, span: Span) -> Self {
+        Self { id, kind, span }
     }
 
     pub fn kind(&self) -> &TyKind {

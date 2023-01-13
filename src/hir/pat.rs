@@ -3,23 +3,21 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
+use super::HirId;
+
 pub enum PatKind {
     Ident(Ident),
 }
 
 pub struct Pat {
-    node_id: NodeId,
+    id: HirId,
     kind: PatKind,
     span: Span,
 }
 
 impl Pat {
-    pub fn new(node_id: NodeId, kind: PatKind, span: Span) -> Self {
-        Self {
-            node_id,
-            kind,
-            span,
-        }
+    pub fn new(id: HirId, kind: PatKind, span: Span) -> Self {
+        Self { id, kind, span }
     }
 
     pub fn kind(&self) -> &PatKind {

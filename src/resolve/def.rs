@@ -47,7 +47,7 @@ impl Display for DefKind {
     }
 }
 
-declare_idx!(DefId, u32, "#", Color::Magenta);
+declare_idx!(DefId, u32, "#{}", Color::Magenta);
 
 pub const ROOT_DEF_ID: DefId = DefId(0);
 

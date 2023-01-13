@@ -72,7 +72,7 @@ where
     }
 }
 
-declare_idx!(NodeId, u32, "#", Color::Blue);
+declare_idx!(NodeId, u32, "#{}", Color::Blue);
 
 pub const DUMMY_NODE_ID: NodeId = NodeId(u32::MAX);
 
