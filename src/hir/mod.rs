@@ -7,13 +7,18 @@ use crate::{
     ast::{NodeId, WithNodeId},
     cli::color::{Color, Colorize},
     dt::idx::declare_idx,
-    resolve::{def::DefId, res::Res},
+    resolve::{
+        def::{DefId, DefMap},
+        res::Res,
+    },
     span::span::{Ident, Span},
 };
 
 use self::{
     expr::Expr,
-    item::{Item, ItemId},
+    item::{Item, ItemId, Mod},
+    pat::Pat,
+    stmt::Stmt,
 };
 
 pub mod expr;
@@ -30,16 +35,6 @@ declare_idx!(BodyId, HirId, "body{}", Color::Green);
 declare_idx!(OwnerChildId, u32, "owner_child#{}", Color::Cyan);
 
 type OwnerChildrenMap<T> = HashMap<OwnerChildId, T>;
-
-
-enum Node {
-
-}
-
-struct Owner<'hir> {
-    bodies: OwnerChildrenMap<&'hir Body>,
-
-}
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HirId {
@@ -78,70 +73,42 @@ impl Display for HirId {
     }
 }
 
-pub struct Body {
-    value: N<Expr>,
+// HIR Node is any Node in HIR with HirId
+enum Node<'hir> {
+    Expr(&'hir Expr),
+    Stmt(&'hir Stmt),
+    Item(&'hir Item),
+    Pat(&'hir Pat),
 }
 
-pub struct Root {
-    items: Vec<ItemId>,
+enum OwnerNode<'hir> {
+    Root(&'hir Mod),
+    Item(&'hir Item),
 }
 
-impl Root {
-    pub fn items(&self) -> &[ItemId] {
-        self.items.as_ref()
-    }
+struct Owner<'hir> {
+    bodies: OwnerChildrenMap<&'hir Body>,
+    nodes: OwnerChildrenMap<Node<'hir>>,
 }
 
-pub struct HIR {
-    root: Root,
-    items: Vec<Item>,
-    bodies: HashMap<BodyId, Body>,
+pub struct HIR<'hir> {
+    owners: DefMap<Owner<'hir>>,
 }
 
-impl HIR {
-    pub fn new(defs_count: usize) -> Self {
+impl<'hir> HIR<'hir> {
+    pub fn new() -> Self {
         Self {
-            root: Root {
-                items: Default::default(),
-            },
-            // Note: As DefId is an incremental identifier and we use all DefId's we defined,
-            //  we can set size of items list to what size we already know.
-            items: Vec::with_capacity(defs_count),
-            bodies: HashMap::default(),
+            owners: Default::default(),
         }
     }
 
-    // Construction API //
-    pub fn set_root(&mut self, items: Vec<ItemId>) {
-        assert!(self.root.items.is_empty());
-        self.root.items = items;
+    pub fn add_owner(&mut self, def_id: DefId, owner: Owner) {
+        self.owners.insert(def_id, owner);
     }
+}
 
-    pub fn add_item(&mut self, item: Item) -> ItemId {
-        let id = ItemId::new(item.owner_id());
-
-        self.items.insert(item.def_id().as_usize(), item);
-
-        id
-    }
-
-    pub fn add_body(&mut self, id: BodyId, body: Body) -> BodyId {
-        self.bodies.insert(id, body);
-        id
-    }
-
-    // Getters //
-    pub fn item(&self, id: ItemId) -> &Item {
-        self.items.get(id.as_usize()).unwrap()
-    }
-
-    pub fn body(&self, id: BodyId) -> &Body {
-        self.bodies.get(&id).unwrap()
-    }
-
-    pub fn root(&self) -> &Root {
-        &self.root
-    }
+pub struct Body {
+    value: N<Expr>,
 }
 
 pub struct PathSeg {
