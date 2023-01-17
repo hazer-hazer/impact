@@ -10,11 +10,11 @@ use crate::{
     hir::{
         self,
         item::{Decl, ItemId, Mod, TypeItem},
-        HIR,
+        Owner, HIR, Node,
     },
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
-    resolve::res::NamePath,
+    resolve::{def::DefId, res::NamePath},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
 };
@@ -48,6 +48,7 @@ macro_rules! lower_each {
 pub struct Lower<'ast, 'hir> {
     ast: &'ast AST,
     hir: HIR<'hir>,
+    owner_stack: Vec<DefId>,
     sess: Session,
     msg: MessageStorage,
 }
@@ -57,9 +58,27 @@ impl<'ast, 'hir> Lower<'ast, 'hir> {
         Self {
             ast,
             hir: HIR::new(),
+            owner_stack: Default::default(),
             sess,
             msg: Default::default(),
         }
+    }
+
+    fn enter_owner(&mut self, def_id: DefId) {
+        self.hir.add_owner(def_id);
+        self.owner_stack.push(def_id);
+    }
+
+    fn exit_owner(&mut self) {
+        self.owner_stack.pop();
+    }
+
+    fn owner(&mut self) -> &mut Owner {
+        self.hir.expect_owner(self.owner_stack.last().unwrap())
+    }
+
+    fn add_node(&mut self, node: Node) {
+        self.owner().nodes
     }
 
     fn lower_ast(&mut self) {
@@ -94,7 +113,7 @@ impl<'ast, 'hir> Lower<'ast, 'hir> {
         let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
 
         self.hir
-            .add_item(hir::item::Item::new(item.id(), def_id, kind, item.span()))
+            .add_item(hir::item::Item::new(def_id, kind, item.span()))
     }
 
     fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {

@@ -39,9 +39,9 @@ pub struct Item {
 }
 
 impl Item {
-    pub fn new(owner_id: OwnerId, kind: ItemKind, span: Span) -> Self {
+    pub fn new(def_id: DefId, kind: ItemKind, span: Span) -> Self {
         Self {
-            owner_id,
+            owner_id: OwnerId(def_id),
             kind,
             span,
         }

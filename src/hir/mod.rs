@@ -76,7 +76,7 @@ impl Display for HirId {
 }
 
 // HIR Node is any Node in HIR with HirId
-enum Node<'hir> {
+pub enum Node<'hir> {
     Expr(&'hir Expr),
     Stmt(&'hir Stmt),
     Item(&'hir Item),
@@ -92,13 +92,13 @@ impl<'hir> Node<'hir> {
     }
 }
 
-enum OwnerNode<'hir> {
+pub enum OwnerNode<'hir> {
     Root(&'hir Mod),
     Item(&'hir Item),
 }
 
 #[derive(Default)]
-struct Owner<'hir> {
+pub struct Owner<'hir> {
     pub bodies: OwnerChildrenMap<&'hir Body>,
 
     // OwnerNode is the first child of nodes
@@ -126,16 +126,23 @@ impl<'hir> HIR<'hir> {
         }
     }
 
-    pub fn add_owner(&mut self, def_id: DefId, owner: Owner) {
-        self.owners.insert(def_id, owner);
+    pub fn add_owner(&mut self, def_id: DefId) {
+        self.owners.insert(def_id, Owner::default());
     }
 
-    pub fn expect_owner(&self, def_id: DefId) -> OwnerNode {
-        match self.owners.get(&def_id).unwrap().nodes.get(0) {}
+    pub fn expect_owner(&self, def_id: DefId) -> &mut Owner {
+        self.owners.get_mut(&def_id).unwrap()
+    }
+
+    pub fn expect_owner_node(&self, def_id: DefId) -> OwnerNode {
+        self.expect_owner(def_id).owner_node()
     }
 
     pub fn root(&self) -> &Mod {
-        // self.owners.get(&ROOT_DEF_ID).unwrap().nodes.get(0).unwrap().as_owner()
+        match self.expect_owner_node(&ROOT_DEF_ID) {
+            OwnerNode::Root(root) => root,
+            OwnerNode::Item(_) => unreachable!(),
+        }
     }
 }
 
@@ -161,7 +168,7 @@ impl Display for PathSeg {
 }
 
 pub struct Path {
-    node_id: NodeId,
+    id: HirId,
     res: Res,
     segments: Vec<PathSeg>,
     span: Span,
@@ -174,9 +181,9 @@ impl WithNodeId for Path {
 }
 
 impl Path {
-    pub fn new(node_id: NodeId, res: Res, segments: Vec<PathSeg>, span: Span) -> Self {
+    pub fn new(id: HirId, res: Res, segments: Vec<PathSeg>, span: Span) -> Self {
         Self {
-            node_id,
+            id,
             res,
             segments,
             span,
