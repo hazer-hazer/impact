@@ -8,7 +8,7 @@ use crate::{
     cli::color::{Color, Colorize},
     dt::idx::declare_idx,
     resolve::{
-        def::{DefId, DefMap},
+        def::{DefId, DefMap, ROOT_DEF_ID},
         res::Res,
     },
     span::span::{Ident, Span},
@@ -33,6 +33,8 @@ type N<T> = Box<T>;
 declare_idx!(OwnerId, DefId, "owner{}", Color::BrightCyan);
 declare_idx!(BodyId, HirId, "body{}", Color::Green);
 declare_idx!(OwnerChildId, u32, "owner_child#{}", Color::Cyan);
+
+const FIRST_OWNER_CHILD_ID: OwnerChildId = OwnerChildId(0);
 
 type OwnerChildrenMap<T> = HashMap<OwnerChildId, T>;
 
@@ -81,14 +83,36 @@ enum Node<'hir> {
     Pat(&'hir Pat),
 }
 
+impl<'hir> Node<'hir> {
+    pub fn as_owner(&self) -> Option<OwnerNode<'hir>> {
+        match self {
+            Node::Item(item) => Some(OwnerNode::Item(item)),
+            _ => None,
+        }
+    }
+}
+
 enum OwnerNode<'hir> {
     Root(&'hir Mod),
     Item(&'hir Item),
 }
 
+#[derive(Default)]
 struct Owner<'hir> {
-    bodies: OwnerChildrenMap<&'hir Body>,
-    nodes: OwnerChildrenMap<Node<'hir>>,
+    pub bodies: OwnerChildrenMap<&'hir Body>,
+
+    // OwnerNode is the first child of nodes
+    pub nodes: OwnerChildrenMap<Node<'hir>>,
+}
+
+impl<'hir> Owner<'hir> {
+    pub fn owner_node(&self) -> OwnerNode {
+        self.nodes
+            .get(&FIRST_OWNER_CHILD_ID)
+            .unwrap()
+            .as_owner()
+            .unwrap()
+    }
 }
 
 pub struct HIR<'hir> {
@@ -104,6 +128,14 @@ impl<'hir> HIR<'hir> {
 
     pub fn add_owner(&mut self, def_id: DefId, owner: Owner) {
         self.owners.insert(def_id, owner);
+    }
+
+    pub fn expect_owner(&self, def_id: DefId) -> OwnerNode {
+        match self.owners.get(&def_id).unwrap().nodes.get(0) {}
+    }
+
+    pub fn root(&self) -> &Mod {
+        // self.owners.get(&ROOT_DEF_ID).unwrap().nodes.get(0).unwrap().as_owner()
     }
 }
 
