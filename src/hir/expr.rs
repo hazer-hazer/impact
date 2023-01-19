@@ -10,7 +10,66 @@ use crate::{
 
 use super::{pat::Pat, stmt::Stmt, ty::Ty, HirId, Path, N};
 
-pub use crate::typeck::ty::{FloatKind, IntKind};
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum IntKind {
+    Unknown,
+
+    U8,
+    U16,
+    U32,
+    U64,
+    Uint,
+
+    I8,
+    I16,
+    I32,
+    I64,
+    Int,
+}
+
+impl Display for IntKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                IntKind::Unknown => "",
+                IntKind::U8 => "u8",
+                IntKind::U16 => "u16",
+                IntKind::U32 => "u32",
+                IntKind::U64 => "u64",
+                IntKind::Uint => "uint",
+                IntKind::I8 => "i8",
+                IntKind::I16 => "i16",
+                IntKind::I32 => "i32",
+                IntKind::I64 => "i64",
+                IntKind::Int => "int",
+            }
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FloatKind {
+    Unknown,
+
+    F32,
+    F64,
+}
+
+impl Display for FloatKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                FloatKind::Unknown => "",
+                FloatKind::F32 => "f32",
+                FloatKind::F64 => "f64",
+            }
+        )
+    }
+}
 
 pub enum Lit {
     Bool(bool),

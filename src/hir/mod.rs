@@ -81,6 +81,7 @@ pub enum Node<'hir> {
     Stmt(&'hir Stmt),
     Item(&'hir Item),
     Pat(&'hir Pat),
+    Root(&'hir Mod),
 }
 
 impl<'hir> Node<'hir> {
@@ -130,7 +131,7 @@ impl<'hir> HIR<'hir> {
         self.owners.insert(def_id, Owner::default());
     }
 
-    pub fn expect_owner(&self, def_id: DefId) -> &mut Owner {
+    pub fn expect_owner(&self, def_id: DefId) -> &'hir mut Owner {
         self.owners.get_mut(&def_id).unwrap()
     }
 
@@ -139,7 +140,7 @@ impl<'hir> HIR<'hir> {
     }
 
     pub fn root(&self) -> &Mod {
-        match self.expect_owner_node(&ROOT_DEF_ID) {
+        match self.expect_owner_node(ROOT_DEF_ID) {
             OwnerNode::Root(root) => root,
             OwnerNode::Item(_) => unreachable!(),
         }
@@ -172,12 +173,6 @@ pub struct Path {
     res: Res,
     segments: Vec<PathSeg>,
     span: Span,
-}
-
-impl WithNodeId for Path {
-    fn id(&self) -> NodeId {
-        self.node_id
-    }
 }
 
 impl Path {

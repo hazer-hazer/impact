@@ -1,7 +1,7 @@
 use std::{array, collections::HashMap, fmt::Display};
 
 use crate::{
-    ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID},
+    ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::color::{Color, Colorize},
     dt::idx::declare_idx,
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
@@ -9,6 +9,7 @@ use crate::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum DefKind {
+    Root,
     TyAlias,
     Mod,
     Func,
@@ -29,6 +30,7 @@ impl DefKind {
             DefKind::TyAlias => Namespace::Type,
             DefKind::Mod => Namespace::Type,
             DefKind::Func => Namespace::Value,
+            DefKind::Root => Namespace::Type,
         }
     }
 }
@@ -42,6 +44,7 @@ impl Display for DefKind {
                 DefKind::TyAlias => "type alias",
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
+                DefKind::Root => "[ROOT]",
             }
         )
     }
@@ -282,8 +285,8 @@ impl DefTable {
         assert!(self.defs.is_empty());
         // FIXME: Review usage of DUMMY_NODE_ID for root module
         self.define(
-            DUMMY_NODE_ID,
-            DefKind::Mod,
+            ROOT_NODE_ID,
+            DefKind::Root,
             &Ident::synthetic(Symbol::from_kw(Kw::Root)),
         );
         assert!(self.modules.insert(ROOT_DEF_ID, Module::root()).is_none());

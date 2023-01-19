@@ -46,6 +46,8 @@
 
 // impl_uints!(u8, u16, u32, u64);
 
+// TODO: IndexVec
+
 macro_rules! declare_idx {
     ($name: ident, u8, $format: expr, $color: expr) => {
         declare_idx!(uint $name, u8, $format, $color);
@@ -91,6 +93,11 @@ macro_rules! declare_idx {
         impl $name {
             pub const MIN: $inner_ty = <$inner_ty>::MIN;
             pub const MAX: $inner_ty = <$inner_ty>::MAX;
+
+            pub fn inc(&mut self) -> &mut Self {
+                self.0 += 1;
+                self
+            }
         }
 
         impl From<$name> for usize {

@@ -22,8 +22,7 @@ pub mod ty;
 struct Typecker<'hir> {
     tyctx: TyCtx,
 
-    hir: &'hir HIR,
-
+    // hir: &'hir HIR,
     def_types: DefMap<Ty>,
 
     msg: MessageStorage,

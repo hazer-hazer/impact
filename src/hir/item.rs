@@ -12,17 +12,14 @@ use super::{expr::Expr, ty::Ty, OwnerId, N};
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 
 pub struct TypeItem {
-    pub name: Ident,
     pub ty: N<Ty>,
 }
 
 pub struct Mod {
-    pub name: Ident,
     pub items: Vec<ItemId>,
 }
 
 pub struct Decl {
-    pub name: Ident,
     pub value: N<Expr>,
 }
 
@@ -33,14 +30,16 @@ pub enum ItemKind {
 }
 
 pub struct Item {
+    name: Ident,
     owner_id: OwnerId,
     kind: ItemKind,
     span: Span,
 }
 
 impl Item {
-    pub fn new(def_id: DefId, kind: ItemKind, span: Span) -> Self {
+    pub fn new(name: Ident, def_id: DefId, kind: ItemKind, span: Span) -> Self {
         Self {
+            name,
             owner_id: OwnerId(def_id),
             kind,
             span,
@@ -48,11 +47,7 @@ impl Item {
     }
 
     pub fn name(&self) -> Ident {
-        match self.kind() {
-            ItemKind::Type(t) => t.name,
-            ItemKind::Mod(m) => m.name,
-            ItemKind::Decl(d) => d.name,
-        }
+        self.name
     }
 
     pub fn kind(&self) -> &ItemKind {

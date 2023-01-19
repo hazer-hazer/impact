@@ -5,16 +5,19 @@ use crate::{
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        Path, PathSeg, WithNodeId, AST, N, PR,
+        NodeId, NodeMap, Path, PathSeg, WithNodeId, AST, N, PR, ROOT_NODE_ID,
     },
     hir::{
         self,
         item::{Decl, ItemId, Mod, TypeItem},
-        Owner, HIR, Node,
+        HirId, Node, Owner, OwnerChildId, OwnerId, OwnerNode, HIR,
     },
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
-    resolve::{def::DefId, res::NamePath},
+    resolve::{
+        def::{DefId, ROOT_DEF_ID},
+        res::NamePath,
+    },
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
 };
@@ -48,7 +51,12 @@ macro_rules! lower_each {
 pub struct Lower<'ast, 'hir> {
     ast: &'ast AST,
     hir: HIR<'hir>,
+
+    // HirId
     owner_stack: Vec<DefId>,
+    child_id: OwnerChildId,
+    node_id_hir_id: NodeMap<HirId>,
+
     sess: Session,
     msg: MessageStorage,
 }
@@ -59,43 +67,61 @@ impl<'ast, 'hir> Lower<'ast, 'hir> {
             ast,
             hir: HIR::new(),
             owner_stack: Default::default(),
+            child_id: OwnerChildId::new(0),
+            node_id_hir_id: Default::default(),
             sess,
             msg: Default::default(),
         }
     }
 
-    fn enter_owner(&mut self, def_id: DefId) {
-        self.hir.add_owner(def_id);
-        self.owner_stack.push(def_id);
-    }
-
-    fn exit_owner(&mut self) {
-        self.owner_stack.pop();
+    fn owner_id(&self) -> OwnerId {
+        OwnerId::new(*self.owner_stack.last().unwrap())
     }
 
     fn owner(&mut self) -> &mut Owner {
-        self.hir.expect_owner(self.owner_stack.last().unwrap())
+        self.hir.expect_owner(*self.owner_stack.last().unwrap())
     }
 
-    fn add_node(&mut self, node: Node) {
-        self.owner().nodes
+    fn with_owner(&mut self, owner: NodeId, f: impl FnOnce(&mut Self) -> OwnerNode) {
+        let def_id = self.sess.def_table.get_def_id(owner).unwrap();
+        let owner_id = OwnerId::new(def_id);
+
+        self.hir.add_owner(def_id);
+        self.owner_stack.push(def_id);
+        f(self);
+        self.owner_stack.pop();
+    }
+
+    fn lower_node_id(&mut self, id: NodeId) -> HirId {
+        if let Some(hir_id) = self.node_id_hir_id.get(&id) {
+            *hir_id
+        } else {
+            let hir_id = HirId::new(self.owner_id(), self.child_id);
+            self.node_id_hir_id.insert(id, hir_id);
+            self.child_id.inc();
+
+            hir_id
+        }
     }
 
     fn lower_ast(&mut self) {
-        let items = lower_each_pr!(self, self.ast.items(), lower_item);
-        self.hir.set_root(items);
+        self.with_owner(ROOT_NODE_ID, |this| {
+            let items = lower_each_pr!(self, self.ast.items(), lower_item);
+            let root = Mod { items };
+            OwnerNode::Root(root)
+        });
     }
 
     // Statements //
     fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
         match stmt.kind() {
             StmtKind::Expr(expr) => hir::stmt::Stmt::new(
-                stmt.id(),
+                self.lower_node_id(stmt.id()),
                 hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
                 stmt.span(),
             ),
             StmtKind::Item(item) => hir::stmt::Stmt::new(
-                stmt.id(),
+                self.lower_node_id(stmt.id()),
                 hir::stmt::StmtKind::Item(lower_pr!(self, item, lower_item)),
                 stmt.span(),
             ),
@@ -104,16 +130,22 @@ impl<'ast, 'hir> Lower<'ast, 'hir> {
 
     // Items //
     fn lower_item(&mut self, item: &Item) -> ItemId {
-        let kind = match item.kind() {
-            ItemKind::Type(name, ty) => self.lower_type_item(name, ty),
-            ItemKind::Mod(name, items) => self.lower_mod_item(name, items),
-            ItemKind::Decl(name, params, body) => self.lower_decl_item(name, params, body),
-        };
+        self.with_owner(item.id(), |this| {
+            let kind = match item.kind() {
+                ItemKind::Type(name, ty) => self.lower_type_item(name, ty),
+                ItemKind::Mod(name, items) => self.lower_mod_item(name, items),
+                ItemKind::Decl(name, params, body) => self.lower_decl_item(name, params, body),
+            };
 
-        let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
+            let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
 
-        self.hir
-            .add_item(hir::item::Item::new(def_id, kind, item.span()))
+            self.hir.add_item(hir::item::Item::new(
+                *item.name().unwrap(),
+                def_id,
+                kind,
+                item.span(),
+            ))
+        });
     }
 
     fn lower_type_item(&mut self, name: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
@@ -305,6 +337,7 @@ impl<'ast, 'hir> Lower<'ast, 'hir> {
 
     fn lower_path(&mut self, path: &Path) -> hir::Path {
         hir::Path::new(
+            self.lower_node_id(path.id()),
             self.sess.res.get(NamePath::new(path.id())).unwrap(),
             lower_each!(self, path.segments(), lower_path_seg),
             path.span(),

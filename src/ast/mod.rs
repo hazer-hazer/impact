@@ -74,6 +74,7 @@ where
 
 declare_idx!(NodeId, u32, "#{}", Color::Blue);
 
+pub const ROOT_NODE_ID: NodeId = NodeId(0);
 pub const DUMMY_NODE_ID: NodeId = NodeId(u32::MAX);
 
 pub trait WithNodeId {
@@ -93,6 +94,12 @@ impl AST {
 
     pub fn items(&self) -> &[PR<N<Item>>] {
         self.items.as_ref()
+    }
+}
+
+impl WithNodeId for AST {
+    fn id(&self) -> NodeId {
+        ROOT_NODE_ID
     }
 }
 
