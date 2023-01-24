@@ -3,7 +3,7 @@ use std::{array, collections::HashMap, fmt::Display};
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::color::{Color, Colorize},
-    dt::idx::declare_idx,
+    dt::idx::{declare_idx, Idx},
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 

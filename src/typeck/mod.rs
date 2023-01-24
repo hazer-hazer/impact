@@ -1,11 +1,14 @@
 use crate::{
-    ast::WithNodeId,
-    hir::{self, HIR},
+    hir::{
+        self,
+        expr::{Block, ExprKind, Lit, TyExpr},
+        item::{ItemId, ItemKind},
+        HIR,
+    },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    parser::token,
     resolve::{
         def::{DefKind, DefMap},
-        res::{NamePath, ResKind},
+        res::ResKind,
     },
     session::{Session, Stage, StageOutput},
     span::span::WithSpan,
@@ -22,7 +25,7 @@ pub mod ty;
 struct Typecker<'hir> {
     tyctx: TyCtx,
 
-    // hir: &'hir HIR,
+    hir: &'hir HIR,
     def_types: DefMap<Ty>,
 
     msg: MessageStorage,
@@ -36,20 +39,31 @@ impl<'hir> MessageHolder for Typecker<'hir> {
 }
 
 impl<'hir> Typecker<'hir> {
+    pub fn new(sess: Session, hir: &'hir HIR) -> Self {
+        Self {
+            tyctx: TyCtx::new(),
+            hir,
+            sess,
+            def_types: Default::default(),
+            msg: Default::default(),
+        }
+    }
+
     // Conversion //
-    fn conv(&mut self, ty: &hir::ty::Ty) -> Ty {
+    fn conv(&mut self, ty: hir::ty::Ty) -> Ty {
+        let ty = self.hir.ty(ty);
         // TODO: Allow recursive?
 
-        match ty.kind() {
+        match ty.kind {
             hir::ty::TyKind::Unit => self.tyctx.unit(),
             hir::ty::TyKind::Path(path) => self.conv_path(path),
             hir::ty::TyKind::Func(_, _) => todo!(),
         }
     }
 
-    fn conv_path(&mut self, path: &hir::Path) -> Ty {
-        let res = self.sess.res.get(NamePath::new(path.id())).unwrap();
-        match res.kind() {
+    fn conv_path(&mut self, path: hir::Path) -> Ty {
+        let path = self.hir.path(path);
+        match path.res().kind() {
             &ResKind::Def(def_id) => {
                 if let Some(def_ty) = self.def_types.get(&def_id) {
                     return *def_ty;
@@ -58,21 +72,18 @@ impl<'hir> Typecker<'hir> {
                 let def = self.sess.def_table.get_def(def_id).unwrap();
                 match def.kind() {
                     DefKind::TyAlias => {
-                        let ty_alias = self
-                            .ast
-                            .map()
-                            .item(self.sess.def_table.get_node_id(def_id).unwrap());
-                        let ty_node_id = match ty_alias.kind() {
-                            ItemKind::Type(_, ty) => ty.as_ref().unwrap().id(),
+                        let ty_alias = self.hir.item(ItemId::new(def.def_id.into()));
+                        let ty = match ty_alias.kind() {
+                            ItemKind::Type(ty_item) => ty_item.ty,
                             _ => unreachable!(),
                         };
-                        let ty = self.conv(ty_node_id);
+                        let ty = self.conv(ty);
                         self.def_types.insert(def_id, ty);
                         ty
                     },
 
                     // Non-type definitions from type namespace
-                    DefKind::Mod => {
+                    DefKind::Root | DefKind::Mod => {
                         MessageBuilder::error()
                             .span(path.span())
                             .text(format!("{} item used as type", def.kind()))
@@ -89,33 +100,34 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn conv_int_kind(&self, kind: token::IntKind) -> IntKind {
+    fn conv_int_kind(&self, kind: hir::expr::IntKind) -> IntKind {
         match kind {
-            token::IntKind::Unknown => todo!(),
-            token::IntKind::U8 => IntKind::U8,
-            token::IntKind::U16 => IntKind::U16,
-            token::IntKind::U32 => IntKind::U32,
-            token::IntKind::U64 => IntKind::U64,
-            token::IntKind::Uint => IntKind::Uint,
-            token::IntKind::I8 => IntKind::I8,
-            token::IntKind::I16 => IntKind::I16,
-            token::IntKind::I32 => IntKind::I32,
-            token::IntKind::I64 => IntKind::I64,
-            token::IntKind::Int => IntKind::Int,
+            hir::expr::IntKind::Unknown => todo!(),
+            hir::expr::IntKind::U8 => IntKind::U8,
+            hir::expr::IntKind::U16 => IntKind::U16,
+            hir::expr::IntKind::U32 => IntKind::U32,
+            hir::expr::IntKind::U64 => IntKind::U64,
+            hir::expr::IntKind::Uint => IntKind::Uint,
+            hir::expr::IntKind::I8 => IntKind::I8,
+            hir::expr::IntKind::I16 => IntKind::I16,
+            hir::expr::IntKind::I32 => IntKind::I32,
+            hir::expr::IntKind::I64 => IntKind::I64,
+            hir::expr::IntKind::Int => IntKind::Int,
         }
     }
 
-    fn conv_float_kind(&self, kind: token::FloatKind) -> FloatKind {
+    fn conv_float_kind(&self, kind: hir::expr::FloatKind) -> FloatKind {
         match kind {
-            token::FloatKind::Unknown => todo!(),
-            token::FloatKind::F32 => FloatKind::F32,
-            token::FloatKind::F64 => FloatKind::F64,
+            hir::expr::FloatKind::Unknown => todo!(),
+            hir::expr::FloatKind::F32 => FloatKind::F32,
+            hir::expr::FloatKind::F64 => FloatKind::F64,
         }
     }
 
     // Synthesis //
-    fn synth_expr(&mut self, expr: &Expr) -> TyResult<Ty> {
-        match expr.kind() {
+    fn synth_expr(&mut self, expr: hir::expr::Expr) -> TyResult<Ty> {
+        let expr = self.hir.expr(expr);
+        match &expr.kind {
             ExprKind::Unit => Ok(self.tyctx.unit()),
             ExprKind::Lit(lit) => {
                 let prim = match lit {
@@ -127,7 +139,7 @@ impl<'hir> Typecker<'hir> {
 
                 Ok(self.tyctx.lit(prim))
             },
-            ExprKind::Path(path) => self.synth_path(path.0.as_ref().unwrap()),
+            ExprKind::Path(path) => self.synth_path(path.0),
             ExprKind::Block(_) => todo!(),
             ExprKind::Infix(_) => todo!(),
             ExprKind::Prefix(_) => todo!(),
@@ -135,14 +147,15 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Call(_) => todo!(),
             ExprKind::Let(_) => todo!(),
             ExprKind::Ty(TyExpr { expr, ty: anno }) => {
-                let ty = self.conv(anno.as_ref().unwrap().id());
-                self.check(expr.as_ref().unwrap(), ty)?;
+                let ty = self.conv(*anno);
+                self.check(*expr, ty)?;
                 Ok(ty)
             },
         }
     }
 
-    fn synth_path(&self, path: &Path) -> TyResult<Ty> {
+    fn synth_path(&self, path: hir::Path) -> TyResult<Ty> {
+        let path = self.hir.path(path);
         self.tyctx
             .lookup_typed_term_ty(path.target_name())
             .ok_or(TyError())
@@ -156,23 +169,25 @@ impl<'hir> Typecker<'hir> {
         todo!()
     }
 
-    fn synth_item(&self, item: &Item) -> TyResult<Ty> {
+    fn synth_item(&self, item: ItemId) -> TyResult<Ty> {
+        let item = self.hir.item(item);
         match item.kind() {
-            ItemKind::Type(_name, _ty) => {
+            ItemKind::Type(_ty) => {
                 todo!()
             },
-            ItemKind::Mod(_name, _items) => todo!(),
-            ItemKind::Decl(_name, _params, _body) => todo!(),
+            ItemKind::Mod(_items) => todo!(),
+            ItemKind::Decl(_decl) => todo!(),
         }
     }
 
     // Check //
-    fn check(&mut self, expr: &Expr, ty: Ty) -> TyResult<()> {
+    fn check(&mut self, expr_id: hir::expr::Expr, ty: Ty) -> TyResult<()> {
+        let expr = self.hir.expr(expr_id);
         let tys = self.tyctx.ty(ty);
 
-        match (expr.kind(), tys.kind()) {
-            (ExprKind::Lit(ast_lit), TyKind::Lit(prim)) => {
-                if *prim != PrimTy::from(ast_lit) {
+        match (&expr.kind, tys.kind()) {
+            (ExprKind::Lit(lit), TyKind::Lit(prim)) => {
+                if *prim != PrimTy::from(*lit) {
                     MessageBuilder::error()
                         .span(expr.span())
                         .text(format!("Type mismatch: expected {}", prim))
@@ -194,13 +209,13 @@ impl<'hir> Typecker<'hir> {
             (_, &TyKind::Forall(alpha, body)) => {
                 let alpha_item = CtxItem::Var(alpha);
                 self.tyctx.ctx().enter(alpha, vec![alpha_item]);
-                self.check(expr, body)?;
+                self.check(expr_id, body)?;
                 self.tyctx.ctx().leave(alpha);
                 Ok(())
             },
 
             _ => {
-                let expr_ty = self.synth_expr(expr)?;
+                let expr_ty = self.synth_expr(expr_id)?;
                 let l = self.tyctx.apply_ctx(expr_ty);
                 let r = self.tyctx.apply_ctx(ty);
 

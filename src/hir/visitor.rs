@@ -1,10 +1,11 @@
-
-
-use crate::span::span::Ident;
+use crate::{span::span::Ident};
 
 use super::{
-    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
-    item::{Decl, ItemId, Mod, TypeItem},
+    expr::{
+        Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix,
+        TyExpr,
+    },
+    item::{Decl, ItemId, ItemKind, Mod, TypeItem},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind},
@@ -13,22 +14,23 @@ use super::{
 
 macro_rules! walk_each {
     ($self: ident, $els: expr, $visitor: ident, $hir: expr) => {
-        for el in $els {
-            $self.$visitor(&el, $hir);
-        }
+        $els.iter().for_each(|el| {
+            $self.$visitor(el, $hir);
+        })
     };
 }
 
 pub trait HirVisitor {
     fn visit_hir(&mut self, hir: &HIR) {
-        walk_each!(self, &hir.root.items, visit_item_stmt, hir);
+        walk_each!(self, &hir.root().items, visit_item, hir);
     }
 
     // Statements //
     fn visit_stmt(&mut self, stmt: &Stmt, hir: &HIR) {
-        match stmt.kind() {
-            StmtKind::Expr(expr) => self.visit_expr_stmt(expr, hir),
-            StmtKind::Item(item) => self.visit_item_stmt(item, hir),
+        let stmt = hir.stmt(*stmt);
+        match stmt.kind {
+            StmtKind::Expr(expr) => self.visit_expr_stmt(&expr, hir),
+            StmtKind::Item(item) => self.visit_item_stmt(&item, hir),
         }
     }
 
@@ -37,31 +39,39 @@ pub trait HirVisitor {
     }
 
     fn visit_item_stmt(&mut self, id: &ItemId, hir: &HIR) {
-        self.visit_item(*id, hir)
+        self.visit_item(id, hir)
     }
 
     // Items //
-    fn visit_item(&mut self, id: ItemId, hir: &HIR);
+    fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
+        let item = hir.item(*id);
+        match item.kind() {
+            ItemKind::Type(ty) => self.visit_type_item(item.name(), ty, hir),
+            ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, hir),
+            ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, hir),
+        }
+    }
 
-    fn visit_type_item(&mut self, ty_item: &TypeItem, hir: &HIR) {
-        self.visit_ident(&ty_item.name, hir);
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TypeItem, hir: &HIR) {
+        self.visit_ident(&name, hir);
         self.visit_ty(&ty_item.ty, hir);
     }
 
-    fn visit_mod_item(&mut self, mod_item: &Mod, hir: &HIR) {
-        self.visit_ident(&mod_item.name, hir);
-        walk_each!(self, &mod_item.items, visit_item_stmt, hir);
+    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        walk_each!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_decl_item(&mut self, decl: &Decl, hir: &HIR) {
-        self.visit_ident(&decl.name, hir);
+    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, hir: &HIR) {
+        self.visit_ident(&name, hir);
         self.visit_expr(&decl.value, hir);
     }
 
     // Patterns //
     fn visit_pat(&mut self, pat: &Pat, hir: &HIR) {
-        match pat.kind() {
-            PatKind::Ident(ident) => self.visit_ident_pat(ident, hir),
+        let pat = hir.pat(*pat);
+        match pat.kind {
+            PatKind::Ident(ident) => self.visit_ident_pat(&ident, hir),
         }
     }
 
@@ -71,7 +81,8 @@ pub trait HirVisitor {
 
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr, hir: &HIR) {
-        match expr.kind() {
+        let expr = hir.expr(*expr);
+        match &expr.kind {
             ExprKind::Unit => self.visit_unit_expr(hir),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
@@ -127,7 +138,8 @@ pub trait HirVisitor {
 
     // Types //
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
-        match ty.kind() {
+        let ty = hir.ty(*ty);
+        match &ty.kind {
             TyKind::Unit => self.visit_unit_ty(hir),
             TyKind::Path(path) => self.visit_path_ty(path, hir),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
@@ -151,6 +163,7 @@ pub trait HirVisitor {
     fn visit_path(&mut self, _: &Path, _hir: &HIR) {}
 
     fn visit_block(&mut self, block: &Block, hir: &HIR) {
+        let block = hir.block(*block);
         walk_each!(self, block.stmts(), visit_stmt, hir);
 
         block.expr().map(|expr| self.visit_expr(expr, hir));

@@ -5,17 +5,15 @@ use std::{
 };
 
 use crate::{
-    ast::expr::Lit,
     cli::color::{Color, Colorize},
-    dt::idx::declare_idx,
-    parser::token,
+    dt::idx::{declare_idx, Idx},
+    hir::{self, expr::Lit},
     span::span::{Ident, Kw, Symbol},
 };
 
-use super::ctx::{Ctx, CtxItem, CtxItemName, ExistentialId, ExistentialIdInner};
+use super::ctx::{Ctx, CtxItem, CtxItemName, ExistentialId};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TypeVarId(pub usize);
+declare_idx!(TypeVarId, usize, "{}", Color::Green);
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum IntKind {
@@ -32,20 +30,20 @@ pub enum IntKind {
     Int,
 }
 
-impl From<token::IntKind> for IntKind {
-    fn from(kind: token::IntKind) -> Self {
+impl From<hir::expr::IntKind> for IntKind {
+    fn from(kind: hir::expr::IntKind) -> Self {
         match kind {
-            token::IntKind::Unknown => todo!(),
-            token::IntKind::U8 => Self::U8,
-            token::IntKind::U16 => Self::U16,
-            token::IntKind::U32 => Self::U32,
-            token::IntKind::U64 => Self::U64,
-            token::IntKind::Uint => Self::Uint,
-            token::IntKind::I8 => Self::I8,
-            token::IntKind::I16 => Self::I16,
-            token::IntKind::I32 => Self::I32,
-            token::IntKind::I64 => Self::I64,
-            token::IntKind::Int => Self::Int,
+            hir::expr::IntKind::Unknown => todo!(),
+            hir::expr::IntKind::U8 => Self::U8,
+            hir::expr::IntKind::U16 => Self::U16,
+            hir::expr::IntKind::U32 => Self::U32,
+            hir::expr::IntKind::U64 => Self::U64,
+            hir::expr::IntKind::Uint => Self::Uint,
+            hir::expr::IntKind::I8 => Self::I8,
+            hir::expr::IntKind::I16 => Self::I16,
+            hir::expr::IntKind::I32 => Self::I32,
+            hir::expr::IntKind::I64 => Self::I64,
+            hir::expr::IntKind::Int => Self::Int,
         }
     }
 }
@@ -88,12 +86,12 @@ pub enum FloatKind {
     F64,
 }
 
-impl From<token::FloatKind> for FloatKind {
-    fn from(kind: token::FloatKind) -> Self {
+impl From<hir::expr::FloatKind> for FloatKind {
+    fn from(kind: hir::expr::FloatKind) -> Self {
         match kind {
-            token::FloatKind::Unknown => todo!(),
-            token::FloatKind::F32 => Self::F32,
-            token::FloatKind::F64 => Self::F64,
+            hir::expr::FloatKind::Unknown => todo!(),
+            hir::expr::FloatKind::F32 => Self::F32,
+            hir::expr::FloatKind::F64 => Self::F64,
         }
     }
 }
@@ -121,12 +119,12 @@ pub enum PrimTy {
     String,
 }
 
-impl From<&Lit> for PrimTy {
-    fn from(lit: &Lit) -> Self {
+impl From<Lit> for PrimTy {
+    fn from(lit: Lit) -> Self {
         match lit {
             Lit::Bool(_) => Self::Bool,
-            Lit::Int(_, kind) => Self::Int(IntKind::from(*kind)),
-            Lit::Float(_, kind) => Self::Float(FloatKind::from(*kind)),
+            Lit::Int(_, kind) => Self::Int(IntKind::from(kind)),
+            Lit::Float(_, kind) => Self::Float(FloatKind::from(kind)),
             Lit::String(_) => Self::String,
         }
     }
@@ -231,7 +229,7 @@ impl TyInterner {
 pub struct TyCtx {
     interner: TyInterner,
     ctx: Ctx,
-    existential: ExistentialIdInner,
+    existential: ExistentialId,
 }
 
 impl TyCtx {
@@ -239,7 +237,7 @@ impl TyCtx {
         Self {
             interner: Default::default(),
             ctx: Ctx::initial(),
-            existential: 0,
+            existential: ExistentialId::new(0),
         }
     }
 
@@ -249,9 +247,7 @@ impl TyCtx {
 
     // Type context //
     pub fn fresh_ex(&mut self) -> ExistentialId {
-        let ex = ExistentialId::new(self.existential);
-        self.existential += 1;
-        ex
+        *self.existential.inc()
     }
 
     pub fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {

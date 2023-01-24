@@ -1,29 +1,14 @@
 use std::fmt::Display;
 
-use crate::{cli::color::Colorize, span::span::Ident};
+use crate::{
+    cli::color::{Color, Colorize},
+    dt::idx::declare_idx,
+    span::span::Ident,
+};
 
 use super::ty::Ty;
 
-pub type ExistentialIdInner = u32;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ExistentialId(ExistentialIdInner);
-
-impl ExistentialId {
-    pub fn new(id: ExistentialIdInner) -> Self {
-        Self(id)
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl Display for ExistentialId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format!("^{}", self.0).blue())
-    }
-}
+declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 
 #[derive(Clone)]
 pub enum CtxItem {

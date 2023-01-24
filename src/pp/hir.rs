@@ -1,10 +1,7 @@
-
-
 use crate::{
     hir::{
         expr::{Block, Call, Infix, Lambda, Lit, Prefix, TyExpr},
-        item::{Decl, ItemId, ItemKind, Mod, TypeItem},
-        stmt::{Stmt, StmtKind},
+        item::{Decl, Mod, TypeItem},
         ty::Ty,
         visitor::HirVisitor,
         Path, HIR,
@@ -54,43 +51,26 @@ impl<'a> HirPP<'a> {
 impl<'a> HirVisitor for HirPP<'a> {
     fn visit_hir(&mut self, hir: &HIR) {
         self.pp.line("== HIR ==");
-        walk_each_delim!(self, hir.root().items(), visit_item_stmt, "\n", hir)
-    }
-
-    // Statements //
-    fn visit_stmt(&mut self, stmt: &Stmt, hir: &HIR) {
-        match stmt.kind() {
-            StmtKind::Expr(expr) => self.visit_expr(expr, hir),
-            StmtKind::Item(item) => self.visit_item_stmt(item, hir),
-        }
+        walk_each_delim!(self, hir.root().items, visit_item_stmt, "\n", hir)
     }
 
     // Items //
-    fn visit_item(&mut self, id: ItemId, hir: &HIR) {
-        let item = hir.item(id);
-        match item.kind() {
-            ItemKind::Type(ty_item) => self.visit_type_item(ty_item, hir),
-            ItemKind::Mod(mod_item) => self.visit_mod_item(mod_item, hir),
-            ItemKind::Decl(decl) => self.visit_decl_item(decl, hir),
-        }
-    }
-
-    fn visit_type_item(&mut self, ty_item: &TypeItem, hir: &HIR) {
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TypeItem, hir: &HIR) {
         self.pp.kw(Kw::Type);
-        self.visit_ident(&ty_item.name, hir);
+        self.visit_ident(&name, hir);
         self.pp.punct(Punct::Assign);
         self.visit_ty(&ty_item.ty, hir);
     }
 
-    fn visit_mod_item(&mut self, mod_item: &Mod, hir: &HIR) {
+    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, hir: &HIR) {
         self.pp.kw(Kw::Mod);
-        self.visit_ident(&mod_item.name, hir);
+        self.visit_ident(&name, hir);
         self.pp.nl();
-        walk_block!(self, mod_item.items, visit_item_stmt, hir);
+        walk_block!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_decl_item(&mut self, decl: &Decl, hir: &HIR) {
-        self.visit_ident(&decl.name, hir);
+    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, hir: &HIR) {
+        self.visit_ident(&name, hir);
         self.pp.punct(Punct::Assign);
         self.visit_expr(&decl.value, hir);
     }
@@ -160,6 +140,8 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     fn visit_block(&mut self, block: &Block, hir: &HIR) {
+        let block = hir.block(*block);
+
         self.pp.nl();
         walk_block!(self, block.stmts(), visit_stmt, hir);
         self.pp.indent();

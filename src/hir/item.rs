@@ -1,5 +1,4 @@
 use crate::{
-    ast::NodeId,
     cli::color::Color,
     cli::color::Colorize,
     dt::idx::declare_idx,
@@ -7,12 +6,15 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{expr::Expr, ty::Ty, OwnerId, N};
+use super::{
+    expr::{Expr},
+    ty::{Ty}, OwnerId,
+};
 
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 
 pub struct TypeItem {
-    pub ty: N<Ty>,
+    pub ty: Ty,
 }
 
 pub struct Mod {
@@ -20,7 +22,7 @@ pub struct Mod {
 }
 
 pub struct Decl {
-    pub value: N<Expr>,
+    pub value: Expr,
 }
 
 pub enum ItemKind {
@@ -29,14 +31,14 @@ pub enum ItemKind {
     Decl(Decl),
 }
 
-pub struct Item {
+pub struct ItemNode {
     name: Ident,
     owner_id: OwnerId,
     kind: ItemKind,
     span: Span,
 }
 
-impl Item {
+impl ItemNode {
     pub fn new(name: Ident, def_id: DefId, kind: ItemKind, span: Span) -> Self {
         Self {
             name,
@@ -63,7 +65,7 @@ impl Item {
     }
 }
 
-impl WithSpan for Item {
+impl WithSpan for ItemNode {
     fn span(&self) -> Span {
         self.span
     }

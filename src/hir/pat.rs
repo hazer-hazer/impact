@@ -1,7 +1,4 @@
-use crate::{
-    ast::NodeId,
-    span::span::{Ident, Span, WithSpan},
-};
+use crate::span::span::{Ident, Span, WithSpan};
 
 use super::HirId;
 
@@ -9,24 +6,22 @@ pub enum PatKind {
     Ident(Ident),
 }
 
-pub struct Pat {
-    id: HirId,
-    kind: PatKind,
+pub struct PatNode {
+    pub id: HirId,
+    pub kind: PatKind,
     span: Span,
 }
 
-impl Pat {
+impl PatNode {
     pub fn new(id: HirId, kind: PatKind, span: Span) -> Self {
         Self { id, kind, span }
     }
-
-    pub fn kind(&self) -> &PatKind {
-        &self.kind
-    }
 }
 
-impl WithSpan for Pat {
+impl WithSpan for PatNode {
     fn span(&self) -> Span {
         self.span
     }
 }
+
+pub type Pat = HirId;

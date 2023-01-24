@@ -1,27 +1,22 @@
 use crate::{
-    ast::NodeId,
     span::span::{Span, WithSpan},
 };
 
-use super::{HirId, Path, N};
+use super::{HirId, Path};
 
-pub struct Ty {
-    id: HirId,
-    kind: TyKind,
+pub struct TyNode {
+    pub id: HirId,
+    pub kind: TyKind,
     span: Span,
 }
 
-impl Ty {
+impl TyNode {
     pub fn new(id: HirId, kind: TyKind, span: Span) -> Self {
         Self { id, kind, span }
     }
-
-    pub fn kind(&self) -> &TyKind {
-        &self.kind
-    }
 }
 
-impl WithSpan for Ty {
+impl WithSpan for TyNode {
     fn span(&self) -> Span {
         self.span
     }
@@ -30,5 +25,7 @@ impl WithSpan for Ty {
 pub enum TyKind {
     Unit,
     Path(Path),
-    Func(N<Ty>, N<Ty>),
+    Func(Ty, Ty),
 }
+
+pub type Ty = HirId;

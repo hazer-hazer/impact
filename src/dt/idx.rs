@@ -1,3 +1,30 @@
+#[derive(Default)]
+pub struct IndexVec<I: Idx, T> {
+    vec: Vec<T>,
+    _i: PhantomData<I>,
+}
+
+impl<I: Idx, T> IndexVec<I, T> {
+    pub fn new_decent() -> Self
+    where
+        I: BoundedIdx,
+        I::Inner: Into<usize>,
+    {
+        Self {
+            vec: Vec::with_capacity(I::MAX.into()),
+            _i: PhantomData::default(),
+        }
+    }
+
+    pub fn get(&self, i: I) -> Option<&T> {
+        self.vec.get(i.into())
+    }
+
+    pub fn get_mut(&mut self, i: I) -> Option<&mut T> {
+        self.vec.get_mut(i.into())
+    }
+}
+
 // pub trait Idx {
 //     type Inner;
 
@@ -48,6 +75,19 @@
 
 // TODO: IndexVec
 
+pub trait Idx: Copy + Into<usize> {
+    type Inner;
+
+    fn inner(&self) -> Self::Inner;
+
+    fn as_usize(&self) -> usize;
+}
+
+pub trait BoundedIdx: Idx {
+    const MIN: Self::Inner;
+    const MAX: Self::Inner;
+}
+
 macro_rules! declare_idx {
     ($name: ident, u8, $format: expr, $color: expr) => {
         declare_idx!(uint $name, u8, $format, $color);
@@ -65,12 +105,16 @@ macro_rules! declare_idx {
         declare_idx!(uint $name, u64, $format, $color);
     };
 
+    ($name: ident, usize, $format: expr, $color: expr) => {
+        declare_idx!(uint $name, u64, $format, $color);
+    };
+
     ($name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
         declare_idx!(new_type $name, $inner_ty, $format, $color);
 
         impl From<$name> for usize {
             fn from(id: $name) -> Self {
-                usize::from(id)
+                usize::from(id.0)
             }
         }
 
@@ -91,13 +135,15 @@ macro_rules! declare_idx {
         declare_idx!(new_type $name, $inner_ty, $format, $color);
 
         impl $name {
-            pub const MIN: $inner_ty = <$inner_ty>::MIN;
-            pub const MAX: $inner_ty = <$inner_ty>::MAX;
-
             pub fn inc(&mut self) -> &mut Self {
                 self.0 += 1;
                 self
             }
+        }
+
+        impl crate::dt::idx::BoundedIdx for $name {
+            const MIN: $inner_ty = <$inner_ty>::MIN;
+            const MAX: $inner_ty = <$inner_ty>::MAX;
         }
 
         impl From<$name> for usize {
@@ -120,8 +166,24 @@ macro_rules! declare_idx {
         }
     };
 
+    (wrapper $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
+        declare_idx!(private $name, $inner_ty, $format, $color);
+    };
+
     (new_type $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
         declare_idx!(private $name, $inner_ty, $format, $color);
+
+        impl crate::dt::idx::Idx for $name {
+            type Inner = $inner_ty;
+
+            fn as_usize(&self) -> usize {
+                usize::from(*self)
+            }
+
+            fn inner(&self) -> $inner_ty {
+                self.0
+            }
+        }
     };
 
     (private $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
@@ -131,10 +193,6 @@ macro_rules! declare_idx {
         impl $name {
             pub fn new(value: $inner_ty) -> Self {
                 Self(value)
-            }
-
-            pub fn as_usize(&self) -> usize {
-                usize::from(*self)
             }
         }
 
@@ -172,5 +230,7 @@ macro_rules! declare_idx {
         }
     };
 }
+
+use std::marker::PhantomData;
 
 pub(crate) use declare_idx;

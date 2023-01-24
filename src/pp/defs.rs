@@ -55,7 +55,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                 self.string(def);
 
                 match def.kind() {
-                    DefKind::Mod => {
+                    DefKind::Root | DefKind::Mod => {
                         self.nl();
                         self.indent();
                         self.pp_mod(ModuleId::Module(def.def_id()));

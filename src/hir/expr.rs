@@ -1,14 +1,16 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::{
-        expr::{InfixOp, PrefixOp},
-        NodeId,
-    },
+    ast::expr::{InfixOp, PrefixOp},
     span::span::{Span, Symbol, WithSpan},
 };
 
-use super::{pat::Pat, stmt::Stmt, ty::Ty, HirId, Path, N};
+use super::{
+    pat::{Pat, PatNode},
+    stmt::Stmt,
+    ty::Ty,
+    HirId, Path,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum IntKind {
@@ -71,6 +73,7 @@ impl Display for FloatKind {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Lit {
     Bool(bool),
     Int(u64, IntKind),
@@ -89,78 +92,74 @@ impl Display for Lit {
     }
 }
 
-pub struct Expr {
-    id: HirId,
-    kind: ExprKind,
+pub struct ExprNode {
+    pub id: HirId,
+    pub kind: ExprKind,
     span: Span,
 }
 
-impl Expr {
+impl ExprNode {
     pub fn new(id: HirId, kind: ExprKind, span: Span) -> Self {
         Self { id, kind, span }
     }
-
-    pub fn kind(&self) -> &ExprKind {
-        &self.kind
-    }
 }
 
-impl WithSpan for Expr {
+impl WithSpan for ExprNode {
     fn span(&self) -> Span {
         self.span
     }
 }
 
-pub struct Block {
-    node_id: NodeId,
+pub type Expr = HirId;
+
+pub struct BlockNode {
+    pub id: HirId,
     stmts: Vec<Stmt>,
-    expr: Option<N<Expr>>,
+    expr: Option<Expr>,
 }
 
-impl Block {
-    pub fn new(node_id: NodeId, stmts: Vec<Stmt>, expr: Option<N<Expr>>) -> Self {
-        Self {
-            node_id,
-            stmts,
-            expr,
-        }
+impl BlockNode {
+    pub fn new(id: HirId, stmts: Vec<Stmt>, expr: Option<Expr>) -> Self {
+        Self { id, stmts, expr }
     }
 
     pub fn stmts(&self) -> &[Stmt] {
         self.stmts.as_ref()
     }
 
-    pub fn expr(&self) -> Option<&N<Expr>> {
+    pub fn expr(&self) -> Option<&Expr> {
         self.expr.as_ref()
     }
 }
+
+pub type Block = HirId;
 
 pub struct PathExpr(pub Path);
 
 pub struct Lambda {
     pub param: Pat,
-    pub body: N<Expr>,
+    pub body: Expr,
 }
 
 pub struct TyExpr {
-    pub expr: N<Expr>,
-    pub ty: N<Ty>,
+    pub expr: Expr,
+    pub ty: Ty,
 }
 
 pub struct Call {
-    pub lhs: N<Expr>,
-    pub arg: N<Expr>,
+    pub lhs: Expr,
+    pub arg: Expr,
 }
 
 pub struct Infix {
-    pub lhs: N<Expr>,
+    pub lhs: Expr,
     pub op: InfixOp,
-    pub rhs: N<Expr>,
+    pub rhs: Expr,
 }
 
 pub struct Prefix {
     pub op: PrefixOp,
-    pub rhs: N<Expr>,
+    pub rhs: Expr,
 }
 
 pub enum ExprKind {
@@ -177,10 +176,10 @@ pub enum ExprKind {
 }
 
 pub struct Param {
-    pat: Pat,
+    pat: PatNode,
 }
 
 pub struct Body {
     params: Vec<Param>,
-    value: Expr,
+    value: ExprNode,
 }

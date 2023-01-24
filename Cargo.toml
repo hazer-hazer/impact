@@ -3,7 +3,7 @@ name = "impact"
 version = "0.1.0"
 edition = "2021"
 authors = ["hazer_hazer <gordeev.john@gmail.com>"]
-    
+
 [lib]
 name = "impact"
 edition = "2021"

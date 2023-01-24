@@ -7,5 +7,5 @@ main =
 //> --stop-at lexer --pp lexer --interruption-reason configured
 
 /*> --expected-output """
-Tokens: main = [NL] [INDENT] a = let [NL] [INDENT] asd = 123 [NL] asd + 123 [NL] [DEDENT] a [NL] [DEDENT] [NL] [NL] [EOF]
+Tokens: main = [BLOCK START] a = let [BLOCK START] asd = 123 [NL] asd + 123 [BLOCK END] a [BLOCK END] [NL] [NL] [EOF]
 """*/

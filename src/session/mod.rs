@@ -6,7 +6,7 @@ use crate::{
     ast::{AstMetadata, NodeId},
     cli::color::{Color, Colorize},
     config::config::Config,
-    dt::idx::declare_idx,
+    dt::idx::{declare_idx, Idx},
     interface::{interface::InterruptionReason, writer::Writer},
     message::{
         message::{Message, MessageStorage},
