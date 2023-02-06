@@ -10,7 +10,7 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        item::{Decl, ItemId, ItemNode, Mod, TypeItem},
+        item::{Decl, ItemId, ItemNode, Mod, TyAlias},
         HirId, Node, Owner, OwnerChildId, OwnerId, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
     message::message::MessageStorage,
@@ -203,7 +203,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
-        hir::item::ItemKind::Type(TypeItem {
+        hir::item::ItemKind::TyAlias(TyAlias {
             ty: lower_pr!(self, ty, lower_ty),
         })
     }

@@ -11,7 +11,7 @@ use super::{expr::Expr, ty::Ty, OwnerId};
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 
 #[derive(Debug)]
-pub struct TypeItem {
+pub struct TyAlias {
     pub ty: Ty,
 }
 
@@ -27,7 +27,7 @@ pub struct Decl {
 
 #[derive(Debug)]
 pub enum ItemKind {
-    Type(TypeItem),
+    TyAlias(TyAlias),
     Mod(Mod),
     Decl(Decl),
 }
@@ -72,3 +72,51 @@ impl WithSpan for ItemNode {
         self.span
     }
 }
+
+macro_rules! specific_item_nodes {
+    ($($name: ident $method_name: ident $ty: tt),*) => {
+        // $(
+        //     #[derive(Debug)]
+        //     pub struct $name {
+        //         name: Ident,
+        //         owner_id: OwnerId,
+        //         kind: $ty,
+        //         span: Span
+        //     }
+
+        // )*
+
+        // $(
+        //     impl $name {
+        //         pub fn name(&self) -> Ident {
+        //             self.name
+        //         }
+
+        //         pub fn def_id(&self) -> DefId {
+        //             self.owner_id.into()
+        //         }
+
+        //         pub fn owner_id(&self) -> OwnerId {
+        //             self.owner_id
+        //         }
+        //     }
+        // )*
+
+        $(
+            impl ItemNode {
+                pub fn $method_name(&self) -> &$ty {
+                    match self.kind() {
+                        ItemKind::$ty(inner) => inner,
+                        _ => unreachable!()
+                    }
+                }
+            }
+        )*
+    };
+}
+
+specific_item_nodes!(
+    TyAliasNode ty_alias TyAlias,
+    ModNode mod_ Mod,
+    DeclNode decl Decl
+);

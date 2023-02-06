@@ -167,6 +167,14 @@ impl Ctx {
         }
     }
 
+    pub fn new_with_ex(id: ExistentialId) -> Self {
+        Self {
+            existentials: IndexVec::from([(id, None)]),
+            vars: Default::default(),
+            terms: Default::default(),
+        }
+    }
+
     // Getters //
     pub fn get_term(&self, name: Ident) -> Option<Ty> {
         self.terms.get(&name).copied()
@@ -185,7 +193,7 @@ impl Ctx {
     }
 
     pub fn get_ex(&self, id: ExistentialId) -> Option<ExistentialId> {
-        if let Some(ex) = self.existentials.get(id) {
+        if let Some(_) = self.existentials.get(id) {
             Some(id)
         } else {
             None
@@ -199,5 +207,9 @@ impl Ctx {
     // Setters //
     pub fn type_term(&mut self, name: Ident, ty: Ty) {
         assert!(self.terms.insert(name, ty).is_none())
+    }
+
+    pub fn solve(&mut self, ex: ExistentialId, solution: Ty) {
+        assert!(self.existentials[ex].replace(solution).is_none())
     }
 }

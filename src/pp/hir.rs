@@ -1,7 +1,7 @@
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, Prefix, TyExpr},
-        item::{Decl, ItemId, ItemKind, Mod, TypeItem},
+        item::{Decl, ItemId, ItemKind, Mod, TyAlias},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -69,7 +69,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
         let item = hir.item(*id);
         match item.kind() {
-            ItemKind::Type(ty) => self.visit_type_item(item.name(), ty, hir),
+            ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, hir),
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, hir),
             ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, hir),
         }
@@ -79,7 +79,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         }
     }
 
-    fn visit_type_item(&mut self, name: Ident, ty_item: &TypeItem, hir: &HIR) {
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, hir: &HIR) {
         self.pp.kw(Kw::Type);
         self.visit_ident(&name, hir);
         self.pp.punct(Punct::Assign);

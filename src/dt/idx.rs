@@ -13,6 +13,24 @@ impl<I: Idx, T> Default for IndexVec<I, T> {
     }
 }
 
+impl<I: Idx, T> FromIterator<(I, Option<T>)> for IndexVec<I, Option<T>> {
+    fn from_iter<V: IntoIterator<Item = (I, Option<T>)>>(iter: V) -> Self {
+        let index_vec = IndexVec::<I, Option<T>>::default();
+        for (i, v) in iter {
+            if let Some(v) = v {
+                index_vec.insert(i, v);
+            }
+        }
+        index_vec
+    }
+}
+
+impl<I: Idx, T, const N: usize> From<[(I, Option<T>); N]> for IndexVec<I, Option<T>> {
+    fn from(values: [(I, Option<T>); N]) -> Self {
+        Self::from_iter(values)
+    }
+}
+
 impl<I: Idx, T> IndexVec<I, T> {
     pub fn new_decent() -> Self
     where
@@ -21,6 +39,13 @@ impl<I: Idx, T> IndexVec<I, T> {
     {
         Self {
             vec: Vec::with_capacity(I::MAX.into()),
+            _i: PhantomData::default(),
+        }
+    }
+
+    pub fn new_of(count: usize) -> Self {
+        Self {
+            vec: Vec::with_capacity(count),
             _i: PhantomData::default(),
         }
     }

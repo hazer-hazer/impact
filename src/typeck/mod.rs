@@ -2,20 +2,21 @@ use crate::{
     hir::{
         self,
         expr::{Block, ExprKind, Lit, TyExpr},
-        item::{ItemId, ItemKind, Mod},
+        item::{ItemId, ItemKind, Mod, TyAlias},
         HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
-        def::{DefKind, DefMap},
+        def::{DefId, DefKind, DefMap},
         res::ResKind,
     },
     session::{Session, Stage, StageOutput},
     span::span::WithSpan,
+    typeck::ty::Subst,
 };
 
 use self::{
-    ctx::Ctx,
+    ctx::{Ctx, ExistentialId},
     ty::{FloatKind, IntKind, PrimTy, Ty, TyCtx, TyError, TyKind, TyResult},
 };
 
@@ -26,6 +27,10 @@ struct Typecker<'hir> {
     tyctx: TyCtx,
 
     hir: &'hir HIR,
+
+    /// Types associated to DefId's (meaning for each item is different!)
+    /// - Type alias: `[Type alias DefId] -> [Its converted type]`
+    /// - Declaration: `[Declaration DefId] -> [Type of assigned value]`
     def_types: DefMap<Ty>,
 
     msg: MessageStorage,
@@ -53,6 +58,17 @@ impl<'hir> Typecker<'hir> {
         self.tyctx.ctx()
     }
 
+    pub fn under_ctx<T>(&mut self, ctx: Ctx, mut f: impl FnMut(&mut Self) -> T) -> T {
+        self.tyctx.enter_ctx(ctx);
+        let res = f(self);
+        self.tyctx.exit_ctx();
+        res
+    }
+
+    pub fn under_new_ctx<T>(&mut self, mut f: impl FnMut(&mut Self) -> T) -> T {
+        self.under_ctx(Ctx::default(), f)
+    }
+
     // Conversion //
     fn conv(&mut self, ty: hir::ty::Ty) -> Ty {
         let ty = self.hir.ty(ty);
@@ -69,21 +85,12 @@ impl<'hir> Typecker<'hir> {
         let path = self.hir.path(path);
         match path.res().kind() {
             &ResKind::Def(def_id) => {
-                if let Some(def_ty) = self.def_types.get_flat(def_id) {
-                    return *def_ty;
-                }
-
                 let def = self.sess.def_table.get_def(def_id).unwrap();
                 match def.kind() {
                     DefKind::TyAlias => {
-                        let ty_alias = self.hir.item(ItemId::new(def.def_id.into()));
-                        let ty = match ty_alias.kind() {
-                            ItemKind::Type(ty_item) => ty_item.ty,
-                            _ => unreachable!(),
-                        };
-                        let ty = self.conv(ty);
-                        self.def_types.insert(def_id, ty);
-                        ty
+                        // Path conversion is done linearly, i.e. we get type alias from HIR and convert its type, caching it
+                        // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
+                        self.conv_ty_alias(def_id)
                     },
 
                     // Non-type definitions from type namespace
@@ -102,6 +109,19 @@ impl<'hir> Typecker<'hir> {
             },
             _ => unreachable!(),
         }
+    }
+
+    fn conv_ty_alias(&mut self, ty_alias_def_id: DefId) -> Ty {
+        let def = self.sess.def_table.get_def(ty_alias_def_id).unwrap();
+        if let Some(def_ty) = self.def_types.get_flat(ty_alias_def_id) {
+            return *def_ty;
+        }
+
+        let ty_alias = self.hir.item(ItemId::new(def.def_id.into())).ty_alias();
+        let ty = ty_alias.ty;
+        let ty = self.conv(ty);
+        self.def_types.insert(ty_alias_def_id, ty);
+        ty
     }
 
     fn conv_int_kind(&self, kind: hir::expr::IntKind) -> IntKind {
@@ -177,8 +197,9 @@ impl<'hir> Typecker<'hir> {
         let item = self.hir.item(item);
 
         match item.kind() {
-            ItemKind::Type(_ty) => {
-                todo!()
+            ItemKind::TyAlias(_ty) => {
+                // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
+                self.conv_ty_alias(item.def_id());
             },
             ItemKind::Mod(Mod { items }) => {
                 for item in items {
@@ -187,6 +208,7 @@ impl<'hir> Typecker<'hir> {
             },
             ItemKind::Decl(decl) => {
                 let value_ty = self.synth_expr(decl.value)?;
+                assert!(self.def_types.insert(item.def_id(), value_ty).is_none());
                 self.ctx().type_term(item.name(), value_ty)
             },
         }
@@ -220,17 +242,15 @@ impl<'hir> Typecker<'hir> {
                 todo!()
             },
 
-            (_, &TyKind::Forall(alpha, body)) => {
-                self.tyctx.under_ctx(Ctx::new_with_var(alpha), |ctx| {
-                    self.check(expr_id, body)?;
-                    Ok(())
-                })
-            },
+            (_, &TyKind::Forall(alpha, body)) => self.under_ctx(Ctx::new_with_var(alpha), |this| {
+                this.check(expr_id, body)?;
+                Ok(())
+            }),
 
             _ => {
                 let expr_ty = self.synth_expr(expr_id)?;
-                let l = self.tyctx.apply_ctx(expr_ty);
-                let r = self.tyctx.apply_ctx(ty);
+                let l = self.tyctx.apply_on(expr_ty);
+                let r = self.tyctx.apply_on(ty);
 
                 match self.subtype(l, r) {
                     Ok(()) => {},
@@ -271,29 +291,63 @@ impl<'hir> Typecker<'hir> {
             (TyKind::Existential(id), TyKind::Existential(id_)) if id == id_ => Ok(()),
 
             (&TyKind::Func(param, ret), &TyKind::Func(param_, ret_)) => {
-                self.subtype(param, param_)?;
-                let ret = self.tyctx.apply_ctx(ret);
-                let ret_ = self.tyctx.apply_ctx(ret_);
-                self.subtype(ret, ret_)
+                self.under_new_ctx(|this| {
+                    // Enter Θ
+                    this.subtype(param, param_)?;
+                    let ret = this.tyctx.apply_on(ret);
+                    let ret_ = this.tyctx.apply_on(ret_);
+                    this.subtype(ret, ret_)
+                })
             },
 
-            (&TyKind::Forall(_alpha, _body), _) => {
-                todo!()
+            (&TyKind::Forall(alpha, body), _) => {
+                let ex = self.tyctx.fresh_ex();
+                let ex_ty = self.tyctx.existential(ex);
+                let with_substituted_alpha = self.tyctx.substitute(body, Subst::Name(alpha), ex_ty);
+
+                self.under_ctx(Ctx::new_with_ex(ex), |this| {
+                    this.subtype(with_substituted_alpha, r_ty)
+                })
             },
 
-            (_, &TyKind::Forall(_alpha, _body)) => {
-                todo!()
+            (_, &TyKind::Forall(alpha, body)) => {
+                self.under_ctx(Ctx::new_with_var(alpha), |this| this.subtype(l_ty, body))
             },
 
-            (&TyKind::Existential(_id), _) => {
-                todo!()
+            (&TyKind::Existential(id), _) => {
+                if !self.tyctx.occurs_in(r_ty, Subst::Existential(id)) {
+                    todo!("InstantiateL")
+                }
+                Err(TyError())
             },
 
-            (_, &TyKind::Existential(_id)) => {
-                todo!()
+            (_, &TyKind::Existential(id)) => {
+                if !self.tyctx.occurs_in(l_ty, Subst::Existential(id)) {
+                    todo!("InstantiateR")
+                }
+                Err(TyError())
             },
 
             _ => Err(TyError()),
+        }
+    }
+
+    fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<()> {
+        if self.tyctx.is_mono(r_ty) {
+            return Ok(self.tyctx.ctx().solve(ex, r_ty));
+        }
+
+        match self.tyctx.ty(r_ty).kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Lit(_)
+            | TyKind::Var(_)
+            | TyKind::Existential(_) => unreachable!("Unchecked monotype in `instantiate_l`"),
+            TyKind::Func(param, body) => {
+                let alpha1 = self.tyctx.fresh_ex();
+                let alpha2 = self.tyctx.fresh_ex();
+            },
+            TyKind::Forall(_, _) => todo!(),
         }
     }
 }

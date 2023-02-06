@@ -158,6 +158,53 @@ pub enum TyKind {
     Forall(Ident, Ty),
 }
 
+// pub enum MonoTy<'a> {
+//     Error,
+//     Unit,
+//     Lit(PrimTy),
+//     Var(Ident),
+//     Existential(ExistentialId),
+//     Func(&'a MonoTy<'a>, &'a MonoTy<'a>),
+// }
+
+// pub enum PolyTy<'a> {
+//     Func(&'a MonoPolyTy<'a>, &'a MonoPolyTy<'a>),
+//     Forall(Ident, &'a MonoPolyTy<'a>),
+// }
+
+// // I'm so proud of giving such names to structures
+// pub enum MonoPolyTy<'a> {
+//     Mono(MonoTy<'a>),
+//     Poly(PolyTy<'a>),
+// }
+
+// impl<'a> MonoPolyTy<'a> {
+//     pub fn is_mono(&self) -> bool {
+//         match self {
+//             MonoPolyTy::Mono(_) => true,
+//             MonoPolyTy::Poly(_) => false,
+//         }
+//     }
+
+//     pub fn is_poly(&self) -> bool {
+//         !self.is_mono()
+//     }
+
+//     pub fn as_mono(&self) -> Option<&MonoTy> {
+//         match self {
+//             MonoPolyTy::Mono(mono) => Some(mono),
+//             MonoPolyTy::Poly(_) => None,
+//         }
+//     }
+
+//     pub fn as_poly(&self) -> Option<&PolyTy> {
+//         match self {
+//             MonoPolyTy::Mono(_) => None,
+//             MonoPolyTy::Poly(poly) => Some(poly),
+//         }
+//     }
+// }
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct TyS {
     kind: TyKind,
@@ -227,6 +274,30 @@ impl TyInterner {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum Subst {
+    Existential(ExistentialId),
+    Name(Ident),
+}
+
+impl PartialEq<Ident> for Subst {
+    fn eq(&self, other: &Ident) -> bool {
+        match (self, other) {
+            (Self::Name(name), other) => name == other,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<ExistentialId> for Subst {
+    fn eq(&self, other: &ExistentialId) -> bool {
+        match (self, other) {
+            (Self::Existential(ex), other) => ex == other,
+            _ => false,
+        }
+    }
+}
+
 pub struct TyCtx {
     interner: TyInterner,
     ctx_stack: Vec<Ctx>,
@@ -248,6 +319,29 @@ impl TyCtx {
         self.interner.types.get(ty.as_usize()).unwrap()
     }
 
+    // pub fn mono_poly_ty(&self, ty: Ty) -> MonoPolyTy {
+    //     match self.ty(ty).kind() {
+    //         TyKind::Error => MonoPolyTy::Mono(MonoTy::Error),
+    //         TyKind::Unit => MonoPolyTy::Mono(MonoTy::Unit),
+    //         &TyKind::Lit(lit) => MonoPolyTy::Mono(MonoTy::Lit(lit)),
+    //         &TyKind::Var(var) => MonoPolyTy::Mono(MonoTy::Var(var)),
+    //         &TyKind::Existential(ex) => MonoPolyTy::Mono(MonoTy::Existential(ex)),
+    //         &TyKind::Func(param, body) => {
+    //             let param = self.mono_poly_ty(param);
+    //             let body = self.mono_poly_ty(body);
+    //             if param.is_mono() && body.is_mono() {
+    //                 MonoPolyTy::Mono(MonoTy::Func(
+    //                     param.as_mono().unwrap(),
+    //                     body.as_mono().unwrap(),
+    //                 ))
+    //             } else {
+    //                 MonoPolyTy::Poly(PolyTy::Func(&param, &body))
+    //             }
+    //         },
+    //         TyKind::Forall(_, _) => todo!(),
+    //     }
+    // }
+
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
         assert!(self.typed.insert(id, ty).is_none());
     }
@@ -257,19 +351,28 @@ impl TyCtx {
         self.ctx_stack.last_mut().unwrap()
     }
 
+    pub fn enter_ctx(&mut self, ctx: Ctx) {
+        self.ctx_stack.push(ctx);
+    }
+
+    pub fn exit_ctx(&mut self) {
+        self.ctx_stack.pop();
+    }
+
     pub fn under_new_ctx<T>(&mut self, f: impl FnMut(&mut Self) -> T) -> T {
         self.under_ctx(Ctx::default(), f)
     }
 
-    pub fn under_ctx<T>(&mut self, ctx: Ctx, f: impl FnMut(&mut Self) -> T) -> T {
-        self.ctx_stack.push(ctx);
-        let res = f(&mut self);
-        self.ctx_stack.pop();
+    pub fn under_ctx<T>(&mut self, ctx: Ctx, mut f: impl FnMut(&mut Self) -> T) -> T {
+        self.enter_ctx(ctx);
+        let res = f(self);
+        self.exit_ctx();
 
         res
     }
 
-    fn ascending_ctx<T>(&self, f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
+    /// Goes up from current context to the root looking for something in each scope
+    fn ascending_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
         let mut ctx_index = self.ctx_stack.len() - 1;
 
         loop {
@@ -324,7 +427,12 @@ impl TyCtx {
         self.intern(TyS::new(TyKind::Forall(alpha, body)))
     }
 
+    pub fn existential(&mut self, id: ExistentialId) -> Ty {
+        self.intern(TyS::new(TyKind::Existential(id)))
+    }
+
     // Type API //
+    // FIXME: Maybe move to `Typeck`
     pub fn is_mono(&self, ty: Ty) -> bool {
         match self.ty(ty).kind() {
             TyKind::Error
@@ -340,27 +448,33 @@ impl TyCtx {
     }
 
     /// Substitute
-    pub fn substitute(&mut self, ty: Ty, name: Ident, with: Ty) -> Ty {
+    pub fn substitute(&mut self, ty: Ty, subst: Subst, with: Ty) -> Ty {
         match self.ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) => ty,
             &TyKind::Var(ident) => {
-                if name == ident {
+                if subst == ident {
                     with
                 } else {
                     ty
                 }
             },
-            TyKind::Existential(_) => ty,
+            &TyKind::Existential(ex) => {
+                if subst == ex {
+                    with
+                } else {
+                    ty
+                }
+            },
             &TyKind::Func(param_ty, return_ty) => {
-                let param = self.substitute(param_ty, name, with);
-                let ret = self.substitute(return_ty, name, with);
+                let param = self.substitute(param_ty, subst, with);
+                let ret = self.substitute(return_ty, subst, with);
                 self.func(param, ret)
             },
             &TyKind::Forall(ident, body) => {
-                if name == ident {
+                if subst == ident {
                     self.forall(ident, with)
                 } else {
-                    let subst = self.substitute(body, name, with);
+                    let subst = self.substitute(body, subst, with);
                     self.forall(ident, subst)
                 }
             },
@@ -370,7 +484,7 @@ impl TyCtx {
     /// Substitute all occurrences of universally quantified type inside it body
     pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
         match self.ty(ty).kind() {
-            &TyKind::Forall(ident, body) => self.substitute(ty, ident, body),
+            &TyKind::Forall(alpha, body) => self.substitute(ty, Subst::Name(alpha), body),
             _ => unreachable!(),
         }
     }
@@ -393,35 +507,36 @@ impl TyCtx {
     //     }
     // }
 
-    pub fn apply_ctx(&mut self, ty: Ty) -> Ty {
+    pub fn apply_on(&mut self, ty: Ty) -> Ty {
         match self.ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => ty,
             TyKind::Existential(id) => self
                 .ascending_ctx(|ctx| ctx.get_solution(*id))
                 .unwrap_or(ty),
             &TyKind::Func(param_ty, return_ty) => {
-                let param = self.apply_ctx(param_ty);
-                let ret = self.apply_ctx(return_ty);
+                let param = self.apply_on(param_ty);
+                let ret = self.apply_on(return_ty);
                 self.func(param, ret)
             },
             &TyKind::Forall(ident, body) => {
-                let body = self.apply_ctx(body);
+                let body = self.apply_on(body);
                 self.forall(ident, body)
             },
         }
     }
 
-    pub fn occurs_in(&self, ty: Ty, name: Ident) -> bool {
+    pub fn occurs_in(&self, ty: Ty, name: Subst) -> bool {
         match self.ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) => false,
-            TyKind::Var(name_) if name_.sym() == name.sym() => true,
+            &TyKind::Var(name_) if name == name_ => true,
             TyKind::Var(_) => false,
-            TyKind::Existential(_) => {
+            &TyKind::Existential(id) if name == id => {
                 // TODO: Is this right?!
-                false
+                true
             },
+            TyKind::Existential(_) => false,
             &TyKind::Func(param, ret) => self.occurs_in(param, name) || self.occurs_in(ret, name),
-            &TyKind::Forall(alpha, _) if alpha.sym() == name.sym() => true,
+            &TyKind::Forall(alpha, _) if name == alpha => true,
             &TyKind::Forall(_, body) => self.occurs_in(body, name),
         }
     }
@@ -446,16 +561,12 @@ impl TyCtx {
                 self.ty_wf(param_ty)?;
                 self.ty_wf(return_ty)
             },
-            &TyKind::Forall(ident, body) => {
-                let marker_name = Ident::kw(Kw::M);
-
-                self.under_new_ctx(|this| {
-                    let alpha = this.var(ident);
-                    let open_forall = this.open_forall(body, alpha);
-                    self.ty_wf(open_forall)?;
-                    Ok(())
-                })
-            },
+            &TyKind::Forall(ident, body) => self.under_new_ctx(|this| {
+                let alpha = this.var(ident);
+                let open_forall = this.open_forall(body, alpha);
+                this.ty_wf(open_forall)?;
+                Ok(())
+            }),
             _ => Err(TyError()),
         }
     }
