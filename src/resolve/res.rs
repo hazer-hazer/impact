@@ -7,7 +7,7 @@ use super::def::DefId;
 // #[derive(Debug, Clone, Copy)]
 // pub struct LocalId(NodeId);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ResKind {
     Local(NodeId),
     Def(DefId), // Definition, e.g. imported function
@@ -18,7 +18,7 @@ pub enum ResKind {
  * The unit of name resolution.
  * Created for each name in source code after items are defined.
  */
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Res {
     kind: ResKind,
 }

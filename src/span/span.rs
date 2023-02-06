@@ -295,6 +295,13 @@ impl Ident {
         }
     }
 
+    pub fn kw(kw: Kw) -> Self {
+        Self {
+            span: Span::new_error(),
+            sym: Symbol::from_kw(kw),
+        }
+    }
+
     pub fn span(&self) -> Span {
         self.span
     }

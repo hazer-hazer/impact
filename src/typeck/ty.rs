@@ -7,11 +7,12 @@ use std::{
 use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, Idx},
-    hir::{self, expr::Lit},
+    hir::{self, expr::Lit, HirId},
+    resolve::def::Def,
     span::span::{Ident, Kw, Symbol},
 };
 
-use super::ctx::{Ctx, CtxItem, CtxItemName, ExistentialId};
+use super::ctx::{Ctx, ExistentialId};
 
 declare_idx!(TypeVarId, usize, "{}", Color::Green);
 
@@ -228,16 +229,18 @@ impl TyInterner {
 
 pub struct TyCtx {
     interner: TyInterner,
-    ctx: Ctx,
+    ctx_stack: Vec<Ctx>,
     existential: ExistentialId,
+    typed: HashMap<HirId, Ty>,
 }
 
 impl TyCtx {
     pub fn new() -> Self {
         Self {
             interner: Default::default(),
-            ctx: Ctx::initial(),
+            ctx_stack: Default::default(),
             existential: ExistentialId::new(0),
+            typed: HashMap::default(),
         }
     }
 
@@ -245,20 +248,51 @@ impl TyCtx {
         self.interner.types.get(ty.as_usize()).unwrap()
     }
 
+    pub fn type_node(&mut self, id: HirId, ty: Ty) {
+        assert!(self.typed.insert(id, ty).is_none());
+    }
+
     // Type context //
+    pub fn ctx(&mut self) -> &mut Ctx {
+        self.ctx_stack.last_mut().unwrap()
+    }
+
+    pub fn under_new_ctx<T>(&mut self, f: impl FnMut(&mut Self) -> T) -> T {
+        self.under_ctx(Ctx::default(), f)
+    }
+
+    pub fn under_ctx<T>(&mut self, ctx: Ctx, f: impl FnMut(&mut Self) -> T) -> T {
+        self.ctx_stack.push(ctx);
+        let res = f(&mut self);
+        self.ctx_stack.pop();
+
+        res
+    }
+
+    fn ascending_ctx<T>(&self, f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
+        let mut ctx_index = self.ctx_stack.len() - 1;
+
+        loop {
+            let res = f(&self.ctx_stack[ctx_index]);
+            if let Some(res) = res {
+                return Some(res);
+            }
+            ctx_index -= 1;
+
+            if ctx_index == 0 {
+                break;
+            }
+        }
+
+        None
+    }
+
     pub fn fresh_ex(&mut self) -> ExistentialId {
         *self.existential.inc()
     }
 
     pub fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
-        if let Some(item) = self.ctx.lookup(CtxItemName::TypedTerm(name)) {
-            match item {
-                &CtxItem::TypedTerm(_, ty) => Some(ty),
-                _ => unreachable!(),
-            }
-        } else {
-            None
-        }
+        self.ascending_ctx(|ctx: &Ctx| ctx.get_term(name))
     }
 
     // Constructors //
@@ -362,20 +396,9 @@ impl TyCtx {
     pub fn apply_ctx(&mut self, ty: Ty) -> Ty {
         match self.ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => ty,
-            TyKind::Existential(id) => match self.ctx.lookup(CtxItemName::Existential(*id)) {
-                Some(item) => match item {
-                    CtxItem::TypedTerm(_, ty) => ty.clone(),
-                    CtxItem::Existential(_, ety) => {
-                        if let Some(ty) = ety {
-                            ty.clone()
-                        } else {
-                            ty
-                        }
-                    },
-                    _ => ty,
-                },
-                None => ty,
-            },
+            TyKind::Existential(id) => self
+                .ascending_ctx(|ctx| ctx.get_solution(*id))
+                .unwrap_or(ty),
             &TyKind::Func(param_ty, return_ty) => {
                 let param = self.apply_ctx(param_ty);
                 let ret = self.apply_ctx(return_ty);
@@ -406,14 +429,14 @@ impl TyCtx {
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<()> {
         match self.ty(ty).kind() {
             &TyKind::Var(ident) => {
-                if self.ctx.contains(CtxItemName::Var(ident)) {
+                if self.ascending_ctx(|ctx| ctx.get_var(ident)).is_some() {
                     Ok(())
                 } else {
                     Err(TyError())
                 }
             },
-            &TyKind::Existential(ident) => {
-                if self.ctx.contains(CtxItemName::Existential(ident)) {
+            &TyKind::Existential(id) => {
+                if self.ascending_ctx(|ctx| ctx.get_ex(id)).is_some() {
                     Ok(())
                 } else {
                     Err(TyError())
@@ -424,19 +447,16 @@ impl TyCtx {
                 self.ty_wf(return_ty)
             },
             &TyKind::Forall(ident, body) => {
-                let marker_name = Ident::synthetic(Symbol::from_kw(Kw::M));
-                self.ctx.enter(marker_name, vec![CtxItem::Var(ident)]);
-                let alpha = self.var(ident);
-                let open_forall = self.open_forall(body, alpha);
-                self.ty_wf(open_forall)?;
-                self.ctx.leave(marker_name);
-                Ok(())
+                let marker_name = Ident::kw(Kw::M);
+
+                self.under_new_ctx(|this| {
+                    let alpha = this.var(ident);
+                    let open_forall = this.open_forall(body, alpha);
+                    self.ty_wf(open_forall)?;
+                    Ok(())
+                })
             },
             _ => Err(TyError()),
         }
-    }
-
-    pub fn ctx(&mut self) -> &mut Ctx {
-        &mut self.ctx
     }
 }

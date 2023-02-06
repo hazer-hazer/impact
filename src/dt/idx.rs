@@ -1,7 +1,16 @@
-#[derive(Default)]
+#[derive(Debug)]
 pub struct IndexVec<I: Idx, T> {
     vec: Vec<T>,
     _i: PhantomData<I>,
+}
+
+impl<I: Idx, T> Default for IndexVec<I, T> {
+    fn default() -> Self {
+        Self {
+            vec: Vec::default(),
+            _i: PhantomData::default(),
+        }
+    }
 }
 
 impl<I: Idx, T> IndexVec<I, T> {
@@ -16,12 +25,147 @@ impl<I: Idx, T> IndexVec<I, T> {
         }
     }
 
+    #[inline]
+    pub fn iter(&self) -> slice::Iter<'_, T> {
+        self.vec.iter()
+    }
+
+    #[inline]
+    pub fn iter_enumerated(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = (I, &T)> + ExactSizeIterator + '_
+    where
+        I: From<usize>,
+    {
+        self.vec.iter().enumerate().map(|(i, v)| (I::from(i), v))
+    }
+
+    #[inline]
     pub fn get(&self, i: I) -> Option<&T> {
         self.vec.get(i.into())
     }
 
+    #[inline]
     pub fn get_mut(&mut self, i: I) -> Option<&mut T> {
         self.vec.get_mut(i.into())
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.vec.len()
+    }
+
+    #[inline]
+    pub fn push(&mut self, v: T) -> I
+    where
+        I: From<usize>,
+    {
+        let id = I::from(self.len());
+        self.vec.push(v);
+        id
+    }
+
+    pub fn resize_with_el(&mut self, i: I, fill: impl FnMut() -> T) {
+        let min_len = i.into() + 1;
+        if self.len() < min_len {
+            self.vec.resize_with(min_len, fill)
+        }
+    }
+}
+
+impl<I: Idx, T> Index<I> for IndexVec<I, T> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, i: I) -> &Self::Output {
+        &self.vec[i.into()]
+    }
+}
+
+impl<I: Idx, T> IndexMut<I> for IndexVec<I, T> {
+    #[inline]
+    fn index_mut(&mut self, i: I) -> &mut Self::Output {
+        &mut self.vec[i.into()]
+    }
+}
+
+impl<I: Idx, T> IndexVec<I, Option<T>> {
+    pub fn insert(&mut self, i: I, v: T) -> Option<T> {
+        self.resize_with_el(i, || None);
+        self[i].replace(v)
+    }
+
+    #[inline]
+    pub fn get_flat(&self, i: I) -> Option<&T> {
+        if let Some(v) = self.get(i) {
+            v.as_ref()
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn iter_enumerated_flat(&self) -> impl Iterator<Item = (I, &T)> + '_
+    where
+        I: From<usize>,
+    {
+        self.vec
+            .iter()
+            .filter(|v| v.is_some())
+            .enumerate()
+            .map(|(i, v)| (I::from(i), v.as_ref().unwrap()))
+    }
+
+    #[inline]
+    pub fn get_mut_unwrap(&mut self, i: I) -> &mut T {
+        let a: &mut Option<T> = self.get_mut(i).unwrap();
+        a.as_mut().unwrap()
+    }
+
+    #[inline]
+    pub fn get_mut_expect(&mut self, i: I, msg: &str) -> &mut T {
+        let a: &mut Option<T> = self.get_mut(i).expect(msg);
+        a.as_mut().expect(msg)
+    }
+
+    #[inline]
+    pub fn get_unwrap(&self, i: I) -> &T {
+        self.get(i).unwrap().as_ref().unwrap()
+    }
+
+    #[inline]
+    pub fn get_expect(&self, i: I, msg: &str) -> &T {
+        self.get(i).expect(msg).as_ref().expect(msg)
+    }
+}
+
+impl<I: Idx, T> IntoIterator for IndexVec<I, T> {
+    type Item = T;
+    type IntoIter = vec::IntoIter<T>;
+
+    #[inline]
+    fn into_iter(self) -> vec::IntoIter<T> {
+        self.vec.into_iter()
+    }
+}
+
+impl<'a, I: Idx, T> IntoIterator for &'a IndexVec<I, T> {
+    type Item = &'a T;
+    type IntoIter = slice::Iter<'a, T>;
+
+    #[inline]
+    fn into_iter(self) -> slice::Iter<'a, T> {
+        self.vec.iter()
+    }
+}
+
+impl<'a, I: Idx, T> IntoIterator for &'a mut IndexVec<I, T> {
+    type Item = &'a mut T;
+    type IntoIter = slice::IterMut<'a, T>;
+
+    #[inline]
+    fn into_iter(self) -> slice::IterMut<'a, T> {
+        self.vec.iter_mut()
     }
 }
 
@@ -73,10 +217,10 @@ impl<I: Idx, T> IndexVec<I, T> {
 
 // impl_uints!(u8, u16, u32, u64);
 
-// TODO: IndexVec
-
 pub trait Idx: Copy + Into<usize> {
     type Inner;
+
+    fn new(inner: Self::Inner) -> Self;
 
     fn inner(&self) -> Self::Inner;
 
@@ -139,6 +283,10 @@ macro_rules! declare_idx {
                 self.0 += 1;
                 self
             }
+
+            pub fn next(&self) -> Self {
+                Self::new(self.0 + 1)
+            }
         }
 
         impl crate::dt::idx::BoundedIdx for $name {
@@ -175,6 +323,10 @@ macro_rules! declare_idx {
 
         impl crate::dt::idx::Idx for $name {
             type Inner = $inner_ty;
+
+            fn new(inner: Self::Inner) -> Self {
+                Self(inner)
+            }
 
             fn as_usize(&self) -> usize {
                 usize::from(*self)
@@ -231,6 +383,48 @@ macro_rules! declare_idx {
     };
 }
 
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    ops::{Index, IndexMut},
+    slice, vec,
+};
 
 pub(crate) use declare_idx;
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, time::Instant};
+
+    use crate::cli::color::{Color, Colorize};
+
+    use super::*;
+
+    declare_idx!(BenchIdx, u32, "BenchIdx#{}", Color::Black);
+
+    #[test]
+    fn vs_hashmap_inserts() {
+        const MAX: <BenchIdx as Idx>::Inner = 10000;
+
+        let mut index_vec = IndexVec::<BenchIdx, u32>::default();
+        let mut hashmap = HashMap::<BenchIdx, u32>::default();
+
+        let index_vec_time = Instant::now();
+        for i in BenchIdx::MIN..MAX {
+            index_vec.push(i as u32);
+        }
+        let index_vec_time = index_vec_time.elapsed();
+
+        let hashmap_time = Instant::now();
+        for i in BenchIdx::MIN..MAX {
+            hashmap.insert(BenchIdx::new(i), i as u32);
+        }
+        let hashmap_time = hashmap_time.elapsed();
+
+        assert!(index_vec_time < hashmap_time);
+        println!(
+            "IndexVec /vs/ HashMap descent full inserts: {}ns /vs/ {}ns",
+            index_vec_time.as_nanos(),
+            hashmap_time.as_nanos()
+        );
+    }
+}

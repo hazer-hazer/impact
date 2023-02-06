@@ -26,7 +26,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
         self.sess
             .def_table
             .blocks()
-            .iter()
+            .iter_enumerated_flat()
             .for_each(|(node_id, module)| {
                 self.string(format!("Block{}:\n", node_id));
                 self.indent();
@@ -61,7 +61,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                         self.pp_mod(ModuleId::Module(def.def_id()));
                         self.dedent();
                     },
-                    DefKind::TyAlias | DefKind::Func => {
+                    DefKind::Var | DefKind::TyAlias | DefKind::Func => {
                         self.nl();
                     },
                 }

@@ -1,11 +1,10 @@
-use crate::{
-    span::span::{Span, WithSpan},
-};
+use crate::span::span::{Span, WithSpan};
 
-use super::{HirId, Path};
+use super::{HirId, Path, WithHirId};
 
+#[derive(Debug)]
 pub struct TyNode {
-    pub id: HirId,
+    id: HirId,
     pub kind: TyKind,
     span: Span,
 }
@@ -16,12 +15,19 @@ impl TyNode {
     }
 }
 
+impl WithHirId for TyNode {
+    fn id(&self) -> HirId {
+        self.id
+    }
+}
+
 impl WithSpan for TyNode {
     fn span(&self) -> Span {
         self.span
     }
 }
 
+#[derive(Debug)]
 pub enum TyKind {
     Unit,
     Path(Path),

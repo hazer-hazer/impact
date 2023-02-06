@@ -1,10 +1,10 @@
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, Infix, Lambda, Lit, Prefix, TyExpr},
-        item::Item,
+        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, Prefix, TyExpr},
+        item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
-        ty::Ty,
+        ty::{Ty, TyKind},
         visitor::walk_pr,
         visitor::AstVisitor,
         ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
@@ -59,9 +59,21 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             StmtKind::Expr(expr) => walk_pr!(self, expr, visit_expr),
             StmtKind::Item(item) => walk_pr!(self, item, visit_item),
         }
+        self.node_id(stmt);
     }
 
     // Items //
+    fn visit_item(&mut self, item: &'ast Item) {
+        match item.kind() {
+            ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
+            ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
+            ItemKind::Decl(name, params, body) => {
+                self.visit_decl_item(name, params, body, item.id())
+            },
+        }
+        self.node_id(item);
+    }
+
     fn visit_type_item(&mut self, name: &'ast PR<Ident>, ty: &'ast PR<N<Ty>>, id: NodeId) {
         self.kw(Kw::Type);
         walk_pr!(self, name, name, id);
@@ -97,9 +109,26 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         match pat.kind() {
             PatKind::Ident(ident) => walk_pr!(self, ident, name, pat.id()),
         }
+        self.node_id(pat);
     }
 
     // Expressions //
+    fn visit_expr(&mut self, expr: &'ast Expr) {
+        match expr.kind() {
+            ExprKind::Unit => self.visit_unit_expr(),
+            ExprKind::Lit(lit) => self.visit_lit_expr(lit),
+            ExprKind::Path(path) => self.visit_path_expr(path),
+            ExprKind::Block(block) => self.visit_block_expr(block),
+            ExprKind::Infix(infix) => self.visit_infix_expr(infix),
+            ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix),
+            ExprKind::Call(call) => self.visit_app_expr(call),
+            ExprKind::Let(block) => self.visit_let_expr(block),
+            ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
+            ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
+        }
+        self.node_id(expr);
+    }
+
     fn visit_unit_expr(&mut self) {
         self.str("()");
     }
@@ -144,6 +173,16 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     }
 
     // Types //
+    fn visit_ty(&mut self, ty: &'ast Ty) {
+        match ty.kind() {
+            TyKind::Unit => self.visit_unit_ty(),
+            TyKind::Path(path) => self.visit_path_ty(path),
+            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+            TyKind::Paren(inner) => self.visit_paren_ty(inner),
+        }
+        self.node_id(ty);
+    }
+
     fn visit_unit_ty(&mut self) {
         self.str("()");
     }

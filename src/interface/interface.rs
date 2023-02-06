@@ -183,7 +183,7 @@ impl<'ast> Interface {
             let mut pp = HirPP::new(&sess);
             pp.visit_hir(&hir);
             let hir = pp.pp.get_string();
-            outln!(sess.writer, "Printing HIR after parsing\n{}", hir);
+            outln!(sess.writer, "Printing HIR\n{}", hir);
         }
 
         let sess = self.should_stop(sess, stage)?;

@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{fmt::Display};
 
 use crate::{
     ast::visitor::walk_each_pr,
     cli::color::{Color, Colorize},
-    dt::idx::declare_idx,
+    dt::idx::{declare_idx, IndexVec},
     span::span::{Ident, Span, WithSpan},
 };
 
@@ -81,7 +81,7 @@ pub trait WithNodeId {
     fn id(&self) -> NodeId;
 }
 
-pub type NodeMap<T> = HashMap<NodeId, T>;
+pub type NodeMap<T> = IndexVec<NodeId, Option<T>>;
 
 pub struct AST {
     items: Vec<PR<N<Item>>>,
@@ -103,15 +103,20 @@ impl WithNodeId for AST {
     }
 }
 
-#[derive(Default)]
 pub struct AstMetadata {
-    last_node_index: u32,
+    last_node_index: NodeId,
 }
 
 impl AstMetadata {
+    pub fn new() -> Self {
+        Self {
+            last_node_index: ROOT_NODE_ID.next(),
+        }
+    }
+
     pub fn next_node_id(&mut self) -> NodeId {
-        let id = NodeId(self.last_node_index);
-        self.last_node_index += 1;
+        let id = self.last_node_index;
+        self.last_node_index.inc();
         id
     }
 }
@@ -180,7 +185,9 @@ impl PathSeg {
     }
 
     pub fn expect_name(&self) -> &Ident {
-        self.name.as_ref().unwrap()
+        self.name
+            .as_ref()
+            .expect("Error PathSeg::name in `PathSeg::expect_name`")
     }
 }
 
@@ -227,7 +234,7 @@ impl Path {
             .iter()
             .map(|seg| seg.span())
             .reduce(|prefix, seg| prefix.to(seg))
-            .unwrap()
+            .expect("Empty Path in `Path::prefix_span`")
     }
 
     pub fn target_name(&self) -> Ident {
@@ -293,9 +300,9 @@ macro_rules! impl_ast_map_get {
         impl<'ast> AstMap<'ast> {
             $(
                 pub fn $method(&self, id: NodeId) -> &$type {
-                    match self.map.get(&id) {
+                    match self.map.get(id) {
                         Some(node) => {
-                            match node {
+                            match node.as_ref().unwrap() {
                                 AstNode::$type(node) => node,
                                 _ => panic!()
                             }

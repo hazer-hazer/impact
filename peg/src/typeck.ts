@@ -305,7 +305,7 @@ export class Ctx {
     }
 
     // Figure 8.
-    public apply(ty: Ty): Ty {
+    public (ty: Ty): Ty {
         switch (ty.tag) {
         case 'Var':
         case 'Lit': return ty

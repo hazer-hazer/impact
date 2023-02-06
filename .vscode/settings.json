@@ -12,6 +12,7 @@
     "idents",
     "interner",
     "Interner",
+    "nanos",
     "outl",
     "outln",
     "peekable",

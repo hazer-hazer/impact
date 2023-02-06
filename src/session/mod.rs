@@ -210,7 +210,7 @@ impl Session {
             config,
             writer: Default::default(),
             source_map: Default::default(),
-            ast_metadata: Default::default(),
+            ast_metadata: AstMetadata::new(),
             def_table: Default::default(),
             res: Resolutions::default(),
         }

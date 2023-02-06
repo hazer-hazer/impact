@@ -7,18 +7,15 @@ use crate::{
         ty::{Ty, TyKind},
         NodeId, NodeMap, Path, PathSeg, WithNodeId, AST, N, PR, ROOT_NODE_ID,
     },
+    cli::verbose,
     hir::{
         self,
         item::{Decl, ItemId, ItemNode, Mod, TypeItem},
-        HirId, Node, Owner, OwnerChildId, OwnerId, FIRST_OWNER_CHILD_ID, HIR,
-        OWNER_SELF_CHILD_ID,
+        HirId, Node, Owner, OwnerChildId, OwnerId, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
-    resolve::{
-        def::{DefId},
-        res::NamePath,
-    },
+    resolve::{def::DefId, res::NamePath},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Span, WithSpan},
 };
@@ -75,6 +72,7 @@ pub struct Lower<'ast> {
     msg: MessageStorage,
 }
 
+#[derive(Debug)]
 enum LoweredOwner {
     Root(Mod),
     Item(ItemNode),
@@ -101,15 +99,9 @@ impl<'ast> Lower<'ast> {
         }
     }
 
-    fn owner_id(&self) -> OwnerId {
-        self.owner_stack.last().unwrap().owner_id
-    }
-
-    fn owner(&mut self) -> &Owner {
-        self.hir.expect_owner(self.owner_id().into())
-    }
-
     fn with_owner(&mut self, owner: NodeId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> DefId {
+        verbose!("With owner {}", owner);
+
         let def_id = self.sess.def_table.get_def_id(owner).unwrap();
         let owner_id = OwnerId::new(def_id);
 
@@ -118,6 +110,7 @@ impl<'ast> Lower<'ast> {
             owner_id,
             owner: Owner::default(),
         });
+
         let owner_stack_size = self.owner_stack.len();
 
         let owner_node = f(self);
@@ -132,7 +125,8 @@ impl<'ast> Lower<'ast> {
             .nodes
             .insert(OWNER_SELF_CHILD_ID, owner_node.into());
 
-        self.owner_stack.pop();
+        self.hir
+            .add_owner(def_id, self.owner_stack.pop().unwrap().owner);
 
         def_id
     }
@@ -149,7 +143,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_node_id(&mut self, id: NodeId) -> HirId {
-        if let Some(hir_id) = self.node_id_hir_id.get(&id) {
+        if let Some(hir_id) = self.node_id_hir_id.get_flat(id) {
             *hir_id
         } else {
             let hir_id = self.next_hir_id();
@@ -282,7 +276,7 @@ impl<'ast> Lower<'ast> {
 
     fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
         match kind {
-            IntKind::Unknown => todo!(),
+            IntKind::Unknown => hir::expr::IntKind::Unknown,
             IntKind::U8 => hir::expr::IntKind::U8,
             IntKind::U16 => hir::expr::IntKind::U16,
             IntKind::U32 => hir::expr::IntKind::U32,
@@ -298,7 +292,7 @@ impl<'ast> Lower<'ast> {
 
     fn lower_float_kind(&self, kind: FloatKind) -> hir::expr::FloatKind {
         match kind {
-            FloatKind::Unknown => todo!(),
+            FloatKind::Unknown => hir::expr::FloatKind::Unknown,
             FloatKind::F32 => hir::expr::FloatKind::F32,
             FloatKind::F64 => hir::expr::FloatKind::F64,
         }

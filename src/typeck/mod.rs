@@ -2,7 +2,7 @@ use crate::{
     hir::{
         self,
         expr::{Block, ExprKind, Lit, TyExpr},
-        item::{ItemId, ItemKind},
+        item::{ItemId, ItemKind, Mod},
         HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -15,7 +15,7 @@ use crate::{
 };
 
 use self::{
-    ctx::{Ctx, CtxItem},
+    ctx::Ctx,
     ty::{FloatKind, IntKind, PrimTy, Ty, TyCtx, TyError, TyKind, TyResult},
 };
 
@@ -49,6 +49,10 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    fn ctx(&mut self) -> &mut Ctx {
+        self.tyctx.ctx()
+    }
+
     // Conversion //
     fn conv(&mut self, ty: hir::ty::Ty) -> Ty {
         let ty = self.hir.ty(ty);
@@ -65,7 +69,7 @@ impl<'hir> Typecker<'hir> {
         let path = self.hir.path(path);
         match path.res().kind() {
             &ResKind::Def(def_id) => {
-                if let Some(def_ty) = self.def_types.get(&def_id) {
+                if let Some(def_ty) = self.def_types.get_flat(def_id) {
                     return *def_ty;
                 }
 
@@ -93,7 +97,7 @@ impl<'hir> Typecker<'hir> {
                     },
 
                     // Definitions from value namespace
-                    DefKind::Func => unreachable!(),
+                    DefKind::Func | DefKind::Var => unreachable!(),
                 }
             },
             _ => unreachable!(),
@@ -169,15 +173,25 @@ impl<'hir> Typecker<'hir> {
         todo!()
     }
 
-    fn synth_item(&self, item: ItemId) -> TyResult<Ty> {
+    fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         let item = self.hir.item(item);
+
         match item.kind() {
             ItemKind::Type(_ty) => {
                 todo!()
             },
-            ItemKind::Mod(_items) => todo!(),
-            ItemKind::Decl(_decl) => todo!(),
+            ItemKind::Mod(Mod { items }) => {
+                for item in items {
+                    self.synth_item(*item)?;
+                }
+            },
+            ItemKind::Decl(decl) => {
+                let value_ty = self.synth_expr(decl.value)?;
+                self.ctx().type_term(item.name(), value_ty)
+            },
         }
+
+        TyResult::Ok(self.tyctx.unit())
     }
 
     // Check //
@@ -207,11 +221,10 @@ impl<'hir> Typecker<'hir> {
             },
 
             (_, &TyKind::Forall(alpha, body)) => {
-                let alpha_item = CtxItem::Var(alpha);
-                self.tyctx.ctx().enter(alpha, vec![alpha_item]);
-                self.check(expr_id, body)?;
-                self.tyctx.ctx().leave(alpha);
-                Ok(())
+                self.tyctx.under_ctx(Ctx::new_with_var(alpha), |ctx| {
+                    self.check(expr_id, body)?;
+                    Ok(())
+                })
             },
 
             _ => {

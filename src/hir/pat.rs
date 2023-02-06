@@ -1,13 +1,15 @@
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::HirId;
+use super::{HirId, WithHirId};
 
+#[derive(Debug)]
 pub enum PatKind {
     Ident(Ident),
 }
 
+#[derive(Debug)]
 pub struct PatNode {
-    pub id: HirId,
+    id: HirId,
     pub kind: PatKind,
     span: Span,
 }
@@ -15,6 +17,12 @@ pub struct PatNode {
 impl PatNode {
     pub fn new(id: HirId, kind: PatKind, span: Span) -> Self {
         Self { id, kind, span }
+    }
+}
+
+impl WithHirId for PatNode {
+    fn id(&self) -> HirId {
+        self.id
     }
 }
 

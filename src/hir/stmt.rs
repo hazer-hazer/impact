@@ -1,15 +1,10 @@
-use crate::{
-    span::span::{Span, WithSpan},
-};
+use crate::span::span::{Span, WithSpan};
 
-use super::{
-    expr::{Expr},
-    item::ItemId,
-    HirId,
-};
+use super::{expr::Expr, item::ItemId, HirId, WithHirId};
 
+#[derive(Debug)]
 pub struct StmtNode {
-    pub id: HirId,
+    id: HirId,
     pub kind: StmtKind,
     span: Span,
 }
@@ -20,12 +15,19 @@ impl StmtNode {
     }
 }
 
+impl WithHirId for StmtNode {
+    fn id(&self) -> HirId {
+        self.id
+    }
+}
+
 impl WithSpan for StmtNode {
     fn span(&self) -> Span {
         self.span
     }
 }
 
+#[derive(Debug)]
 pub enum StmtKind {
     Expr(Expr),
     Item(ItemId),

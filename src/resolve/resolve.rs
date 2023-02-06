@@ -10,6 +10,7 @@ use crate::{
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    resolve::def::DefKind,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Span, Symbol, WithSpan},
 };
@@ -74,12 +75,13 @@ impl<'ast> NameResolver<'ast> {
                     ident.sym()
                 ))
                 .label(
-                    self.locals_spans[&old_local],
+                    *self.locals_spans.get_unwrap(old_local),
                     "Previously defined here".to_string(),
                 )
                 .label(ident.span(), "Redefined here".to_string())
                 .emit(self);
         } else {
+            self.sess.def_table.define(node_id, DefKind::Var, ident);
             self.locals_spans.insert(node_id, ident.span());
         }
     }
@@ -189,6 +191,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     // visit_let: We don't have locals for now
 
     fn visit_item(&mut self, item: &'ast Item) {
+        verbose!("Item id {}", item.id());
         match item.kind() {
             ItemKind::Mod(name, items) => {
                 let module_id =
@@ -207,13 +210,14 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 self.exit_scope();
 
                 if params.is_empty() {
-                    self.define_var(item.id(), item.name().unwrap());
+                    self.define_var(item.id(), name.as_ref().unwrap());
                 }
             },
         }
     }
 
     fn visit_pat(&mut self, pat: &'ast Pat) {
+        verbose!("Visit pat {}", pat.id());
         match pat.kind() {
             PatKind::Ident(ident) => self.define_var(pat.id(), ident.as_ref().unwrap()),
         }

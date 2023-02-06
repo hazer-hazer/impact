@@ -23,7 +23,7 @@ impl Item {
     pub fn name(&self) -> Option<&Ident> {
         match self.kind() {
             ItemKind::Type(name, _) | ItemKind::Mod(name, _) | ItemKind::Decl(name, _, _) => {
-                Some(name.as_ref().unwrap())
+                Some(name.as_ref().expect("Error Ident node in `Item::name`"))
             },
         }
     }

@@ -75,8 +75,12 @@ impl Display for PPStages {
 
 #[derive(Clone)]
 pub struct Config {
-    compilation_depth: StageName,
+    // PP //
     pp_stages: PPStages,
+    pp_ast_ids: bool,
+
+    // Debug and in-source testing //
+    compilation_depth: StageName,
     expected_output: Option<String>,
     interruption_reason: Option<InterruptionReason>,
     verbose_messages: bool,
@@ -90,6 +94,10 @@ impl Config {
             PPStages::Some(stages) => stages.contains(&stage),
             PPStages::All => true,
         }
+    }
+
+    pub fn pp_ast_ids(&self) -> bool {
+        self.pp_ast_ids
     }
 
     pub fn expected_output(&self) -> Option<&String> {
@@ -111,23 +119,20 @@ impl Config {
     pub fn compilation_depth(&self) -> StageName {
         self.compilation_depth
     }
-
-    pub fn pp_stages(&self) -> &PPStages {
-        &self.pp_stages
-    }
 }
 
 impl Display for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "compilation_depth='{}', pp_stages='{}', expected_output='{}', interruption_reason='{}', verbose_messages={}, parser_debug={}",
+            "compilation_depth='{}', pp_stages='{}', expected_output='{}', interruption_reason='{}', verbose_messages={}, parser_debug={}, pp_ast_ids={}",
             self.compilation_depth,
             self.pp_stages,
             self.expected_output.as_ref().map_or("none", |o| o.as_str()),
             self.interruption_reason.as_ref().map_or("none".to_string(), ToString::to_string),
             if self.verbose_messages {"yes"} else {"no"},
-            if self.parser_debug {"yes"} else {"no"}
+            if self.parser_debug {"yes"} else {"no"},
+            if self.pp_ast_ids {"yes"} else {"no"},
         )
     }
 }
@@ -138,8 +143,10 @@ pub const DEFAULT_EXPECTED_OUTPUT: Option<String> = None;
 
 #[derive(Default)]
 pub struct ConfigBuilder {
-    compilation_depth: Option<StageName>,
     pp_stages: Option<PPStages>,
+    pp_ast_ids: bool,
+
+    compilation_depth: Option<StageName>,
     expected_output: Option<String>,
     interruption_reason: Option<InterruptionReason>,
     verbose_messages: bool,
@@ -149,8 +156,10 @@ pub struct ConfigBuilder {
 impl ConfigBuilder {
     pub fn new() -> Self {
         Self {
-            compilation_depth: None,
             pp_stages: None,
+            pp_ast_ids: false,
+
+            compilation_depth: None,
             expected_output: None,
             interruption_reason: None,
             verbose_messages: false,
@@ -158,13 +167,31 @@ impl ConfigBuilder {
         }
     }
 
-    pub fn compilation_depth(mut self, compilation_depth: StageName) -> Self {
-        self.compilation_depth = Some(compilation_depth);
-        self
+    pub fn emit(self) -> Config {
+        Config {
+            pp_ast_ids: self.pp_ast_ids,
+            pp_stages: self.pp_stages.unwrap_or(DEFAULT_PP_STAGES),
+
+            compilation_depth: self.compilation_depth.unwrap_or(DEFAULT_COMPILATION_DEPTH),
+            expected_output: self.expected_output,
+            interruption_reason: self.interruption_reason,
+            verbose_messages: self.verbose_messages,
+            parser_debug: self.parser_debug,
+        }
     }
 
     pub fn pp_stages(mut self, pp_stages: PPStages) -> Self {
         self.pp_stages = Some(pp_stages);
+        self
+    }
+
+    pub fn pp_ast_ids(mut self, pp_ast_ids: bool) -> Self {
+        self.pp_ast_ids = pp_ast_ids;
+        self
+    }
+
+    pub fn compilation_depth(mut self, compilation_depth: StageName) -> Self {
+        self.compilation_depth = Some(compilation_depth);
         self
     }
 
@@ -186,16 +213,5 @@ impl ConfigBuilder {
     pub fn parser_debug(mut self, parser_debug: bool) -> Self {
         self.parser_debug = parser_debug;
         self
-    }
-
-    pub fn emit(self) -> Config {
-        Config {
-            compilation_depth: self.compilation_depth.unwrap_or(DEFAULT_COMPILATION_DEPTH),
-            pp_stages: self.pp_stages.unwrap_or(DEFAULT_PP_STAGES),
-            expected_output: self.expected_output,
-            interruption_reason: self.interruption_reason,
-            verbose_messages: self.verbose_messages,
-            parser_debug: self.parser_debug,
-        }
     }
 }

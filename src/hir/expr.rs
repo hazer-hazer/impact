@@ -9,7 +9,7 @@ use super::{
     pat::{Pat, PatNode},
     stmt::Stmt,
     ty::Ty,
-    HirId, Path,
+    HirId, Path, WithHirId,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -73,7 +73,7 @@ impl Display for FloatKind {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Lit {
     Bool(bool),
     Int(u64, IntKind),
@@ -92,8 +92,9 @@ impl Display for Lit {
     }
 }
 
+#[derive(Debug)]
 pub struct ExprNode {
-    pub id: HirId,
+    id: HirId,
     pub kind: ExprKind,
     span: Span,
 }
@@ -101,6 +102,12 @@ pub struct ExprNode {
 impl ExprNode {
     pub fn new(id: HirId, kind: ExprKind, span: Span) -> Self {
         Self { id, kind, span }
+    }
+}
+
+impl WithHirId for ExprNode {
+    fn id(&self) -> HirId {
+        self.id
     }
 }
 
@@ -112,8 +119,9 @@ impl WithSpan for ExprNode {
 
 pub type Expr = HirId;
 
+#[derive(Debug)]
 pub struct BlockNode {
-    pub id: HirId,
+    id: HirId,
     stmts: Vec<Stmt>,
     expr: Option<Expr>,
 }
@@ -132,36 +140,49 @@ impl BlockNode {
     }
 }
 
+impl WithHirId for BlockNode {
+    fn id(&self) -> HirId {
+        self.id
+    }
+}
+
 pub type Block = HirId;
 
+#[derive(Debug)]
 pub struct PathExpr(pub Path);
 
+#[derive(Debug)]
 pub struct Lambda {
     pub param: Pat,
     pub body: Expr,
 }
 
+#[derive(Debug)]
 pub struct TyExpr {
     pub expr: Expr,
     pub ty: Ty,
 }
 
+#[derive(Debug)]
 pub struct Call {
     pub lhs: Expr,
     pub arg: Expr,
 }
 
+#[derive(Debug)]
 pub struct Infix {
     pub lhs: Expr,
     pub op: InfixOp,
     pub rhs: Expr,
 }
 
+#[derive(Debug)]
 pub struct Prefix {
     pub op: PrefixOp,
     pub rhs: Expr,
 }
 
+#[derive(Debug)]
 pub enum ExprKind {
     Unit,
     Lit(Lit),
@@ -175,10 +196,12 @@ pub enum ExprKind {
     Ty(TyExpr),
 }
 
+#[derive(Debug)]
 pub struct Param {
     pat: PatNode,
 }
 
+#[derive(Debug)]
 pub struct Body {
     params: Vec<Param>,
     value: ExprNode,

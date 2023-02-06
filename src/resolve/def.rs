@@ -3,7 +3,7 @@ use std::{array, collections::HashMap, fmt::Display};
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::color::{Color, Colorize},
-    dt::idx::{declare_idx, Idx},
+    dt::idx::{declare_idx, Idx, IndexVec},
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 
@@ -13,6 +13,7 @@ pub enum DefKind {
     TyAlias,
     Mod,
     Func,
+    Var,
 }
 
 impl DefKind {
@@ -20,7 +21,7 @@ impl DefKind {
         match kind {
             ItemKind::Type(_, _) => DefKind::TyAlias,
             ItemKind::Mod(_, _) => DefKind::Mod,
-            ItemKind::Decl(_, params, _) if params.is_empty() => unreachable!(),
+            ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Var,
             ItemKind::Decl(_, _, _) => DefKind::Func,
         }
     }
@@ -31,6 +32,7 @@ impl DefKind {
             DefKind::Mod => Namespace::Type,
             DefKind::Func => Namespace::Value,
             DefKind::Root => Namespace::Type,
+            DefKind::Var => Namespace::Value,
         }
     }
 }
@@ -44,6 +46,7 @@ impl Display for DefKind {
                 DefKind::TyAlias => "type alias",
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
+                DefKind::Var => "var",
                 DefKind::Root => "[ROOT]",
             }
         )
@@ -54,7 +57,7 @@ declare_idx!(DefId, u32, "#{}", Color::Magenta);
 
 pub const ROOT_DEF_ID: DefId = DefId(0);
 
-pub type DefMap<T> = HashMap<DefId, T>;
+pub type DefMap<T> = IndexVec<DefId, Option<T>>;
 
 /**
  * Definition of item, e.g. type
@@ -246,8 +249,8 @@ impl Module {
 pub struct DefTable {
     modules: DefMap<Module>,
     blocks: NodeMap<Module>,
-    node_id_def_id: HashMap<NodeId, DefId>,
-    def_id_node_id: HashMap<DefId, NodeId>,
+    node_id_def_id: NodeMap<DefId>,
+    def_id_node_id: DefMap<NodeId>,
 
     /// Span of definition name
     def_id_span: HashMap<DefId, Span>,
@@ -257,40 +260,37 @@ pub struct DefTable {
 impl DefTable {
     pub(super) fn get_module_mut(&mut self, id: ModuleId) -> &mut Module {
         match id {
-            ModuleId::Block(ref id) => self
+            ModuleId::Block(id) => self
                 .blocks
-                .get_mut(id)
-                .expect(format!("No block found by {}", id).as_str()),
-            ModuleId::Module(ref def_id) => self
+                .get_mut_expect(id, format!("No block found by {}", id).as_str()),
+            ModuleId::Module(def_id) => self
                 .modules
-                .get_mut(def_id)
-                .expect(format!("No module found by {}", def_id).as_str()),
+                .get_mut_expect(def_id, format!("No module found by {}", def_id).as_str()),
         }
     }
 
     pub fn get_module(&self, module_id: ModuleId) -> &Module {
         match module_id {
-            ModuleId::Block(ref id) => self
+            ModuleId::Block(id) => self
                 .blocks
-                .get(id)
-                .expect(format!("No block found by {}", id).as_str()),
-            ModuleId::Module(ref def_id) => self
+                .get_expect(id, format!("No block found by {}", id).as_str()),
+            ModuleId::Module(def_id) => self
                 .modules
-                .get(def_id)
-                .expect(format!("No module found by {}", def_id).as_str()),
+                .get_expect(def_id, format!("No module found by {}", def_id).as_str()),
         }
     }
 
     pub(super) fn add_root_module(&mut self) -> ModuleId {
         assert!(self.defs.is_empty());
         // FIXME: Review usage of DUMMY_NODE_ID for root module
-        self.define(
+        let def_id = self.define(
             ROOT_NODE_ID,
             DefKind::Root,
             &Ident::synthetic(Symbol::from_kw(Kw::Root)),
         );
         assert!(self.modules.insert(ROOT_DEF_ID, Module::root()).is_none());
-        ModuleId::Module(ROOT_DEF_ID)
+        assert_eq!(def_id, ROOT_DEF_ID);
+        ModuleId::Module(def_id)
     }
 
     pub(super) fn add_module(&mut self, def_id: DefId, parent: ModuleId) -> ModuleId {
@@ -315,8 +315,8 @@ impl DefTable {
         self.defs.push(Def::new(def_id, kind, *ident));
 
         if node_id != DUMMY_NODE_ID {
-            self.node_id_def_id.insert(node_id, def_id);
-            self.def_id_node_id.insert(def_id, node_id);
+            assert!(self.node_id_def_id.insert(node_id, def_id).is_none());
+            assert!(self.def_id_node_id.insert(def_id, node_id).is_none());
         }
 
         def_id
@@ -327,11 +327,11 @@ impl DefTable {
     }
 
     pub fn get_def_id(&self, node_id: NodeId) -> Option<DefId> {
-        self.node_id_def_id.get(&node_id).copied()
+        self.node_id_def_id.get_flat(node_id).copied()
     }
 
     pub fn get_node_id(&self, def_id: DefId) -> Option<NodeId> {
-        self.def_id_node_id.get(&def_id).copied()
+        self.def_id_node_id.get_flat(def_id).copied()
     }
 
     pub fn defs(&self) -> &[Def] {
@@ -344,5 +344,13 @@ impl DefTable {
 
     pub fn blocks(&self) -> &NodeMap<Module> {
         &self.blocks
+    }
+
+    pub fn node_id_def_id(&self) -> &NodeMap<DefId> {
+        &self.node_id_def_id
+    }
+
+    pub fn def_id_node_id(&self) -> &DefMap<NodeId> {
+        &self.def_id_node_id
     }
 }

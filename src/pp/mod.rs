@@ -4,6 +4,7 @@ use crate::{
         NodeId, NodeMap, Path, WithNodeId,
     },
     cli::color::{Color, Colorize},
+    hir::WithHirId,
     parser::token::Punct,
     resolve::res::{NamePath, ResKind},
     session::Session,
@@ -74,6 +75,20 @@ impl<'a, D> AstLikePP<'a, D> {
             names_colors: Default::default(),
             data,
         }
+    }
+
+    pub fn node_id(&mut self, with_node_id: &impl WithNodeId) -> &mut Self {
+        if self.sess.config().pp_ast_ids() {
+            self.string(with_node_id.id());
+        }
+        self
+    }
+
+    pub fn hir_id(&mut self, with_hir_id: &impl WithHirId) -> &mut Self {
+        if self.sess.config().pp_ast_ids() {
+            self.string(with_hir_id.id());
+        }
+        self
     }
 
     pub fn get_string(self) -> String {
@@ -185,7 +200,7 @@ impl<'a, D> AstLikePP<'a, D> {
 
         let node_id = node_id.unwrap();
 
-        if let Some(color) = self.names_colors.get(&node_id) {
+        if let Some(color) = self.names_colors.get_flat(node_id) {
             return *color;
         }
 

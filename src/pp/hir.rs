@@ -1,8 +1,10 @@
 use crate::{
     hir::{
-        expr::{Block, Call, Infix, Lambda, Lit, Prefix, TyExpr},
-        item::{Decl, Mod, TypeItem},
-        ty::Ty,
+        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, Prefix, TyExpr},
+        item::{Decl, ItemId, ItemKind, Mod, TypeItem},
+        pat::{Pat, PatKind},
+        stmt::{Stmt, StmtKind},
+        ty::{Ty, TyKind},
         visitor::HirVisitor,
         Path, HIR,
     },
@@ -54,7 +56,29 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_each_delim!(self, hir.root().items, visit_item_stmt, "\n", hir)
     }
 
+    fn visit_stmt(&mut self, stmt: &Stmt, hir: &HIR) {
+        let stmt = hir.stmt(*stmt);
+        match stmt.kind {
+            StmtKind::Expr(expr) => self.visit_expr_stmt(&expr, hir),
+            StmtKind::Item(item) => self.visit_item_stmt(&item, hir),
+        }
+        self.pp.hir_id(stmt);
+    }
+
     // Items //
+    fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
+        let item = hir.item(*id);
+        match item.kind() {
+            ItemKind::Type(ty) => self.visit_type_item(item.name(), ty, hir),
+            ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, hir),
+            ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, hir),
+        }
+
+        if self.pp.sess.config().pp_ast_ids() {
+            self.pp.string(id);
+        }
+    }
+
     fn visit_type_item(&mut self, name: Ident, ty_item: &TypeItem, hir: &HIR) {
         self.pp.kw(Kw::Type);
         self.visit_ident(&name, hir);
@@ -76,6 +100,23 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     // Expressions //
+    fn visit_expr(&mut self, expr: &Expr, hir: &HIR) {
+        let expr = hir.expr(*expr);
+        match &expr.kind {
+            ExprKind::Unit => self.visit_unit_expr(hir),
+            ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
+            ExprKind::Path(path) => self.visit_path_expr(path, hir),
+            ExprKind::Block(block) => self.visit_block_expr(block, hir),
+            ExprKind::Infix(infix) => self.visit_infix_expr(infix, hir),
+            ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix, hir),
+            ExprKind::Call(call) => self.visit_call_expr(call, hir),
+            ExprKind::Let(block) => self.visit_let_expr(block, hir),
+            ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
+            ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
+        }
+        self.pp.hir_id(expr);
+    }
+
     fn visit_unit_expr(&mut self, _hir: &HIR) {
         self.pp.str("()");
     }
@@ -120,6 +161,16 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     // Types //
+    fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
+        let ty = hir.ty(*ty);
+        match &ty.kind {
+            TyKind::Unit => self.visit_unit_ty(hir),
+            TyKind::Path(path) => self.visit_path_ty(path, hir),
+            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
+        }
+        self.pp.hir_id(ty);
+    }
+
     fn visit_unit_ty(&mut self, _hir: &HIR) {
         self.pp.str("()");
     }
@@ -130,13 +181,24 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_ty(return_ty, hir);
     }
 
+    // Patterns //
+    fn visit_pat(&mut self, pat: &Pat, hir: &HIR) {
+        let pat = hir.pat(*pat);
+        match pat.kind {
+            PatKind::Ident(ident) => self.visit_ident_pat(&ident, hir),
+        }
+        self.pp.hir_id(pat);
+    }
+
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident, _hir: &HIR) {
         self.pp.string(ident);
     }
 
-    fn visit_path(&mut self, path: &Path, _hir: &HIR) {
+    fn visit_path(&mut self, path: &Path, hir: &HIR) {
+        let path = hir.path(*path);
         self.pp.string(path);
+        self.pp.hir_id(path);
     }
 
     fn visit_block(&mut self, block: &Block, hir: &HIR) {
@@ -148,5 +210,6 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.out_indent();
         block.expr().map(|expr| self.visit_expr(expr, hir));
         self.pp.dedent();
+        self.pp.hir_id(block);
     }
 }

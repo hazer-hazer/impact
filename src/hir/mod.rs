@@ -2,11 +2,11 @@
  * HIR is nothing more than just an unwrapped version of AST, i.e. freed of parse results.
  */
 use core::panic;
-use std::{collections::HashMap, fmt::Display};
+use std::fmt::Display;
 
 use crate::{
     cli::color::{Color, Colorize},
-    dt::idx::{declare_idx, Idx},
+    dt::idx::{declare_idx, Idx, IndexVec},
     resolve::{
         def::{DefId, DefMap, ROOT_DEF_ID},
         res::Res,
@@ -31,14 +31,14 @@ pub mod visitor;
 
 type N<T> = Box<T>;
 
-declare_idx!(OwnerId, DefId, "owner{}", Color::BrightCyan);
+declare_idx!(OwnerId, DefId, "{}", Color::BrightCyan);
 declare_idx!(wrapper BodyId, HirId, "body{}", Color::Green);
-declare_idx!(OwnerChildId, u32, "owner_child#{}", Color::Cyan);
+declare_idx!(OwnerChildId, u32, "#{}", Color::Cyan);
 
 pub const OWNER_SELF_CHILD_ID: OwnerChildId = OwnerChildId(0);
 pub const FIRST_OWNER_CHILD_ID: OwnerChildId = OwnerChildId(1);
 
-type OwnerChildrenMap<T> = HashMap<OwnerChildId, T>;
+type OwnerChildrenMap<T> = IndexVec<OwnerChildId, Option<T>>;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HirId {
@@ -81,14 +81,19 @@ impl HirId {
 
 impl Display for HirId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.owner, self.id)
+        write!(f, "[{}:{}]", self.owner, self.id)
     }
+}
+
+pub trait WithHirId {
+    fn id(&self) -> HirId;
 }
 
 // HIR Node is any Node in HIR with HirId
 macro_rules! hir_nodes {
     // identified by HirId --- other
     ($($name: ident $ty: tt,)* / $($other_name: ident $other_ty: tt,)*) => {
+        #[derive(Debug)]
         pub enum Node {
             $(
                 $ty($ty),
@@ -147,18 +152,19 @@ impl Node {
     pub fn as_owner<'hir>(&'hir self) -> Option<OwnerNode<'hir>> {
         match self {
             Node::ItemNode(item) => Some(OwnerNode::Item(item)),
+            Node::Mod(root) => Some(OwnerNode::Root(root)),
             _ => None,
         }
     }
 
     pub fn hir_id(&self) -> HirId {
         match self {
-            Node::ExprNode(expr) => expr.id,
-            Node::StmtNode(stmt) => stmt.id,
-            Node::PatNode(pat) => pat.id,
-            Node::BlockNode(block) => block.id,
-            Node::TyNode(ty) => ty.id,
-            Node::PathNode(path) => path.id,
+            Node::ExprNode(expr) => expr.id(),
+            Node::StmtNode(stmt) => stmt.id(),
+            Node::PatNode(pat) => pat.id(),
+            Node::BlockNode(block) => block.id(),
+            Node::TyNode(ty) => ty.id(),
+            Node::PathNode(path) => path.id(),
             Node::ItemNode(item) => HirId::new_owner(item.def_id()),
             Node::Mod(_root) => HirId::new_owner(ROOT_DEF_ID),
         }
@@ -170,7 +176,7 @@ pub enum OwnerNode<'hir> {
     Item(&'hir ItemNode),
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Owner {
     pub bodies: OwnerChildrenMap<Body>,
 
@@ -181,13 +187,13 @@ pub struct Owner {
 impl Owner {
     pub fn owner_node(&self) -> OwnerNode {
         self.nodes
-            .get(&FIRST_OWNER_CHILD_ID)
-            .unwrap()
+            .get_expect(OWNER_SELF_CHILD_ID, "No owner self node in owner nodes")
             .as_owner()
-            .unwrap()
+            .expect("First node in owner nodes is non-owner node")
     }
 }
 
+#[derive(Debug)]
 pub struct HIR {
     // TODO: Replace with IndexVec
     owners: DefMap<Owner>,
@@ -206,7 +212,8 @@ impl HIR {
 
     // Getters //
     pub fn expect_owner(&self, def_id: DefId) -> &Owner {
-        self.owners.get(&def_id).unwrap()
+        self.owners
+            .get_expect(def_id, &format!("Expect owner {}", def_id))
     }
 
     pub fn expect_owner_node(&self, def_id: DefId) -> OwnerNode {
@@ -221,12 +228,7 @@ impl HIR {
     }
 
     pub fn item(&self, item_id: ItemId) -> &ItemNode {
-        match self
-            .owners
-            .get(&item_id.inner().inner())
-            .unwrap()
-            .owner_node()
-        {
+        match self.owners.get_unwrap(item_id.inner().inner()).owner_node() {
             OwnerNode::Item(item) => item,
             OwnerNode::Root(_) => todo!(),
         }
@@ -234,18 +236,31 @@ impl HIR {
 
     pub fn node(&self, id: HirId) -> &Node {
         self.owners
-            .get(&id.owner.inner())
-            .unwrap()
+            .get_unwrap(id.owner.inner())
             .nodes
-            .get(&id.id)
-            .unwrap()
+            .get_unwrap(id.id)
     }
+
+    // // Debug //
+    // pub fn dump(&self) -> String {
+    //     let dump_owner = |owner: &Owner| -> String {
+
+    //     };
+
+    //     self.owners
+    //         .iter()
+    //         .map(|(def_id, owner)| format!("{}: {}", def_id, dump_owner(owner)))
+    //         .collect::<Vec<_>>()
+    //         .join("\n")
+    // }
 }
 
+#[derive(Debug)]
 pub struct Body {
     value: Expr,
 }
 
+#[derive(Debug)]
 pub struct PathSeg {
     ident: Ident,
     span: Span,
@@ -263,8 +278,9 @@ impl Display for PathSeg {
     }
 }
 
+#[derive(Debug)]
 pub struct PathNode {
-    pub id: HirId,
+    id: HirId,
     res: Res,
     segments: Vec<PathSeg>,
     span: Span,
@@ -290,6 +306,12 @@ impl PathNode {
 
     pub fn target_name(&self) -> Ident {
         self.segments.last().unwrap().ident
+    }
+}
+
+impl WithHirId for PathNode {
+    fn id(&self) -> HirId {
+        self.id
     }
 }
 
