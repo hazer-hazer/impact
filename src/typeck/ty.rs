@@ -372,13 +372,15 @@ impl TyCtx {
     }
 
     /// Goes up from current context to the root looking for something in each scope
-    fn ascending_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
+    /// Returns result of the callback (if some returned) and depth of context scope
+    /// where callback returned result
+    fn _ascending_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<(T, usize)> {
         let mut ctx_index = self.ctx_stack.len() - 1;
 
         loop {
             let res = f(&self.ctx_stack[ctx_index]);
             if let Some(res) = res {
-                return Some(res);
+                return Some((res, ctx_index));
             }
             ctx_index -= 1;
 
@@ -388,6 +390,17 @@ impl TyCtx {
         }
 
         None
+    }
+
+    fn ascending_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
+        self._ascending_ctx(f)
+            .map_or(None, |(val, _depth)| Some(val))
+    }
+
+    pub fn find_unbound_ex_depth(&self, id: ExistentialId) -> usize {
+        self._ascending_ctx(|(ctx)| if ctx.has_ex(id) { Some(()) } else { None })
+            .expect("Undefined existential id")
+            .1
     }
 
     pub fn fresh_ex(&mut self) -> ExistentialId {

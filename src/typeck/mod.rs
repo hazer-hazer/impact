@@ -333,8 +333,19 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<()> {
+        let ex_depth = self.tyctx.find_unbound_ex_depth(ex);
+
+        let ty = self.tyctx.ty(r_ty);
+
         if self.tyctx.is_mono(r_ty) {
-            return Ok(self.tyctx.ctx().solve(ex, r_ty));
+            match ty.kind() {
+                &TyKind::Existential(ty_ex) => {
+                    if ex_depth < self.tyctx.find_unbound_ex_depth(ty_ex) {
+                        return Ok(self.tyctx.ctx().solve(ex, r_ty));
+                    }
+                },
+                _ => {},
+            }
         }
 
         match self.tyctx.ty(r_ty).kind() {
