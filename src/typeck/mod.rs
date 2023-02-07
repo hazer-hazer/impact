@@ -1,8 +1,9 @@
 use crate::{
     hir::{
         self,
-        expr::{Block, ExprKind, Lit, TyExpr},
+        expr::{Block, Call, ExprKind, Lambda, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod, TyAlias},
+        stmt::Stmt,
         HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -54,19 +55,21 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn ctx(&mut self) -> &mut Ctx {
-        self.tyctx.ctx()
-    }
-
-    pub fn under_ctx<T>(&mut self, ctx: Ctx, mut f: impl FnMut(&mut Self) -> T) -> T {
+    fn under_ctx<T>(&mut self, ctx: Ctx, mut f: impl FnMut(&mut Self) -> T) -> T {
         self.tyctx.enter_ctx(ctx);
         let res = f(self);
         self.tyctx.exit_ctx();
         res
     }
 
-    pub fn under_new_ctx<T>(&mut self, mut f: impl FnMut(&mut Self) -> T) -> T {
+    fn under_new_ctx<T>(&mut self, f: impl FnMut(&mut Self) -> T) -> T {
         self.under_ctx(Ctx::default(), f)
+    }
+
+    fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T> {
+        let restore = self.tyctx.enter_try_mode();
+        let res = f(self);
+        self.tyctx.exit_try_mode(res, restore)
     }
 
     // Conversion //
@@ -77,7 +80,11 @@ impl<'hir> Typecker<'hir> {
         match ty.kind {
             hir::ty::TyKind::Unit => self.tyctx.unit(),
             hir::ty::TyKind::Path(path) => self.conv_path(path),
-            hir::ty::TyKind::Func(_, _) => todo!(),
+            hir::ty::TyKind::Func(param, body) => {
+                let param = self.conv(param);
+                let ret = self.conv(body);
+                self.tyctx.func(param, ret)
+            },
         }
     }
 
@@ -164,11 +171,11 @@ impl<'hir> Typecker<'hir> {
                 Ok(self.tyctx.lit(prim))
             },
             ExprKind::Path(path) => self.synth_path(path.0),
-            ExprKind::Block(_) => todo!(),
+            &ExprKind::Block(block) => self.synth_block(block),
             ExprKind::Infix(_) => todo!(),
             ExprKind::Prefix(_) => todo!(),
-            ExprKind::Lambda(_) => todo!(),
-            ExprKind::Call(_) => todo!(),
+            ExprKind::Lambda(lambda) => self.synth_lambda(lambda),
+            ExprKind::Call(call) => self.synth_call(call),
             ExprKind::Let(_) => todo!(),
             ExprKind::Ty(TyExpr { expr, ty: anno }) => {
                 let ty = self.conv(*anno);
@@ -185,11 +192,43 @@ impl<'hir> Typecker<'hir> {
             .ok_or(TyError())
     }
 
-    fn synth_ty_expr(&self, _ty_expr: &TyExpr) -> TyResult<(Ty, Ctx)> {
-        todo!()
+    fn synth_ty_expr(&mut self, ty_expr: &TyExpr) -> TyResult<Ty> {
+        // FIXME: Check wf?
+        // FIXME: Do we need `try_to`?
+        self.try_to(|this| {
+            let anno_ty = this.conv(ty_expr.ty);
+            this.check(ty_expr.expr, anno_ty)
+        })
     }
 
-    fn synth_block(&self, _block: Block) -> TyResult<(Ty, Ctx)> {
+    fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
+        let block = self.hir.block(block);
+
+        block.stmts().iter().for_each(|&stmt| {
+            self.synth_stmt(stmt);
+        });
+
+        block
+            .expr()
+            .map_or(Ok(self.tyctx.unit()), |&expr| self.synth_expr(expr))
+    }
+
+    fn synth_lambda(&mut self, lambda: &Lambda) -> TyResult<Ty> {
+        let param_ex = self.tyctx.fresh_ex();
+        let body_ex = self.tyctx.fresh_ex();
+
+        // FIXME: Should these existentials be inside context?
+        self.tyctx.add_ex(param_ex);
+        self.tyctx.add_ex(body_ex);
+
+        self.under_new_ctx(|this| {
+            if let Some(param_name) = this.hir.pat_name(lambda.param) {
+                this.tyctx.add_ex(ex)
+            }
+        })
+    }
+
+    fn synth_call(&mut self, call: &Call) -> TyResult<Ty> {
         todo!()
     }
 
@@ -209,15 +248,30 @@ impl<'hir> Typecker<'hir> {
             ItemKind::Decl(decl) => {
                 let value_ty = self.synth_expr(decl.value)?;
                 assert!(self.def_types.insert(item.def_id(), value_ty).is_none());
-                self.ctx().type_term(item.name(), value_ty)
+                self.tyctx.type_term(item.name(), value_ty)
             },
         }
 
         TyResult::Ok(self.tyctx.unit())
     }
 
+    fn synth_stmt(&mut self, stmt: Stmt) -> TyResult<Ty> {
+        let stmt = self.hir.stmt(stmt);
+
+        match stmt.kind() {
+            &hir::stmt::StmtKind::Expr(expr) => {
+                self.synth_expr(expr)?;
+            },
+            &hir::stmt::StmtKind::Item(item) => {
+                self.synth_item(item)?;
+            },
+        }
+
+        Ok(self.tyctx.unit())
+    }
+
     // Check //
-    fn check(&mut self, expr_id: hir::expr::Expr, ty: Ty) -> TyResult<()> {
+    fn check(&mut self, expr_id: hir::expr::Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
         let tys = self.tyctx.ty(ty);
 
@@ -231,7 +285,7 @@ impl<'hir> Typecker<'hir> {
                         .emit(self);
                     return Err(TyError());
                 }
-                Ok(())
+                Ok(ty)
             },
 
             (ExprKind::Lambda(_lambda), TyKind::Func(_param_ty, _ret_ty)) => {
@@ -244,7 +298,7 @@ impl<'hir> Typecker<'hir> {
 
             (_, &TyKind::Forall(alpha, body)) => self.under_ctx(Ctx::new_with_var(alpha), |this| {
                 this.check(expr_id, body)?;
-                Ok(())
+                Ok(ty)
             }),
 
             _ => {
@@ -274,7 +328,7 @@ impl<'hir> Typecker<'hir> {
                     },
                 }
 
-                Ok(())
+                Ok(ty)
             },
         }
     }
@@ -288,7 +342,7 @@ impl<'hir> Typecker<'hir> {
 
             (TyKind::Var(name), TyKind::Var(name_)) if name.sym() == name_.sym() => Ok(()),
 
-            (TyKind::Existential(id), TyKind::Existential(id_)) if id == id_ => Ok(()),
+            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => Ok(()),
 
             (&TyKind::Func(param, ret), &TyKind::Func(param_, ret_)) => {
                 self.under_new_ctx(|this| {
@@ -314,18 +368,20 @@ impl<'hir> Typecker<'hir> {
                 self.under_ctx(Ctx::new_with_var(alpha), |this| this.subtype(l_ty, body))
             },
 
-            (&TyKind::Existential(id), _) => {
-                if !self.tyctx.occurs_in(r_ty, Subst::Existential(id)) {
-                    todo!("InstantiateL")
+            (&TyKind::Existential(ex), _) => {
+                if !self.tyctx.occurs_in(r_ty, Subst::Existential(ex)) {
+                    self.instantiate_l(ex, r_ty)
+                } else {
+                    Err(TyError())
                 }
-                Err(TyError())
             },
 
-            (_, &TyKind::Existential(id)) => {
-                if !self.tyctx.occurs_in(l_ty, Subst::Existential(id)) {
-                    todo!("InstantiateR")
+            (_, &TyKind::Existential(ex)) => {
+                if !self.tyctx.occurs_in(l_ty, Subst::Existential(ex)) {
+                    self.instantiate_r(l_ty, ex)
+                } else {
+                    Err(TyError())
                 }
-                Err(TyError())
             },
 
             _ => Err(TyError()),
@@ -333,32 +389,117 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<()> {
-        let ex_depth = self.tyctx.find_unbound_ex_depth(ex);
-
         let ty = self.tyctx.ty(r_ty);
 
-        if self.tyctx.is_mono(r_ty) {
-            match ty.kind() {
-                &TyKind::Existential(ty_ex) => {
-                    if ex_depth < self.tyctx.find_unbound_ex_depth(ty_ex) {
-                        return Ok(self.tyctx.ctx().solve(ex, r_ty));
-                    }
-                },
-                _ => {},
-            }
+        // InstLReach
+        match ty.kind() {
+            &TyKind::Existential(ty_ex) => {
+                let ex_depth = self.tyctx.find_unbound_ex_depth(ex);
+                let ty_ex_depth = self.tyctx.find_unbound_ex_depth(ty_ex);
+                if ex_depth < ty_ex_depth {
+                    let ex_ty = self.tyctx.existential(ex);
+                    self.tyctx.solve(ty_ex, ex_ty);
+                    return Ok(());
+                }
+            },
+            _ => {},
         }
 
-        match self.tyctx.ty(r_ty).kind() {
+        // InstLSolve
+        if self.tyctx.is_mono(r_ty) {
+            // FIXME: check WF?
+            self.tyctx.solve(ex, r_ty);
+            return Ok(());
+        }
+
+        match ty.kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Lit(_)
             | TyKind::Var(_)
-            | TyKind::Existential(_) => unreachable!("Unchecked monotype in `instantiate_l`"),
-            TyKind::Func(param, body) => {
-                let alpha1 = self.tyctx.fresh_ex();
-                let alpha2 = self.tyctx.fresh_ex();
+            | TyKind::Existential(_) => {
+                unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            TyKind::Forall(_, _) => todo!(),
+            &TyKind::Func(param, body) => self.try_to(|this| {
+                let domain_ex = this.tyctx.fresh_ex();
+                let range_ex = this.tyctx.fresh_ex();
+
+                let domain_ex_ty = this.tyctx.existential(domain_ex);
+                let range_ex_ty = this.tyctx.existential(range_ex);
+                let func_ty = this.tyctx.func(domain_ex_ty, range_ex_ty);
+
+                this.tyctx.solve(ex, func_ty);
+                this.tyctx.add_ex(domain_ex);
+                this.tyctx.add_ex(range_ex);
+
+                this.instantiate_r(param, domain_ex)?;
+
+                let range_ty = this.tyctx.apply_on(body);
+                this.instantiate_l(range_ex, range_ty)
+            }),
+            &TyKind::Forall(alpha, ty) => self.try_to(|this| {
+                this.under_ctx(Ctx::new_with_var(alpha), |this| this.instantiate_l(ex, ty))
+            }),
+        }
+    }
+
+    fn instantiate_r(&mut self, l_ty: Ty, ex: ExistentialId) -> TyResult<()> {
+        let ty = self.tyctx.ty(l_ty);
+
+        // InstRReach
+        match ty.kind() {
+            &TyKind::Existential(ty_ex) => {
+                let ex_depth = self.tyctx.find_unbound_ex_depth(ex);
+                let ty_ex_depth = self.tyctx.find_unbound_ex_depth(ty_ex);
+                if ex_depth < ty_ex_depth {
+                    let ex_ty = self.tyctx.existential(ex);
+                    self.tyctx.solve(ty_ex, ex_ty);
+                    return Ok(());
+                }
+            },
+            _ => {},
+        }
+
+        if self.tyctx.is_mono(l_ty) {
+            // FIXME: Check WF?
+            self.tyctx.solve(ex, l_ty);
+            return Ok(());
+        }
+
+        match ty.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Lit(_)
+            | TyKind::Var(_)
+            | TyKind::Existential(_) => {
+                unreachable!("Unchecked monotype in `instantiate_l`")
+            },
+            &TyKind::Func(param, body) => self.try_to(|this| {
+                let domain_ex = this.tyctx.fresh_ex();
+                let range_ex = this.tyctx.fresh_ex();
+
+                let domain_ex_ty = this.tyctx.existential(domain_ex);
+                let range_ex_ty = this.tyctx.existential(range_ex);
+                let func_ty = this.tyctx.func(domain_ex_ty, range_ex_ty);
+
+                this.tyctx.solve(ex, func_ty);
+                this.tyctx.add_ex(domain_ex);
+                this.tyctx.add_ex(range_ex);
+
+                this.instantiate_l(domain_ex, param)?;
+
+                let range_ty = this.tyctx.apply_on(body);
+                this.instantiate_r(range_ty, range_ex)
+            }),
+            &TyKind::Forall(alpha, ty) => self.try_to(|this| {
+                let alpha_ex = this.tyctx.fresh_ex();
+
+                this.under_ctx(Ctx::new_with_ex(alpha_ex), |this| {
+                    let alpha_ex_ty = this.tyctx.existential(alpha_ex);
+                    let body_ty = this.tyctx.substitute(ty, Subst::Name(alpha), alpha_ex_ty);
+                    this.instantiate_r(body_ty, ex)
+                })
+            }),
         }
     }
 }

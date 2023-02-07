@@ -17,7 +17,7 @@ use crate::{
 use self::{
     expr::{BlockNode, Expr, ExprNode},
     item::{ItemId, ItemNode, Mod},
-    pat::PatNode,
+    pat::{Pat, PatNode},
     stmt::StmtNode,
     ty::TyNode,
 };
@@ -239,6 +239,12 @@ impl HIR {
             .get_unwrap(id.owner.inner())
             .nodes
             .get_unwrap(id.id)
+    }
+
+    pub fn pat_name(&self, pat: Pat) -> Option<Ident> {
+        match self.pat(pat).kind() {
+            &pat::PatKind::Ident(name) => Some(name),
+        }
     }
 
     // // Debug //

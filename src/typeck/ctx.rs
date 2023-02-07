@@ -151,9 +151,12 @@ declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 //     }
 // }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Ctx {
-    existentials: IndexVec<ExistentialId, Option<Ty>>,
+    existentials: Vec<ExistentialId>,
+    // Note: I end up with storing `solved` and unsolved existentials separately due to `try` logic.
+    //  We need to enter new "try to"-context under which we do not violate upper context.
+    solved: IndexVec<ExistentialId, Option<Ty>>,
     vars: Vec<Ident>,
     terms: HashMap<Ident, Ty>,
 }
@@ -161,17 +164,22 @@ pub struct Ctx {
 impl Ctx {
     pub fn new_with_var(var: Ident) -> Self {
         Self {
-            existentials: Default::default(),
             vars: vec![var],
-            terms: Default::default(),
+            ..Default::default()
         }
     }
 
-    pub fn new_with_ex(id: ExistentialId) -> Self {
+    pub fn new_with_ex(ex: ExistentialId) -> Self {
         Self {
-            existentials: IndexVec::from([(id, None)]),
-            vars: Default::default(),
-            terms: Default::default(),
+            existentials: vec![ex],
+            ..Default::default()
+        }
+    }
+
+    pub fn new_with_term(name: Ident, ty: Ty) -> Self {
+        Self {
+            terms: HashMap::from([(name, ty)]),
+            ..Default::default()
         }
     }
 
@@ -188,28 +196,44 @@ impl Ctx {
         self.vars.iter().find(|var| **var == name).copied()
     }
 
-    pub fn has_ex(&self, id: ExistentialId) -> bool {
-        self.get_ex(id).is_some()
+    pub fn has_ex(&self, ex: ExistentialId) -> bool {
+        self.get_ex(ex).is_some()
     }
 
-    pub fn get_ex(&self, id: ExistentialId) -> Option<ExistentialId> {
-        if let Some(_) = self.existentials.get(id) {
-            Some(id)
+    pub fn get_ex(&self, ex: ExistentialId) -> Option<ExistentialId> {
+        if let Some(_) = self.solved.get(ex) {
+            Some(ex)
         } else {
             None
         }
     }
 
-    pub fn get_solution(&self, id: ExistentialId) -> Option<Ty> {
-        self.existentials.get_flat(id).copied()
+    pub fn get_solution(&self, ex: ExistentialId) -> Option<Ty> {
+        self.solved.get_flat(ex).copied()
     }
 
     // Setters //
+    pub fn add_var(&mut self, name: Ident) {
+        assert!(!self.vars.contains(&name));
+        self.vars.push(name);
+    }
+
+    pub fn add_ex(&mut self, ex: ExistentialId) {
+        assert!(!self.existentials.contains(&ex));
+        self.existentials.push(ex);
+    }
+
     pub fn type_term(&mut self, name: Ident, ty: Ty) {
         assert!(self.terms.insert(name, ty).is_none())
     }
 
-    pub fn solve(&mut self, ex: ExistentialId, solution: Ty) {
-        assert!(self.existentials[ex].replace(solution).is_none())
+    /// Returns solution if existential is in context
+    pub fn solve(&mut self, ex: ExistentialId, solution: Ty) -> Option<Ty> {
+        if self.has_ex(ex) {
+            assert!(self.solved[ex].replace(solution).is_none());
+            Some(solution)
+        } else {
+            None
+        }
     }
 }

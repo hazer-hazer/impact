@@ -5,13 +5,17 @@ use super::{expr::Expr, item::ItemId, HirId, WithHirId};
 #[derive(Debug)]
 pub struct StmtNode {
     id: HirId,
-    pub kind: StmtKind,
+    kind: StmtKind,
     span: Span,
 }
 
 impl StmtNode {
     pub fn new(id: HirId, kind: StmtKind, span: Span) -> Self {
         Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &StmtKind {
+        &self.kind
     }
 }
 

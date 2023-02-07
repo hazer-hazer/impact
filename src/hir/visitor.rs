@@ -25,7 +25,7 @@ pub trait HirVisitor {
     // Statements //
     fn visit_stmt(&mut self, stmt: &Stmt, hir: &HIR) {
         let stmt = hir.stmt(*stmt);
-        match stmt.kind {
+        match stmt.kind() {
             StmtKind::Expr(expr) => self.visit_expr_stmt(&expr, hir),
             StmtKind::Item(item) => self.visit_item_stmt(&item, hir),
         }

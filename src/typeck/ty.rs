@@ -301,6 +301,7 @@ impl PartialEq<ExistentialId> for Subst {
 pub struct TyCtx {
     interner: TyInterner,
     ctx_stack: Vec<Ctx>,
+    try_mode: bool,
     existential: ExistentialId,
     typed: HashMap<HirId, Ty>,
 }
@@ -310,6 +311,7 @@ impl TyCtx {
         Self {
             interner: Default::default(),
             ctx_stack: Default::default(),
+            try_mode: false,
             existential: ExistentialId::new(0),
             typed: HashMap::default(),
         }
@@ -347,8 +349,12 @@ impl TyCtx {
     }
 
     // Type context //
-    pub fn ctx(&mut self) -> &mut Ctx {
+    fn ctx(&mut self) -> &mut Ctx {
         self.ctx_stack.last_mut().unwrap()
+    }
+
+    pub fn ctx_depth(&self) -> usize {
+        self.ctx_stack.len()
     }
 
     pub fn enter_ctx(&mut self, ctx: Ctx) {
@@ -358,6 +364,49 @@ impl TyCtx {
     pub fn exit_ctx(&mut self) {
         self.ctx_stack.pop();
     }
+
+    /// Returns try mode flag and context depth before try mode to restore to them
+    pub fn enter_try_mode(&mut self) -> (bool, usize) {
+        let restore = (self.try_mode, self.ctx_depth());
+        self.enter_ctx(Ctx::default());
+        self.try_mode = true;
+        restore
+    }
+
+    pub fn exit_try_mode<T>(
+        &mut self,
+        res: TyResult<T>,
+        (before_try_mode, try_depth): (bool, usize),
+    ) -> TyResult<T> {
+        self.try_mode = before_try_mode;
+
+        match res {
+            Ok(ok) => Ok(ok),
+            Err(err) => {
+                self.ctx_stack.split_off(try_depth);
+                Err(err)
+            },
+        }
+    }
+
+    // pub fn under_try_ctx<T>(&mut self, f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T> {
+    //     let before_try_mode = self.try_mode;
+    //     let try_depth = self.ctx_depth();
+
+    //     self.try_mode = true;
+
+    //     let res = self.under_new_ctx(f);
+
+    //     self.try_mode = before_try_mode;
+
+    //     match res {
+    //         Ok(ok) => Ok(ok),
+    //         Err(err) => {
+    //             self.ctx_stack.split_off(try_depth + 1);
+    //             Err(err)
+    //         },
+    //     }
+    // }
 
     pub fn under_new_ctx<T>(&mut self, f: impl FnMut(&mut Self) -> T) -> T {
         self.under_ctx(Ctx::default(), f)
@@ -369,6 +418,27 @@ impl TyCtx {
         self.exit_ctx();
 
         res
+    }
+
+    pub fn solve(&mut self, ex: ExistentialId, solution: Ty) -> Option<Ty> {
+        self._ascending_ctx_mut(|ctx| ctx.solve(ex, solution))
+            .map_or(None, |(ty, _)| Some(ty))
+    }
+
+    pub fn type_term(&mut self, name: Ident, ty: Ty) {
+        self.ctx().type_term(name, ty)
+    }
+
+    pub fn add_ex(&mut self, ex: ExistentialId) {
+        self.ctx().add_ex(ex);
+    }
+
+    pub fn add_var(&mut self, name: Ident) {
+        self.ctx().add_var(name);
+    }
+
+    pub fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
+        self.ascending_ctx(|ctx: &Ctx| ctx.get_term(name))
     }
 
     /// Goes up from current context to the root looking for something in each scope
@@ -392,23 +462,40 @@ impl TyCtx {
         None
     }
 
+    fn _ascending_ctx_mut<T>(
+        &mut self,
+        mut f: impl FnMut(&mut Ctx) -> Option<T>,
+    ) -> Option<(T, usize)> {
+        let mut ctx_index = self.ctx_stack.len() - 1;
+
+        loop {
+            let res = f(&mut self.ctx_stack[ctx_index]);
+            if let Some(res) = res {
+                return Some((res, ctx_index));
+            }
+            ctx_index -= 1;
+
+            if ctx_index == 0 {
+                break;
+            }
+        }
+
+        None
+    }
+
     fn ascending_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
         self._ascending_ctx(f)
             .map_or(None, |(val, _depth)| Some(val))
     }
 
-    pub fn find_unbound_ex_depth(&self, id: ExistentialId) -> usize {
-        self._ascending_ctx(|(ctx)| if ctx.has_ex(id) { Some(()) } else { None })
+    pub fn find_unbound_ex_depth(&self, ex: ExistentialId) -> usize {
+        self._ascending_ctx(|ctx| if ctx.has_ex(ex) { Some(()) } else { None })
             .expect("Undefined existential id")
             .1
     }
 
     pub fn fresh_ex(&mut self) -> ExistentialId {
         *self.existential.inc()
-    }
-
-    pub fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
-        self.ascending_ctx(|ctx: &Ctx| ctx.get_term(name))
     }
 
     // Constructors //
@@ -440,8 +527,8 @@ impl TyCtx {
         self.intern(TyS::new(TyKind::Forall(alpha, body)))
     }
 
-    pub fn existential(&mut self, id: ExistentialId) -> Ty {
-        self.intern(TyS::new(TyKind::Existential(id)))
+    pub fn existential(&mut self, ex: ExistentialId) -> Ty {
+        self.intern(TyS::new(TyKind::Existential(ex)))
     }
 
     // Type API //
@@ -523,9 +610,9 @@ impl TyCtx {
     pub fn apply_on(&mut self, ty: Ty) -> Ty {
         match self.ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => ty,
-            TyKind::Existential(id) => self
-                .ascending_ctx(|ctx| ctx.get_solution(*id))
-                .unwrap_or(ty),
+            &TyKind::Existential(ex) => {
+                self.ascending_ctx(|ctx| ctx.get_solution(ex)).unwrap_or(ty)
+            },
             &TyKind::Func(param_ty, return_ty) => {
                 let param = self.apply_on(param_ty);
                 let ret = self.apply_on(return_ty);
@@ -543,7 +630,7 @@ impl TyCtx {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) => false,
             &TyKind::Var(name_) if name == name_ => true,
             TyKind::Var(_) => false,
-            &TyKind::Existential(id) if name == id => {
+            &TyKind::Existential(ex) if name == ex => {
                 // TODO: Is this right?!
                 true
             },
@@ -563,8 +650,8 @@ impl TyCtx {
                     Err(TyError())
                 }
             },
-            &TyKind::Existential(id) => {
-                if self.ascending_ctx(|ctx| ctx.get_ex(id)).is_some() {
+            &TyKind::Existential(ex) => {
+                if self.ascending_ctx(|ctx| ctx.get_ex(ex)).is_some() {
                     Ok(())
                 } else {
                     Err(TyError())

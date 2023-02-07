@@ -10,13 +10,17 @@ pub enum PatKind {
 #[derive(Debug)]
 pub struct PatNode {
     id: HirId,
-    pub kind: PatKind,
+    kind: PatKind,
     span: Span,
 }
 
 impl PatNode {
     pub fn new(id: HirId, kind: PatKind, span: Span) -> Self {
         Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &PatKind {
+        &self.kind
     }
 }
 

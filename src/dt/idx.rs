@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IndexVec<I: Idx, T> {
     vec: Vec<T>,
     _i: PhantomData<I>,
