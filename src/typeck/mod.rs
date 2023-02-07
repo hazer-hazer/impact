@@ -222,8 +222,10 @@ impl<'hir> Typecker<'hir> {
         self.tyctx.add_ex(body_ex);
 
         self.under_new_ctx(|this| {
+            // FIXME: What if pattern w/o name?
             if let Some(param_name) = this.hir.pat_name(lambda.param) {
-                this.tyctx.add_ex(ex)
+                this.tyctx
+                    .type_term(param_name, this.tyctx.existential(param_ex));
             }
         })
     }
