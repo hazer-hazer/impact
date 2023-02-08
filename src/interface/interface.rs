@@ -15,6 +15,7 @@ use crate::{
         resolve::NameResolver,
     },
     session::{Session, Source, Stage},
+    typeck::Typecker,
 };
 
 pub struct Interface {
@@ -180,10 +181,24 @@ impl<'ast> Interface {
         let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
         if sess.config().check_pp_stage(stage) {
-            let mut pp = HirPP::new(&sess);
+            let mut pp = HirPP::new(&sess, AstPPMode::Normal);
             pp.visit_hir(&hir);
             let hir = pp.pp.get_string();
             outln!(sess.writer, "Printing HIR\n{}", hir);
+        }
+
+        let sess = self.should_stop(sess, stage)?;
+
+        // Typeck //
+        verbose!("=== Type checking ===");
+        let stage = StageName::Typeck;
+        let (_, mut sess) = Typecker::new(sess, &hir).run_and_emit(true)?;
+
+        if sess.config().check_pp_stage(stage) {
+            let mut pp = HirPP::new(&sess, AstPPMode::TyAnno);
+            pp.visit_hir(&hir);
+            let hir = pp.pp.get_string();
+            outln!(sess.writer, "Printing HIR with type annotations\n{}", hir);
         }
 
         let sess = self.should_stop(sess, stage)?;

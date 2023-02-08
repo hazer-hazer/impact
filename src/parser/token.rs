@@ -1,49 +1,32 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
-use crate::span::span::{Kw, Span, SpanLen, Symbol, WithSpan};
+use crate::span::span::{Ident, Kw, Span, SpanLen, Symbol, WithSpan};
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Infix {
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    Mod,
-}
+// #[derive(PartialEq, Debug, Clone, Copy)]
+// pub enum Infix {
+//     Plus,
+//     Minus,
+//     Mul,
+//     Div,
+//     Mod,
+// }
 
-impl Display for Infix {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Infix::Plus => "+",
-                Infix::Minus => "-",
-                Infix::Mul => "*",
-                Infix::Div => "/",
-                Infix::Mod => "%",
-            }
-        )
-    }
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Prefix {
-    Not,
-}
-
-impl Display for Prefix {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Prefix::Not => "not",
-            }
-        )
-    }
-}
+// impl Display for Infix {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(
+//             f,
+//             "{}",
+//             match self {
+//                 Infix::Plus => "+",
+//                 Infix::Minus => "-",
+//                 Infix::Mul => "*",
+//                 Infix::Div => "/",
+//                 Infix::Mod => "%",
+//             }
+//         )
+//     }
+// }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Punct {
@@ -135,6 +118,11 @@ impl Display for FloatKind {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum Op {
+    Minus,
+}
+
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TokenKind {
     Eof,
@@ -148,9 +136,8 @@ pub enum TokenKind {
     String(Symbol),
     Kw(Kw),
     Ident(Symbol),
-
-    Prefix(Prefix),
-    Infix(Infix),
+    OpIdent(Symbol),
+    Op(Op),
 
     Punct(Punct),
 
@@ -161,7 +148,7 @@ pub enum ComplexSymbol {
     LineComment,
     MultilineComment,
     Punct(Punct, SpanLen),
-    Infix(Infix, SpanLen),
+    Op(Op, SpanLen),
     None,
 }
 
@@ -170,7 +157,6 @@ impl TokenKind {
         match sym.as_str() {
             "true" => Some(TokenKind::Bool(true)),
             "false" => Some(TokenKind::Bool(false)),
-            "not" => Some(TokenKind::Prefix(Prefix::Not)),
             "let" => Some(TokenKind::Kw(Kw::Let)),
             "in" => Some(TokenKind::Kw(Kw::In)),
             "mod" => Some(TokenKind::Kw(Kw::Mod)),
@@ -184,10 +170,6 @@ impl TokenKind {
             ('/', Some('/')) => ComplexSymbol::LineComment,
             ('/', Some('*')) => ComplexSymbol::MultilineComment,
 
-            ('+', _) => ComplexSymbol::Infix(Infix::Plus, 1),
-            ('*', _) => ComplexSymbol::Infix(Infix::Mul, 1),
-            ('/', _) => ComplexSymbol::Infix(Infix::Div, 1),
-            ('%', _) => ComplexSymbol::Infix(Infix::Mod, 1),
             ('=', _) => ComplexSymbol::Punct(Punct::Assign, 1),
             ('\\', _) => ComplexSymbol::Punct(Punct::Backslash, 1),
             (':', _) => ComplexSymbol::Punct(Punct::Colon, 1),
@@ -196,7 +178,7 @@ impl TokenKind {
             (')', _) => ComplexSymbol::Punct(Punct::RParen, 1),
 
             ('-', Some('>')) => ComplexSymbol::Punct(Punct::Arrow, 2),
-            ('-', _) => ComplexSymbol::Infix(Infix::Minus, 1),
+            ('-', _) => ComplexSymbol::Op(Op::Minus, 1),
 
             _ => ComplexSymbol::None,
         }
@@ -219,9 +201,7 @@ pub enum TokenCmp {
     Int,
     String,
     Ident,
-    SomePrefix,
-    Prefix(Prefix),
-    Infix(Infix),
+    Op,
     Kw(Kw),
     Punct(Punct),
     Error,
@@ -239,9 +219,9 @@ impl Display for TokenCmp {
                 TokenCmp::Int => "int".to_string(),
                 TokenCmp::String => "string".to_string(),
                 TokenCmp::Ident => "ident".to_string(),
-                TokenCmp::SomePrefix => "prefix operator".to_string(),
-                TokenCmp::Prefix(prefix) => format!("{} prefix operator", prefix),
+                TokenCmp::OpIdent => "operator ident".to_string(),
                 TokenCmp::Infix(infix) => format!("{} infix operator", infix),
+                TokenCmp::SomeInfix => "infix operator".to_string(),
                 TokenCmp::Kw(kw) => format!("{} keyword", kw),
                 TokenCmp::Punct(punct) => format!("{} punctuation", punct),
                 TokenCmp::BlockStart => "[BLOCK START]".to_string(),
@@ -261,13 +241,13 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::Int(_, _), TokenCmp::Int)
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
-            | (TokenKind::Prefix(_), TokenCmp::SomePrefix)
+            | (TokenKind::OpIdent(_), TokenCmp::OpIdent)
+            | (TokenKind::Infix(_), TokenCmp::SomeInfix)
             | (TokenKind::BlockStart, TokenCmp::BlockStart)
             | (TokenKind::BlockEnd, TokenCmp::BlockEnd)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
-            (TokenKind::Prefix(prefix1), TokenCmp::Prefix(prefix2)) => prefix1 == prefix2,
             (TokenKind::Infix(infix1), TokenCmp::Infix(infix2)) => infix1 == infix2,
             _ => false,
         }
@@ -280,7 +260,10 @@ impl Display for TokenKind {
             TokenKind::Eof => write!(f, "{}", "[EOF]"),
             TokenKind::Nl => write!(f, "{}", "[NL]"),
             TokenKind::Int(val, kind) => write!(f, "{}{}", val, kind),
-            TokenKind::String(val) | TokenKind::Ident(val) | TokenKind::Error(val) => {
+            TokenKind::String(val)
+            | TokenKind::Ident(val)
+            | TokenKind::OpIdent(val)
+            | TokenKind::Error(val) => {
                 write!(f, "{}", val)
             },
             TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),

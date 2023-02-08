@@ -1,7 +1,7 @@
 use crate::span::span::Ident;
 
 use super::{
-    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
+    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
     item::{Decl, ItemId, ItemKind, Mod, TyAlias},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
@@ -41,25 +41,26 @@ pub trait HirVisitor {
 
     // Items //
     fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
-        let item = hir.item(*id);
+        let id = *id;
+        let item = hir.item(id);
         match item.kind() {
-            ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, hir),
-            ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, hir),
-            ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, hir),
+            ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
+            ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
+            ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, id, hir),
         }
     }
 
-    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, hir: &HIR) {
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         self.visit_ty(&ty_item.ty, hir);
     }
 
-    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, hir: &HIR) {
+    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         walk_each!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, hir: &HIR) {
+    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         self.visit_expr(&decl.value, hir);
     }
@@ -85,7 +86,6 @@ pub trait HirVisitor {
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
             ExprKind::Block(block) => self.visit_block_expr(block, hir),
             ExprKind::Infix(infix) => self.visit_infix_expr(infix, hir),
-            ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix, hir),
             ExprKind::Call(call) => self.visit_call_expr(call, hir),
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
@@ -108,10 +108,6 @@ pub trait HirVisitor {
     fn visit_infix_expr(&mut self, infix: &Infix, hir: &HIR) {
         self.visit_expr(&infix.lhs, hir);
         self.visit_expr(&infix.rhs, hir);
-    }
-
-    fn visit_prefix_expr(&mut self, prefix: &Prefix, hir: &HIR) {
-        self.visit_expr(&prefix.rhs, hir);
     }
 
     fn visit_call_expr(&mut self, call: &Call, hir: &HIR) {

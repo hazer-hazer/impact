@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::expr::{InfixOp, PrefixOp},
+    ast::expr::InfixOp,
     span::span::{Span, Symbol, WithSpan},
 };
 
@@ -181,19 +181,12 @@ pub struct Infix {
 }
 
 #[derive(Debug)]
-pub struct Prefix {
-    pub op: PrefixOp,
-    pub rhs: Expr,
-}
-
-#[derive(Debug)]
 pub enum ExprKind {
     Unit,
     Lit(Lit),
     Path(PathExpr),
     Block(Block),
     Infix(Infix),
-    Prefix(Prefix),
     Lambda(Lambda),
     Call(Call),
     Let(Block),

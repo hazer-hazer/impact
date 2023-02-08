@@ -15,6 +15,7 @@ use crate::{
     },
     resolve::{def::DefTable, res::Resolutions},
     span::span::{Span, SpanPos},
+    typeck::tyctx::TyCtx,
 };
 
 declare_idx!(SourceId, u32, "source[{}]", Color::White);
@@ -202,6 +203,7 @@ pub struct Session {
     ast_metadata: AstMetadata,
     pub def_table: DefTable,
     pub res: Resolutions,
+    pub tyctx: TyCtx,
 }
 
 impl Session {
@@ -213,6 +215,7 @@ impl Session {
             ast_metadata: AstMetadata::new(),
             def_table: Default::default(),
             res: Resolutions::default(),
+            tyctx: TyCtx::default(),
         }
     }
 

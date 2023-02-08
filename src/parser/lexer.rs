@@ -13,12 +13,14 @@ enum TokenStartMatch {
     String,
     Skip,
     IndentPrecursor,
+    OpIdent,
     Unknown,
 }
 
 trait LexerCharCheck {
     fn is_ident_first(&self) -> bool;
     fn is_ident_next(&self) -> bool;
+    fn is_op_ident(&self) -> bool;
     fn is_skippable(&self) -> bool;
     fn is_indent(&self) -> bool;
     fn is_indent_precursor(&self) -> bool;
@@ -32,6 +34,10 @@ impl LexerCharCheck for char {
 
     fn is_ident_next(&self) -> bool {
         self.is_ident_first() || self.is_digit(10)
+    }
+
+    fn is_op_ident(&self) -> bool {
+        ['!', '$', '+', '-', '*', '/', '%', '?', '^', '|', '&', '~'].contains(self)
     }
 
     fn is_skippable(&self) -> bool {
@@ -181,6 +187,9 @@ impl Lexer {
 
     fn lex_ident(&mut self) {
         let start = self.pos;
+
+        self.advance();
+
         while !self.eof() && self.peek().is_ident_next() {
             self.advance();
         }
@@ -194,6 +203,26 @@ impl Lexer {
         };
 
         self.add_token(kind, len);
+    }
+
+    fn lex_op_ident(&mut self) {
+        assert!(self.advance() == '(');
+
+        let start = self.pos;
+
+        while !self.eof() && self.peek() != ')' && self.peek().is_op_ident() {
+            self.advance();
+        }
+
+        if self.peek() != ')' {
+            todo!("error")
+        }
+
+        self.advance();
+
+        let (sym, len) = self.get_fragment_intern(start);
+
+        self.add_token(TokenKind::OpIdent(sym), len);
     }
 
     fn lex_str(&mut self) {
@@ -313,6 +342,7 @@ impl Stage<TokenStream> for Lexer {
                     self.advance();
                 },
                 TokenStartMatch::Ident => self.lex_ident(),
+                TokenStartMatch::OpIdent => self.lex_op_ident(),
                 TokenStartMatch::Num => self.lex_num(),
                 TokenStartMatch::String => self.lex_str(),
                 TokenStartMatch::IndentPrecursor => self.lex_indent(),

@@ -1,4 +1,4 @@
-use std::{fmt::Display};
+use std::fmt::Display;
 
 use crate::{
     ast::visitor::walk_each_pr,
@@ -8,7 +8,7 @@ use crate::{
 };
 
 use self::{
-    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
+    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
     item::Item,
     pat::Pat,
     stmt::Stmt,
@@ -427,10 +427,10 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
         match expr.kind() {
             ExprKind::Unit => self.visit_unit_expr(),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
+            ExprKind::Paren(inner) => walk_pr!(self, inner, visit_expr),
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(infix) => self.visit_infix_expr(infix),
-            ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix),
             ExprKind::Call(call) => self.visit_app_expr(call),
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
@@ -453,10 +453,6 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
     fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
         walk_pr!(self, &infix.rhs, visit_expr);
-    }
-
-    fn visit_prefix_expr(&mut self, prefix: &'ast Prefix) {
-        walk_pr!(self, &prefix.rhs, visit_expr);
     }
 
     fn visit_app_expr(&mut self, call: &'ast Call) {

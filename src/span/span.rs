@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 
 use crate::{
-    parser::token::{Token, TokenKind},
+    parser::token::{Infix, Prefix, Token, TokenKind},
     session::{SourceId, DUMMY_SOURCE_ID},
 };
 use std::{
@@ -19,11 +19,16 @@ pub enum Kw {
     Mod,
     Type,
 
+    // Operators //
+    Plus,
+    Minus,
+    Mul,
+    Div,
+    Modulo,
+    Not,
+
     // Reserved for name resolution //
     Root,
-
-    // Reserved for typeck //
-    M,
 
     Unknown,
 }
@@ -33,9 +38,14 @@ impl Kw {
         match self {
             Kw::Let => "let",
             Kw::In => "in",
-            Kw::M => "m",
             Kw::Mod => "mod",
             Kw::Type => "type",
+            Kw::Plus => "+",
+            Kw::Minus => "-",
+            Kw::Mul => "*",
+            Kw::Div => "/",
+            Kw::Modulo => "%",
+            Kw::Not => "not",
             Kw::Root => "[root]",
             Kw::Unknown => "[UNKNOWN]",
         }
@@ -97,7 +107,15 @@ impl TryInto<Kw> for Symbol {
         match self.as_str() {
             "let" => Ok(Kw::Let),
             "in" => Ok(Kw::In),
-            "m" => Ok(Kw::M),
+            "mod" => Ok(Kw::Mod),
+            "type" => Ok(Kw::Type),
+            "+" => Ok(Kw::Plus),
+            "-" => Ok(Kw::Minus),
+            "*" => Ok(Kw::Mul),
+            "/" => Ok(Kw::Div),
+            "%" => Ok(Kw::Modulo),
+            "not" => Ok(Kw::Not),
+            "[root]" => Ok(Kw::Root),
             _ => Err(()),
         }
     }
@@ -279,12 +297,12 @@ impl Ident {
     }
 
     pub fn from_token(tok: Token) -> Self {
-        match tok.kind {
-            TokenKind::Ident(sym) => Ident {
-                span: tok.span,
-                sym,
+        Ident {
+            span: tok.span,
+            sym: match tok.kind {
+                TokenKind::Ident(sym) | TokenKind::OpIdent(sym) => sym,
+                _ => unreachable!(),
             },
-            _ => unreachable!(),
         }
     }
 

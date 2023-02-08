@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, Prefix, TyExpr},
+        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -255,10 +255,10 @@ impl<'ast> Lower<'ast> {
         let kind = match expr.kind() {
             ExprKind::Unit => hir::expr::ExprKind::Unit,
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
+            ExprKind::Paren(inner) => return lower_pr!(self, inner, lower_expr),
             ExprKind::Path(path) => self.lower_path_expr(path),
             ExprKind::Block(block) => self.lower_block_expr(block),
             ExprKind::Infix(infix) => self.lower_infix_expr(infix),
-            ExprKind::Prefix(prefix) => self.lower_prefix_expr(prefix),
             ExprKind::Lambda(lambda) => self.lower_lambda_expr(lambda),
             ExprKind::Call(call) => self.lower_app_expr(call),
             ExprKind::Let(block) => self.lower_let_expr(block),
@@ -320,13 +320,6 @@ impl<'ast> Lower<'ast> {
             lhs: lower_pr!(self, &infix.lhs, lower_expr),
             op: infix.op,
             rhs: lower_pr!(self, &infix.rhs, lower_expr),
-        })
-    }
-
-    fn lower_prefix_expr(&mut self, prefix: &Prefix) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Prefix(hir::expr::Prefix {
-            op: prefix.op,
-            rhs: lower_pr!(self, &prefix.rhs, lower_expr),
         })
     }
 

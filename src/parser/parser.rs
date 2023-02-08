@@ -3,8 +3,8 @@ use std::fmt::{Debug, Display};
 use crate::{
     ast::{
         expr::{
-            is_block_ended, Block, Call, Expr, ExprKind, Infix, InfixOpKind, Lambda, Lit, PathExpr,
-            Prefix, PrefixOpKind, TyExpr,
+            is_block_ended, Block, Call, Expr, ExprKind, Infix, InfixOp, InfixOpKind, Lambda, Lit,
+            PathExpr, Prefix, PrefixOpKind, TyExpr,
         },
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
@@ -146,8 +146,8 @@ impl Parser {
         self.prev_tok().span()
     }
 
-    fn close_span(&self, span: Span) -> Span {
-        span.to(self.prev_tok_span())
+    fn close_span(&self, lo: Span) -> Span {
+        lo.to(self.prev_tok_span())
     }
 
     fn peek_tok(&self) -> Token {
@@ -372,6 +372,14 @@ impl Parser {
         self.expected(skip, expected)
     }
 
+    fn parse_ident_allow_op(&mut self, expected: &str) -> PR<Ident> {
+        let skip = self
+            .skip(TokenCmp::Ident)
+            .or_else(|| self.skip(TokenCmp::OpIdent))
+            .map(|tok| Ident::from_token(tok));
+        self.expected(skip, expected)
+    }
+
     // Statements //
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "statement");
@@ -511,7 +519,7 @@ impl Parser {
 
         let lo = self.span();
 
-        let name = self.parse_ident("function name");
+        let name = self.parse_ident_allow_op("function name");
 
         let mut params = vec![];
         while !self.eof() {
@@ -660,7 +668,7 @@ impl Parser {
                         self.next_node_id(),
                         ExprKind::Infix(Infix {
                             lhs,
-                            op: InfixOpKind::from_tok(op),
+                            op: InfixOp::from_tok(self.next_node_id(), op),
                             rhs,
                         }),
                         self.close_span(lo),
@@ -677,7 +685,7 @@ impl Parser {
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
-        if let Some(op) = self.skip(TokenCmp::SomePrefix) {
+        if let Some(op) = self.skip(TokenCmp::) {
             let rhs = self.parse_postfix();
 
             let rhs = if let Some(rhs) = rhs {
@@ -736,28 +744,50 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
+        let lo = self.span();
         let Token { kind, span } = self.peek_tok();
 
         if self.is(TokenCmp::Punct(Punct::Backslash)) {
             return self.parse_lambda();
         }
 
-        let (kind, advance) = match kind {
-            TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val)))), true),
-            TokenKind::Int(val, kind) => (Some(Ok(ExprKind::Lit(Lit::Int(val, kind)))), true),
-            TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
-            TokenKind::Ident(_) => (
-                Some(Ok(ExprKind::Path(PathExpr(
-                    self.parse_path("[BUG] First identifier in path expression"),
-                )))),
-                false,
-            ),
+        // if self.is(TokenCmp::Punct(Punct::LParen)) {
+        //     let lo = self.span();
 
-            // Error token is an error on lexing stage
-            //  so don't emit one more error for it, just add error stub
-            TokenKind::Error(_) => (Some(Err(ErrorNode::new(span))), true),
+        //     self.advance();
 
-            _ => (None, false),
+        //     if self.is(TokenCmp::SomeOp) {
+        //         let op_ident = Ident::from_token(self.advance_tok());
+        //         return Some(Ok(Box::new(Expr::new(
+        //             self.next_node_id(),
+        //             ExprKind::Path(PathExpr(Ok())),
+        //             self.close_span(lo),
+        //         ))));
+        //     }
+        // }
+
+        let (kind, advance) = if let Some(_) = self.skip(TokenCmp::Punct(Punct::LParen)) {
+            let expr = self.parse_expr();
+
+            (Some(Ok(ExprKind::Paren(expr))), false)
+        } else {
+            match kind {
+                TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val)))), true),
+                TokenKind::Int(val, kind) => (Some(Ok(ExprKind::Lit(Lit::Int(val, kind)))), true),
+                TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
+                TokenKind::Ident(_) => (
+                    Some(Ok(ExprKind::Path(PathExpr(
+                        self.parse_path("[BUG] First identifier in path expression"),
+                    )))),
+                    false,
+                ),
+
+                // Error token is an error on lexing stage
+                //  so don't emit one more error for it, just add error stub
+                TokenKind::Error(_) => (Some(Err(ErrorNode::new(span))), true),
+
+                _ => (None, false),
+            }
         };
 
         if advance {
@@ -772,7 +802,7 @@ impl Parser {
             ));
         }
 
-        kind.map(|k| k.map(|k| Box::new(Expr::new(self.next_node_id(), k, span))))
+        kind.map(|k| k.map(|k| Box::new(Expr::new(self.next_node_id(), k, self.close_span(lo)))))
     }
 
     fn parse_path(&mut self, _expected: &str) -> PR<Path> {
@@ -797,7 +827,11 @@ impl Parser {
 
     fn parse_path_seg(&mut self) -> PathSeg {
         let lo = self.span();
-        PathSeg::new(self.parse_ident("path segment"), self.close_span(lo))
+        // FIXME: PascalCase type ident, not any ident
+        PathSeg::new(
+            self.parse_ident_allow_op("path segment"),
+            self.close_span(lo),
+        )
     }
 
     fn parse_block(&mut self) -> PR<Block> {

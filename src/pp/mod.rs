@@ -1,10 +1,10 @@
 use crate::{
     ast::{
-        expr::{InfixOp, InfixOpKind, PrefixOp, PrefixOpKind},
+        expr::{InfixOp, InfixOpKind},
         NodeId, NodeMap, Path, WithNodeId,
     },
     cli::color::{Color, Colorize},
-    hir::WithHirId,
+    hir::{HirId, WithHirId},
     parser::token::Punct,
     resolve::res::{NamePath, ResKind},
     session::Session,
@@ -19,6 +19,7 @@ pub mod hir;
 pub enum AstPPMode {
     Normal,
     NameHighlighter,
+    TyAnno,
 }
 
 const ALLOWED_COLORS: &[Color] = &[
@@ -91,6 +92,21 @@ impl<'a, D> AstLikePP<'a, D> {
         self
     }
 
+    pub fn ty(&mut self, id: HirId) -> &mut Self {
+        if self.mode == AstPPMode::TyAnno {
+            self.string(self.sess.tyctx.pp_typed_node(id));
+        }
+        self
+    }
+
+    pub fn ty_anno(&mut self, id: HirId) -> &mut Self {
+        if self.mode == AstPPMode::TyAnno {
+            self.str(": ");
+            self.ty(id);
+        }
+        self
+    }
+
     pub fn get_string(self) -> String {
         self.out
     }
@@ -145,9 +161,9 @@ impl<'a, D> AstLikePP<'a, D> {
 
     fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
-            Kw::In => (" ", " "),
-            Kw::Mod => ("", " "),
-            Kw::Let | Kw::Type | Kw::Root | Kw::M | Kw::Unknown => ("", ""),
+            Kw::Plus | Kw::Minus | Kw::Mul | Kw::Div | Kw::Modulo | Kw::In => (" ", " "),
+            Kw::Not | Kw::Mod => ("", " "),
+            Kw::Let | Kw::Type | Kw::Root | Kw::Unknown => ("", ""),
         };
 
         self.str(pre);
@@ -168,7 +184,7 @@ impl<'a, D> AstLikePP<'a, D> {
     }
 
     fn infix(&mut self, infix: &InfixOp) -> &mut Self {
-        let (pre, post) = match infix.node() {
+        let (pre, post) = match infix.kind() {
             InfixOpKind::Plus
             | InfixOpKind::Minus
             | InfixOpKind::Mul
@@ -177,16 +193,7 @@ impl<'a, D> AstLikePP<'a, D> {
         };
 
         self.str(pre);
-        self.str(&infix.node().to_string());
-        self.str(post)
-    }
-
-    fn prefix(&mut self, prefix: &PrefixOp) -> &mut Self {
-        let post = match prefix.node() {
-            PrefixOpKind::Not => "",
-        };
-
-        self.str(&prefix.node().to_string());
+        self.str(&infix.kind().to_string());
         self.str(post)
     }
 

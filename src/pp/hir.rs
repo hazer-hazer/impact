@@ -1,6 +1,6 @@
 use crate::{
     hir::{
-        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, Prefix, TyExpr},
+        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
         item::{Decl, ItemId, ItemKind, Mod, TyAlias},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -43,9 +43,9 @@ pub struct HirPP<'a> {
 }
 
 impl<'a> HirPP<'a> {
-    pub fn new(sess: &'a Session) -> Self {
+    pub fn new(sess: &'a Session, mode: AstPPMode) -> Self {
         Self {
-            pp: AstLikePP::new(sess, AstPPMode::Normal),
+            pp: AstLikePP::new(sess, mode),
         }
     }
 }
@@ -67,11 +67,12 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     // Items //
     fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
-        let item = hir.item(*id);
+        let id = *id;
+        let item = hir.item(id);
         match item.kind() {
-            ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, hir),
-            ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, hir),
-            ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, hir),
+            ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
+            ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
+            ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, id, hir),
         }
 
         if self.pp.sess.config().pp_ast_ids() {
@@ -79,41 +80,43 @@ impl<'a> HirVisitor for HirPP<'a> {
         }
     }
 
-    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, hir: &HIR) {
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, _id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Type);
         self.visit_ident(&name, hir);
         self.pp.punct(Punct::Assign);
         self.visit_ty(&ty_item.ty, hir);
     }
 
-    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, hir: &HIR) {
+    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, _id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Mod);
         self.visit_ident(&name, hir);
         self.pp.nl();
         walk_block!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, hir: &HIR) {
+    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
+        self.pp.ty_anno(id.hir_id());
         self.pp.punct(Punct::Assign);
         self.visit_expr(&decl.value, hir);
     }
 
     // Expressions //
-    fn visit_expr(&mut self, expr: &Expr, hir: &HIR) {
-        let expr = hir.expr(*expr);
+    fn visit_expr(&mut self, expr_id: &Expr, hir: &HIR) {
+        let expr_id = *expr_id;
+        let expr = hir.expr(expr_id);
         match &expr.kind() {
             ExprKind::Unit => self.visit_unit_expr(hir),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
             ExprKind::Block(block) => self.visit_block_expr(block, hir),
             ExprKind::Infix(infix) => self.visit_infix_expr(infix, hir),
-            ExprKind::Prefix(prefix) => self.visit_prefix_expr(prefix, hir),
             ExprKind::Call(call) => self.visit_call_expr(call, hir),
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
         }
+        self.pp.ty_anno(expr_id);
         self.pp.hir_id(expr);
     }
 
@@ -129,11 +132,6 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_expr(&infix.lhs, hir);
         self.pp.infix(&infix.op);
         self.visit_expr(&infix.rhs, hir);
-    }
-
-    fn visit_prefix_expr(&mut self, prefix: &Prefix, hir: &HIR) {
-        self.pp.prefix(&prefix.op);
-        self.visit_expr(&prefix.rhs, hir);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {

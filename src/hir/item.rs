@@ -1,14 +1,20 @@
 use crate::{
     cli::color::Color,
     cli::color::Colorize,
-    dt::idx::declare_idx,
+    dt::idx::{declare_idx, Idx},
     resolve::def::DefId,
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{expr::Expr, ty::Ty, OwnerId};
+use super::{expr::Expr, ty::Ty, HirId, OwnerId};
 
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
+
+impl ItemId {
+    pub fn hir_id(&self) -> HirId {
+        HirId::new_owner(self.inner().into())
+    }
+}
 
 #[derive(Debug)]
 pub struct TyAlias {
