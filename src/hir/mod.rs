@@ -241,9 +241,9 @@ impl HIR {
             .get_unwrap(id.id)
     }
 
-    pub fn pat_name(&self, pat: Pat) -> Option<Ident> {
+    pub fn pat_names(&self, pat: Pat) -> Option<Vec<Ident>> {
         match self.pat(pat).kind() {
-            &pat::PatKind::Ident(name) => Some(name),
+            &pat::PatKind::Ident(name) => Some(vec![name]),
         }
     }
 

@@ -72,6 +72,12 @@ impl<'hir> Typecker<'hir> {
         self.tyctx.exit_try_mode(res, restore)
     }
 
+    fn fresh_ex_with_ty(&mut self) -> (ExistentialId, Ty) {
+        let ex = self.tyctx.fresh_ex();
+        // TODO: Add?
+        (ex, self.tyctx.existential(ex))
+    }
+
     // Conversion //
     fn conv(&mut self, ty: hir::ty::Ty) -> Ty {
         let ty = self.hir.ty(ty);
@@ -217,21 +223,58 @@ impl<'hir> Typecker<'hir> {
         let param_ex = self.tyctx.fresh_ex();
         let body_ex = self.tyctx.fresh_ex();
 
+        // Parameter is a pattern which can contain multiple name bindings
         // FIXME: Should these existentials be inside context?
-        self.tyctx.add_ex(param_ex);
+        let param_names = self.hir.pat_names(lambda.param).map_or(vec![], |names| {
+            names
+                .iter()
+                .map(|&name| {
+                    let param_ex = self.tyctx.fresh_ex();
+                    self.tyctx.add_ex(param_ex);
+                    (name, param_ex, self.tyctx.existential(param_ex))
+                })
+                .collect::<Vec<_>>()
+        });
+
         self.tyctx.add_ex(body_ex);
 
         self.under_new_ctx(|this| {
             // FIXME: What if pattern w/o name?
-            if let Some(param_name) = this.hir.pat_name(lambda.param) {
-                this.tyctx
-                    .type_term(param_name, this.tyctx.existential(param_ex));
-            }
+            param_names.iter().for_each(|(name, name_ex, name_ex_ty)| {
+                this.tyctx.type_term(*name, *name_ex_ty);
+            });
+
+            self.check(lambda.body, this.tyctx.existential(body_ex))
         })
     }
 
     fn synth_call(&mut self, call: &Call) -> TyResult<Ty> {
-        todo!()
+        let func_ty = self.synth_expr(call.lhs)?;
+        let func_ty = self.tyctx.apply_on(func_ty);
+
+        match self.tyctx.ty(func_ty).kind() {
+            // FIXME: Or return Ok(func_ty)?
+            TyKind::Error => Err(TyError()),
+            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => todo!("Non-callable type"),
+            &TyKind::Existential(ex) => {
+                // FIXME: Under context or `try_to` to escape types?
+                self.under_new_ctx(|this| {
+                    let param_ex = this.fresh_ex_with_ty();
+                    let body_ex = this.fresh_ex_with_ty();
+                    this.tyctx.solve(ex, this.tyctx.func(param_ex.1, body_ex.1));
+
+                    self.check(call.arg, param_ex.1)?;
+                    Ok(body_ex.1)
+                })
+            },
+            &TyKind::Func(param, body) => {
+                self.check(call.arg, param)?;
+                Ok(body)
+            },
+            TyKind::Forall(alpha, ty) => {
+                let 
+            },
+        }
     }
 
     fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
@@ -423,21 +466,19 @@ impl<'hir> Typecker<'hir> {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             &TyKind::Func(param, body) => self.try_to(|this| {
-                let domain_ex = this.tyctx.fresh_ex();
-                let range_ex = this.tyctx.fresh_ex();
+                let domain_ex = this.fresh_ex_with_ty();
+                let range_ex = this.fresh_ex_with_ty();
 
-                let domain_ex_ty = this.tyctx.existential(domain_ex);
-                let range_ex_ty = this.tyctx.existential(range_ex);
-                let func_ty = this.tyctx.func(domain_ex_ty, range_ex_ty);
+                let func_ty = this.tyctx.func(domain_ex.1, range_ex.1);
 
                 this.tyctx.solve(ex, func_ty);
-                this.tyctx.add_ex(domain_ex);
-                this.tyctx.add_ex(range_ex);
+                this.tyctx.add_ex(domain_ex.0);
+                this.tyctx.add_ex(range_ex.0);
 
-                this.instantiate_r(param, domain_ex)?;
+                this.instantiate_r(param, domain_ex.0)?;
 
                 let range_ty = this.tyctx.apply_on(body);
-                this.instantiate_l(range_ex, range_ty)
+                this.instantiate_l(range_ex.0, range_ty)
             }),
             &TyKind::Forall(alpha, ty) => self.try_to(|this| {
                 this.under_ctx(Ctx::new_with_var(alpha), |this| this.instantiate_l(ex, ty))
@@ -477,21 +518,19 @@ impl<'hir> Typecker<'hir> {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             &TyKind::Func(param, body) => self.try_to(|this| {
-                let domain_ex = this.tyctx.fresh_ex();
-                let range_ex = this.tyctx.fresh_ex();
+                let domain_ex = this.fresh_ex_with_ty();
+                let range_ex = this.fresh_ex_with_ty();
 
-                let domain_ex_ty = this.tyctx.existential(domain_ex);
-                let range_ex_ty = this.tyctx.existential(range_ex);
-                let func_ty = this.tyctx.func(domain_ex_ty, range_ex_ty);
+                let func_ty = this.tyctx.func(domain_ex.1, range_ex.1);
 
                 this.tyctx.solve(ex, func_ty);
-                this.tyctx.add_ex(domain_ex);
-                this.tyctx.add_ex(range_ex);
+                this.tyctx.add_ex(domain_ex.0);
+                this.tyctx.add_ex(range_ex.0);
 
-                this.instantiate_l(domain_ex, param)?;
+                this.instantiate_l(domain_ex.0, param)?;
 
                 let range_ty = this.tyctx.apply_on(body);
-                this.instantiate_r(range_ty, range_ex)
+                this.instantiate_r(range_ty, range_ex.0)
             }),
             &TyKind::Forall(alpha, ty) => self.try_to(|this| {
                 let alpha_ex = this.tyctx.fresh_ex();
