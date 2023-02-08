@@ -67,7 +67,7 @@ pub trait HirVisitor {
     // Patterns //
     fn visit_pat(&mut self, pat: &Pat, hir: &HIR) {
         let pat = hir.pat(*pat);
-        match pat.kind {
+        match pat.kind() {
             PatKind::Ident(ident) => self.visit_ident_pat(&ident, hir),
         }
     }
@@ -79,7 +79,7 @@ pub trait HirVisitor {
     // Expressions //
     fn visit_expr(&mut self, expr: &Expr, hir: &HIR) {
         let expr = hir.expr(*expr);
-        match &expr.kind {
+        match &expr.kind() {
             ExprKind::Unit => self.visit_unit_expr(hir),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),

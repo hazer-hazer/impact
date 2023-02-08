@@ -2,7 +2,7 @@
  * HIR is nothing more than just an unwrapped version of AST, i.e. freed of parse results.
  */
 use core::panic;
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     cli::color::{Color, Colorize},
@@ -84,6 +84,8 @@ impl Display for HirId {
         write!(f, "[{}:{}]", self.owner, self.id)
     }
 }
+
+pub type HirMap<T> = HashMap<HirId, T>;
 
 pub trait WithHirId {
     fn id(&self) -> HirId;

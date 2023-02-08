@@ -1,10 +1,10 @@
 use crate::{
     hir::{
         self,
-        expr::{Block, Call, ExprKind, Lambda, Lit, TyExpr},
-        item::{ItemId, ItemKind, Mod, TyAlias},
-        stmt::Stmt,
-        HIR,
+        expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
+        item::{ItemId, ItemKind, Mod},
+        stmt::{Stmt, StmtKind},
+        HirMap, Path, HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
@@ -33,6 +33,7 @@ struct Typecker<'hir> {
     /// - Type alias: `[Type alias DefId] -> [Its converted type]`
     /// - Declaration: `[Declaration DefId] -> [Type of assigned value]`
     def_types: DefMap<Ty>,
+    expr_types: HirMap<Ty>,
 
     msg: MessageStorage,
     sess: Session,
@@ -51,6 +52,7 @@ impl<'hir> Typecker<'hir> {
             hir,
             sess,
             def_types: Default::default(),
+            expr_types: Default::default(),
             msg: Default::default(),
         }
     }
@@ -72,9 +74,9 @@ impl<'hir> Typecker<'hir> {
         self.tyctx.exit_try_mode(res, restore)
     }
 
-    fn fresh_ex_with_ty(&mut self) -> (ExistentialId, Ty) {
+    fn add_fresh_ex(&mut self) -> (ExistentialId, Ty) {
         let ex = self.tyctx.fresh_ex();
-        // TODO: Add?
+        self.tyctx.add_ex(ex);
         (ex, self.tyctx.existential(ex))
     }
 
@@ -94,7 +96,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn conv_path(&mut self, path: hir::Path) -> Ty {
+    fn conv_path(&mut self, path: Path) -> Ty {
         let path = self.hir.path(path);
         match path.res().kind() {
             &ResKind::Def(def_id) => {
@@ -162,9 +164,9 @@ impl<'hir> Typecker<'hir> {
     }
 
     // Synthesis //
-    fn synth_expr(&mut self, expr: hir::expr::Expr) -> TyResult<Ty> {
-        let expr = self.hir.expr(expr);
-        match &expr.kind {
+    fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
+        let expr = self.hir.expr(expr_id);
+        let expr_ty = match expr.kind() {
             ExprKind::Unit => Ok(self.tyctx.unit()),
             ExprKind::Lit(lit) => {
                 let prim = match lit {
@@ -182,16 +184,20 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Prefix(_) => todo!(),
             ExprKind::Lambda(lambda) => self.synth_lambda(lambda),
             ExprKind::Call(call) => self.synth_call(call),
-            ExprKind::Let(_) => todo!(),
+            &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(TyExpr { expr, ty: anno }) => {
                 let ty = self.conv(*anno);
                 self.check(*expr, ty)?;
                 Ok(ty)
             },
-        }
+        }?;
+
+        self.expr_types.insert(expr_id, expr_ty);
+
+        Ok(expr_ty)
     }
 
-    fn synth_path(&self, path: hir::Path) -> TyResult<Ty> {
+    fn synth_path(&self, path: Path) -> TyResult<Ty> {
         let path = self.hir.path(path);
         self.tyctx
             .lookup_typed_term_ty(path.target_name())
@@ -210,9 +216,10 @@ impl<'hir> Typecker<'hir> {
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
         let block = self.hir.block(block);
 
-        block.stmts().iter().for_each(|&stmt| {
-            self.synth_stmt(stmt);
-        });
+        block.stmts().iter().try_for_each(|&stmt| {
+            self.synth_stmt(stmt)?;
+            Ok(())
+        })?;
 
         block
             .expr()
@@ -220,59 +227,58 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_lambda(&mut self, lambda: &Lambda) -> TyResult<Ty> {
-        let param_ex = self.tyctx.fresh_ex();
-        let body_ex = self.tyctx.fresh_ex();
-
         // Parameter is a pattern which can contain multiple name bindings
         // FIXME: Should these existentials be inside context?
         let param_names = self.hir.pat_names(lambda.param).map_or(vec![], |names| {
             names
                 .iter()
-                .map(|&name| {
-                    let param_ex = self.tyctx.fresh_ex();
-                    self.tyctx.add_ex(param_ex);
-                    (name, param_ex, self.tyctx.existential(param_ex))
-                })
+                .map(|&name| (name, self.add_fresh_ex()))
                 .collect::<Vec<_>>()
         });
 
-        self.tyctx.add_ex(body_ex);
+        let body_ex = self.add_fresh_ex();
 
         self.under_new_ctx(|this| {
             // FIXME: What if pattern w/o name?
-            param_names.iter().for_each(|(name, name_ex, name_ex_ty)| {
-                this.tyctx.type_term(*name, *name_ex_ty);
+            param_names.iter().for_each(|(name, name_ex)| {
+                this.tyctx.type_term(*name, name_ex.1);
             });
 
-            self.check(lambda.body, this.tyctx.existential(body_ex))
+            this.check(lambda.body, body_ex.1)
         })
     }
 
     fn synth_call(&mut self, call: &Call) -> TyResult<Ty> {
-        let func_ty = self.synth_expr(call.lhs)?;
-        let func_ty = self.tyctx.apply_on(func_ty);
+        let lhs_ty = self.synth_expr(call.lhs)?;
+        let lhs_ty = self.tyctx.apply_on(lhs_ty);
+        self._synth_call(lhs_ty, call.arg)
+    }
 
-        match self.tyctx.ty(func_ty).kind() {
-            // FIXME: Or return Ok(func_ty)?
+    fn _synth_call(&mut self, lhs_ty: Ty, arg: Expr) -> TyResult<Ty> {
+        match self.tyctx.ty(lhs_ty).kind() {
+            // FIXME: Or return Ok(lhs_ty)?
             TyKind::Error => Err(TyError()),
             TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => todo!("Non-callable type"),
             &TyKind::Existential(ex) => {
-                // FIXME: Under context or `try_to` to escape types?
-                self.under_new_ctx(|this| {
-                    let param_ex = this.fresh_ex_with_ty();
-                    let body_ex = this.fresh_ex_with_ty();
-                    this.tyctx.solve(ex, this.tyctx.func(param_ex.1, body_ex.1));
+                // // FIXME: Under context or `try_to` to escape types?
+                self.try_to(|this| {
+                    let param_ex = this.add_fresh_ex();
+                    let body_ex = this.add_fresh_ex();
+                    let func_ty = this.tyctx.func(param_ex.1, body_ex.1);
+                    this.tyctx.solve(ex, func_ty);
 
-                    self.check(call.arg, param_ex.1)?;
+                    this.check(arg, param_ex.1)?;
                     Ok(body_ex.1)
                 })
             },
             &TyKind::Func(param, body) => {
-                self.check(call.arg, param)?;
+                self.check(arg, param)?;
                 Ok(body)
             },
-            TyKind::Forall(alpha, ty) => {
-                let 
+            &TyKind::Forall(alpha, ty) => {
+                let alpha_ex = self.add_fresh_ex();
+                let substituted_ty = self.tyctx.substitute(ty, Subst::Name(alpha), alpha_ex.1);
+                self._synth_call(substituted_ty, arg)
             },
         }
     }
@@ -304,10 +310,10 @@ impl<'hir> Typecker<'hir> {
         let stmt = self.hir.stmt(stmt);
 
         match stmt.kind() {
-            &hir::stmt::StmtKind::Expr(expr) => {
+            &StmtKind::Expr(expr) => {
                 self.synth_expr(expr)?;
             },
-            &hir::stmt::StmtKind::Item(item) => {
+            &StmtKind::Item(item) => {
                 self.synth_item(item)?;
             },
         }
@@ -316,11 +322,11 @@ impl<'hir> Typecker<'hir> {
     }
 
     // Check //
-    fn check(&mut self, expr_id: hir::expr::Expr, ty: Ty) -> TyResult<Ty> {
+    fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
         let tys = self.tyctx.ty(ty);
 
-        match (&expr.kind, tys.kind()) {
+        match (&expr.kind(), tys.kind()) {
             (ExprKind::Lit(lit), TyKind::Lit(prim)) => {
                 if *prim != PrimTy::from(*lit) {
                     MessageBuilder::error()
@@ -333,12 +339,14 @@ impl<'hir> Typecker<'hir> {
                 Ok(ty)
             },
 
-            (ExprKind::Lambda(_lambda), TyKind::Func(_param_ty, _ret_ty)) => {
-                // let typed_param = CtxItem::TypedTerm(lambda.param.as_ref().unwrap(), *param_ty);
-                // self.tyctx.ctx().add(typed_param);
+            (ExprKind::Lambda(lambda), &TyKind::Func(param_ty, body_ty)) => {
+                let param_name = self.hir.pat_names(lambda.param).unwrap();
+                assert!(param_name.len() == 1);
+                let param_name = param_name[0];
 
-                // Patterns :(
-                todo!()
+                self.under_ctx(Ctx::new_with_term(param_name, param_ty), |this| {
+                    this.check(lambda.body, body_ty)
+                })
             },
 
             (_, &TyKind::Forall(alpha, body)) => self.under_ctx(Ctx::new_with_var(alpha), |this| {
@@ -466,14 +474,12 @@ impl<'hir> Typecker<'hir> {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             &TyKind::Func(param, body) => self.try_to(|this| {
-                let domain_ex = this.fresh_ex_with_ty();
-                let range_ex = this.fresh_ex_with_ty();
+                let domain_ex = this.add_fresh_ex();
+                let range_ex = this.add_fresh_ex();
 
                 let func_ty = this.tyctx.func(domain_ex.1, range_ex.1);
 
                 this.tyctx.solve(ex, func_ty);
-                this.tyctx.add_ex(domain_ex.0);
-                this.tyctx.add_ex(range_ex.0);
 
                 this.instantiate_r(param, domain_ex.0)?;
 
@@ -518,14 +524,12 @@ impl<'hir> Typecker<'hir> {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             &TyKind::Func(param, body) => self.try_to(|this| {
-                let domain_ex = this.fresh_ex_with_ty();
-                let range_ex = this.fresh_ex_with_ty();
+                let domain_ex = this.add_fresh_ex();
+                let range_ex = this.add_fresh_ex();
 
                 let func_ty = this.tyctx.func(domain_ex.1, range_ex.1);
 
                 this.tyctx.solve(ex, func_ty);
-                this.tyctx.add_ex(domain_ex.0);
-                this.tyctx.add_ex(range_ex.0);
 
                 this.instantiate_l(domain_ex.0, param)?;
 

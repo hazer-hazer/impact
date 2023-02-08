@@ -95,13 +95,17 @@ impl Display for Lit {
 #[derive(Debug)]
 pub struct ExprNode {
     id: HirId,
-    pub kind: ExprKind,
+    kind: ExprKind,
     span: Span,
 }
 
 impl ExprNode {
     pub fn new(id: HirId, kind: ExprKind, span: Span) -> Self {
         Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &ExprKind {
+        &self.kind
     }
 }
 

@@ -15,7 +15,7 @@ impl<I: Idx, T> Default for IndexVec<I, T> {
 
 impl<I: Idx, T> FromIterator<(I, Option<T>)> for IndexVec<I, Option<T>> {
     fn from_iter<V: IntoIterator<Item = (I, Option<T>)>>(iter: V) -> Self {
-        let index_vec = IndexVec::<I, Option<T>>::default();
+        let mut index_vec = IndexVec::<I, Option<T>>::default();
         for (i, v) in iter {
             if let Some(v) = v {
                 index_vec.insert(i, v);

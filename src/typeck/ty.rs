@@ -8,8 +8,7 @@ use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, Idx},
     hir::{self, expr::Lit, HirId},
-    resolve::def::Def,
-    span::span::{Ident, Kw, Symbol},
+    span::span::Ident,
 };
 
 use super::ctx::{Ctx, ExistentialId};
@@ -383,7 +382,7 @@ impl TyCtx {
         match res {
             Ok(ok) => Ok(ok),
             Err(err) => {
-                self.ctx_stack.split_off(try_depth);
+                self.ctx_stack.truncate(try_depth);
                 Err(err)
             },
         }
@@ -483,7 +482,7 @@ impl TyCtx {
         None
     }
 
-    fn ascending_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
+    fn ascending_ctx<T>(&self, f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
         self._ascending_ctx(f)
             .map_or(None, |(val, _depth)| Some(val))
     }
