@@ -77,7 +77,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_type_item(&mut self, name: &'ast PR<Ident>, ty: &'ast PR<N<Ty>>, id: NodeId) {
         self.kw(Kw::Type);
         walk_pr!(self, name, name, id);
-        self.punct(Punct::Assign);
+        self.str(" = ");
         walk_pr!(self, ty, visit_ty);
     }
 
@@ -100,7 +100,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             self.sp();
         }
         walk_each_pr_delim!(self, params, visit_pat, " ");
-        self.punct(Punct::Assign);
+        self.str(" = ");
         walk_pr!(self, body, visit_expr);
     }
 
@@ -143,7 +143,9 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
-        self.infix(&infix.op);
+        self.str(" ");
+        self.visit_path(&infix.op);
+        self.str(" ");
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 

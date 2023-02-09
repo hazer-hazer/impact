@@ -9,7 +9,7 @@ use crate::{
 use super::{
     item::{Item, ItemKind},
     visitor::AstVisitor,
-    ErrorNode, WithNodeId, AST,
+    ErrorNode, Path, WithNodeId, AST,
 };
 
 use convert_case::{Case, Casing};
@@ -201,6 +201,26 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.visit_decl_item(name, params, body, item.id());
             },
         }
+    }
+
+    fn visit_path(&mut self, path: &'ast Path) {
+        assert!(!path.segments().is_empty());
+
+        path.segments().iter().enumerate().for_each(|(index, seg)| {
+            let last = index == path.segments().len() - 1;
+            let name = seg.name.as_ref().unwrap();
+
+            // FIXME: Replace with multi-span when added
+            //  Like so:
+            //  (+)::blah::blah::(-)::something
+            //  ^^^--------------^^^------ Error Message
+            if !last && name.sym().is_op() {
+                MessageBuilder::error()
+                    .span(name.span())
+                    .text(format!("Unexpected operator name in path prefix"))
+                    .emit_single_label(self);
+            }
+        });
     }
 }
 

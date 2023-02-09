@@ -7,11 +7,11 @@ use std::{
 use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, Idx},
-    hir::{self, expr::Lit, HirId},
+    hir::{self, expr::Lit},
     span::span::Ident,
 };
 
-use super::ctx::{Ctx, ExistentialId};
+use super::ctx::{ExistentialId};
 
 declare_idx!(TypeVarId, usize, "{}", Color::Green);
 

@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
 use crate::{
-    parser::token::{self, FloatKind, IntKind, Token, TokenKind},
-    span::span::{Ident, Span, Spanned, Symbol, WithSpan},
+    parser::token::{FloatKind, IntKind},
+    span::span::{Span, Symbol, WithSpan},
 };
 
 use super::{
@@ -73,32 +73,39 @@ pub enum Lit {
     String(Symbol),
 }
 
-#[derive(Debug)]
-pub struct InfixOp {
-    id: NodeId,
-    symbol: Ident,
-    span: Span,
-}
+// #[derive(Debug, Clone, Copy)]
+// pub struct InfixOp {
+//     id: NodeId,
+//     symbol: Ident,
+//     span: Span,
+// }
 
-impl InfixOp {
-    pub fn from_tok(id: NodeId, tok: Token) -> Self {
-        Self {
-            id,
-            symbol: Ident::from_token(tok),
-            span: tok.span,
-        }
-    }
+// impl InfixOp {
+//     pub fn from_tok(id: NodeId, tok: Token) -> Self {
+//         Self {
+//             id,
+//             symbol: Ident::new(
+//                 tok.span(),
+//                 match tok.kind {
+//                     TokenKind::Op(op) => Symbol::intern(&op.to_string()),
+//                     TokenKind::CustomOp(op) => op,
+//                     _ => panic!(),
+//                 },
+//             ),
+//             span: tok.span,
+//         }
+//     }
 
-    pub fn symbol(&self) -> Ident {
-        self.symbol
-    }
-}
+//     pub fn symbol(&self) -> Ident {
+//         self.symbol
+//     }
+// }
 
-impl Display for InfixOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.symbol.fmt(f)
-    }
-}
+// impl Display for InfixOp {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         self.symbol.fmt(f)
+//     }
+// }
 
 // #[derive(Clone, Copy, Debug)]
 // pub enum InfixOpKind {
@@ -143,7 +150,7 @@ impl Display for InfixOp {
 #[derive(Debug)]
 pub struct Infix {
     pub lhs: PR<N<Expr>>,
-    pub op: InfixOp,
+    pub op: Path,
     pub rhs: PR<N<Expr>>,
 }
 

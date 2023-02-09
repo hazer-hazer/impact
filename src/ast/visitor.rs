@@ -140,6 +140,7 @@ pub trait AstVisitor<'ast> {
 
     fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
+        self.visit_path(&infix.op);
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 

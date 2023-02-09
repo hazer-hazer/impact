@@ -316,10 +316,13 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_infix_expr(&mut self, infix: &Infix) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Infix(hir::expr::Infix {
-            lhs: lower_pr!(self, &infix.lhs, lower_expr),
-            op: infix.op,
-            rhs: lower_pr!(self, &infix.rhs, lower_expr),
+        // Note [TRANSFORM]: [lhs] [op] [rhs] -> [op] [lhs] [rhs]
+        let op_path = self.lower_path(&infix.op);
+        let op_path = self.expr_path(infix.op.span(), op_path);
+        let first_op_arg = lower_pr!(self, &infix.lhs, lower_expr);
+        hir::expr::ExprKind::Call(hir::expr::Call {
+            lhs: self.expr_call(infix.op.span().to(infix.lhs.span()), op_path, first_op_arg),
+            arg: lower_pr!(self, &infix.rhs, lower_expr),
         })
     }
 
@@ -418,6 +421,22 @@ impl<'ast> Lower<'ast> {
     fn expr(&mut self, span: Span, kind: hir::expr::ExprKind) -> hir::expr::Expr {
         let id = self.next_hir_id();
         self.add_node(Node::ExprNode(hir::expr::ExprNode::new(id, kind, span)))
+    }
+
+    fn expr_call(
+        &mut self,
+        span: Span,
+        lhs: hir::expr::Expr,
+        arg: hir::expr::Expr,
+    ) -> hir::expr::Expr {
+        self.expr(
+            span,
+            hir::expr::ExprKind::Call(hir::expr::Call { lhs, arg }),
+        )
+    }
+
+    fn expr_path(&mut self, span: Span, path: hir::Path) -> hir::expr::Expr {
+        self.expr(span, hir::expr::ExprKind::Path(hir::expr::PathExpr(path)))
     }
 
     fn expr_lambda(

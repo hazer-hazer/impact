@@ -1,7 +1,10 @@
 use once_cell::sync::Lazy;
 
 use crate::{
-    parser::token::{Token, TokenKind},
+    parser::{
+        lexer::LexerCharCheck,
+        token::{Token, TokenKind},
+    },
     session::{SourceId, DUMMY_SOURCE_ID},
 };
 use std::{
@@ -19,14 +22,6 @@ pub enum Kw {
     Mod,
     Type,
 
-    // Operators //
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    Modulo,
-    Not,
-
     // Reserved for name resolution //
     Root,
 
@@ -40,12 +35,6 @@ impl Kw {
             Kw::In => "in",
             Kw::Mod => "mod",
             Kw::Type => "type",
-            Kw::Plus => "+",
-            Kw::Minus => "-",
-            Kw::Mul => "*",
-            Kw::Div => "/",
-            Kw::Modulo => "%",
-            Kw::Not => "not",
             Kw::Root => "[root]",
             Kw::Unknown => "[UNKNOWN]",
         }
@@ -86,6 +75,11 @@ impl Symbol {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
+
+    pub fn is_op(&self) -> bool {
+        let str = self.as_str();
+        !str.is_empty() && str.chars().all(|ch| ch.is_custom_op())
+    }
 }
 
 impl Display for Symbol {
@@ -109,12 +103,6 @@ impl TryInto<Kw> for Symbol {
             "in" => Ok(Kw::In),
             "mod" => Ok(Kw::Mod),
             "type" => Ok(Kw::Type),
-            "+" => Ok(Kw::Plus),
-            "-" => Ok(Kw::Minus),
-            "*" => Ok(Kw::Mul),
-            "/" => Ok(Kw::Div),
-            "%" => Ok(Kw::Modulo),
-            "not" => Ok(Kw::Not),
             "[root]" => Ok(Kw::Root),
             _ => Err(()),
         }
@@ -300,7 +288,7 @@ impl Ident {
         Ident {
             span: tok.span,
             sym: match tok.kind {
-                TokenKind::Ident(sym) | TokenKind::OpIdent(sym) => sym,
+                TokenKind::Ident(sym) => sym,
                 _ => unreachable!(),
             },
         }

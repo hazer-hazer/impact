@@ -1,7 +1,7 @@
 use crate::span::span::Ident;
 
 use super::{
-    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+    expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
     item::{Decl, ItemId, ItemKind, Mod, TyAlias},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
@@ -50,17 +50,17 @@ pub trait HirVisitor {
         }
     }
 
-    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         self.visit_ty(&ty_item.ty, hir);
     }
 
-    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, id: ItemId, hir: &HIR) {
+    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         walk_each!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, id: ItemId, hir: &HIR) {
+    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         self.visit_expr(&decl.value, hir);
     }
@@ -85,7 +85,6 @@ pub trait HirVisitor {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
             ExprKind::Block(block) => self.visit_block_expr(block, hir),
-            ExprKind::Infix(infix) => self.visit_infix_expr(infix, hir),
             ExprKind::Call(call) => self.visit_call_expr(call, hir),
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
@@ -103,11 +102,6 @@ pub trait HirVisitor {
 
     fn visit_block_expr(&mut self, block: &Block, hir: &HIR) {
         self.visit_block(block, hir)
-    }
-
-    fn visit_infix_expr(&mut self, infix: &Infix, hir: &HIR) {
-        self.visit_expr(&infix.lhs, hir);
-        self.visit_expr(&infix.rhs, hir);
     }
 
     fn visit_call_expr(&mut self, call: &Call, hir: &HIR) {

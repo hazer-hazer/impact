@@ -7,20 +7,19 @@ use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
 
 use super::token::{ComplexSymbol, IntKind};
 
-enum TokenStartMatch {
+pub enum TokenStartMatch {
     Ident,
     Num,
     String,
     Skip,
     IndentPrecursor,
-    Op,
     Unknown,
 }
 
 pub trait LexerCharCheck {
     fn is_ident_first(&self) -> bool;
     fn is_ident_next(&self) -> bool;
-    fn is_op(&self) -> bool;
+    fn is_custom_op(&self) -> bool;
     fn is_skippable(&self) -> bool;
     fn is_indent(&self) -> bool;
     fn is_indent_precursor(&self) -> bool;
@@ -36,8 +35,11 @@ impl LexerCharCheck for char {
         self.is_ident_first() || self.is_digit(10)
     }
 
-    fn is_op(&self) -> bool {
-        ['!', '$', '+', '-', '*', '/', '%', '?', '^', '|', '&', '~'].contains(self)
+    fn is_custom_op(&self) -> bool {
+        [
+            '!', '$', '+', '-', '*', '/', '%', '?', '^', '|', '&', '~', '=',
+        ]
+        .contains(self)
     }
 
     fn is_skippable(&self) -> bool {
@@ -206,11 +208,11 @@ impl Lexer {
     }
 
     fn lex_op_ident(&mut self) {
-        assert!(self.advance() == '(' && self.peek().is_op());
+        assert!(self.advance() == '(' && self.peek().is_custom_op());
 
         let start = self.pos;
 
-        while !self.eof() && self.peek() != ')' && self.peek().is_op() {
+        while !self.eof() && self.peek() != ')' && self.peek().is_custom_op() {
             self.advance();
         }
 
@@ -223,14 +225,14 @@ impl Lexer {
         self.add_token(TokenKind::OpIdent(sym), len);
     }
 
-    fn lex_op(&mut self) {
+    fn lex_custom_op(&mut self) {
         let start = self.pos;
 
-        while !self.eof() && self.advance().is_op() {}
+        while !self.eof() && self.advance().is_custom_op() {}
 
         let (sym, len) = self.get_fragment_intern(start);
 
-        self.add_token(TokenKind::Op(sym), len);
+        self.add_token(TokenKind::CustomOp(sym), len);
     }
 
     fn lex_str(&mut self) {
@@ -350,7 +352,6 @@ impl Stage<TokenStream> for Lexer {
                     self.advance();
                 },
                 TokenStartMatch::Ident => self.lex_ident(),
-                TokenStartMatch::Op => self.lex_op(),
                 TokenStartMatch::Num => self.lex_num(),
                 TokenStartMatch::String => self.lex_str(),
                 TokenStartMatch::IndentPrecursor => self.lex_indent(),
@@ -366,9 +367,13 @@ impl Stage<TokenStream> for Lexer {
 
                         ComplexSymbol::MultilineComment => self.lex_multiline_comment(),
 
-                        ComplexSymbol::None => self.unexpected_token(),
-
                         ComplexSymbol::OpIdent => self.lex_op_ident(),
+
+                        ComplexSymbol::Op(op, len) => self.add_token_adv(TokenKind::Op(op), len),
+
+                        ComplexSymbol::None if self.peek().is_custom_op() => self.lex_custom_op(),
+
+                        ComplexSymbol::None => self.unexpected_token(),
                     }
                 },
             };

@@ -1,7 +1,7 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
-use crate::span::span::{Ident, Kw, Span, SpanLen, Symbol, WithSpan};
+use crate::span::span::{Kw, Span, SpanLen, Symbol, WithSpan};
 
 use super::lexer::LexerCharCheck;
 
@@ -31,8 +31,48 @@ use super::lexer::LexerCharCheck;
 // }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Punct {
+pub enum Op {
     Assign,
+    Plus,
+    Minus,
+    Mul,
+    Div,
+    Mod,
+}
+
+impl Op {
+    pub fn try_from_sym(sym: Symbol) -> Option<Self> {
+        match sym.as_str() {
+            "=" => Some(Self::Assign),
+            "+" => Some(Self::Plus),
+            "-" => Some(Self::Minus),
+            "*" => Some(Self::Mul),
+            "/" => Some(Self::Div),
+            "%" => Some(Self::Mod),
+            _ => None,
+        }
+    }
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Op::Assign => "=",
+                Op::Plus => "+",
+                Op::Minus => "-",
+                Op::Mul => "*",
+                Op::Div => "/",
+                Op::Mod => "%",
+            }
+        )
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum Punct {
     Backslash,
     Arrow,
     Colon,
@@ -47,7 +87,6 @@ impl Display for Punct {
             f,
             "{}",
             match self {
-                Punct::Assign => "=",
                 Punct::Backslash => "\\",
                 Punct::Arrow => "->",
                 Punct::Colon => ":",
@@ -137,11 +176,40 @@ pub enum TokenKind {
 
     // (op)
     OpIdent(Symbol),
-    Op(Symbol),
+
+    // Predefined operators
+    Op(Op),
+
+    // Custom operators
+    CustomOp(Symbol),
 
     Punct(Punct),
 
     Error(Symbol),
+}
+
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenKind::Eof => write!(f, "{}", "[EOF]"),
+            TokenKind::Nl => write!(f, "{}", "[NL]"),
+            TokenKind::Int(val, kind) => write!(f, "{}{}", val, kind),
+            TokenKind::String(val)
+            | TokenKind::Ident(val)
+            | TokenKind::OpIdent(val)
+            | TokenKind::Error(val) => {
+                write!(f, "{}", val)
+            },
+            TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),
+            TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
+            TokenKind::Kw(kw) => write!(f, "{}", kw),
+            TokenKind::BlockStart => write!(f, "{}", "[BLOCK START]"),
+            TokenKind::BlockEnd => write!(f, "{}", "[BLOCK END]"),
+            TokenKind::Punct(punct) => write!(f, "{}", punct),
+            TokenKind::Op(op) => write!(f, "{}", op),
+            TokenKind::CustomOp(op) => write!(f, "{}", op),
+        }
+    }
 }
 
 pub enum ComplexSymbol {
@@ -149,6 +217,7 @@ pub enum ComplexSymbol {
     MultilineComment,
     Punct(Punct, SpanLen),
     OpIdent,
+    Op(Op, SpanLen),
     Kw(Kw, SpanLen),
     None,
 }
@@ -168,10 +237,11 @@ impl TokenKind {
 
     pub fn try_from_chars(char1: char, char2: Option<char>) -> ComplexSymbol {
         match (char1, char2) {
+            ('(', Some(next)) if next.is_custom_op() => ComplexSymbol::OpIdent,
+
             ('/', Some('/')) => ComplexSymbol::LineComment,
             ('/', Some('*')) => ComplexSymbol::MultilineComment,
 
-            ('=', _) => ComplexSymbol::Punct(Punct::Assign, 1),
             ('\\', _) => ComplexSymbol::Punct(Punct::Backslash, 1),
             (':', _) => ComplexSymbol::Punct(Punct::Colon, 1),
             ('.', _) => ComplexSymbol::Punct(Punct::Dot, 1),
@@ -179,8 +249,13 @@ impl TokenKind {
             (')', _) => ComplexSymbol::Punct(Punct::RParen, 1),
 
             ('-', Some('>')) => ComplexSymbol::Punct(Punct::Arrow, 2),
-            ('-', _) => ComplexSymbol::Kw(Kw::Minus, 1),
-            ('(', Some(next)) if next.is_op() => ComplexSymbol::OpIdent,
+
+            ('=', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Assign, 1),
+            ('+', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Plus, 1),
+            ('-', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Minus, 1),
+            ('*', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Mul, 1),
+            ('/', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Div, 1),
+            ('%', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Mod, 1),
 
             _ => ComplexSymbol::None,
         }
@@ -205,6 +280,8 @@ pub enum TokenCmp {
     String,
     Ident,
     OpIdent,
+    Op(Op),
+    InfixOp,
     Kw(Kw),
     Punct(Punct),
     Error,
@@ -224,6 +301,8 @@ impl Display for TokenCmp {
                 TokenCmp::String => "string".to_string(),
                 TokenCmp::Ident => "ident".to_string(),
                 TokenCmp::OpIdent => "operator ident".to_string(),
+                TokenCmp::Op(op) => format!("operator {}", op),
+                TokenCmp::InfixOp => "some infix operator".to_string(),
                 TokenCmp::Kw(kw) => format!("{} keyword", kw),
                 TokenCmp::Punct(punct) => format!("{} punctuation", punct),
                 TokenCmp::BlockStart => "[BLOCK START]".to_string(),
@@ -247,33 +326,16 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::OpIdent(_), TokenCmp::OpIdent)
             | (TokenKind::BlockStart, TokenCmp::BlockStart)
             | (TokenKind::BlockEnd, TokenCmp::BlockEnd)
+            | (
+                TokenKind::Op(Op::Assign | Op::Plus | Op::Minus | Op::Mul | Op::Div | Op::Mod)
+                | TokenKind::CustomOp(_),
+                TokenCmp::InfixOp,
+            )
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
+            (TokenKind::Op(op1), TokenCmp::Op(op2)) => op1 == op2,
             _ => false,
-        }
-    }
-}
-
-impl Display for TokenKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TokenKind::Eof => write!(f, "{}", "[EOF]"),
-            TokenKind::Nl => write!(f, "{}", "[NL]"),
-            TokenKind::Int(val, kind) => write!(f, "{}{}", val, kind),
-            TokenKind::String(val)
-            | TokenKind::Ident(val)
-            | TokenKind::OpIdent(val)
-            | TokenKind::Error(val) => {
-                write!(f, "{}", val)
-            },
-            TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),
-            TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
-            TokenKind::Kw(kw) => write!(f, "{}", kw),
-            TokenKind::BlockStart => write!(f, "{}", "[BLOCK START]"),
-            TokenKind::BlockEnd => write!(f, "{}", "[BLOCK END]"),
-            TokenKind::Punct(punct) => write!(f, "{}", punct),
-            TokenKind::Op(op) => write!(f, "{}", op),
         }
     }
 }

@@ -1,9 +1,6 @@
 use std::fmt::Display;
 
-use crate::{
-    ast::expr::InfixOp,
-    span::span::{Span, Symbol, WithSpan},
-};
+use crate::span::span::{Span, Symbol, WithSpan};
 
 use super::{
     pat::{Pat, PatNode},
@@ -174,19 +171,11 @@ pub struct Call {
 }
 
 #[derive(Debug)]
-pub struct Infix {
-    pub lhs: Expr,
-    pub op: InfixOp,
-    pub rhs: Expr,
-}
-
-#[derive(Debug)]
 pub enum ExprKind {
     Unit,
     Lit(Lit),
     Path(PathExpr),
     Block(Block),
-    Infix(Infix),
     Lambda(Lambda),
     Call(Call),
     Let(Block),

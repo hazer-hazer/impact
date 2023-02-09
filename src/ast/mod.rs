@@ -4,7 +4,8 @@ use crate::{
     ast::visitor::walk_each_pr,
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, IndexVec},
-    span::span::{Ident, Span, WithSpan},
+    parser::token::{Token, TokenKind},
+    span::span::{Ident, Span, Symbol, WithSpan},
 };
 
 use self::{
@@ -213,6 +214,25 @@ pub struct Path {
 impl Path {
     pub fn new(id: NodeId, segments: Vec<PathSeg>, span: Span) -> Self {
         Self { id, segments, span }
+    }
+
+    pub fn new_infix_op(id: NodeId, tok: Token) -> Self {
+        let segments = vec![PathSeg::new(
+            Ok(Ident::new(
+                tok.span(),
+                match tok.kind {
+                    TokenKind::Op(op) => Symbol::intern(&op.to_string()),
+                    TokenKind::CustomOp(op) => op,
+                    _ => panic!(),
+                },
+            )),
+            tok.span,
+        )];
+        Self {
+            id,
+            segments,
+            span: tok.span,
+        }
     }
 
     pub fn prefix_str(&self, to: usize) -> String {

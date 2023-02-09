@@ -1,6 +1,6 @@
 use crate::{
     hir::{
-        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
+        expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{Decl, ItemId, ItemKind, Mod, TyAlias},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -83,7 +83,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, _id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Type);
         self.visit_ident(&name, hir);
-        self.pp.punct(Punct::Assign);
+        self.pp.str(" = ");
         self.visit_ty(&ty_item.ty, hir);
     }
 
@@ -97,7 +97,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_decl_item(&mut self, name: Ident, decl: &Decl, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         self.pp.ty_anno(id.hir_id());
-        self.pp.punct(Punct::Assign);
+        self.pp.str(" = ");
         self.visit_expr(&decl.value, hir);
     }
 
@@ -110,7 +110,6 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
             ExprKind::Block(block) => self.visit_block_expr(block, hir),
-            ExprKind::Infix(infix) => self.visit_infix_expr(infix, hir),
             ExprKind::Call(call) => self.visit_call_expr(call, hir),
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
@@ -126,12 +125,6 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_lit_expr(&mut self, lit: &Lit, _hir: &HIR) {
         self.pp.string(lit);
-    }
-
-    fn visit_infix_expr(&mut self, infix: &Infix, hir: &HIR) {
-        self.visit_expr(&infix.lhs, hir);
-        self.pp.infix(&infix.op);
-        self.visit_expr(&infix.rhs, hir);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {

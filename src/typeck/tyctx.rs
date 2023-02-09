@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     dt::idx::Idx,
-    hir::{HirId, WithHirId},
+    hir::{HirId},
     span::span::Ident,
 };
 

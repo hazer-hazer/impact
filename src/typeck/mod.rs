@@ -4,7 +4,7 @@ use crate::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Stmt, StmtKind},
-        HirMap, Path, HIR,
+        Path, HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
@@ -426,7 +426,6 @@ impl<'hir> Typecker<'hir> {
             },
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
-            ExprKind::Infix(_) => todo!(),
             ExprKind::Lambda(lambda) => self.synth_lambda(lambda),
             ExprKind::Call(call) => self.synth_call(call),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),

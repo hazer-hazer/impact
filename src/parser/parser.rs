@@ -2,10 +2,7 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
-        expr::{
-            is_block_ended, Block, Call, Expr, ExprKind, Infix, InfixOp, Lambda, Lit, PathExpr,
-            TyExpr,
-        },
+        expr::{is_block_ended, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -15,12 +12,11 @@ use crate::{
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    parser::token,
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
 };
 
-use super::token::{Punct, Token, TokenCmp, TokenKind, TokenStream};
+use super::token::{Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
 
 #[derive(Debug, PartialEq)]
 enum ParseEntryKind {
@@ -271,9 +267,22 @@ impl Parser {
         self.expect(TokenCmp::Punct(punct))
     }
 
+    fn expect_op(&mut self, op: Op) -> PR<()> {
+        self.expect(TokenCmp::Op(op))
+    }
+
     fn expected<'a, T>(&'a mut self, entity: Option<T>, expected: &str) -> PR<T> {
         if let Some(entity) = entity {
             Ok(entity)
+        } else {
+            self.expected_error(expected, self.peek())?;
+            Err(ErrorNode::new(self.span()))
+        }
+    }
+
+    fn expected_pr<'a, T>(&'a mut self, pr: Option<PR<T>>, expected: &str) -> PR<T> {
+        if let Some(pr) = pr {
+            pr
         } else {
             self.expected_error(expected, self.peek())?;
             Err(ErrorNode::new(self.span()))
@@ -457,7 +466,7 @@ impl Parser {
             self.skip_opt_nls();
 
             Some(ty_item)
-        } else if self.lookup_after_many1(TokenCmp::Ident, TokenCmp::Punct(Punct::Assign)) {
+        } else if self.lookup_after_many1(TokenCmp::Ident, TokenCmp::Op(Op::Assign)) {
             let decl = self.parse_decl_item();
 
             self.exit_entity(pe, &decl);
@@ -501,7 +510,7 @@ impl Parser {
 
         let name = self.parse_ident("type name");
 
-        self.expect_punct(Punct::Assign)?;
+        self.expect_op(Op::Assign)?;
 
         let ty = self.parse_ty();
 
@@ -523,13 +532,13 @@ impl Parser {
 
         let mut params = vec![];
         while !self.eof() {
-            if self.is(TokenCmp::Punct(Punct::Assign)) {
+            if self.is(TokenCmp::Op(Op::Assign)) {
                 break;
             }
             params.push(self.parse_pat("function parameter (pattern)"));
         }
 
-        self.expect(TokenCmp::Punct(Punct::Assign))?;
+        self.expect(TokenCmp::Op(Op::Assign))?;
 
         let body = self.parse_body();
 
@@ -577,7 +586,7 @@ impl Parser {
         let expr = if self.is(TokenCmp::Kw(Kw::Let)) {
             Some(self.parse_let())
         } else {
-            self.parse_prec(0)
+            self.parse_infix()
         };
 
         self.exit_parsed_entity(pe);
@@ -622,15 +631,34 @@ impl Parser {
     fn parse_infix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
-        let lhs = self.parse_infix();
+        let lhs = self.parse_prefix();
 
-        if 
+        if let Some(lhs_expr) = lhs {
+            if let Some(op) = self.skip(TokenCmp::InfixOp) {
+                let rhs = self.parse_infix();
+                let rhs = self.expected_pr(rhs, "right-hand side in infix expression");
+
+                return Some(Ok(Box::new(Expr::new(
+                    self.next_node_id(),
+                    ExprKind::Infix(Infix {
+                        lhs: lhs_expr,
+                        op: Path::new_infix_op(self.next_node_id(), op),
+                        rhs,
+                    }),
+                    self.close_span(lo),
+                ))));
+            } else {
+                return Some(lhs_expr);
+            }
+        } else {
+            return self.parse_prefix();
+        }
     }
 
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
-        let lo = self.span();
+        let _lo = self.span();
 
-        if self.is(TokenCmp::Kw(Kw::Minus))
+        if self.is(TokenCmp::Op(Op::Minus))
             && (self.next_is(TokenCmp::Int) || self.next_is(TokenCmp::Float))
         {
             todo!("Negative literals")
@@ -673,6 +701,17 @@ impl Parser {
         let lhs = self.parse_primary();
 
         if let Some(lhs) = lhs {
+            // FIXME: Ok precedence?
+            if self.skip(TokenCmp::Punct(Punct::Colon)).is_some() {
+                let ty = self.parse_ty();
+
+                return Some(Ok(Box::new(Expr::new(
+                    self.next_node_id(),
+                    ExprKind::Ty(TyExpr { expr: lhs, ty }),
+                    self.close_span(lo),
+                ))));
+            }
+
             let arg = self.parse_postfix();
 
             if let Some(arg) = arg {
@@ -728,7 +767,7 @@ impl Parser {
                 TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val)))), true),
                 TokenKind::Int(val, kind) => (Some(Ok(ExprKind::Lit(Lit::Int(val, kind)))), true),
                 TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
-                TokenKind::Ident(_) => (
+                TokenKind::Ident(_) | TokenKind::OpIdent(_) => (
                     Some(Ok(ExprKind::Path(PathExpr(
                         self.parse_path("[BUG] First identifier in path expression"),
                     )))),
@@ -780,7 +819,7 @@ impl Parser {
 
     fn parse_path_seg(&mut self) -> PathSeg {
         let lo = self.span();
-        // FIXME: PascalCase type ident, not any ident
+        // FIXME: PascalCase type ident, not any ident??
         PathSeg::new(
             self.parse_ident_allow_op("path segment"),
             self.close_span(lo),

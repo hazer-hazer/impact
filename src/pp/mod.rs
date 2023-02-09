@@ -1,8 +1,5 @@
 use crate::{
-    ast::{
-        expr::{InfixOp, InfixOpKind},
-        NodeId, NodeMap, Path, WithNodeId,
-    },
+    ast::{NodeId, NodeMap, Path, WithNodeId},
     cli::color::{Color, Colorize},
     hir::{HirId, WithHirId},
     parser::token::Punct,
@@ -161,8 +158,8 @@ impl<'a, D> AstLikePP<'a, D> {
 
     fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
-            Kw::Plus | Kw::Minus | Kw::Mul | Kw::Div | Kw::Modulo | Kw::In => (" ", " "),
-            Kw::Not | Kw::Mod => ("", " "),
+            Kw::In => (" ", " "),
+            Kw::Mod => ("", " "),
             Kw::Let | Kw::Type | Kw::Root | Kw::Unknown => ("", ""),
         };
 
@@ -173,29 +170,21 @@ impl<'a, D> AstLikePP<'a, D> {
 
     fn punct(&mut self, punct: Punct) -> &mut Self {
         let (pre, post) = match punct {
-            Punct::Assign | Punct::Arrow => (" ", " "),
+            Punct::Arrow => (" ", " "),
             Punct::Colon => ("", " "),
             Punct::Dot | Punct::LParen | Punct::RParen | Punct::Backslash => ("", ""),
         };
 
         self.str(pre);
-        self.str(&punct.to_string());
+        self.string(punct);
         self.str(post)
     }
 
-    fn infix(&mut self, infix: &InfixOp) -> &mut Self {
-        let (pre, post) = match infix.kind() {
-            InfixOpKind::Plus
-            | InfixOpKind::Minus
-            | InfixOpKind::Mul
-            | InfixOpKind::Div
-            | InfixOpKind::Mod => (" ", " "),
-        };
-
-        self.str(pre);
-        self.str(&infix.kind().to_string());
-        self.str(post)
-    }
+    // fn infix(&mut self, infix: &Path) -> &mut Self {
+    //     self.str(" ");
+    //     self.str(&infix.to_string());
+    //     self.str(" ")
+    // }
 
     // Name highlighting mode //
     fn name_color(&mut self, node_id: Option<NodeId>) -> Color {
