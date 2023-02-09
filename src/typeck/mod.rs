@@ -427,7 +427,6 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
             ExprKind::Infix(_) => todo!(),
-            ExprKind::Prefix(_) => todo!(),
             ExprKind::Lambda(lambda) => self.synth_lambda(lambda),
             ExprKind::Call(call) => self.synth_call(call),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),

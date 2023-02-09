@@ -13,14 +13,14 @@ enum TokenStartMatch {
     String,
     Skip,
     IndentPrecursor,
-    OpIdent,
+    Op,
     Unknown,
 }
 
-trait LexerCharCheck {
+pub trait LexerCharCheck {
     fn is_ident_first(&self) -> bool;
     fn is_ident_next(&self) -> bool;
-    fn is_op_ident(&self) -> bool;
+    fn is_op(&self) -> bool;
     fn is_skippable(&self) -> bool;
     fn is_indent(&self) -> bool;
     fn is_indent_precursor(&self) -> bool;
@@ -36,7 +36,7 @@ impl LexerCharCheck for char {
         self.is_ident_first() || self.is_digit(10)
     }
 
-    fn is_op_ident(&self) -> bool {
+    fn is_op(&self) -> bool {
         ['!', '$', '+', '-', '*', '/', '%', '?', '^', '|', '&', '~'].contains(self)
     }
 
@@ -206,23 +206,31 @@ impl Lexer {
     }
 
     fn lex_op_ident(&mut self) {
-        assert!(self.advance() == '(');
+        assert!(self.advance() == '(' && self.peek().is_op());
 
         let start = self.pos;
 
-        while !self.eof() && self.peek() != ')' && self.peek().is_op_ident() {
+        while !self.eof() && self.peek() != ')' && self.peek().is_op() {
             self.advance();
         }
 
-        if self.peek() != ')' {
+        if self.advance() != ')' {
             todo!("error")
         }
-
-        self.advance();
 
         let (sym, len) = self.get_fragment_intern(start);
 
         self.add_token(TokenKind::OpIdent(sym), len);
+    }
+
+    fn lex_op(&mut self) {
+        let start = self.pos;
+
+        while !self.eof() && self.advance().is_op() {}
+
+        let (sym, len) = self.get_fragment_intern(start);
+
+        self.add_token(TokenKind::Op(sym), len);
     }
 
     fn lex_str(&mut self) {
@@ -342,25 +350,25 @@ impl Stage<TokenStream> for Lexer {
                     self.advance();
                 },
                 TokenStartMatch::Ident => self.lex_ident(),
-                TokenStartMatch::OpIdent => self.lex_op_ident(),
+                TokenStartMatch::Op => self.lex_op(),
                 TokenStartMatch::Num => self.lex_num(),
                 TokenStartMatch::String => self.lex_str(),
                 TokenStartMatch::IndentPrecursor => self.lex_indent(),
                 TokenStartMatch::Unknown => {
                     match TokenKind::try_from_chars(self.peek(), self.lookup()) {
-                        ComplexSymbol::Infix(kind, len) => {
-                            self.add_token_adv(TokenKind::Infix(kind), len)
-                        },
-
                         ComplexSymbol::Punct(kind, len) => {
                             self.add_token_adv(TokenKind::Punct(kind), len)
                         },
+
+                        ComplexSymbol::Kw(kw, len) => self.add_token_adv(TokenKind::Kw(kw), len),
 
                         ComplexSymbol::LineComment => self.lex_line_comment(),
 
                         ComplexSymbol::MultilineComment => self.lex_multiline_comment(),
 
                         ComplexSymbol::None => self.unexpected_token(),
+
+                        ComplexSymbol::OpIdent => self.lex_op_ident(),
                     }
                 },
             };

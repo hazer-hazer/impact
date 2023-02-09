@@ -3,6 +3,8 @@ use std::fmt::{Debug, Display};
 
 use crate::span::span::{Ident, Kw, Span, SpanLen, Symbol, WithSpan};
 
+use super::lexer::LexerCharCheck;
+
 // #[derive(PartialEq, Debug, Clone, Copy)]
 // pub enum Infix {
 //     Plus,
@@ -118,12 +120,7 @@ impl Display for FloatKind {
     }
 }
 
-#[derive(Clone, Copy)]
-pub enum Op {
-    Minus,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TokenKind {
     Eof,
     Nl,
@@ -135,9 +132,12 @@ pub enum TokenKind {
     Float(f64, FloatKind),
     String(Symbol),
     Kw(Kw),
+
     Ident(Symbol),
+
+    // (op)
     OpIdent(Symbol),
-    Op(Op),
+    Op(Symbol),
 
     Punct(Punct),
 
@@ -148,7 +148,8 @@ pub enum ComplexSymbol {
     LineComment,
     MultilineComment,
     Punct(Punct, SpanLen),
-    Op(Op, SpanLen),
+    OpIdent,
+    Kw(Kw, SpanLen),
     None,
 }
 
@@ -178,7 +179,8 @@ impl TokenKind {
             (')', _) => ComplexSymbol::Punct(Punct::RParen, 1),
 
             ('-', Some('>')) => ComplexSymbol::Punct(Punct::Arrow, 2),
-            ('-', _) => ComplexSymbol::Op(Op::Minus, 1),
+            ('-', _) => ComplexSymbol::Kw(Kw::Minus, 1),
+            ('(', Some(next)) if next.is_op() => ComplexSymbol::OpIdent,
 
             _ => ComplexSymbol::None,
         }
@@ -199,9 +201,10 @@ pub enum TokenCmp {
     BlockEnd,
     Bool,
     Int,
+    Float,
     String,
     Ident,
-    Op,
+    OpIdent,
     Kw(Kw),
     Punct(Punct),
     Error,
@@ -217,11 +220,10 @@ impl Display for TokenCmp {
                 TokenCmp::Nl => "[NL]".to_string(),
                 TokenCmp::Bool => "bool".to_string(),
                 TokenCmp::Int => "int".to_string(),
+                TokenCmp::Float => "float".to_string(),
                 TokenCmp::String => "string".to_string(),
                 TokenCmp::Ident => "ident".to_string(),
                 TokenCmp::OpIdent => "operator ident".to_string(),
-                TokenCmp::Infix(infix) => format!("{} infix operator", infix),
-                TokenCmp::SomeInfix => "infix operator".to_string(),
                 TokenCmp::Kw(kw) => format!("{} keyword", kw),
                 TokenCmp::Punct(punct) => format!("{} punctuation", punct),
                 TokenCmp::BlockStart => "[BLOCK START]".to_string(),
@@ -239,16 +241,15 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::Nl, TokenCmp::Nl)
             | (TokenKind::Bool(_), TokenCmp::Bool)
             | (TokenKind::Int(_, _), TokenCmp::Int)
+            | (TokenKind::Float(_, _), TokenCmp::Float)
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
             | (TokenKind::OpIdent(_), TokenCmp::OpIdent)
-            | (TokenKind::Infix(_), TokenCmp::SomeInfix)
             | (TokenKind::BlockStart, TokenCmp::BlockStart)
             | (TokenKind::BlockEnd, TokenCmp::BlockEnd)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
-            (TokenKind::Infix(infix1), TokenCmp::Infix(infix2)) => infix1 == infix2,
             _ => false,
         }
     }
@@ -267,13 +268,12 @@ impl Display for TokenKind {
                 write!(f, "{}", val)
             },
             TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),
-            TokenKind::Infix(infix) => write!(f, "{}", infix),
             TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
-            TokenKind::Prefix(prefix) => write!(f, "{}", prefix),
             TokenKind::Kw(kw) => write!(f, "{}", kw),
             TokenKind::BlockStart => write!(f, "{}", "[BLOCK START]"),
             TokenKind::BlockEnd => write!(f, "{}", "[BLOCK END]"),
             TokenKind::Punct(punct) => write!(f, "{}", punct),
+            TokenKind::Op(op) => write!(f, "{}", op),
         }
     }
 }

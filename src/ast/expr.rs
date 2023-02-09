@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     parser::token::{self, FloatKind, IntKind, Token, TokenKind},
-    span::span::{Span, Spanned, Symbol, WithSpan},
+    span::span::{Ident, Span, Spanned, Symbol, WithSpan},
 };
 
 use super::{
@@ -76,7 +76,7 @@ pub enum Lit {
 #[derive(Debug)]
 pub struct InfixOp {
     id: NodeId,
-    kind: InfixOpKind,
+    symbol: Ident,
     span: Span,
 }
 
@@ -84,61 +84,61 @@ impl InfixOp {
     pub fn from_tok(id: NodeId, tok: Token) -> Self {
         Self {
             id,
-            kind: InfixOpKind::from_tok(tok),
+            symbol: Ident::from_token(tok),
             span: tok.span,
         }
     }
 
-    pub fn kind(&self) -> InfixOpKind {
-        self.kind
+    pub fn symbol(&self) -> Ident {
+        self.symbol
     }
 }
 
 impl Display for InfixOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.kind.fmt(f)
+        self.symbol.fmt(f)
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum InfixOpKind {
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    Mod,
-}
+// #[derive(Clone, Copy, Debug)]
+// pub enum InfixOpKind {
+//     Plus,
+//     Minus,
+//     Mul,
+//     Div,
+//     Mod,
+// }
 
-impl InfixOpKind {
-    pub fn from_tok(tok: Token) -> Self {
-        match tok.kind {
-            TokenKind::Infix(infix) => match infix {
-                token::Infix::Plus => InfixOpKind::Plus,
-                token::Infix::Minus => InfixOpKind::Minus,
-                token::Infix::Mul => InfixOpKind::Mul,
-                token::Infix::Div => InfixOpKind::Div,
-                token::Infix::Mod => InfixOpKind::Mod,
-            },
-            _ => panic!("Cannot make InfixOpKind from not a Infix Token"),
-        }
-    }
-}
+// impl InfixOpKind {
+//     pub fn from_tok(tok: Token) -> Self {
+//         match tok.kind {
+//             TokenKind::Infix(infix) => match infix {
+//                 token::Infix::Plus => InfixOpKind::Plus,
+//                 token::Infix::Minus => InfixOpKind::Minus,
+//                 token::Infix::Mul => InfixOpKind::Mul,
+//                 token::Infix::Div => InfixOpKind::Div,
+//                 token::Infix::Mod => InfixOpKind::Mod,
+//             },
+//             _ => panic!("Cannot make InfixOpKind from not a Infix Token"),
+//         }
+//     }
+// }
 
-impl Display for InfixOpKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Plus => "+",
-                Self::Minus => "-",
-                Self::Mul => "*",
-                Self::Div => "/",
-                Self::Mod => "%",
-            }
-        )
-    }
-}
+// impl Display for InfixOpKind {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(
+//             f,
+//             "{}",
+//             match self {
+//                 Self::Plus => "+",
+//                 Self::Minus => "-",
+//                 Self::Mul => "*",
+//                 Self::Div => "/",
+//                 Self::Mod => "%",
+//             }
+//         )
+//     }
+// }
 
 #[derive(Debug)]
 pub struct Infix {

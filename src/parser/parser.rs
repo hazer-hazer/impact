@@ -3,8 +3,8 @@ use std::fmt::{Debug, Display};
 use crate::{
     ast::{
         expr::{
-            is_block_ended, Block, Call, Expr, ExprKind, Infix, InfixOp, InfixOpKind, Lambda, Lit,
-            PathExpr, Prefix, PrefixOpKind, TyExpr,
+            is_block_ended, Block, Call, Expr, ExprKind, Infix, InfixOp, Lambda, Lit, PathExpr,
+            TyExpr,
         },
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
@@ -619,99 +619,52 @@ impl Parser {
         )));
     }
 
-    fn parse_prec(&mut self, prec: u8) -> Option<PR<N<Expr>>> {
-        const PREC_TABLE: &[&[TokenCmp]] = &[
-            &[TokenCmp::Punct(Punct::Colon)],
-            &[
-                TokenCmp::Infix(token::Infix::Plus),
-                TokenCmp::Infix(token::Infix::Minus),
-            ],
-            &[
-                TokenCmp::Infix(token::Infix::Mul),
-                TokenCmp::Infix(token::Infix::Div),
-                TokenCmp::Infix(token::Infix::Mod),
-            ],
-        ];
-
-        if prec as usize == PREC_TABLE.len() {
-            return self.parse_prefix();
-        }
-
+    fn parse_infix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
-        let mut lhs = self.parse_prec(prec + 1)?;
+        let lhs = self.parse_infix();
 
-        while let Some(op) = self.skip_any(&PREC_TABLE[prec as usize]) {
-            if op.kind == TokenKind::Punct(Punct::Colon) {
-                // Parse ascription (type expression)
-
-                let ty = self.parse_ty();
-
-                self.mark_late_check("type ascription");
-
-                lhs = Ok(Box::new(Expr::new(
-                    self.next_node_id(),
-                    ExprKind::Ty(TyExpr { expr: lhs, ty }),
-                    self.close_span(lo),
-                )));
-
-                // TODO: Allow ascription of ascription?
-                // pe = self.enter_future_pred_entry();
-                break;
-            } else {
-                let rhs = self.parse_prec(prec + 1);
-
-                if let Some(rhs) = rhs {
-                    self.mark_late_check("infix expression");
-
-                    lhs = Ok(Box::new(Expr::new(
-                        self.next_node_id(),
-                        ExprKind::Infix(Infix {
-                            lhs,
-                            op: InfixOp::from_tok(self.next_node_id(), op),
-                            rhs,
-                        }),
-                        self.close_span(lo),
-                    )));
-                } else {
-                    break;
-                }
-            }
-        }
-
-        Some(lhs)
+        if 
     }
 
     fn parse_prefix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
-        if let Some(op) = self.skip(TokenCmp::) {
-            let rhs = self.parse_postfix();
-
-            let rhs = if let Some(rhs) = rhs {
-                rhs
-            } else {
-                MessageBuilder::error()
-                    .span(self.span())
-                    .text(format!("Expected expression after {} operator", op.kind))
-                    .origin(file!(), line!())
-                    .emit_single_label(self);
-                Err(ErrorNode::new(self.span()))
-            };
-
-            self.mark_late_check("prefix expression");
-
-            Some(Ok(Box::new(Expr::new(
-                self.next_node_id(),
-                ExprKind::Prefix(Prefix {
-                    op: PrefixOpKind::from_tok(&op),
-                    rhs,
-                }),
-                op.span.to(lo),
-            ))))
-        } else {
-            self.parse_postfix()
+        if self.is(TokenCmp::Kw(Kw::Minus))
+            && (self.next_is(TokenCmp::Int) || self.next_is(TokenCmp::Float))
+        {
+            todo!("Negative literals")
         }
+
+        // if let Some(op) = self.skip(TokenCmp::Kw(Kw::Minus)) {
+        //     let rhs = self.parse_postfix();
+
+        //     let rhs = if let Some(rhs) = rhs {
+        //         rhs
+        //     } else {
+        //         MessageBuilder::error()
+        //             .span(self.span())
+        //             .text(format!("Expected expression after {} operator", op.kind))
+        //             .origin(file!(), line!())
+        //             .emit_single_label(self);
+        //         Err(ErrorNode::new(self.span()))
+        //     };
+
+        //     self.mark_late_check("prefix expression");
+
+        //     Some(Ok(Box::new(Expr::new(
+        //         self.next_node_id(),
+        //         ExprKind::Prefix(Prefix {
+        //             op: PrefixOpKind::from_tok(&op),
+        //             rhs,
+        //         }),
+        //         op.span.to(lo),
+        //     ))))
+        // } else {
+        //     self.parse_postfix()
+        // }
+
+        self.parse_postfix()
     }
 
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {

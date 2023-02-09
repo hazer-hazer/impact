@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 
 use crate::{
-    parser::token::{Infix, Prefix, Token, TokenKind},
+    parser::token::{Token, TokenKind},
     session::{SourceId, DUMMY_SOURCE_ID},
 };
 use std::{
