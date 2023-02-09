@@ -216,11 +216,11 @@ impl Lexer {
             self.advance();
         }
 
+        let (sym, len) = self.get_fragment_intern(start);
+
         if self.advance() != ')' {
             todo!("error")
         }
-
-        let (sym, len) = self.get_fragment_intern(start);
 
         self.add_token(TokenKind::OpIdent(sym), len);
     }
@@ -243,13 +243,14 @@ impl Lexer {
             self.advance();
         }
 
+        let (sym, len) = self.get_fragment_intern(start);
+
         if self.peek() != quote {
             self.add_error(format!("Expected closing quote {}", quote).as_str());
         } else {
             self.advance();
         }
 
-        let (sym, len) = self.get_fragment_intern(start);
         self.add_token(TokenKind::String(sym), len);
     }
 

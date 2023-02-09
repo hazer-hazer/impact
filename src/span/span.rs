@@ -277,6 +277,7 @@ pub struct Ident {
 pub enum IdentKind {
     Var, // Lower-case identifiers are used for variables
     Ty,  // Capitalized identifiers are used for types and modules
+    Op,  // Operator identifier, e.g. `(+)` (without parentheses)
 }
 
 impl Ident {
@@ -288,7 +289,7 @@ impl Ident {
         Ident {
             span: tok.span,
             sym: match tok.kind {
-                TokenKind::Ident(sym) => sym,
+                TokenKind::OpIdent(sym) | TokenKind::Ident(sym) => sym,
                 _ => unreachable!(),
             },
         }
@@ -320,6 +321,7 @@ impl Ident {
         match self.sym().to_string().chars().nth(0) {
             Some(first) if first.is_uppercase() => IdentKind::Ty,
             Some(first) if first.is_lowercase() => IdentKind::Var,
+            Some(first) if first.is_custom_op() => IdentKind::Op,
             _ => panic!(),
         }
     }

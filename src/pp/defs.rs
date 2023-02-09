@@ -61,7 +61,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                         self.pp_mod(ModuleId::Module(def.def_id()));
                         self.dedent();
                     },
-                    DefKind::Var | DefKind::TyAlias | DefKind::Func => {
+                    DefKind::BuiltinFunc | DefKind::Var | DefKind::TyAlias | DefKind::Func => {
                         self.nl();
                     },
                 }

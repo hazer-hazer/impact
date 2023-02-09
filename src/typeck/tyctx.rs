@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    dt::idx::Idx,
-    hir::{HirId},
-    span::span::Ident,
-};
+use crate::{hir::HirId, span::span::Ident};
 
 use super::{
     ctx::ExistentialId,

@@ -11,6 +11,7 @@ use super::def::DefId;
 pub enum ResKind {
     Local(NodeId),
     Def(DefId), // Definition, e.g. imported function
+    BuiltinFunc(DefId),
     Error,
 }
 
@@ -59,6 +60,7 @@ impl Display for Res {
         match self.kind {
             ResKind::Def(def_id) => write!(f, "{}", def_id),
             ResKind::Local(node_id) => write!(f, "{}", node_id),
+            ResKind::BuiltinFunc(def_id) => write!(f, "[builtin func]{}", def_id),
             ResKind::Error => write!(f, "[ERROR]"),
         }
     }

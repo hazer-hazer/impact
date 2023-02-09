@@ -8,7 +8,7 @@ use crate::{
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
-        def::{DefId, DefKind, DefMap},
+        def::{BuiltinFunc, DefId, DefKind, DefMap},
         res::ResKind,
     },
     session::{Session, Stage, StageOutput},
@@ -365,7 +365,7 @@ impl<'hir> Typecker<'hir> {
                     },
 
                     // Definitions from value namespace
-                    DefKind::Func | DefKind::Var => unreachable!(),
+                    DefKind::BuiltinFunc | DefKind::Func | DefKind::Var => unreachable!(),
                 }
             },
             _ => unreachable!(),

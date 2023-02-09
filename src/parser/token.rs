@@ -194,10 +194,9 @@ impl Display for TokenKind {
             TokenKind::Eof => write!(f, "{}", "[EOF]"),
             TokenKind::Nl => write!(f, "{}", "[NL]"),
             TokenKind::Int(val, kind) => write!(f, "{}{}", val, kind),
-            TokenKind::String(val)
-            | TokenKind::Ident(val)
-            | TokenKind::OpIdent(val)
-            | TokenKind::Error(val) => {
+            TokenKind::String(val) => write!(f, "\"{}\"", val),
+            TokenKind::OpIdent(val) => write!(f, "({})", val),
+            TokenKind::Ident(val) | TokenKind::Error(val) => {
                 write!(f, "{}", val)
             },
             TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),

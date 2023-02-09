@@ -33,6 +33,8 @@ const ALLOWED_COLORS: &[Color] = &[
     Color::BrightMagenta,
 ];
 
+const BUILTIN_FUNC_COLOR: Color = Color::Cyan;
+
 pub struct AstLikePP<'a, D = ()> {
     out: String,
     indent_level: u32,
@@ -233,6 +235,10 @@ impl<'a, D> AstLikePP<'a, D> {
         let node_id = match res.kind() {
             ResKind::Local(node_id) => Some(*node_id),
             ResKind::Def(def_id) => Some(self.sess.def_table.get_node_id(*def_id).unwrap()),
+            ResKind::BuiltinFunc(_) => {
+                self.string("[builtin]".fg_color(BUILTIN_FUNC_COLOR));
+                return;
+            },
             ResKind::Error => None,
         };
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::{
     cli::color::{Color, Colorize},
@@ -52,7 +52,10 @@ impl Ctx {
     }
 
     pub fn get_var(&self, name: Ident) -> Option<Ident> {
-        self.vars.iter().find(|var| **var == name).copied()
+        self.vars
+            .iter()
+            .find(|var| var.sym() == name.sym())
+            .copied()
     }
 
     pub fn has_ex(&self, ex: ExistentialId) -> bool {

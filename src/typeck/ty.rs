@@ -11,7 +11,7 @@ use crate::{
     span::span::Ident,
 };
 
-use super::ctx::{ExistentialId};
+use super::ctx::ExistentialId;
 
 declare_idx!(TypeVarId, usize, "{}", Color::Green);
 
@@ -286,7 +286,7 @@ pub enum Subst {
 impl PartialEq<Ident> for Subst {
     fn eq(&self, other: &Ident) -> bool {
         match (self, other) {
-            (Self::Name(name), other) => name == other,
+            (Self::Name(name), other) => name.sym() == other.sym(),
             _ => false,
         }
     }

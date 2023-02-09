@@ -1,13 +1,15 @@
 use crate::{
     ast::{
+        expr::Block,
         item::{Item, ItemKind},
         visitor::{walk_each_pr, AstVisitor},
-        ErrorNode, NodeId, WithNodeId, AST, expr::Block,
+        ErrorNode, NodeId, WithNodeId, AST, DUMMY_NODE_ID,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    resolve::def::{BuiltinFunc, Namespace},
     session::{Session, Stage, StageOutput},
-    span::span::Ident,
+    span::span::{Ident, Symbol},
 };
 
 use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};
@@ -77,6 +79,22 @@ impl<'ast> DefCollector<'ast> {
 
         def_id
     }
+
+    fn define_builtin_func(&mut self) {
+        let def_id =
+            self.sess
+                .def_table
+                .define(DUMMY_NODE_ID, DefKind::BuiltinFunc, &BuiltinFunc::ident());
+
+        assert!(self
+            .module()
+            .define(Namespace::Value, BuiltinFunc::sym(), def_id)
+            .is_none());
+
+        self.sess
+            .def_table
+            .set_builtin_func(BuiltinFunc::new(def_id));
+    }
 }
 
 impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
@@ -121,8 +139,15 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
 
 impl<'ast> Stage<()> for DefCollector<'ast> {
     fn run(mut self) -> StageOutput<()> {
-        self.sess.def_table.add_root_module();
+        assert_eq!(
+            self.sess.def_table.add_root_module().as_module(),
+            ROOT_DEF_ID
+        );
+
+        self.define_builtin_func();
+
         self.visit_ast(self.ast);
+
         StageOutput::new(self.sess, (), self.msg)
     }
 }

@@ -14,6 +14,8 @@ pub enum DefKind {
     Mod,
     Func,
     Var,
+
+    BuiltinFunc,
 }
 
 impl DefKind {
@@ -33,6 +35,7 @@ impl DefKind {
             DefKind::Func => Namespace::Value,
             DefKind::Root => Namespace::Type,
             DefKind::Var => Namespace::Value,
+            DefKind::BuiltinFunc => Namespace::Value,
         }
     }
 }
@@ -48,6 +51,7 @@ impl Display for DefKind {
                 DefKind::Func => "function",
                 DefKind::Var => "var",
                 DefKind::Root => "[ROOT]",
+                DefKind::BuiltinFunc => "[`builtin` func]",
             }
         )
     }
@@ -107,7 +111,7 @@ impl Namespace {
 
     pub fn from_ident(ident: &Ident) -> Self {
         match ident.kind() {
-            IdentKind::Var => Namespace::Value,
+            IdentKind::Op | IdentKind::Var => Namespace::Value,
             IdentKind::Ty => Namespace::Type,
         }
     }
@@ -175,6 +179,22 @@ pub enum ModuleKind {
 pub enum ModuleId {
     Block(NodeId),
     Module(DefId),
+}
+
+impl ModuleId {
+    pub fn as_module(&self) -> DefId {
+        match self {
+            ModuleId::Block(_) => panic!(),
+            &ModuleId::Module(def_id) => def_id,
+        }
+    }
+
+    pub fn as_block(&self) -> NodeId {
+        match self {
+            &ModuleId::Block(node_id) => node_id,
+            ModuleId::Module(_) => panic!(),
+        }
+    }
 }
 
 pub const ROOT_MODULE_ID: ModuleId = ModuleId::Module(ROOT_DEF_ID);
@@ -245,12 +265,33 @@ impl Module {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct BuiltinFunc {
+    def_id: DefId,
+}
+
+impl BuiltinFunc {
+    pub fn new(def_id: DefId) -> Self {
+        Self { def_id }
+    }
+
+    pub fn sym() -> Symbol {
+        Symbol::intern("builtin")
+    }
+
+    pub fn ident() -> Ident {
+        Ident::synthetic(Self::sym())
+    }
+}
+
 #[derive(Default)]
 pub struct DefTable {
     modules: DefMap<Module>,
     blocks: NodeMap<Module>,
     node_id_def_id: NodeMap<DefId>,
     def_id_node_id: DefMap<NodeId>,
+
+    builtin_func_def_id: Option<BuiltinFunc>,
 
     /// Span of definition name
     def_id_span: HashMap<DefId, Span>,
@@ -352,5 +393,14 @@ impl DefTable {
 
     pub fn def_id_node_id(&self) -> &DefMap<NodeId> {
         &self.def_id_node_id
+    }
+
+    pub fn builtin_func(&self) -> BuiltinFunc {
+        self.builtin_func_def_id.unwrap()
+    }
+
+    pub fn set_builtin_func(&mut self, builtin_func_def_id: BuiltinFunc) {
+        assert!(self.builtin_func_def_id.is_none());
+        self.builtin_func_def_id = Some(builtin_func_def_id);
     }
 }

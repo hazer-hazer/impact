@@ -490,7 +490,7 @@ impl Parser {
 
         let name = self.parse_ident("module name");
 
-        let items = parse_block_common!(self, parse_item);
+        let items = parse_block_common!(self, parse_item_semi);
 
         self.exit_parsed_entity(pe);
 
