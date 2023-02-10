@@ -182,6 +182,17 @@ impl<'a, D> AstLikePP<'a, D> {
         self.str(post)
     }
 
+    fn ident(&mut self, ident: &Ident) -> &mut Self {
+        if ident.is_op() {
+            self.str("(");
+            self.string(ident);
+            self.str(")");
+        } else {
+            self.string(ident);
+        }
+        self
+    }
+
     // fn infix(&mut self, infix: &Path) -> &mut Self {
     //     self.str(" ");
     //     self.str(&infix.to_string());
@@ -210,14 +221,25 @@ impl<'a, D> AstLikePP<'a, D> {
         color
     }
 
-    fn name(&mut self, ident: &Ident, item_node_id: NodeId) {
+    fn name(&mut self, name: &Ident, item_node_id: NodeId, is_def: bool) {
         if self.mode == AstPPMode::Normal {
-            self.string(ident);
+            if is_def {
+                self.string(name.original_string());
+            } else {
+                self.string(name);
+            }
             return;
         }
 
         let color = self.name_color(Some(item_node_id));
-        self.string(ident.sym().to_string().fg_color(color));
+        self.string(
+            if is_def {
+                name.original_string()
+            } else {
+                name.to_string()
+            }
+            .fg_color(color),
+        );
     }
 
     fn path(&mut self, path: &Path) {
@@ -234,7 +256,13 @@ impl<'a, D> AstLikePP<'a, D> {
 
         let node_id = match res.kind() {
             ResKind::Local(node_id) => Some(*node_id),
-            ResKind::Def(def_id) => Some(self.sess.def_table.get_node_id(*def_id).unwrap()),
+            ResKind::Def(def_id) => {
+                Some(self.sess.def_table.get_node_id(*def_id).expect(&format!(
+                    "Name resolution for definition {} by name {}",
+                    def_id,
+                    path.to_string()
+                )))
+            },
             ResKind::BuiltinFunc(_) => {
                 self.string("[builtin]".fg_color(BUILTIN_FUNC_COLOR));
                 return;

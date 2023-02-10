@@ -299,6 +299,21 @@ impl Display for Path {
     }
 }
 
+pub trait IsBlockEnded {
+    fn is_block_ended(&self) -> bool;
+}
+
+macro_rules! is_block_ended {
+    ($pr: expr) => {
+        match &$pr {
+            Err(_) => false,
+            Ok(node) => node.is_block_ended(),
+        }
+    };
+}
+
+pub(crate) use is_block_ended;
+
 // Referencing ADT to any AST node, where node is anything with `NodeId`
 pub enum AstNode<'ast> {
     Path(&'ast Path),

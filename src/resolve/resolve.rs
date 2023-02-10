@@ -169,7 +169,11 @@ impl<'ast> NameResolver<'ast> {
             };
 
             if is_target {
-                return Res::def(*def);
+                if *self.sess.def_table.get_def(*def).unwrap().kind() == DefKind::BuiltinFunc {
+                    return Res::builtin_func(*def);
+                } else {
+                    return Res::def(*def);
+                }
             } else {
                 search_mod = self.sess.def_table.get_module(ModuleId::Module(*def))
             }

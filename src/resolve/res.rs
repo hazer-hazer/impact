@@ -37,6 +37,13 @@ impl Res {
         }
     }
 
+    pub fn builtin_func(def_id: DefId) -> Self {
+        // FIXME: Add static state to check for uniqueness?
+        Self {
+            kind: ResKind::BuiltinFunc(def_id),
+        }
+    }
+
     pub fn error() -> Self {
         Self {
             kind: ResKind::Error,

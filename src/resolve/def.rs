@@ -7,7 +7,7 @@ use crate::{
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DefKind {
     Root,
     TyAlias,

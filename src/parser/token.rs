@@ -279,6 +279,7 @@ pub enum TokenCmp {
     String,
     Ident,
     OpIdent,
+    DeclName,
     Op(Op),
     InfixOp,
     Kw(Kw),
@@ -300,7 +301,8 @@ impl Display for TokenCmp {
                 TokenCmp::String => "string".to_string(),
                 TokenCmp::Ident => "ident".to_string(),
                 TokenCmp::OpIdent => "operator ident".to_string(),
-                TokenCmp::Op(op) => format!("operator {}", op),
+                TokenCmp::DeclName => "declaration name".to_string(),
+                TokenCmp::Op(op) => format!("operator `{}`", op),
                 TokenCmp::InfixOp => "some infix operator".to_string(),
                 TokenCmp::Kw(kw) => format!("{} keyword", kw),
                 TokenCmp::Punct(punct) => format!("{} punctuation", punct),
@@ -323,6 +325,7 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
             | (TokenKind::OpIdent(_), TokenCmp::OpIdent)
+            | (TokenKind::OpIdent(_) | TokenKind::Ident(_), TokenCmp::DeclName)
             | (TokenKind::BlockStart, TokenCmp::BlockStart)
             | (TokenKind::BlockEnd, TokenCmp::BlockEnd)
             | (

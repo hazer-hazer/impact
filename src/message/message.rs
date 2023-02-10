@@ -43,7 +43,7 @@ pub enum SolutionKind {
     Rename {
         kind: NameKind,
         name: Ident,
-        to: String,
+        to: Option<String>,
         // TODO: Name identifier for LS
     },
 }

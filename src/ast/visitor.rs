@@ -14,7 +14,7 @@ macro_rules! walk_pr {
         walk_pr!($self, $pr, $ok_visitor,)
     };
 
-    ($self: ident, $pr: expr, $ok_visitor: ident, $($args: expr)*) => {
+    ($self: ident, $pr: expr, $ok_visitor: ident, $($args: expr),*) => {
         match $pr {
             Ok(ok) => $self.$ok_visitor(ok, $($args),*),
             Err(err) => $self.visit_err(err),
@@ -85,6 +85,10 @@ pub trait AstVisitor<'ast> {
     fn visit_mod_item(&mut self, name: &'ast PR<Ident>, items: &'ast Vec<PR<N<Item>>>, _: NodeId) {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, items, visit_item);
+    }
+
+    fn visit_decl_name(&mut self, name: &'ast PR<Ident>) {
+        walk_pr!(self, name, visit_ident);
     }
 
     fn visit_decl_item(

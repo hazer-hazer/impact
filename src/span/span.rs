@@ -80,6 +80,13 @@ impl Symbol {
         let str = self.as_str();
         !str.is_empty() && str.chars().all(|ch| ch.is_custom_op())
     }
+
+    /// Checks if symbol is a name but not an operator
+    pub fn is_non_op_name(&self) -> bool {
+        self.as_str()
+            .chars()
+            .all(|ch| ch == '_' || ch.is_alphanumeric())
+    }
 }
 
 impl Display for Symbol {
@@ -333,11 +340,27 @@ impl Ident {
     pub fn is_ty(&self) -> bool {
         self.kind() == IdentKind::Ty
     }
+
+    pub fn is_op(&self) -> bool {
+        self.kind() == IdentKind::Op
+    }
+
+    pub fn original_string(&self) -> String {
+        if self.is_op() {
+            format!("({})", self)
+        } else {
+            self.to_string()
+        }
+    }
 }
 
 impl Display for Ident {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // if self.is_op() {
+        //     write!(f, "({})", self.sym())
+        // } else {
         write!(f, "{}", self.sym())
+        // }
     }
 }
 

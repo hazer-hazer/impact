@@ -6,19 +6,9 @@ use crate::{
 };
 
 use super::{
-    pat::Pat, pr_display, stmt::Stmt, ty::Ty, NodeId, NodeKindStr, Path, WithNodeId, N, PR,
+    is_block_ended, pat::Pat, pr_display, stmt::Stmt, ty::Ty, IsBlockEnded, NodeId, NodeKindStr,
+    Path, WithNodeId, N, PR,
 };
-
-macro_rules! is_block_ended {
-    ($pr: expr) => {
-        match &$pr {
-            Err(_) => false,
-            Ok(node) => node.is_block_ended(),
-        }
-    };
-}
-
-pub(crate) use is_block_ended;
 
 #[derive(Debug)]
 pub struct Expr {
@@ -35,8 +25,10 @@ impl Expr {
     pub fn kind(&self) -> &ExprKind {
         &self.kind
     }
+}
 
-    pub fn is_block_ended(&self) -> bool {
+impl IsBlockEnded for Expr {
+    fn is_block_ended(&self) -> bool {
         self.kind.is_block_ended()
     }
 }
@@ -71,6 +63,17 @@ pub enum Lit {
     Int(u64, IntKind),
     Float(f64, FloatKind),
     String(Symbol),
+}
+
+impl Display for Lit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
+            Self::Int(val, kind) => write!(f, "{}{}", val, kind),
+            Self::Float(val, kind) => write!(f, "{}{}", val, kind),
+            Self::String(val) => write!(f, "\"{}\"", val),
+        }
+    }
 }
 
 // #[derive(Debug, Clone, Copy)]
@@ -267,25 +270,14 @@ pub enum ExprKind {
     Ty(TyExpr),
 }
 
-impl ExprKind {
-    pub fn is_block_ended(&self) -> bool {
+impl IsBlockEnded for ExprKind {
+    fn is_block_ended(&self) -> bool {
         match self {
             Self::Unit | Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => false,
             Self::Block(_) | Self::Let(_) => true,
             Self::Infix(infix) => is_block_ended!(infix.rhs),
             Self::Lambda(lambda) => is_block_ended!(lambda.body),
             Self::Call(call) => is_block_ended!(call.arg),
-        }
-    }
-}
-
-impl Display for Lit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
-            Self::Int(val, kind) => write!(f, "{}{}", val, kind),
-            Self::Float(val, kind) => write!(f, "{}{}", val, kind),
-            Self::String(val) => write!(f, "{}", val),
         }
     }
 }

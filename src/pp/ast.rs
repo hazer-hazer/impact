@@ -76,14 +76,14 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     fn visit_type_item(&mut self, name: &'ast PR<Ident>, ty: &'ast PR<N<Ty>>, id: NodeId) {
         self.kw(Kw::Type);
-        walk_pr!(self, name, name, id);
+        walk_pr!(self, name, name, id, true);
         self.str(" = ");
         walk_pr!(self, ty, visit_ty);
     }
 
     fn visit_mod_item(&mut self, name: &'ast PR<Ident>, items: &'ast Vec<PR<N<Item>>>, id: NodeId) {
         self.kw(Kw::Mod);
-        walk_pr!(self, name, name, id);
+        walk_pr!(self, name, name, id, true);
         self.nl();
         walk_block!(self, items, visit_item);
     }
@@ -95,7 +95,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         body: &'ast PR<N<Expr>>,
         id: NodeId,
     ) {
-        walk_pr!(self, name, name, id);
+        walk_pr!(self, name, name, id, true);
         if !params.is_empty() {
             self.sp();
         }
@@ -107,7 +107,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     // Patterns //
     fn visit_pat(&mut self, pat: &'ast Pat) {
         match pat.kind() {
-            PatKind::Ident(ident) => walk_pr!(self, ident, name, pat.id()),
+            PatKind::Ident(ident) => walk_pr!(self, ident, name, pat.id(), true),
         }
         self.node_id(pat);
     }
@@ -202,7 +202,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     // Fragments //
     fn visit_ident(&mut self, ident: &'ast Ident) {
-        self.string(ident);
+        self.ident(ident);
     }
 
     fn visit_path(&mut self, path: &'ast Path) {

@@ -2,7 +2,10 @@ use std::fmt::Display;
 
 use crate::span::span::{Ident, Span, WithSpan};
 
-use super::{expr::Expr, pat::Pat, pr_display, ty::Ty, NodeId, NodeKindStr, WithNodeId, N, PR};
+use super::{
+    expr::Expr, is_block_ended, pat::Pat, pr_display, ty::Ty, IsBlockEnded, NodeId, NodeKindStr,
+    WithNodeId, N, PR,
+};
 
 #[derive(Debug)]
 pub struct Item {
@@ -36,6 +39,12 @@ impl Item {
     }
 }
 
+impl IsBlockEnded for Item {
+    fn is_block_ended(&self) -> bool {
+        self.kind.is_block_ended()
+    }
+}
+
 impl WithNodeId for Item {
     fn id(&self) -> NodeId {
         self.id
@@ -65,6 +74,16 @@ pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
+}
+
+impl IsBlockEnded for ItemKind {
+    fn is_block_ended(&self) -> bool {
+        match self {
+            ItemKind::Type(_, _) => false, // FIXME: Always?
+            ItemKind::Mod(_, _) => true,
+            ItemKind::Decl(_, _, body) => is_block_ended!(body),
+        }
+    }
 }
 
 impl Display for ItemKind {

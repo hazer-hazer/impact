@@ -36,6 +36,7 @@ impl LexerCharCheck for char {
     }
 
     fn is_custom_op(&self) -> bool {
+        // Note: Relates to `CAMEL_CASE_REGEX`
         [
             '!', '$', '+', '-', '*', '/', '%', '?', '^', '|', '&', '~', '=',
         ]
@@ -222,7 +223,8 @@ impl Lexer {
             todo!("error")
         }
 
-        self.add_token(TokenKind::OpIdent(sym), len);
+        // FIXME: Test `+ 2`
+        self.add_token(TokenKind::OpIdent(sym), len + 2);
     }
 
     fn lex_custom_op(&mut self) {

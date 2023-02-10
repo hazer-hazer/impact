@@ -181,7 +181,13 @@ impl TermEmitter {
                 sess,
                 &Label::new(
                     name.span(),
-                    format!("Rename {} `{}` to {}", kind, name.sym(), to),
+                    format!(
+                        "Solution: Rename {} `{}` {}",
+                        kind,
+                        name.sym(),
+                        to.as_ref()
+                            .map_or("".to_string(), |to| format!("to {}", to))
+                    ),
                 ),
             ),
         }

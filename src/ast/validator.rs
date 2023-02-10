@@ -3,7 +3,7 @@ use crate::{
         Message, MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution, SolutionKind,
     },
     session::{Session, Stage, StageOutput},
-    span::span::Ident,
+    span::span::{Ident, Symbol},
 };
 
 use super::{
@@ -12,13 +12,14 @@ use super::{
     ErrorNode, Path, WithNodeId, AST,
 };
 
-use convert_case::{Case, Casing};
+use convert_case::Case;
 use lazy_static::lazy_static;
 use regex::Regex;
 
 lazy_static! {
     static ref PASCAL_CASE_REGEX: Regex = Regex::new(r"^[A-Z][A-z\d]*$").unwrap();
-    static ref CAMEL_CASE_REGEX: Regex = Regex::new(r"^[a-z][A-z\d]*$").unwrap();
+    static ref CAMEL_CASE_REGEX: Regex =
+        Regex::new(r"^([a-z][A-z\d]*|[!\$\+\-\*/%\?\^\|\&\~=]+)$").unwrap();
     static ref SNAKE_CASE_REGEX: Regex = Regex::new(r"^[a-z]+(?:_[a-z\d]+)*$").unwrap();
     static ref KEBAB_CASE_REGEX: Regex = Regex::new(r"^[a-z]+(?:-[a-z\d]+)*$").unwrap();
     static ref SCREAMING_SNAKE_CASE_REGEX: Regex = Regex::new(r"^[A-Z]+(?:_[A-Z\d]+)*$").unwrap();
@@ -68,6 +69,14 @@ impl<'ast> AstValidator<'ast> {
         }
     }
 
+    fn to_case(str: &str, case: Case) -> Option<String> {
+        if Symbol::intern(str).is_non_op_name() {
+            Some(str.to_string())
+        } else {
+            None
+        }
+    }
+
     fn validate_name(&mut self, name: &Ident, kind: NameKind) {
         let solution = match kind {
             NameKind::Var | NameKind::Func | NameKind::TypeVar => self.validate_varname(name, kind),
@@ -97,7 +106,7 @@ impl<'ast> AstValidator<'ast> {
         let str = sym.as_str();
 
         if !PASCAL_CASE_REGEX.is_match(str) {
-            let to = str.to_case(Case::Pascal);
+            let to = Self::to_case(str, Case::Pascal);
             return Some(Solution::new(SolutionKind::Rename { kind, name, to }));
         }
 
@@ -116,7 +125,7 @@ impl<'ast> AstValidator<'ast> {
         let str = sym.as_str();
 
         if !CAMEL_CASE_REGEX.is_match(str) {
-            let to = str.to_case(Case::Camel);
+            let to = Self::to_case(str, Case::Camel);
             return Some(Solution::new(SolutionKind::Rename { kind, name, to }));
         }
 
@@ -134,7 +143,7 @@ impl<'ast> AstValidator<'ast> {
         let str = sym.as_str();
 
         if !SNAKE_CASE_REGEX.is_match(str) {
-            let to = str.to_case(Case::Snake);
+            let to = Self::to_case(str, Case::Snake);
             return Some(Solution::new(SolutionKind::Rename { kind, name, to }));
         }
 
@@ -152,7 +161,7 @@ impl<'ast> AstValidator<'ast> {
         let str = sym.as_str();
 
         if !SCREAMING_SNAKE_CASE_REGEX.is_match(str) {
-            let to = str.to_case(Case::ScreamingSnake);
+            let to = Self::to_case(str, Case::ScreamingSnake);
             return Some(Solution::new(SolutionKind::Rename { kind, name, to }));
         }
 
@@ -168,7 +177,7 @@ impl<'ast> AstValidator<'ast> {
         let str = sym.as_str();
 
         if !SNAKE_CASE_REGEX.is_match(str) && !KEBAB_CASE_REGEX.is_match(str) {
-            let to = str.to_case(Case::Snake);
+            let to = Self::to_case(str, Case::Snake);
             return Some(Solution::new(SolutionKind::Rename { kind, name, to }));
         }
 

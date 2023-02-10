@@ -2,14 +2,18 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
-        expr::{is_block_ended, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+        is_block_ended,
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        ErrorNode, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
+        ErrorNode, IsBlockEnded, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
     },
-    cli::color::{Color, Colorize},
+    cli::{
+        color::{Color, Colorize},
+        verbose,
+    },
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
@@ -404,6 +408,10 @@ impl Parser {
         if let Some(item) = self.parse_opt_item() {
             let span = item.span();
 
+            if !is_block_ended!(item) {
+                self.expect_semis()?;
+            }
+
             Ok(Box::new(Stmt::new(
                 self.next_node_id(),
                 StmtKind::Item(item),
@@ -455,23 +463,17 @@ impl Parser {
 
             self.exit_entity(pe, &mod_item);
 
-            self.skip_opt_nls();
-
             Some(mod_item)
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
             let ty_item = self.parse_type_item();
 
             self.exit_entity(pe, &ty_item);
 
-            self.skip_opt_nls();
-
             Some(ty_item)
-        } else if self.lookup_after_many1(TokenCmp::Ident, TokenCmp::Op(Op::Assign)) {
+        } else if self.lookup_after_many1(TokenCmp::DeclName, TokenCmp::Op(Op::Assign)) {
             let decl = self.parse_decl_item();
 
             self.exit_entity(pe, &decl);
-
-            self.skip_opt_nls();
 
             Some(decl)
         } else {
