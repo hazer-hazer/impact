@@ -1,12 +1,12 @@
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{Decl, ItemId, ItemKind, Mod, TyAlias},
+        item::{Decl, ItemId, ItemKind, Mod, TyAlias, ROOT_ITEM_ID},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
-        Path, HIR,
+        HirId, Path, HIR,
     },
     parser::token::Punct,
     session::Session,
@@ -53,16 +53,19 @@ impl<'a> HirPP<'a> {
 impl<'a> HirVisitor for HirPP<'a> {
     fn visit_hir(&mut self, hir: &HIR) {
         self.pp.line("== HIR ==");
+        self.pp.item_id(ROOT_ITEM_ID);
+        self.pp.nl();
         walk_each_delim!(self, hir.root().items, visit_item_stmt, "\n", hir)
     }
 
     fn visit_stmt(&mut self, stmt: &Stmt, hir: &HIR) {
         let stmt = hir.stmt(*stmt);
+        self.pp.hir_id(stmt);
+
         match stmt.kind() {
             StmtKind::Expr(expr) => self.visit_expr_stmt(&expr, hir),
             StmtKind::Item(item) => self.visit_item_stmt(&item, hir),
         }
-        self.pp.hir_id(stmt);
     }
 
     // Items //
@@ -74,29 +77,28 @@ impl<'a> HirVisitor for HirPP<'a> {
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
             ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, id, hir),
         }
-
-        if self.pp.sess.config().pp_ast_ids() {
-            self.pp.string(id);
-        }
     }
 
-    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, _id: ItemId, hir: &HIR) {
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, item_id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Type);
+        self.pp.item_id(item_id);
         self.visit_ident(&name, hir);
         self.pp.str(" = ");
         self.visit_ty(&ty_item.ty, hir);
     }
 
-    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, _id: ItemId, hir: &HIR) {
+    fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, item_id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Mod);
+        self.pp.item_id(item_id);
         self.visit_ident(&name, hir);
         self.pp.nl();
         walk_block!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, id: ItemId, hir: &HIR) {
-        self.visit_ident(&name, hir);
-        self.pp.ty_anno(id.hir_id());
+    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, item_id: ItemId, hir: &HIR) {
+        self.pp.string(name.original_string());
+        self.pp.item_id(item_id);
+        self.pp.ty_anno(item_id.hir_id());
         self.pp.str(" = ");
         self.visit_expr(&decl.value, hir);
     }
@@ -105,6 +107,9 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_expr(&mut self, expr_id: &Expr, hir: &HIR) {
         let expr_id = *expr_id;
         let expr = hir.expr(expr_id);
+
+        self.pp.hir_id(expr);
+
         match &expr.kind() {
             ExprKind::Unit => self.visit_unit_expr(hir),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
@@ -116,7 +121,6 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
         }
         self.pp.ty_anno(expr_id);
-        self.pp.hir_id(expr);
     }
 
     fn visit_unit_expr(&mut self, _hir: &HIR) {
@@ -154,12 +158,13 @@ impl<'a> HirVisitor for HirPP<'a> {
     // Types //
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
         let ty = hir.ty(*ty);
+        self.pp.hir_id(ty);
+
         match &ty.kind {
             TyKind::Unit => self.visit_unit_ty(hir),
             TyKind::Path(path) => self.visit_path_ty(path, hir),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
         }
-        self.pp.hir_id(ty);
     }
 
     fn visit_unit_ty(&mut self, _hir: &HIR) {
@@ -175,10 +180,11 @@ impl<'a> HirVisitor for HirPP<'a> {
     // Patterns //
     fn visit_pat(&mut self, pat: &Pat, hir: &HIR) {
         let pat = hir.pat(*pat);
+        self.pp.hir_id(pat);
+
         match pat.kind() {
             PatKind::Ident(ident) => self.visit_ident_pat(&ident, hir),
         }
-        self.pp.hir_id(pat);
     }
 
     // Fragments //
@@ -188,12 +194,13 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_path(&mut self, path: &Path, hir: &HIR) {
         let path = hir.path(*path);
-        self.pp.string(path);
         self.pp.hir_id(path);
+        self.pp.string(path);
     }
 
     fn visit_block(&mut self, block: &Block, hir: &HIR) {
         let block = hir.block(*block);
+        self.pp.hir_id(block);
 
         self.pp.nl();
         walk_block!(self, block.stmts(), visit_stmt, hir);
@@ -201,6 +208,5 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.out_indent();
         block.expr().map(|expr| self.visit_expr(expr, hir));
         self.pp.dedent();
-        self.pp.hir_id(block);
     }
 }

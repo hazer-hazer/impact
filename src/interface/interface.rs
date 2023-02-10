@@ -192,14 +192,20 @@ impl<'ast> Interface {
         // Typeck //
         verbose!("=== Type checking ===");
         let stage = StageName::Typeck;
-        let (_, mut sess) = Typecker::new(sess, &hir).run_and_emit(true)?;
+        let mut typeck_result = Typecker::new(sess, &hir).run();
 
-        if sess.config().check_pp_stage(stage) {
-            let mut pp = HirPP::new(&sess, AstPPMode::TyAnno);
+        if typeck_result.sess().config().check_pp_stage(stage) {
+            let mut pp = HirPP::new(typeck_result.sess(), AstPPMode::TyAnno);
             pp.visit_hir(&hir);
             let hir = pp.pp.get_string();
-            outln!(sess.writer, "Printing HIR with type annotations\n{}", hir);
+            outln!(
+                typeck_result.sess_mut().writer,
+                "Printing HIR with type annotations\n{}",
+                hir
+            );
         }
+
+        let (_, sess) = typeck_result.emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
 

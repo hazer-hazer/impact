@@ -234,7 +234,7 @@ impl Display for TyS {
             TyKind::Unit => write!(f, "()"),
             TyKind::Lit(lit) => write!(f, "{}", lit),
             TyKind::Var(ident) => write!(f, "{}", ident),
-            TyKind::Existential(ident) => write!(f, "{}^", ident),
+            TyKind::Existential(ident) => write!(f, "{}", ident),
             TyKind::Func(param_ty, return_ty) => write!(f, "{} -> {}", param_ty, return_ty),
             TyKind::Forall(ident, ty) => write!(f, "∀{}. {}", ident, ty),
         }

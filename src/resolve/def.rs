@@ -275,6 +275,10 @@ impl BuiltinFunc {
         Self { def_id }
     }
 
+    pub fn def_id(&self) -> DefId {
+        self.def_id
+    }
+
     pub fn sym() -> Symbol {
         Symbol::intern("builtin")
     }

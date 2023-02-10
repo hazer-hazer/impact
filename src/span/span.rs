@@ -22,6 +22,8 @@ pub enum Kw {
     Mod,
     Type,
 
+    Underscore,
+
     // Reserved for name resolution //
     Root,
 
@@ -35,6 +37,7 @@ impl Kw {
             Kw::In => "in",
             Kw::Mod => "mod",
             Kw::Type => "type",
+            Kw::Underscore => "_",
             Kw::Root => "[root]",
             Kw::Unknown => "[UNKNOWN]",
         }
@@ -60,8 +63,8 @@ impl Symbol {
         Self::try_from(kw).expect("Failed to make a symbol from keyword")
     }
 
-    pub fn intern(string: &str) -> Symbol {
-        INTERNER.write().unwrap().intern(string)
+    pub fn intern(str: &str) -> Symbol {
+        INTERNER.write().unwrap().intern(str)
     }
 
     pub fn as_str(&self) -> &str {
@@ -200,11 +203,18 @@ impl Span {
 
     pub fn to(&self, end: Span) -> Self {
         assert!(self.source() == end.source());
-        Span::new(
-            std::cmp::min(self.pos, end.pos),
-            std::cmp::max(self.hi(), end.hi()),
-            self.source(),
-        )
+        let lo = std::cmp::min(self.pos, end.pos);
+        let hi = std::cmp::max(self.hi(), end.hi());
+        assert!(hi >= lo);
+        Span::new(lo, hi - lo, self.source())
+    }
+
+    pub fn point_after_hi(&self) -> Self {
+        Self {
+            pos: self.hi(),
+            len: 1,
+            source: self.source(),
+        }
     }
 }
 

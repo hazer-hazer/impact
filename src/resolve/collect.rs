@@ -9,7 +9,7 @@ use crate::{
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::def::{BuiltinFunc, Namespace},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Symbol},
+    span::span::{Ident},
 };
 
 use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};

@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use crate::{hir::HirId, span::span::Ident};
+use crate::{
+    cli::verbose,
+    hir::HirId,
+    span::span::{Ident, Span},
+};
 
 use super::{
     ctx::ExistentialId,
@@ -19,6 +23,7 @@ impl TyCtx {
     }
 
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
+        verbose!("Type node {} with {}", id, self.ty(ty));
         assert!(self.typed.insert(id, ty).is_none());
     }
 

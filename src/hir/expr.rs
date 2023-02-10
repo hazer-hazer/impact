@@ -9,6 +9,12 @@ use super::{
     HirId, Path, WithHirId,
 };
 
+/// Get span of expression result. Used in typeck.
+/// Example: Last expression-statement in block
+pub trait ResultSpan {
+    fn result_span(&self) -> Span;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum IntKind {
     Unknown,
@@ -90,37 +96,6 @@ impl Display for Lit {
 }
 
 #[derive(Debug)]
-pub struct ExprNode {
-    id: HirId,
-    kind: ExprKind,
-    span: Span,
-}
-
-impl ExprNode {
-    pub fn new(id: HirId, kind: ExprKind, span: Span) -> Self {
-        Self { id, kind, span }
-    }
-
-    pub fn kind(&self) -> &ExprKind {
-        &self.kind
-    }
-}
-
-impl WithHirId for ExprNode {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
-
-impl WithSpan for ExprNode {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
-
-pub type Expr = HirId;
-
-#[derive(Debug)]
 pub struct BlockNode {
     id: HirId,
     stmts: Vec<Stmt>,
@@ -171,6 +146,17 @@ pub struct Call {
 }
 
 #[derive(Debug)]
+pub struct Param {
+    pat: PatNode,
+}
+
+#[derive(Debug)]
+pub struct Body {
+    params: Vec<Param>,
+    value: ExprNode,
+}
+
+#[derive(Debug)]
 pub enum ExprKind {
     Unit,
     Lit(Lit),
@@ -183,12 +169,32 @@ pub enum ExprKind {
 }
 
 #[derive(Debug)]
-pub struct Param {
-    pat: PatNode,
+pub struct ExprNode {
+    id: HirId,
+    kind: ExprKind,
+    span: Span,
 }
 
-#[derive(Debug)]
-pub struct Body {
-    params: Vec<Param>,
-    value: ExprNode,
+impl ExprNode {
+    pub fn new(id: HirId, kind: ExprKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &ExprKind {
+        &self.kind
+    }
 }
+
+impl WithHirId for ExprNode {
+    fn id(&self) -> HirId {
+        self.id
+    }
+}
+
+impl WithSpan for ExprNode {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+pub type Expr = HirId;

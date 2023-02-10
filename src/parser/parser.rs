@@ -12,7 +12,6 @@ use crate::{
     },
     cli::{
         color::{Color, Colorize},
-        verbose,
     },
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},

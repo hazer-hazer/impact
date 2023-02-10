@@ -15,9 +15,12 @@ use crate::{
     },
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
-    resolve::{def::DefId, res::NamePath},
+    resolve::{
+        def::{BuiltinFunc, DefId},
+        res::NamePath,
+    },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Span, WithSpan},
+    span::span::{Ident, Kw, Span, Symbol, WithSpan},
 };
 
 macro_rules! lower_pr {
@@ -99,10 +102,9 @@ impl<'ast> Lower<'ast> {
         }
     }
 
-    fn with_owner(&mut self, owner: NodeId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> DefId {
-        verbose!("With owner {}", owner);
+    fn _with_owner(&mut self, def_id: DefId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
+        verbose!("With owner {}", def_id);
 
-        let def_id = self.sess.def_table.get_def_id(owner).unwrap();
         let owner_id = OwnerId::new(def_id);
 
         self.owner_stack.push(OwnerCollection {
@@ -128,7 +130,12 @@ impl<'ast> Lower<'ast> {
         self.hir
             .add_owner(def_id, self.owner_stack.pop().unwrap().owner);
 
-        def_id
+        owner_id
+    }
+
+    fn with_owner(&mut self, owner: NodeId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
+        let def_id = self.sess.def_table.get_def_id(owner).unwrap();
+        self._with_owner(def_id, f)
     }
 
     fn add_node(&mut self, node: Node) -> HirId {
@@ -159,9 +166,9 @@ impl<'ast> Lower<'ast> {
 
     fn lower_ast(&mut self) {
         self.with_owner(ROOT_NODE_ID, |this| {
-            LoweredOwner::Root(Mod {
-                items: lower_each_pr!(this, this.ast.items(), lower_item),
-            })
+            let mut items = lower_each_pr!(this, this.ast.items(), lower_item);
+            items.push(this.builtin_func());
+            LoweredOwner::Root(Mod { items })
         });
     }
 
@@ -182,7 +189,7 @@ impl<'ast> Lower<'ast> {
 
     // Items //
     fn lower_item(&mut self, item: &Item) -> ItemId {
-        let def_id = self.with_owner(item.id(), |this| {
+        let owner_id = self.with_owner(item.id(), |this| {
             let kind = match item.kind() {
                 ItemKind::Type(name, ty) => this.lower_type_item(name, ty),
                 ItemKind::Mod(name, items) => this.lower_mod_item(name, items),
@@ -199,7 +206,7 @@ impl<'ast> Lower<'ast> {
             ))
         });
 
-        ItemId::new(OwnerId::new(def_id))
+        ItemId::new(owner_id)
     }
 
     fn lower_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
@@ -260,7 +267,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Block(block) => self.lower_block_expr(block),
             ExprKind::Infix(infix) => self.lower_infix_expr(infix),
             ExprKind::Lambda(lambda) => self.lower_lambda_expr(lambda),
-            ExprKind::Call(call) => self.lower_app_expr(call),
+            ExprKind::Call(call) => self.lower_call_expr(call),
             ExprKind::Let(block) => self.lower_let_expr(block),
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
         };
@@ -333,7 +340,7 @@ impl<'ast> Lower<'ast> {
         })
     }
 
-    fn lower_app_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
+    fn lower_call_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
         hir::expr::ExprKind::Call(hir::expr::Call {
             lhs: lower_pr!(self, &call.lhs, lower_expr),
             arg: lower_pr!(self, &call.arg, lower_expr),
@@ -418,6 +425,28 @@ impl<'ast> Lower<'ast> {
     }
 
     // Synthesis //
+    fn item(
+        &mut self,
+        span: Span,
+        name: Ident,
+        def_id: DefId,
+        kind: hir::item::ItemKind,
+    ) -> ItemId {
+        let owner_id = self._with_owner(def_id, |this| {
+            LoweredOwner::Item(ItemNode::new(name, def_id, kind, span))
+        });
+        ItemId::new(owner_id)
+    }
+
+    fn pat(&mut self, span: Span, kind: hir::pat::PatKind) -> hir::pat::Pat {
+        let id = self.next_hir_id();
+        self.add_node(Node::PatNode(hir::pat::PatNode::new(id, kind, span)))
+    }
+
+    fn pat_ident(&mut self, ident: Ident) -> hir::pat::Pat {
+        self.pat(ident.span(), hir::pat::PatKind::Ident(ident))
+    }
+
     fn expr(&mut self, span: Span, kind: hir::expr::ExprKind) -> hir::expr::Expr {
         let id = self.next_hir_id();
         self.add_node(Node::ExprNode(hir::expr::ExprNode::new(id, kind, span)))
@@ -435,6 +464,10 @@ impl<'ast> Lower<'ast> {
         )
     }
 
+    fn expr_lit(&mut self, span: Span, lit: hir::expr::Lit) -> hir::expr::Expr {
+        self.expr(span, hir::expr::ExprKind::Lit(lit))
+    }
+
     fn expr_path(&mut self, span: Span, path: hir::Path) -> hir::expr::Expr {
         self.expr(span, hir::expr::ExprKind::Path(hir::expr::PathExpr(path)))
     }
@@ -448,6 +481,21 @@ impl<'ast> Lower<'ast> {
         self.expr(
             span,
             hir::expr::ExprKind::Lambda(hir::expr::Lambda { param, body }),
+        )
+    }
+
+    fn builtin_func(&mut self) -> ItemId {
+        let param = self.pat_ident(Ident::kw(Kw::Underscore));
+        let body = self.expr_lit(
+            Span::new_error(),
+            hir::expr::Lit::String(BuiltinFunc::sym()),
+        );
+        let value = self.expr_lambda(Span::new_error(), param, body);
+        self.item(
+            Span::new_error(),
+            BuiltinFunc::ident(),
+            self.sess.def_table.builtin_func().def_id(),
+            hir::item::ItemKind::Decl(Decl { value }),
         )
     }
 }

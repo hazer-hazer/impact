@@ -1,7 +1,7 @@
 use crate::{
     ast::{NodeId, NodeMap, Path, WithNodeId},
     cli::color::{Color, Colorize},
-    hir::{HirId, WithHirId},
+    hir::{item::ItemId, HirId, WithHirId, WithNodeKind},
     parser::token::Punct,
     resolve::res::{NamePath, ResKind},
     session::Session,
@@ -84,9 +84,21 @@ impl<'a, D> AstLikePP<'a, D> {
         self
     }
 
-    pub fn hir_id(&mut self, with_hir_id: &impl WithHirId) -> &mut Self {
+    pub fn hir_id(&mut self, node: &(impl WithHirId + WithNodeKind)) -> &mut Self {
         if self.sess.config().pp_ast_ids() {
-            self.string(with_hir_id.id());
+            self.string(format!(
+                "[{}:{}:{}]",
+                node.kind().to_string().fg_color(Color::BrightBlack),
+                node.id().owner(),
+                node.id().child_id()
+            ));
+        }
+        self
+    }
+
+    pub fn item_id(&mut self, item_id: ItemId) -> &mut Self {
+        if self.sess.config().pp_ast_ids() {
+            self.string(item_id);
         }
         self
     }
@@ -162,7 +174,7 @@ impl<'a, D> AstLikePP<'a, D> {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
             Kw::Mod => ("", " "),
-            Kw::Let | Kw::Type | Kw::Root | Kw::Unknown => ("", ""),
+            Kw::Underscore | Kw::Let | Kw::Type | Kw::Root | Kw::Unknown => ("", ""),
         };
 
         self.str(pre);

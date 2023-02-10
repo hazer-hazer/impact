@@ -1,18 +1,21 @@
+use std::fmt::format;
+
 use crate::{
+    cli::verbose,
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Stmt, StmtKind},
-        Path, HIR,
+        HirId, Path, HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
-        def::{BuiltinFunc, DefId, DefKind, DefMap},
+        def::{DefId, DefKind, DefMap},
         res::ResKind,
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, WithSpan},
+    span::span::{Ident, Spanned, WithSpan},
     typeck::ty::Subst,
 };
 
@@ -73,6 +76,18 @@ impl<'hir> Typecker<'hir> {
     fn tyctx_mut(&mut self) -> &mut TyCtx {
         &mut self.sess.tyctx
     }
+
+    // Errors //
+    fn ty_illformed(&mut self, ty: Ty) {
+        dbg!(&self.ctx_stack);
+        panic!("Illformed type {}", self.tyctx().ty(ty))
+    }
+
+    // fn cyclic_ty(&mut self, ty: Ty, references: Ty, on: ExistentialId) {
+    //     MessageBuilder::error()
+    //     .text(format!("Cyclic type {}", self.tyctx().ty(ty)))
+    //     .label(span, text)
+    // }
 
     // Context //
     fn ctx(&mut self) -> &mut Ctx {
@@ -136,7 +151,7 @@ impl<'hir> Typecker<'hir> {
     /// Goes up from current context to the root looking for something in each scope
     /// Returns result of the callback (if some returned) and depth of context scope
     /// where callback returned result
-    fn _ascending_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<(T, usize)> {
+    fn _ascend_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<(T, usize)> {
         let mut ctx_index = self.ctx_stack.len() - 1;
 
         loop {
@@ -144,17 +159,18 @@ impl<'hir> Typecker<'hir> {
             if let Some(res) = res {
                 return Some((res, ctx_index));
             }
-            ctx_index -= 1;
 
             if ctx_index == 0 {
                 break;
             }
+
+            ctx_index -= 1;
         }
 
         None
     }
 
-    fn _ascending_ctx_mut<T>(
+    fn _ascend_ctx_mut<T>(
         &mut self,
         mut f: impl FnMut(&mut Ctx) -> Option<T>,
     ) -> Option<(T, usize)> {
@@ -165,23 +181,23 @@ impl<'hir> Typecker<'hir> {
             if let Some(res) = res {
                 return Some((res, ctx_index));
             }
-            ctx_index -= 1;
 
             if ctx_index == 0 {
                 break;
             }
+
+            ctx_index -= 1;
         }
 
         None
     }
 
-    fn ascending_ctx<T>(&self, f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
-        self._ascending_ctx(f)
-            .map_or(None, |(val, _depth)| Some(val))
+    fn ascend_ctx<T>(&self, f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
+        self._ascend_ctx(f).map_or(None, |(val, _depth)| Some(val))
     }
 
     fn find_unbound_ex_depth(&self, ex: ExistentialId) -> usize {
-        self._ascending_ctx(|ctx| if ctx.has_ex(ex) { Some(()) } else { None })
+        self._ascend_ctx(|ctx| if ctx.has_ex(ex) { Some(()) } else { None })
             .expect("Undefined existential id")
             .1
     }
@@ -197,7 +213,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn solve(&mut self, ex: ExistentialId, solution: Ty) -> Option<Ty> {
-        self._ascending_ctx_mut(|ctx| ctx.solve(ex, solution))
+        self._ascend_ctx_mut(|ctx| ctx.solve(ex, solution))
             .map_or(None, |(ty, _)| Some(ty))
     }
 
@@ -214,15 +230,13 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
-        self.ascending_ctx(|ctx: &Ctx| ctx.get_term(name))
+        self.ascend_ctx(|ctx: &Ctx| ctx.get_term(name))
     }
 
     fn apply_ctx_on(&mut self, ty: Ty) -> Ty {
         match self.tyctx().ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => ty,
-            &TyKind::Existential(ex) => {
-                self.ascending_ctx(|ctx| ctx.get_solution(ex)).unwrap_or(ty)
-            },
+            &TyKind::Existential(ex) => self.ascend_ctx(|ctx| ctx.get_solution(ex)).unwrap_or(ty),
             &TyKind::Func(param_ty, return_ty) => {
                 let param = self.apply_ctx_on(param_ty);
                 let ret = self.apply_ctx_on(return_ty);
@@ -255,17 +269,24 @@ impl<'hir> Typecker<'hir> {
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<()> {
         match self.tyctx().ty(ty).kind() {
+            TyKind::Unit | TyKind::Lit(_) => Ok(()),
             &TyKind::Var(ident) => {
-                if self.ascending_ctx(|ctx| ctx.get_var(ident)).is_some() {
+                if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
                     Ok(())
                 } else {
+                    self.ty_illformed(ty);
                     Err(TyError())
                 }
             },
             &TyKind::Existential(ex) => {
-                if self.ascending_ctx(|ctx| ctx.get_ex(ex)).is_some() {
+                if self.ascend_ctx(|ctx| {
+                    let some = ctx.get_ex(ex).is_some();
+
+                    some
+                }) {
                     Ok(())
                 } else {
+                    self.ty_illformed(ty);
                     Err(TyError())
                 }
             },
@@ -279,12 +300,14 @@ impl<'hir> Typecker<'hir> {
                 this.ty_wf(open_forall)?;
                 Ok(())
             }),
-            _ => Err(TyError()),
+            _ => {
+                self.ty_illformed(ty);
+                Err(TyError())
+            },
         }
     }
 
     // Substitution //
-    /// Substitute
     pub fn substitute(&mut self, ty: Ty, subst: Subst, with: Ty) -> Ty {
         match self.tyctx().ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) => ty,
@@ -414,31 +437,29 @@ impl<'hir> Typecker<'hir> {
         let expr = self.hir.expr(expr_id);
         let expr_ty = match expr.kind() {
             ExprKind::Unit => Ok(self.tyctx_mut().unit()),
-            ExprKind::Lit(lit) => {
-                let prim = match lit {
-                    Lit::Bool(_) => PrimTy::Bool,
-                    Lit::Int(_, kind) => PrimTy::Int(self.conv_int_kind(*kind)),
-                    Lit::Float(_, kind) => PrimTy::Float(self.conv_float_kind(*kind)),
-                    Lit::String(_) => PrimTy::String,
-                };
-
-                Ok(self.tyctx_mut().lit(prim))
-            },
+            ExprKind::Lit(lit) => self.synth_lit(lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
             ExprKind::Lambda(lambda) => self.synth_lambda(lambda),
             ExprKind::Call(call) => self.synth_call(call),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
-            ExprKind::Ty(TyExpr { expr, ty: anno }) => {
-                let ty = self.conv(*anno);
-                self.check(*expr, ty)?;
-                Ok(ty)
-            },
+            ExprKind::Ty(ty_expr) => self.synth_ty_expr(ty_expr),
         }?;
 
         self.tyctx_mut().type_node(expr_id, expr_ty);
 
         Ok(expr_ty)
+    }
+
+    fn synth_lit(&mut self, lit: &Lit) -> TyResult<Ty> {
+        let prim = match lit {
+            Lit::Bool(_) => PrimTy::Bool,
+            Lit::Int(_, kind) => PrimTy::Int(self.conv_int_kind(*kind)),
+            Lit::Float(_, kind) => PrimTy::Float(self.conv_float_kind(*kind)),
+            Lit::String(_) => PrimTy::String,
+        };
+
+        Ok(self.tyctx_mut().lit(prim))
     }
 
     fn synth_path(&self, path: Path) -> TyResult<Ty> {
@@ -529,24 +550,33 @@ impl<'hir> Typecker<'hir> {
     fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         let item = self.hir.item(item);
 
-        match item.kind() {
+        let ty = match item.kind() {
             ItemKind::TyAlias(_ty) => {
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                 self.conv_ty_alias(item.def_id());
+                self.tyctx_mut().unit()
             },
             ItemKind::Mod(Mod { items }) => {
                 for item in items {
                     self.synth_item(*item)?;
                 }
+                self.tyctx_mut().unit()
             },
             ItemKind::Decl(decl) => {
                 let value_ty = self.synth_expr(decl.value)?;
                 assert!(self.def_types.insert(item.def_id(), value_ty).is_none());
-                self.type_term(item.name(), value_ty)
-            },
-        }
+                self.type_term(item.name(), value_ty);
 
-        TyResult::Ok(self.tyctx_mut().unit())
+                // Note: Actually, declaration type is a unit type, but we save it
+                // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
+                value_ty
+            },
+        };
+
+        self.tyctx_mut()
+            .type_node(HirId::new_owner(item.def_id()), ty);
+
+        TyResult::Ok(ty)
     }
 
     fn synth_stmt(&mut self, stmt: Stmt) -> TyResult<Ty> {
@@ -566,20 +596,43 @@ impl<'hir> Typecker<'hir> {
 
     // Check //
     fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
+        match self._check(expr_id, ty) {
+            Ok(ok) => Ok(ok),
+            Err(err) => {
+                let ty = self.tyctx().ty(ty);
+
+                let span = self.hir.expr_result_span(expr_id);
+
+                MessageBuilder::error()
+                    .span(span)
+                    .text(format!(
+                        "Type mismatch: expected {}{}",
+                        ty,
+                        if let Some(got) = self.tyctx().node_type(expr_id) {
+                            format!(", got {}", got)
+                        } else {
+                            "".to_string()
+                        }
+                    ))
+                    .label(span, format!("Must be of type {}", ty))
+                    .emit(self);
+
+                Err(err)
+            },
+        }
+    }
+
+    fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
         let tys = self.tyctx().ty(ty);
 
         match (&expr.kind(), tys.kind()) {
             (ExprKind::Lit(lit), TyKind::Lit(prim)) => {
                 if *prim != PrimTy::from(*lit) {
-                    MessageBuilder::error()
-                        .span(expr.span())
-                        .text(format!("Type mismatch: expected {}", prim))
-                        .label(expr.span(), format!("Must be of type {}", prim))
-                        .emit(self);
-                    return Err(TyError());
+                    Err(TyError())
+                } else {
+                    Ok(ty)
                 }
-                Ok(ty)
             },
 
             (ExprKind::Lambda(lambda), &TyKind::Func(param_ty, body_ty)) => {
@@ -588,12 +641,12 @@ impl<'hir> Typecker<'hir> {
                 let param_name = param_name[0];
 
                 self.under_ctx(Ctx::new_with_term(param_name, param_ty), |this| {
-                    this.check(lambda.body, body_ty)
+                    this._check(lambda.body, body_ty)
                 })
             },
 
             (_, &TyKind::Forall(alpha, body)) => self.under_ctx(Ctx::new_with_var(alpha), |this| {
-                this.check(expr_id, body)?;
+                this._check(expr_id, body)?;
                 Ok(ty)
             }),
 
@@ -602,36 +655,35 @@ impl<'hir> Typecker<'hir> {
                 let l = self.apply_ctx_on(expr_ty);
                 let r = self.apply_ctx_on(ty);
 
-                match self.subtype(l, r) {
-                    Ok(()) => {},
-                    Err(_) => {
-                        MessageBuilder::error()
-                            .span(expr.span())
-                            .text(format!(
-                                "{} is not a subtype of {}",
-                                self.tyctx().ty(l),
-                                self.tyctx().ty(r)
-                            ))
-                            .label(
-                                expr.span(),
-                                format!(
-                                    "{} is not a subtype of {}",
-                                    self.tyctx().ty(l),
-                                    self.tyctx().ty(r)
-                                ),
-                            )
-                            .emit(self);
-                    },
-                }
-
-                Ok(ty)
+                self.subtype(Spanned::new(expr.span(), l), r)
             },
         }
     }
 
     // Subtyping //
-    fn subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<()> {
-        assert!(self.ty_wf(l_ty).is_ok() && self.ty_wf(r_ty).is_ok());
+    fn subtype(&mut self, check_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
+        verbose!("Subtype {} {}", check_ty, r_ty);
+        match self._subtype(*check_ty.node(), r_ty) {
+            Ok(_) => Ok(r_ty),
+            Err(err) => {
+                let span = check_ty.span();
+                let l_ty = self.tyctx().ty(*check_ty.node());
+                let r_ty = self.tyctx().ty(r_ty);
+
+                MessageBuilder::error()
+                    .span(span)
+                    .text(format!("{} is not a subtype of {}", l_ty, r_ty))
+                    .label(span, format!("{} is not a subtype of {}", l_ty, r_ty))
+                    .emit(self);
+
+                Err(err)
+            },
+        }
+    }
+
+    fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<()> {
+        assert!(self.ty_wf(l_ty).is_ok());
+        assert!(self.ty_wf(r_ty).is_ok());
 
         match (self.tyctx().ty(l_ty).kind(), self.tyctx().ty(r_ty).kind()) {
             (TyKind::Lit(kind), TyKind::Lit(kind_)) if kind == kind_ => Ok(()),
@@ -643,10 +695,10 @@ impl<'hir> Typecker<'hir> {
             (&TyKind::Func(param, ret), &TyKind::Func(param_, ret_)) => {
                 self.under_new_ctx(|this| {
                     // Enter Θ
-                    this.subtype(param, param_)?;
+                    this._subtype(param, param_)?;
                     let ret = this.apply_ctx_on(ret);
                     let ret_ = this.apply_ctx_on(ret_);
-                    this.subtype(ret, ret_)
+                    this._subtype(ret, ret_)
                 })
             },
 
@@ -656,18 +708,19 @@ impl<'hir> Typecker<'hir> {
                 let with_substituted_alpha = self.substitute(body, Subst::Name(alpha), ex_ty);
 
                 self.under_ctx(Ctx::new_with_ex(ex), |this| {
-                    this.subtype(with_substituted_alpha, r_ty)
+                    this._subtype(with_substituted_alpha, r_ty)
                 })
             },
 
             (_, &TyKind::Forall(alpha, body)) => {
-                self.under_ctx(Ctx::new_with_var(alpha), |this| this.subtype(l_ty, body))
+                self.under_ctx(Ctx::new_with_var(alpha), |this| this._subtype(l_ty, body))
             },
 
             (&TyKind::Existential(ex), _) => {
                 if !self.ty_occurs_in(r_ty, Subst::Existential(ex)) {
                     self.instantiate_l(ex, r_ty)
                 } else {
+                    todo!("Cycle error");
                     Err(TyError())
                 }
             },
@@ -676,6 +729,7 @@ impl<'hir> Typecker<'hir> {
                 if !self.ty_occurs_in(l_ty, Subst::Existential(ex)) {
                     self.instantiate_r(l_ty, ex)
                 } else {
+                    todo!("Cycle error");
                     Err(TyError())
                 }
             },

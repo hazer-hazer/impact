@@ -15,7 +15,7 @@ use crate::{
 };
 
 use self::{
-    expr::{BlockNode, Expr, ExprNode},
+    expr::{Block, BlockNode, Expr, ExprKind, ExprNode},
     item::{ItemId, ItemNode, Mod},
     pat::{Pat, PatNode},
     stmt::StmtNode,
@@ -35,6 +35,7 @@ declare_idx!(OwnerId, DefId, "{}", Color::BrightCyan);
 declare_idx!(wrapper BodyId, HirId, "body{}", Color::Green);
 declare_idx!(OwnerChildId, u32, "#{}", Color::Cyan);
 
+pub const ROOT_OWNER_ID: OwnerId = OwnerId(ROOT_DEF_ID);
 pub const OWNER_SELF_CHILD_ID: OwnerChildId = OwnerChildId(0);
 pub const FIRST_OWNER_CHILD_ID: OwnerChildId = OwnerChildId(1);
 
@@ -127,8 +128,8 @@ macro_rules! hir_nodes {
 
         impl<'hir> HIR {
             $(
-                pub fn $name(&self, id: HirId) -> &$ty {
-                    match self.node(id) {
+                pub fn $name(&self, $name: HirId) -> &$ty {
+                    match self.node($name) {
                         Node::$ty(node) => node,
                         _ => panic!(),
                     }
@@ -150,6 +151,64 @@ hir_nodes!(
     root Mod,
 );
 
+/// Do not confuse with `Node`, this is just kind of list of names.
+// Note: Keep referencing `Node` names
+pub enum NodeKind {
+    Expr,
+    Stmt,
+    Pat,
+    Block,
+    Ty,
+    Path,
+    Item,
+    Root,
+}
+
+impl Display for NodeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeKind::Expr => "expr",
+            NodeKind::Stmt => "stmt",
+            NodeKind::Pat => "pat",
+            NodeKind::Block => "block",
+            NodeKind::Ty => "ty",
+            NodeKind::Path => "path",
+            NodeKind::Item => "item",
+            NodeKind::Root => "root",
+        }
+        .fmt(f)
+    }
+}
+
+pub trait WithNodeKind {
+    fn kind(&self) -> NodeKind;
+}
+
+// TODO: impl WithNodeKind for Node
+
+macro_rules! impl_with_node_kind {
+    ($($ty: ty: $kind: expr),*) => {
+        $(
+            impl WithNodeKind for $ty {
+                fn kind(&self) -> NodeKind {
+                    $kind
+                }
+            }
+        )*
+    };
+}
+
+impl_with_node_kind!(
+    ExprNode: NodeKind::Expr,
+    StmtNode: NodeKind::Stmt,
+    PatNode: NodeKind::Pat,
+    BlockNode: NodeKind::Block,
+    TyNode: NodeKind::Ty,
+    PathNode: NodeKind::Path,
+    ItemNode: NodeKind::Item,
+    Mod: NodeKind::Root
+);
+
 impl Node {
     pub fn as_owner<'hir>(&'hir self) -> Option<OwnerNode<'hir>> {
         match self {
@@ -169,6 +228,19 @@ impl Node {
             Node::PathNode(path) => path.id(),
             Node::ItemNode(item) => HirId::new_owner(item.def_id()),
             Node::Mod(_root) => HirId::new_owner(ROOT_DEF_ID),
+        }
+    }
+
+    pub fn kind(&self) -> NodeKind {
+        match self {
+            Node::ExprNode(_) => NodeKind::Expr,
+            Node::StmtNode(_) => NodeKind::Stmt,
+            Node::PatNode(_) => NodeKind::Pat,
+            Node::BlockNode(_) => NodeKind::Block,
+            Node::TyNode(_) => NodeKind::Ty,
+            Node::PathNode(_) => NodeKind::Path,
+            Node::ItemNode(_) => NodeKind::Item,
+            Node::Mod(_) => NodeKind::Root,
         }
     }
 }
@@ -247,6 +319,32 @@ impl HIR {
         match self.pat(pat).kind() {
             &pat::PatKind::Ident(name) => Some(vec![name]),
         }
+    }
+
+    pub fn expr_result_span(&self, expr_id: Expr) -> Span {
+        let expr = self.expr(expr_id);
+        match expr.kind() {
+            ExprKind::Unit
+            | ExprKind::Lit(_)
+            | ExprKind::Path(_)
+            | ExprKind::Lambda(_)
+            | ExprKind::Call(_)
+            | ExprKind::Ty(_) => expr.span(),
+            &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
+        }
+    }
+
+    pub fn block_result_span(&self, block: Block) -> Span {
+        let block = self.block(block);
+
+        block.expr().map_or_else(
+            || {
+                self.stmt(*block.stmts().last().unwrap())
+                    .span()
+                    .point_after_hi()
+            },
+            |&expr| self.expr_result_span(expr),
+        )
     }
 
     // // Debug //

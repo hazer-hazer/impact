@@ -10,7 +10,7 @@ use super::ty::Ty;
 
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Ctx {
     existentials: Vec<ExistentialId>,
     // Note: I end up with storing `solved` and unsolved existentials separately due to `try` logic.

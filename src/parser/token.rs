@@ -230,6 +230,7 @@ impl TokenKind {
             "in" => Some(TokenKind::Kw(Kw::In)),
             "mod" => Some(TokenKind::Kw(Kw::Mod)),
             "type" => Some(TokenKind::Kw(Kw::Type)),
+            "_" => Some(TokenKind::Kw(Kw::Underscore)),
             _ => None,
         }
     }

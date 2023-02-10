@@ -2,13 +2,14 @@ use crate::{
     cli::color::Color,
     cli::color::Colorize,
     dt::idx::{declare_idx, Idx},
-    resolve::def::DefId,
+    resolve::def::{DefId, ROOT_DEF_ID},
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{expr::Expr, ty::Ty, HirId, OwnerId};
+use super::{expr::Expr, ty::Ty, HirId, OwnerId, ROOT_OWNER_ID};
 
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
+pub const ROOT_ITEM_ID: ItemId = ItemId(ROOT_OWNER_ID);
 
 impl ItemId {
     pub fn hir_id(&self) -> HirId {
