@@ -11,7 +11,8 @@ use super::def::DefId;
 pub enum ResKind {
     Local(NodeId),
     Def(DefId), // Definition, e.g. imported function
-    BuiltinFunc(DefId),
+    MakeBuiltin,
+    Builtin(DefId),
     Error,
 }
 
@@ -37,10 +38,15 @@ impl Res {
         }
     }
 
-    pub fn builtin_func(def_id: DefId) -> Self {
-        // FIXME: Add static state to check for uniqueness?
+    pub fn declare_builtin() -> Self {
         Self {
-            kind: ResKind::BuiltinFunc(def_id),
+            kind: ResKind::MakeBuiltin,
+        }
+    }
+
+    pub fn builtin(def_id: DefId) -> Self {
+        Self {
+            kind: ResKind::Builtin(def_id),
         }
     }
 
@@ -67,7 +73,8 @@ impl Display for Res {
         match self.kind {
             ResKind::Def(def_id) => write!(f, "{}", def_id),
             ResKind::Local(node_id) => write!(f, "{}", node_id),
-            ResKind::BuiltinFunc(def_id) => write!(f, "[builtin func]{}", def_id),
+            ResKind::MakeBuiltin => write!(f, "[`builtin`]"),
+            ResKind::Builtin(def_id) => write!(f, "[builtin{}]", def_id),
             ResKind::Error => write!(f, "[ERROR]"),
         }
     }

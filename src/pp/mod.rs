@@ -33,7 +33,7 @@ const ALLOWED_COLORS: &[Color] = &[
     Color::BrightMagenta,
 ];
 
-const BUILTIN_FUNC_COLOR: Color = Color::Cyan;
+const BUILTIN_COLOR: Color = Color::Cyan;
 
 pub struct AstLikePP<'a, D = ()> {
     out: String,
@@ -173,8 +173,8 @@ impl<'a, D> AstLikePP<'a, D> {
     fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
-            Kw::Mod => ("", " "),
-            Kw::Underscore | Kw::Let | Kw::Type | Kw::Root | Kw::Unknown => ("", ""),
+            Kw::Type | Kw::Mod => ("", " "),
+            Kw::Underscore | Kw::Let | Kw::Root | Kw::Unknown => ("", ""),
         };
 
         self.str(pre);
@@ -260,23 +260,22 @@ impl<'a, D> AstLikePP<'a, D> {
             return;
         }
 
-        let res = self
-            .sess
-            .res
-            .get(NamePath::new(path.id()))
-            .expect("No unresolved paths must exist after name resolution");
+        let res = self.sess.res.get(NamePath::new(path.id())).expect(&format!(
+            "No unresolved paths must exist after name resolution. Unresolved path `{}`",
+            path
+        ));
 
         let node_id = match res.kind() {
             ResKind::Local(node_id) => Some(*node_id),
-            ResKind::Def(def_id) => {
+            ResKind::Builtin(def_id) | ResKind::Def(def_id) => {
                 Some(self.sess.def_table.get_node_id(*def_id).expect(&format!(
                     "Name resolution for definition {} by name {}",
                     def_id,
                     path.to_string()
                 )))
             },
-            ResKind::BuiltinFunc(_) => {
-                self.string("[builtin]".fg_color(BUILTIN_FUNC_COLOR));
+            ResKind::MakeBuiltin => {
+                self.string("[`builtin`]".fg_color(BUILTIN_COLOR));
                 return;
             },
             ResKind::Error => None,

@@ -1,4 +1,7 @@
-(+) = builtin "+"
+type A = ()
+
+(+) = builtin
+(-) = builtin
 
 main a =
     b = 123

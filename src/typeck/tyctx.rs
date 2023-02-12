@@ -3,32 +3,56 @@ use std::collections::HashMap;
 use crate::{
     cli::verbose,
     hir::HirId,
-    span::span::{Ident, Span},
+    resolve::builtin::Builtin,
+    span::span::{Ident, Symbol},
 };
 
 use super::{
+    builtin::builtins,
     ctx::ExistentialId,
     ty::{PrimTy, Ty, TyInterner, TyKind, TyS},
 };
 
-#[derive(Default)]
 pub struct TyCtx {
     interner: TyInterner,
+
+    /// Just a quick-access map
+    builtins: HashMap<Builtin, Ty>,
+
+    /// Types associated to DefId's (meaning for each item is different!)
+    /// and types of HIR expressions.
+    /// - Type alias: `[Type alias DefId] -> [Its type]`
+    /// - Declaration: `[Declaration DefId] -> [Type of assigned value]`
     typed: HashMap<HirId, Ty>,
 }
 
 impl TyCtx {
+    pub fn new() -> Self {
+        let mut this = Self {
+            interner: Default::default(),
+            typed: Default::default(),
+            builtins: Default::default(),
+        };
+
+        this.builtins = builtins(&mut this);
+
+        this
+    }
+
     pub fn ty(&self, ty: Ty) -> &TyS {
         self.interner.expect(ty)
     }
 
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
-        verbose!("Type node {} with {}", id, self.ty(ty));
         assert!(self.typed.insert(id, ty).is_none());
     }
 
     pub fn node_type(&self, id: HirId) -> Option<Ty> {
         self.typed.get(&id).copied()
+    }
+
+    pub fn builtin_ty(&self, builtin: Builtin) -> Ty {
+        self.builtins.get(&builtin).copied().unwrap()
     }
 
     // Interning //
@@ -86,7 +110,7 @@ impl TyCtx {
             TyKind::Unit => format!("()"),
             TyKind::Lit(lit) => format!("{}", lit),
             TyKind::Var(name) => format!("{}", name),
-            TyKind::Existential(ex) => format!("^{}", ex),
+            TyKind::Existential(ex) => format!("{}", ex),
             &TyKind::Func(param, body) => format!("({} -> {})", self.pp(param), self.pp(body)),
             &TyKind::Forall(alpha, ty) => format!("(∀{}. {})", alpha, self.pp(ty)),
         }

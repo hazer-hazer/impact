@@ -10,3 +10,4 @@ camelCase
 PascalCase
 SomeType
 non-corelative
+Builtins

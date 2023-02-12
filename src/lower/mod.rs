@@ -16,11 +16,11 @@ use crate::{
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
     resolve::{
-        def::{BuiltinFunc, DefId},
+        def::{DeclareBuiltin, DefId},
         res::NamePath,
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Kw, Span, Symbol, WithSpan},
+    span::span::{Ident, Kw, Span, WithSpan},
 };
 
 macro_rules! lower_pr {
@@ -432,7 +432,7 @@ impl<'ast> Lower<'ast> {
         def_id: DefId,
         kind: hir::item::ItemKind,
     ) -> ItemId {
-        let owner_id = self._with_owner(def_id, |this| {
+        let owner_id = self._with_owner(def_id, |_this| {
             LoweredOwner::Item(ItemNode::new(name, def_id, kind, span))
         });
         ItemId::new(owner_id)
@@ -488,12 +488,12 @@ impl<'ast> Lower<'ast> {
         let param = self.pat_ident(Ident::kw(Kw::Underscore));
         let body = self.expr_lit(
             Span::new_error(),
-            hir::expr::Lit::String(BuiltinFunc::sym()),
+            hir::expr::Lit::String(DeclareBuiltin::sym()),
         );
         let value = self.expr_lambda(Span::new_error(), param, body);
         self.item(
             Span::new_error(),
-            BuiltinFunc::ident(),
+            DeclareBuiltin::ident(),
             self.sess.def_table.builtin_func().def_id(),
             hir::item::ItemKind::Decl(Decl { value }),
         )

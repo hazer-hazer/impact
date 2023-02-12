@@ -152,8 +152,8 @@ impl<'ast> NameResolver<'ast> {
                 return Res::error();
             }
 
-            let def = match search_mod.get_by_ident(seg.expect_name()) {
-                Some(def) => def,
+            let def_id = match search_mod.get_by_ident(seg.expect_name()) {
+                Some(&def_id) => def_id,
                 None => {
                     let prefix = path.prefix_str(seg_index);
                     MessageBuilder::error()
@@ -169,13 +169,23 @@ impl<'ast> NameResolver<'ast> {
             };
 
             if is_target {
-                if *self.sess.def_table.get_def(*def).unwrap().kind() == DefKind::BuiltinFunc {
-                    return Res::builtin_func(*def);
-                } else {
-                    return Res::def(*def);
+                match self.sess.def_table.get_def(def_id).unwrap().kind() {
+                    DefKind::Root
+                    | DefKind::TyAlias
+                    | DefKind::Mod
+                    | DefKind::Func
+                    | DefKind::Var => {
+                        return Res::def(def_id);
+                    },
+                    DefKind::DeclareBuiltin => {
+                        return Res::declare_builtin();
+                    },
+                    DefKind::Builtin(_) => {
+                        return Res::builtin(def_id);
+                    },
                 }
             } else {
-                search_mod = self.sess.def_table.get_module(ModuleId::Module(*def))
+                search_mod = self.sess.def_table.get_module(ModuleId::Module(def_id))
             }
         }
 
@@ -192,10 +202,18 @@ impl<'a> MessageHolder for NameResolver<'a> {
 impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
-    // visit_let: We don't have locals for now
-
     fn visit_item(&mut self, item: &'ast Item) {
-        verbose!("Item id {}", item.id());
+        if self.sess.def_table.is_builtin(item.id()) {
+            match item.kind() {
+                ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
+                ItemKind::Decl(name, params, body) => {
+                    self.visit_decl_item(name, params, body, item.id())
+                },
+                ItemKind::Mod(name, items) => unreachable!(),
+            }
+            return;
+        }
+
         match item.kind() {
             ItemKind::Mod(name, items) => {
                 let module_id =
@@ -207,6 +225,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             },
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
             ItemKind::Decl(name, params, body) => {
+                // FIXME: Why func scope for values too?
                 self.enter_func_scope();
 
                 self.visit_decl_item(name, params, body, item.id());

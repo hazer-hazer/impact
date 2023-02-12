@@ -10,9 +10,7 @@ use crate::{
         ty::{Ty, TyKind},
         ErrorNode, IsBlockEnded, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
     },
-    cli::{
-        color::{Color, Colorize},
-    },
+    cli::color::{Color, Colorize},
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},

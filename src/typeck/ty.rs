@@ -277,7 +277,7 @@ impl TyInterner {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Subst {
     Existential(ExistentialId),
     Name(Ident),
@@ -298,5 +298,62 @@ impl PartialEq<ExistentialId> for Subst {
             (Self::Existential(ex), other) => ex == other,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        session::SourceId,
+        span::span::{Ident, Internable, Span},
+        typeck::ctx::ExistentialId,
+    };
+
+    use super::Subst;
+
+    const SOME_SOURCE_ID: SourceId = SourceId::new(123);
+
+    #[test]
+    fn same_ident_subst_eq() {
+        let name = Ident::synthetic("lolkek".intern());
+        assert_eq!(Subst::Name(name), name);
+    }
+
+    #[test]
+    fn diff_idents_subst_eq() {
+        assert_eq!(
+            Subst::Name(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
+            Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "a".intern())
+        )
+    }
+
+    #[test]
+    fn diff_idents_subst_ne() {
+        assert_ne!(
+            Subst::Name(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
+            Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "b".intern())
+        )
+    }
+
+    #[test]
+    fn same_ex_subst_eq() {
+        let ex = ExistentialId::new(1);
+        assert_eq!(Subst::Existential(ex), ex)
+    }
+
+    #[test]
+    fn diff_exes_subst_eq() {
+        assert_eq!(
+            Subst::Existential(ExistentialId::new(1)),
+            ExistentialId::new(1)
+        )
+    }
+
+    #[test]
+    fn diff_exes_subst_ne() {
+        assert_ne!(
+            Subst::Existential(ExistentialId::new(1)),
+            ExistentialId::new(2)
+        )
     }
 }

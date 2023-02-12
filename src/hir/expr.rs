@@ -90,7 +90,7 @@ impl Display for Lit {
             Lit::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
             Lit::Int(val, kind) => write!(f, "{}{}", val, kind),
             Lit::Float(val, kind) => write!(f, "{}{}", val, kind),
-            Lit::String(val) => write!(f, "{}", val),
+            Lit::String(val) => write!(f, "\"{}\"", val),
         }
     }
 }

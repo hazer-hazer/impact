@@ -6,7 +6,7 @@ use crate::{
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
-        HirId, Path, HIR,
+        Path, HIR,
     },
     parser::token::Punct,
     session::Session,
@@ -195,6 +195,8 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_path(&mut self, path: &Path, hir: &HIR) {
         let path = hir.path(*path);
         self.pp.hir_id(path);
+
+        // TODO: Operator name in parentheses
         self.pp.string(path);
     }
 

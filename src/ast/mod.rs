@@ -249,6 +249,14 @@ impl Path {
         }
     }
 
+    pub fn original_str(&self) -> String {
+        self.segments()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
     pub fn prefix_span(&self, to: usize) -> Span {
         self.segments()[0..=to]
             .iter()

@@ -70,7 +70,7 @@ impl<'ast> AstValidator<'ast> {
     }
 
     fn to_case(str: &str, _case: Case) -> Option<String> {
-        if Symbol::intern(str).is_non_op_name() {
+        if Symbol::intern(str).is_non_op() {
             Some(str.to_string())
         } else {
             None

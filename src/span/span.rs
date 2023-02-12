@@ -84,8 +84,16 @@ impl Symbol {
         !str.is_empty() && str.chars().all(|ch| ch.is_custom_op())
     }
 
+    pub fn looks_like(&self) -> String {
+        if self.is_op() {
+            format!("({})", self)
+        } else {
+            self.to_string()
+        }
+    }
+
     /// Checks if symbol is a name but not an operator
-    pub fn is_non_op_name(&self) -> bool {
+    pub fn is_non_op(&self) -> bool {
         self.as_str()
             .chars()
             .all(|ch| ch == '_' || ch.is_alphanumeric())
@@ -155,6 +163,22 @@ impl Interner {
         self.strings
             .get(sym.as_inner() as usize)
             .expect(format!("Failed to resolve symbol {}", sym.0).as_str())
+    }
+}
+
+pub trait Internable {
+    fn intern(&self) -> Symbol;
+}
+
+impl Internable for String {
+    fn intern(&self) -> Symbol {
+        Symbol::intern(self)
+    }
+}
+
+impl<'a> Internable for &'a str {
+    fn intern(&self) -> Symbol {
+        Symbol::intern(self)
     }
 }
 

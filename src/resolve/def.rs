@@ -7,6 +7,8 @@ use crate::{
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 
+use super::builtin::Builtin;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DefKind {
     Root,
@@ -15,7 +17,8 @@ pub enum DefKind {
     Func,
     Var,
 
-    BuiltinFunc,
+    DeclareBuiltin,
+    Builtin(Builtin),
 }
 
 impl DefKind {
@@ -35,7 +38,8 @@ impl DefKind {
             DefKind::Func => Namespace::Value,
             DefKind::Root => Namespace::Type,
             DefKind::Var => Namespace::Value,
-            DefKind::BuiltinFunc => Namespace::Value,
+            DefKind::DeclareBuiltin => Namespace::Value,
+            DefKind::Builtin(bi) => bi.ns(),
         }
     }
 }
@@ -51,7 +55,8 @@ impl Display for DefKind {
                 DefKind::Func => "function",
                 DefKind::Var => "var",
                 DefKind::Root => "[ROOT]",
-                DefKind::BuiltinFunc => "[`builtin` func]",
+                DefKind::DeclareBuiltin => "[`builtin`]",
+                DefKind::Builtin(bt) => return write!(f, "[built-in `{}`]", bt.name()),
             }
         )
     }
@@ -97,7 +102,7 @@ impl Display for Def {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Namespace {
     Value, // Value namespace used for locals
     Type,  // Type namespace used for types and modules
@@ -175,7 +180,7 @@ pub enum ModuleKind {
     Def(DefId),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModuleId {
     Block(NodeId),
     Module(DefId),
@@ -266,11 +271,11 @@ impl Module {
 }
 
 #[derive(Clone, Copy)]
-pub struct BuiltinFunc {
+pub struct DeclareBuiltin {
     def_id: DefId,
 }
 
-impl BuiltinFunc {
+impl DeclareBuiltin {
     pub fn new(def_id: DefId) -> Self {
         Self { def_id }
     }
@@ -295,7 +300,9 @@ pub struct DefTable {
     node_id_def_id: NodeMap<DefId>,
     def_id_node_id: DefMap<NodeId>,
 
-    builtin_func_def_id: Option<BuiltinFunc>,
+    declare_builtin: Option<DeclareBuiltin>,
+    builtins: HashMap<Builtin, DefId>,
+    node_id_builtin: NodeMap<Builtin>,
 
     /// Span of definition name
     def_id_span: HashMap<DefId, Span>,
@@ -364,6 +371,13 @@ impl DefTable {
             assert!(self.def_id_node_id.insert(def_id, node_id).is_none());
         }
 
+        match kind {
+            DefKind::Builtin(builtin) => {
+                self.add_builtin(builtin, node_id, def_id);
+            },
+            _ => {},
+        }
+
         def_id
     }
 
@@ -399,12 +413,25 @@ impl DefTable {
         &self.def_id_node_id
     }
 
-    pub fn builtin_func(&self) -> BuiltinFunc {
-        self.builtin_func_def_id.unwrap()
+    pub fn builtin_func(&self) -> DeclareBuiltin {
+        self.declare_builtin.unwrap()
     }
 
-    pub fn set_builtin_func(&mut self, builtin_func_def_id: BuiltinFunc) {
-        assert!(self.builtin_func_def_id.is_none());
-        self.builtin_func_def_id = Some(builtin_func_def_id);
+    pub fn set_declare_builtin(&mut self, declare_builtin_def_id: DeclareBuiltin) {
+        assert!(self.declare_builtin.is_none());
+        self.declare_builtin = Some(declare_builtin_def_id);
+    }
+
+    fn add_builtin(&mut self, builtin: Builtin, node_id: NodeId, def_id: DefId) {
+        assert!(self.builtins.insert(builtin, def_id).is_none());
+        assert!(self.node_id_builtin.insert(node_id, builtin).is_none());
+    }
+
+    pub fn builtin_def_id(&self, builtin: Builtin) -> Option<DefId> {
+        self.builtins.get(&builtin).copied()
+    }
+
+    pub fn is_builtin(&self, node_id: NodeId) -> bool {
+        self.node_id_builtin.has(node_id)
     }
 }

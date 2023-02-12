@@ -1,5 +1,6 @@
 {
   "cSpell.words": [
+    "builtins",
     "CIFR",
     "codegen",
     "conv",
@@ -9,6 +10,7 @@
     "Exvar",
     "Forall",
     "formedness",
+    "funcs",
     "idents",
     "illformed",
     "interner",

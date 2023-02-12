@@ -2,7 +2,7 @@ use crate::{
     cli::color::Color,
     cli::color::Colorize,
     dt::idx::{declare_idx, Idx},
-    resolve::def::{DefId, ROOT_DEF_ID},
+    resolve::def::{DefId},
     span::span::{Ident, Span, WithSpan},
 };
 
@@ -14,6 +14,10 @@ pub const ROOT_ITEM_ID: ItemId = ItemId(ROOT_OWNER_ID);
 impl ItemId {
     pub fn hir_id(&self) -> HirId {
         HirId::new_owner(self.inner().into())
+    }
+
+    pub fn def_id(&self) -> DefId {
+        self.inner().inner()
     }
 }
 

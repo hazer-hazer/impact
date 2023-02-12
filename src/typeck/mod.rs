@@ -1,7 +1,6 @@
-use std::fmt::format;
-
 use crate::{
     cli::verbose,
+    dt::idx::Idx,
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
@@ -11,32 +10,29 @@ use crate::{
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
+        builtin::Builtin,
         def::{DefId, DefKind, DefMap},
         res::ResKind,
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Spanned, WithSpan},
+    span::span::{Ident, Internable, Spanned, WithSpan},
     typeck::ty::Subst,
 };
 
 use self::{
+    builtin::builtins,
     ctx::{Ctx, ExistentialId},
     ty::{FloatKind, IntKind, PrimTy, Ty, TyError, TyKind, TyResult},
     tyctx::TyCtx,
 };
 
+mod builtin;
 pub mod ctx;
 pub mod ty;
 pub mod tyctx;
 
 pub struct Typecker<'hir> {
     hir: &'hir HIR,
-
-    /// Types associated to DefId's (meaning for each item is different!)
-    /// - Type alias: `[Type alias DefId] -> [Its type]`
-    /// - Declaration: `[Declaration DefId] -> [Type of assigned value]`
-    // FIXME: Use TyCtx::typed
-    def_types: DefMap<Ty>,
 
     // Context //
     ctx_stack: Vec<Ctx>,
@@ -58,7 +54,6 @@ impl<'hir> Typecker<'hir> {
     pub fn new(sess: Session, hir: &'hir HIR) -> Self {
         Self {
             hir,
-            def_types: Default::default(),
 
             ctx_stack: Default::default(),
             try_mode: false,
@@ -77,9 +72,35 @@ impl<'hir> Typecker<'hir> {
         &mut self.sess.tyctx
     }
 
+    fn define_builtins(&mut self) {
+        Builtin::each(|bt| {
+            let def_id = self
+                .sess
+                .def_table
+                .builtin_def_id(bt)
+                .expect(&format!("Builtin `{}` is not defined in code", bt));
+
+            let ty = self.tyctx().builtin_ty(bt);
+
+            self.tyctx_mut().type_node(HirId::new_owner(def_id), ty);
+
+            // Get builtin definition real ident to have span
+            let def_name = self.sess.def_table.get_def(def_id).unwrap().name();
+
+            assert_eq!(def_name.sym(), bt.sym());
+
+            self.type_term(def_name, ty);
+
+            // verbose!(
+            //     "Define builtin `{}` type `{}`",
+            //     def_name,
+            //     self.tyctx().pp(ty)
+            // );
+        });
+    }
+
     // Errors //
     fn ty_illformed(&mut self, ty: Ty) {
-        dbg!(&self.ctx_stack);
         panic!("Illformed type {}", self.tyctx().ty(ty))
     }
 
@@ -236,7 +257,9 @@ impl<'hir> Typecker<'hir> {
     fn apply_ctx_on(&mut self, ty: Ty) -> Ty {
         match self.tyctx().ty(ty).kind() {
             TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => ty,
-            &TyKind::Existential(ex) => self.ascend_ctx(|ctx| ctx.get_solution(ex)).unwrap_or(ty),
+            &TyKind::Existential(ex) => self
+                .ascend_ctx(|ctx| ctx.get_solution(ex))
+                .map_or(ty, |ty| self.apply_ctx_on(ty)),
             &TyKind::Func(param_ty, return_ty) => {
                 let param = self.apply_ctx_on(param_ty);
                 let ret = self.apply_ctx_on(return_ty);
@@ -279,11 +302,7 @@ impl<'hir> Typecker<'hir> {
                 }
             },
             &TyKind::Existential(ex) => {
-                if self.ascend_ctx(|ctx| {
-                    let some = ctx.get_ex(ex).is_some();
-
-                    some
-                }) {
+                if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() {
                     Ok(())
                 } else {
                     self.ty_illformed(ty);
@@ -371,6 +390,8 @@ impl<'hir> Typecker<'hir> {
             &ResKind::Def(def_id) => {
                 let def = self.sess.def_table.get_def(def_id).unwrap();
                 match def.kind() {
+                    &DefKind::Builtin(bt) if bt.is_ty() => self.tyctx().builtin_ty(bt),
+
                     DefKind::TyAlias => {
                         // Path conversion is done linearly, i.e. we get type alias from HIR and convert its type, caching it
                         // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
@@ -388,7 +409,10 @@ impl<'hir> Typecker<'hir> {
                     },
 
                     // Definitions from value namespace
-                    DefKind::BuiltinFunc | DefKind::Func | DefKind::Var => unreachable!(),
+                    DefKind::Builtin(_)
+                    | DefKind::DeclareBuiltin
+                    | DefKind::Func
+                    | DefKind::Var => unreachable!(),
                 }
             },
             _ => unreachable!(),
@@ -396,15 +420,15 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn conv_ty_alias(&mut self, ty_alias_def_id: DefId) -> Ty {
+        let hir_id = HirId::new_owner(ty_alias_def_id);
         let def = self.sess.def_table.get_def(ty_alias_def_id).unwrap();
-        if let Some(def_ty) = self.def_types.get_flat(ty_alias_def_id) {
-            return *def_ty;
+        if let Some(def_ty) = self.tyctx().node_type(hir_id) {
+            return def_ty;
         }
 
         let ty_alias = self.hir.item(ItemId::new(def.def_id.into())).ty_alias();
-        let ty = ty_alias.ty;
-        let ty = self.conv(ty);
-        self.def_types.insert(ty_alias_def_id, ty);
+        let ty = self.conv(ty_alias.ty);
+        self.tyctx_mut().type_node(hir_id, ty);
         ty
     }
 
@@ -446,6 +470,8 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(ty_expr),
         }?;
 
+        let expr_ty = self.apply_ctx_on(expr_ty);
+
         self.tyctx_mut().type_node(expr_id, expr_ty);
 
         Ok(expr_ty)
@@ -462,10 +488,16 @@ impl<'hir> Typecker<'hir> {
         Ok(self.tyctx_mut().lit(prim))
     }
 
-    fn synth_path(&self, path: Path) -> TyResult<Ty> {
+    fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
         let path = self.hir.path(path);
         self.lookup_typed_term_ty(path.target_name())
-            .ok_or(TyError())
+            .ok_or_else(|| {
+                MessageBuilder::error()
+                    .span(path.span())
+                    .text(format!("Term {} does not have a type", path))
+                    .emit_single_label(self);
+                TyError()
+            })
     }
 
     fn synth_ty_expr(&mut self, ty_expr: &TyExpr) -> TyResult<Ty> {
@@ -548,6 +580,12 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
+        match self.sess.def_table.get_def(item.def_id()).unwrap().kind() {
+            &DefKind::Builtin(bt) => return Ok(self.tyctx().builtin_ty(bt)),
+            DefKind::DeclareBuiltin => return Ok(self.tyctx_mut().unit()),
+            _ => {},
+        }
+
         let item = self.hir.item(item);
 
         let ty = match item.kind() {
@@ -564,7 +602,6 @@ impl<'hir> Typecker<'hir> {
             },
             ItemKind::Decl(decl) => {
                 let value_ty = self.synth_expr(decl.value)?;
-                assert!(self.def_types.insert(item.def_id(), value_ty).is_none());
                 self.type_term(item.name(), value_ty);
 
                 // Note: Actually, declaration type is a unit type, but we save it
@@ -662,7 +699,6 @@ impl<'hir> Typecker<'hir> {
 
     // Subtyping //
     fn subtype(&mut self, check_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
-        verbose!("Subtype {} {}", check_ty, r_ty);
         match self._subtype(*check_ty.node(), r_ty) {
             Ok(_) => Ok(r_ty),
             Err(err) => {
@@ -688,18 +724,18 @@ impl<'hir> Typecker<'hir> {
         match (self.tyctx().ty(l_ty).kind(), self.tyctx().ty(r_ty).kind()) {
             (TyKind::Lit(kind), TyKind::Lit(kind_)) if kind == kind_ => Ok(()),
 
-            (TyKind::Var(name), TyKind::Var(name_)) if name.sym() == name_.sym() => Ok(()),
+            (TyKind::Var(name1), TyKind::Var(name2)) if name1.sym() == name2.sym() => Ok(()),
 
-            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => Ok(()),
+            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => self.ty_wf(l_ty),
 
-            (&TyKind::Func(param, ret), &TyKind::Func(param_, ret_)) => {
-                self.under_new_ctx(|this| {
-                    // Enter Θ
-                    this._subtype(param, param_)?;
-                    let ret = this.apply_ctx_on(ret);
-                    let ret_ = this.apply_ctx_on(ret_);
-                    this._subtype(ret, ret_)
-                })
+            (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2)) => {
+                // self.under_new_ctx(|this| {
+                // Enter Θ
+                self._subtype(param1, param2)?;
+                let body1 = self.apply_ctx_on(body1);
+                let body2 = self.apply_ctx_on(body2);
+                self._subtype(body1, body2)
+                // })
             },
 
             (&TyKind::Forall(alpha, body), _) => {
@@ -738,11 +774,11 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<()> {
-        let ty = self.tyctx().ty(r_ty);
+    fn try_instantiate_common(&mut self, ex: ExistentialId, ty: Ty) -> TyResult<()> {
+        let tys = self.tyctx().ty(ty);
 
-        // InstLReach
-        match ty.kind() {
+        // Inst(L|R)Reach
+        match tys.kind() {
             &TyKind::Existential(ty_ex) => {
                 let ex_depth = self.find_unbound_ex_depth(ex);
                 let ty_ex_depth = self.find_unbound_ex_depth(ty_ex);
@@ -755,12 +791,21 @@ impl<'hir> Typecker<'hir> {
             _ => {},
         }
 
-        // InstLSolve
-        if self.tyctx().is_mono(r_ty) {
+        if self.tyctx().is_mono(ty) {
             // FIXME: check WF?
-            self.solve(ex, r_ty);
+            self.solve(ex, ty);
             return Ok(());
         }
+
+        Err(TyError())
+    }
+
+    fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<()> {
+        if let Ok(ok) = self.try_instantiate_common(ex, r_ty) {
+            return Ok(ok);
+        }
+
+        let ty = self.tyctx().ty(r_ty);
 
         match ty.kind() {
             TyKind::Error
@@ -771,8 +816,8 @@ impl<'hir> Typecker<'hir> {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             &TyKind::Func(param, body) => self.try_to(|this| {
-                let domain_ex = this.add_fresh_ex();
                 let range_ex = this.add_fresh_ex();
+                let domain_ex = this.add_fresh_ex();
 
                 let func_ty = this.tyctx_mut().func(domain_ex.1, range_ex.1);
 
@@ -783,34 +828,20 @@ impl<'hir> Typecker<'hir> {
                 let range_ty = this.apply_ctx_on(body);
                 this.instantiate_l(range_ex.0, range_ty)
             }),
-            &TyKind::Forall(alpha, ty) => self.try_to(|this| {
-                this.under_ctx(Ctx::new_with_var(alpha), |this| this.instantiate_l(ex, ty))
+            &TyKind::Forall(alpha, body) => self.try_to(|this| {
+                this.under_ctx(Ctx::new_with_var(alpha), |this| {
+                    this.instantiate_l(ex, body)
+                })
             }),
         }
     }
 
     fn instantiate_r(&mut self, l_ty: Ty, ex: ExistentialId) -> TyResult<()> {
+        if let Ok(ok) = self.try_instantiate_common(ex, l_ty) {
+            return Ok(ok);
+        }
+
         let ty = self.tyctx().ty(l_ty);
-
-        // InstRReach
-        match ty.kind() {
-            &TyKind::Existential(ty_ex) => {
-                let ex_depth = self.find_unbound_ex_depth(ex);
-                let ty_ex_depth = self.find_unbound_ex_depth(ty_ex);
-                if ex_depth < ty_ex_depth {
-                    let ex_ty = self.tyctx_mut().existential(ex);
-                    self.solve(ty_ex, ex_ty);
-                    return Ok(());
-                }
-            },
-            _ => {},
-        }
-
-        if self.tyctx().is_mono(l_ty) {
-            // FIXME: Check WF?
-            self.solve(ex, l_ty);
-            return Ok(());
-        }
 
         match ty.kind() {
             TyKind::Error
@@ -833,12 +864,12 @@ impl<'hir> Typecker<'hir> {
                 let range_ty = this.apply_ctx_on(body);
                 this.instantiate_r(range_ty, range_ex.0)
             }),
-            &TyKind::Forall(alpha, ty) => self.try_to(|this| {
+            &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 let alpha_ex = this.fresh_ex();
 
                 this.under_ctx(Ctx::new_with_ex(alpha_ex), |this| {
                     let alpha_ex_ty = this.tyctx_mut().existential(alpha_ex);
-                    let body_ty = this.substitute(ty, Subst::Name(alpha), alpha_ex_ty);
+                    let body_ty = this.substitute(body, Subst::Name(alpha), alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)
                 })
             }),
@@ -849,11 +880,39 @@ impl<'hir> Typecker<'hir> {
 impl<'ast> Stage<()> for Typecker<'ast> {
     fn run(mut self) -> StageOutput<()> {
         self.under_new_ctx(|this| {
+            this.define_builtins();
+
             this.hir.root().items.iter().for_each(|&item| {
                 let _ = this.synth_item(item);
             });
         });
 
         StageOutput::new(self.sess, (), self.msg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{config::config::ConfigBuilder, hir::HIR, session::Session};
+
+    use super::Typecker;
+
+    fn get_hir() -> HIR {
+        HIR::new()
+    }
+
+    fn get_typecker<'a>(hir: &'a HIR) -> Typecker<'a> {
+        Typecker::new(Session::new(ConfigBuilder::new().emit()), hir)
+    }
+
+    mod substitution {
+        use super::{get_hir, get_typecker};
+
+        // fn basic() {
+        //     let mut typecker = get_typecker(&get_hir());
+        //     let tyctx = typecker.tyctx_mut();
+        //     let
+        //     typecker.substitute(, subst, with)
+        // }
     }
 }

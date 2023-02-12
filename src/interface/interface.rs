@@ -168,7 +168,7 @@ impl<'ast> Interface {
             let mut pp = AstLikePP::new(name_res_result.sess(), AstPPMode::NameHighlighter);
             pp.visit_ast(&ast);
             let ast = pp.get_string();
-            outln!(name_res_result.sess_mut().writer, "Printing AST after name resolution (resolved names are marked with a same color)\n{}", ast);
+            outln!(name_res_result.sess_mut().writer, "Printing AST after name resolution (resolved names are marked with the same color)\n{}", ast);
         }
 
         let (_, sess) = name_res_result.emit(true)?;

@@ -215,7 +215,7 @@ impl Session {
             ast_metadata: AstMetadata::new(),
             def_table: Default::default(),
             res: Resolutions::default(),
-            tyctx: TyCtx::default(),
+            tyctx: TyCtx::new(),
         }
     }
 

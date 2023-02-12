@@ -162,6 +162,11 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
     pub fn get_expect(&self, i: I, msg: &str) -> &T {
         self.get(i).expect(msg).as_ref().expect(msg)
     }
+
+    #[inline]
+    pub fn has(&self, i: I) -> bool {
+        self.len() > i.as_usize() && self.get(i).is_some()
+    }
 }
 
 impl<I: Idx, T> IntoIterator for IndexVec<I, T> {
@@ -368,7 +373,7 @@ macro_rules! declare_idx {
         pub struct $name($inner_ty);
 
         impl $name {
-            pub fn new(value: $inner_ty) -> Self {
+            pub const fn new(value: $inner_ty) -> Self {
                 Self(value)
             }
         }

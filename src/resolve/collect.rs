@@ -1,22 +1,30 @@
 use crate::{
     ast::{
-        expr::Block,
+        expr::{Block, Expr, ExprKind, PathExpr},
         item::{Item, ItemKind},
+        ty::{Ty, TyKind},
         visitor::{walk_each_pr, AstVisitor},
-        ErrorNode, NodeId, WithNodeId, AST, DUMMY_NODE_ID,
+        ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    resolve::def::{BuiltinFunc, Namespace},
+    resolve::def::{DeclareBuiltin, Namespace},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident},
+    span::span::{Ident, Internable},
 };
 
-use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};
+use super::{
+    builtin::Builtin,
+    def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID},
+};
 
 pub struct DefCollector<'ast> {
     sess: Session,
     ast: &'ast AST,
+
+    declare_builtin_func_mod: Option<ModuleId>,
+    in_declare_builtin_func_scope: bool,
+
     current_module: ModuleId,
     msg: MessageStorage,
 }
@@ -32,6 +40,8 @@ impl<'ast> DefCollector<'ast> {
         Self {
             sess,
             ast,
+            declare_builtin_func_mod: None,
+            in_declare_builtin_func_scope: false,
             current_module: ModuleId::Module(ROOT_DEF_ID),
             msg: Default::default(),
         }
@@ -58,11 +68,19 @@ impl<'ast> DefCollector<'ast> {
             .def_table
             .get_module(self.current_module)
             .parent()
-            .expect("Tried to exit root module")
+            .expect("Tried to exit root module");
+
+        if self.declare_builtin_func_mod.unwrap() == self.current_module {
+            self.in_declare_builtin_func_scope = true;
+        }
     }
 
     fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
         verbose!("Define {} {} {}", node_id, kind, ident);
+
+        if ident.sym() == DeclareBuiltin::sym() {
+            self.in_declare_builtin_func_scope = false;
+        }
 
         let def_id = self.sess.def_table.define(node_id, kind, ident);
         let old_def = self.module().define(kind.namespace(), ident.sym(), def_id);
@@ -80,20 +98,61 @@ impl<'ast> DefCollector<'ast> {
         def_id
     }
 
-    fn define_builtin_func(&mut self) {
-        let def_id =
-            self.sess
-                .def_table
-                .define(DUMMY_NODE_ID, DefKind::BuiltinFunc, &BuiltinFunc::ident());
+    // Builtins //
+    fn define_declare_builtin_func(&mut self) {
+        let def_id = self.sess.def_table.define(
+            DUMMY_NODE_ID,
+            DefKind::DeclareBuiltin,
+            &DeclareBuiltin::ident(),
+        );
 
         assert!(self
             .module()
-            .define(Namespace::Value, BuiltinFunc::sym(), def_id)
+            .define(Namespace::Value, DeclareBuiltin::sym(), def_id)
             .is_none());
+
+        self.declare_builtin_func_mod = Some(self.current_module);
+        self.in_declare_builtin_func_scope = true;
 
         self.sess
             .def_table
-            .set_builtin_func(BuiltinFunc::new(def_id));
+            .set_declare_builtin(DeclareBuiltin::new(def_id));
+    }
+
+    fn define_builtin(&mut self, name: &Ident, node_id: NodeId) -> DefId {
+        let builtin = Builtin::from_sym(name.sym());
+        self.define(node_id, DefKind::Builtin(builtin), name)
+    }
+
+    fn check_path_is_declare_builtin(path: &PR<Path>) -> bool {
+        if path.as_ref().unwrap().original_str().intern() == DeclareBuiltin::sym() {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Checks if expression is `builtin` path
+    fn check_expr_for_builtin(&mut self, expr: &Expr) -> bool {
+        if !self.in_declare_builtin_func_scope {
+            return false;
+        }
+
+        match expr.kind() {
+            ExprKind::Path(PathExpr(path)) => Self::check_path_is_declare_builtin(path),
+            _ => false,
+        }
+    }
+
+    fn check_ty_for_builtin(&mut self, ty: &Ty) -> bool {
+        if !self.in_declare_builtin_func_scope {
+            return false;
+        }
+
+        match ty.kind() {
+            TyKind::Path(path) => Self::check_path_is_declare_builtin(path),
+            _ => false,
+        }
     }
 }
 
@@ -101,7 +160,25 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
     fn visit_item(&mut self, item: &'ast Item) {
-        // Do not collect variables, they are defined and resolved in NameResolver
+        // Maybe define builtin
+        match item.kind() {
+            ItemKind::Decl(_, _, body) => {
+                if self.check_expr_for_builtin(body.as_ref().unwrap()) {
+                    self.define_builtin(item.name().unwrap(), item.id());
+                    return;
+                }
+            },
+            ItemKind::Type(_, ty) => {
+                if self.check_ty_for_builtin(ty.as_ref().unwrap()) {
+                    self.define_builtin(item.name().unwrap(), item.id());
+                    return;
+                }
+            },
+            _ => {},
+        }
+
+        // Do not collect variables, they are defined and resolved in NameResolver.
+        // Note: Builtins are collected anyway
         match item.kind() {
             ItemKind::Decl(name, params, body) if params.is_empty() => {
                 self.visit_decl_item(name, params, body, item.id());
@@ -144,7 +221,7 @@ impl<'ast> Stage<()> for DefCollector<'ast> {
             ROOT_DEF_ID
         );
 
-        self.define_builtin_func();
+        self.define_declare_builtin_func();
 
         self.visit_ast(self.ast);
 

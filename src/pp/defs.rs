@@ -47,12 +47,13 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
         for ns in module.namespaces().iter() {
             for (sym, def_id) in ns {
                 self.out_indent();
-                self.string(sym);
+                self.string(sym.looks_like());
+                self.string(def_id);
                 self.punct(Punct::Colon);
 
                 let def = self.sess.def_table.get_def(*def_id).unwrap();
 
-                self.string(def);
+                self.string(def.kind());
 
                 match def.kind() {
                     DefKind::Root | DefKind::Mod => {
@@ -61,7 +62,11 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                         self.pp_mod(ModuleId::Module(def.def_id()));
                         self.dedent();
                     },
-                    DefKind::BuiltinFunc | DefKind::Var | DefKind::TyAlias | DefKind::Func => {
+                    DefKind::Builtin(_)
+                    | DefKind::DeclareBuiltin
+                    | DefKind::Var
+                    | DefKind::TyAlias
+                    | DefKind::Func => {
                         self.nl();
                     },
                 }
