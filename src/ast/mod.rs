@@ -13,7 +13,7 @@ use self::{
     item::Item,
     pat::Pat,
     stmt::Stmt,
-    ty::Ty,
+    ty::{Ty, TyPath},
     visitor::{walk_pr, AstVisitor},
 };
 
@@ -468,7 +468,6 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
     fn visit_expr(&mut self, expr: &'ast Expr) {
         self.map.map.insert(expr.id(), AstNode::Expr(expr));
         match expr.kind() {
-            ExprKind::Unit => self.visit_unit_expr(),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Paren(inner) => walk_pr!(self, inner, visit_expr),
             ExprKind::Path(path) => self.visit_path_expr(path),
@@ -480,8 +479,6 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
         }
     }
-
-    fn visit_unit_expr(&mut self) {}
 
     fn visit_lit_expr(&mut self, _: &'ast Lit) {}
 
@@ -520,17 +517,14 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
     fn visit_ty(&mut self, ty: &'ast Ty) {
         self.map.map.insert(ty.id(), AstNode::Ty(ty));
         match ty.kind() {
-            ty::TyKind::Unit => self.visit_unit_ty(),
-            ty::TyKind::Path(path) => self.visit_path_ty(path),
+            ty::TyKind::Path(path) => self.visit_ty_path(path),
             ty::TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
             ty::TyKind::Paren(inner) => self.visit_paren_ty(inner),
         }
     }
 
-    fn visit_unit_ty(&mut self) {}
-
-    fn visit_path_ty(&mut self, path: &'ast PR<Path>) {
-        walk_pr!(self, path, visit_path)
+    fn visit_ty_path(&mut self, path: &'ast TyPath) {
+        walk_pr!(self, &path.0, visit_path)
     }
 
     fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {

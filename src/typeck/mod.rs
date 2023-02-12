@@ -1,26 +1,24 @@
 use crate::{
-    cli::verbose,
-    dt::idx::Idx,
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Stmt, StmtKind},
+        ty::TyPath,
         HirId, Path, HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
         builtin::Builtin,
-        def::{DefId, DefKind, DefMap},
+        def::{DefId, DefKind, Namespace},
         res::ResKind,
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Internable, Spanned, WithSpan},
+    span::span::{Ident, Spanned, WithSpan},
     typeck::ty::Subst,
 };
 
 use self::{
-    builtin::builtins,
     ctx::{Ctx, ExistentialId},
     ty::{FloatKind, IntKind, PrimTy, Ty, TyError, TyKind, TyResult},
     tyctx::TyCtx,
@@ -78,7 +76,7 @@ impl<'hir> Typecker<'hir> {
                 .sess
                 .def_table
                 .builtin_def_id(bt)
-                .expect(&format!("Builtin `{}` is not defined in code", bt));
+                .expect(&format!("Builtin {} is not defined in code", bt));
 
             let ty = self.tyctx().builtin_ty(bt);
 
@@ -89,7 +87,13 @@ impl<'hir> Typecker<'hir> {
 
             assert_eq!(def_name.sym(), bt.sym());
 
-            self.type_term(def_name, ty);
+            // Only value builtins are typed terms
+            match bt.ns() {
+                Namespace::Value => {
+                    self.type_term(def_name, ty);
+                },
+                _ => {},
+            }
 
             // verbose!(
             //     "Define builtin `{}` type `{}`",
@@ -375,7 +379,7 @@ impl<'hir> Typecker<'hir> {
 
         match ty.kind {
             hir::ty::TyKind::Unit => self.tyctx_mut().unit(),
-            hir::ty::TyKind::Path(path) => self.conv_path(path),
+            hir::ty::TyKind::Path(TyPath(path)) => self.conv_path(path),
             hir::ty::TyKind::Func(param, body) => {
                 let param = self.conv(param);
                 let ret = self.conv(body);
@@ -906,7 +910,6 @@ mod tests {
     }
 
     mod substitution {
-        use super::{get_hir, get_typecker};
 
         // fn basic() {
         //     let mut typecker = get_typecker(&get_hir());

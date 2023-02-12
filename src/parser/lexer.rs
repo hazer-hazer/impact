@@ -1,9 +1,9 @@
 use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
-use crate::parser::token::{Token, TokenKind, TokenStream};
+use crate::parser::token::{Punct, Token, TokenKind, TokenStream};
 use crate::session::SourceId;
 use crate::session::{Session, Stage, StageOutput};
 
-use crate::span::span::{Span, SpanLen, SpanPos, Symbol};
+use crate::span::span::{Kw, Span, SpanLen, SpanPos, Symbol};
 
 use super::token::{ComplexSymbol, IntKind};
 
@@ -327,6 +327,21 @@ impl Lexer {
         }
     }
 
+    fn lex_maybe_unit(&mut self) {
+        let start = self.pos;
+
+        assert!(self.advance() == '(');
+
+        while self.advance().is_whitespace() {}
+
+        if self.peek() == ')' {
+            self.advance();
+            self.add_token(TokenKind::Kw(Kw::Unit), self.pos - start);
+        } else {
+            self.add_token(TokenKind::Punct(Punct::LParen), 1);
+        }
+    }
+
     fn lex_multiline_comment(&mut self) {
         self.advance_offset(2);
 
@@ -360,6 +375,8 @@ impl Stage<TokenStream> for Lexer {
                 TokenStartMatch::IndentPrecursor => self.lex_indent(),
                 TokenStartMatch::Unknown => {
                     match TokenKind::try_from_chars(self.peek(), self.lookup()) {
+                        ComplexSymbol::MaybeUnit => self.lex_maybe_unit(),
+
                         ComplexSymbol::Punct(kind, len) => {
                             self.add_token_adv(TokenKind::Punct(kind), len)
                         },

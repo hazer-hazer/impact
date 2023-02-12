@@ -5,7 +5,7 @@ use super::{
     item::{Item, ItemKind},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
-    ty::{Ty, TyKind},
+    ty::{Ty, TyKind, TyPath},
     ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
 };
 
@@ -117,7 +117,6 @@ pub trait AstVisitor<'ast> {
     // Expressions //
     fn visit_expr(&mut self, expr: &'ast Expr) {
         match expr.kind() {
-            ExprKind::Unit => self.visit_unit_expr(),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Paren(inner) => walk_pr!(self, inner, visit_expr),
             ExprKind::Path(path) => self.visit_path_expr(path),
@@ -144,7 +143,7 @@ pub trait AstVisitor<'ast> {
 
     fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
-        self.visit_path(&infix.op);
+        self.visit_path_expr(&infix.op);
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 
@@ -170,8 +169,7 @@ pub trait AstVisitor<'ast> {
     // Types //
     fn visit_ty(&mut self, ty: &'ast Ty) {
         match ty.kind() {
-            TyKind::Unit => self.visit_unit_ty(),
-            TyKind::Path(path) => self.visit_path_ty(path),
+            TyKind::Path(path) => self.visit_ty_path(path),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
         }
@@ -179,8 +177,8 @@ pub trait AstVisitor<'ast> {
 
     fn visit_unit_ty(&mut self) {}
 
-    fn visit_path_ty(&mut self, path: &'ast PR<Path>) {
-        walk_pr!(self, path, visit_path)
+    fn visit_ty_path(&mut self, path: &'ast TyPath) {
+        walk_pr!(self, &path.0, visit_path)
     }
 
     fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {

@@ -1,11 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    cli::verbose,
-    hir::HirId,
-    resolve::builtin::Builtin,
-    span::span::{Ident, Symbol},
-};
+use crate::{hir::HirId, resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
     builtin::builtins,
@@ -52,7 +47,10 @@ impl TyCtx {
     }
 
     pub fn builtin_ty(&self, builtin: Builtin) -> Ty {
-        self.builtins.get(&builtin).copied().unwrap()
+        self.builtins
+            .get(&builtin)
+            .copied()
+            .expect(&format!("No type for {} builtin :(", builtin))
     }
 
     // Interning //

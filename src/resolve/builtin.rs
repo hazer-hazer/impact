@@ -1,8 +1,31 @@
 use std::fmt::Display;
 
-use crate::span::span::{Internable, Symbol};
+use crate::span::span::{Ident, Internable, Symbol};
 
-use super::def::Namespace;
+use super::def::{DefId, Namespace};
+
+#[derive(Clone, Copy)]
+pub struct DeclareBuiltin {
+    def_id: DefId,
+}
+
+impl DeclareBuiltin {
+    pub fn new(def_id: DefId) -> Self {
+        Self { def_id }
+    }
+
+    pub fn def_id(&self) -> DefId {
+        self.def_id
+    }
+
+    pub fn sym() -> Symbol {
+        Symbol::intern("builtin")
+    }
+
+    pub fn ident() -> Ident {
+        Ident::synthetic(Self::sym())
+    }
+}
 
 macro_rules! builtin_table {
     ($($ns: ident $variant: ident $name: expr;)*) => {
@@ -12,15 +35,15 @@ macro_rules! builtin_table {
         }
 
         impl Builtin {
-            pub fn from_name(name: &str) -> Self {
-                match name {
-                    $($name => Self::$variant,)*
-                    _ => panic!(),
+            pub fn from_name(ns: Namespace, name: &str) -> Self {
+                match (ns, name) {
+                    $((Namespace::$ns, $name) => Self::$variant,)*
+                    _ => panic!("Cannot declare builtin `{}` as {}", name, ns),
                 }
             }
 
-            pub fn from_sym(sym: Symbol) -> Self {
-                Self::from_name(sym.as_str())
+            pub fn from_sym(ns: Namespace, sym: Symbol) -> Self {
+                Self::from_name(ns, sym.as_str())
             }
 
             pub fn name(&self) -> &str {
@@ -60,7 +83,7 @@ macro_rules! builtin_table {
 
 impl Display for Builtin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        write!(f, "{} `{}`", self.ns(), self.name())
     }
 }
 
@@ -68,8 +91,9 @@ builtin_table! {
     // Operators //
     Value Add "+";
     Value Minus "-";
+    Value UnitValue "()";
 
     // Primitive //
-    Type Unit "()";
+    Type UnitTy "()";
     Type I32 "i32";
 }

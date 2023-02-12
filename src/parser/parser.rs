@@ -7,14 +7,14 @@ use crate::{
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
-        ty::{Ty, TyKind},
+        ty::{Ty, TyKind, TyPath},
         ErrorNode, IsBlockEnded, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
     },
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Kw, Span, WithSpan},
+    span::span::{Ident, Internable, Kw, Span, WithSpan},
 };
 
 use super::token::{Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
@@ -382,10 +382,9 @@ impl Parser {
         self.expected(skip, expected)
     }
 
-    fn parse_ident_allow_op(&mut self, expected: &str) -> PR<Ident> {
+    fn parse_ident_decl_name(&mut self, expected: &str) -> PR<Ident> {
         let skip = self
-            .skip(TokenCmp::Ident)
-            .or_else(|| self.skip(TokenCmp::OpIdent))
+            .skip_any(&[TokenCmp::DeclName])
             .map(|tok| Ident::from_token(tok));
         self.expected(skip, expected)
     }
@@ -462,7 +461,7 @@ impl Parser {
 
             Some(mod_item)
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
-            let ty_item = self.parse_type_item();
+            let ty_item = self.parse_ty_item();
 
             self.exit_entity(pe, &ty_item);
 
@@ -500,14 +499,15 @@ impl Parser {
         )))
     }
 
-    fn parse_type_item(&mut self) -> PR<N<Item>> {
+    fn parse_ty_item(&mut self) -> PR<N<Item>> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "type alias");
 
         let lo = self.span();
 
         self.expect_kw(Kw::Type)?;
 
-        let name = self.parse_ident("type name");
+        // Note: `parse_ident_in_path` is used to allow `type () = ()`
+        let name = self.parse_ident_decl_name("type name");
 
         self.expect_op(Op::Assign)?;
 
@@ -527,7 +527,8 @@ impl Parser {
 
         let lo = self.span();
 
-        let name = self.parse_ident_allow_op("function name");
+        // `parse_ident_in_path` is used to allow `() = ()`
+        let name = self.parse_ident_decl_name("function name");
 
         let mut params = vec![];
         while !self.eof() {
@@ -641,7 +642,7 @@ impl Parser {
                     self.next_node_id(),
                     ExprKind::Infix(Infix {
                         lhs: lhs_expr,
-                        op: Path::new_infix_op(self.next_node_id(), op),
+                        op: PathExpr(Ok(Path::new_infix_op(self.next_node_id(), op))),
                         rhs,
                     }),
                     self.close_span(lo),
@@ -820,7 +821,7 @@ impl Parser {
         let lo = self.span();
         // FIXME: PascalCase type ident, not any ident??
         PathSeg::new(
-            self.parse_ident_allow_op("path segment"),
+            self.parse_ident_decl_name("path segment"),
             self.close_span(lo),
         )
     }
@@ -900,11 +901,25 @@ impl Parser {
 
                 match inner {
                     Some(inner) => TyKind::Paren(inner),
-                    None => TyKind::Unit,
+                    None => {
+                        return None;
+
+                        // Note: Unit type as path is handled in lexer with Kw::Unit,
+                        //  so here we just failed to parse a type
+                        // let span = self.close_span(lo);
+                        // TyKind::Path(TyPath(Ok(Path::new(
+                        //     self.next_node_id(),
+                        //     vec![PathSeg::new(Ok(Ident::new(span, "()".intern())), span)],
+                        //     span,
+                        // ))))
+                    },
                 }
             },
 
-            TokenKind::Ident(_) => TyKind::Path(self.parse_path("type path")),
+            // `Kw::Unit` to allow `()` in type path
+            TokenKind::Kw(Kw::Unit) | TokenKind::Ident(_) => {
+                TyKind::Path(TyPath(self.parse_path("type path")))
+            },
 
             _ => {
                 return None;

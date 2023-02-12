@@ -5,7 +5,7 @@ use super::{
     item::{Decl, ItemId, ItemKind, Mod, TyAlias},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
-    ty::{Ty, TyKind},
+    ty::{Ty, TyKind, TyPath},
     Path, HIR,
 };
 
@@ -128,15 +128,15 @@ pub trait HirVisitor {
         let ty = hir.ty(*ty);
         match &ty.kind {
             TyKind::Unit => self.visit_unit_ty(hir),
-            TyKind::Path(path) => self.visit_path_ty(path, hir),
+            TyKind::Path(path) => self.visit_ty_path(path, hir),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
         }
     }
 
     fn visit_unit_ty(&mut self, _hir: &HIR) {}
 
-    fn visit_path_ty(&mut self, path: &Path, hir: &HIR) {
-        self.visit_path(path, hir)
+    fn visit_ty_path(&mut self, path: &TyPath, hir: &HIR) {
+        self.visit_path(&path.0, hir)
     }
 
     fn visit_func_ty(&mut self, param_ty: &Ty, return_ty: &Ty, hir: &HIR) {

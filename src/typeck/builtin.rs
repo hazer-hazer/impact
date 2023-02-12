@@ -47,6 +47,8 @@ macro_rules! ty {
 
 pub(super) fn builtins(tyctx: &mut TyCtx) -> HashMap<Builtin, Ty> {
     let builtins = HashMap::from([
+        // Values //
+        (Builtin::UnitValue, tyctx.unit()),
         // Operators //
         (
             Builtin::Add,
@@ -63,6 +65,7 @@ pub(super) fn builtins(tyctx: &mut TyCtx) -> HashMap<Builtin, Ty> {
             ),
         ),
         // Types //
+        (Builtin::UnitTy, tyctx.unit()),
         (Builtin::I32, tyctx.lit(PrimTy::Int(IntKind::I32))),
     ]);
 

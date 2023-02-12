@@ -28,9 +28,12 @@ impl WithSpan for TyNode {
 }
 
 #[derive(Debug)]
+pub struct TyPath(pub Path);
+
+#[derive(Debug)]
 pub enum TyKind {
     Unit,
-    Path(Path),
+    Path(TyPath),
     Func(Ty, Ty),
 }
 

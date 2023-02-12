@@ -162,7 +162,7 @@ impl<'a> HirVisitor for HirPP<'a> {
 
         match &ty.kind {
             TyKind::Unit => self.visit_unit_ty(hir),
-            TyKind::Path(path) => self.visit_path_ty(path, hir),
+            TyKind::Path(path) => self.visit_ty_path(path, hir),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
         }
     }

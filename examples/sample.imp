@@ -1,4 +1,7 @@
-type A = ()
+type i32 = builtin
+
+() = builtin
+type () = builtin
 
 (+) = builtin
 (-) = builtin

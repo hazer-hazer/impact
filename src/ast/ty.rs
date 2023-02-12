@@ -46,9 +46,11 @@ impl NodeKindStr for Ty {
 }
 
 #[derive(Debug, Clone)]
+pub struct TyPath(pub PR<Path>);
+
+#[derive(Debug, Clone)]
 pub enum TyKind {
-    Unit,
-    Path(PR<Path>),
+    Path(TyPath),
     Func(PR<N<Ty>>, PR<N<Ty>>),
     Paren(PR<N<Ty>>),
 }
@@ -56,8 +58,7 @@ pub enum TyKind {
 impl Display for TyKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            TyKind::Unit => write!(f, "()"),
-            TyKind::Path(path) => write!(f, "{}", pr_display(path)),
+            TyKind::Path(path) => write!(f, "{}", pr_display(&path.0)),
             TyKind::Func(param_ty, return_ty) => {
                 write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
             },
@@ -69,8 +70,7 @@ impl Display for TyKind {
 impl NodeKindStr for TyKind {
     fn kind_str(&self) -> String {
         match &self {
-            TyKind::Unit => "unit type".to_string(),
-            TyKind::Path(path) => format!("type {}", pr_display(path)),
+            TyKind::Path(path) => format!("type {}", pr_display(&path.0)),
             TyKind::Func(_, _) => "function type".to_string(),
 
             // I just thought this format would look funny 😐

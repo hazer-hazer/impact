@@ -7,7 +7,7 @@ use crate::{
     span::span::{Ident, IdentKind, Kw, Span, Symbol},
 };
 
-use super::builtin::Builtin;
+use super::builtin::{Builtin, DeclareBuiltin};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DefKind {
@@ -102,7 +102,7 @@ impl Display for Def {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Namespace {
     Value, // Value namespace used for locals
     Type,  // Type namespace used for types and modules
@@ -116,8 +116,9 @@ impl Namespace {
 
     pub fn from_ident(ident: &Ident) -> Self {
         match ident.kind() {
-            IdentKind::Op | IdentKind::Var => Namespace::Value,
-            IdentKind::Ty => Namespace::Type,
+            Some(IdentKind::Op | IdentKind::Var) => Namespace::Value,
+            Some(IdentKind::Ty) => Namespace::Type,
+            None => panic!(),
         }
     }
 }
@@ -263,33 +264,15 @@ impl Module {
         self.per_ns.get_mut(ns).insert(sym, def_id)
     }
 
+    pub fn get_from_ns(&self, ns: Namespace, ident: &Ident) -> Option<DefId> {
+        self.per_ns.get(ns).get(&ident.sym()).copied()
+    }
+
+    #[deprecated = "Fails on `()` as it can be both in value and type namespace. Use `get_from_ns`"]
     pub fn get_by_ident(&self, ident: &Ident) -> Option<&DefId> {
         self.per_ns
             .get(Namespace::from_ident(ident))
             .get(&ident.sym())
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct DeclareBuiltin {
-    def_id: DefId,
-}
-
-impl DeclareBuiltin {
-    pub fn new(def_id: DefId) -> Self {
-        Self { def_id }
-    }
-
-    pub fn def_id(&self) -> DefId {
-        self.def_id
-    }
-
-    pub fn sym() -> Symbol {
-        Symbol::intern("builtin")
-    }
-
-    pub fn ident() -> Ident {
-        Ident::synthetic(Self::sym())
     }
 }
 

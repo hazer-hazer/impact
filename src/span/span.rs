@@ -23,6 +23,7 @@ pub enum Kw {
     Type,
 
     Underscore,
+    Unit, // `()`, allowed is type or expression
 
     // Reserved for name resolution //
     Root,
@@ -38,6 +39,7 @@ impl Kw {
             Kw::Mod => "mod",
             Kw::Type => "type",
             Kw::Underscore => "_",
+            Kw::Unit => "()",
             Kw::Root => "[root]",
             Kw::Unknown => "[UNKNOWN]",
         }
@@ -330,6 +332,7 @@ impl Ident {
         Ident {
             span: tok.span,
             sym: match tok.kind {
+                TokenKind::Kw(Kw::Unit) => "()".intern(),
                 TokenKind::OpIdent(sym) | TokenKind::Ident(sym) => sym,
                 _ => unreachable!(),
             },
@@ -358,25 +361,34 @@ impl Ident {
         self.sym
     }
 
-    pub fn kind(&self) -> IdentKind {
+    pub fn kind(&self) -> Option<IdentKind> {
         match self.sym().to_string().chars().nth(0) {
-            Some(first) if first.is_uppercase() => IdentKind::Ty,
-            Some(first) if first.is_lowercase() => IdentKind::Var,
-            Some(first) if first.is_custom_op() => IdentKind::Op,
-            _ => panic!(),
+            Some(first) if first.is_uppercase() => Some(IdentKind::Ty),
+            Some(first) if first.is_lowercase() => Some(IdentKind::Var),
+            Some(first) if first.is_custom_op() => Some(IdentKind::Op),
+            _ => None,
         }
     }
 
     pub fn is_var(&self) -> bool {
-        self.kind() == IdentKind::Var
+        match self.kind() {
+            Some(IdentKind::Var) => true,
+            _ => false,
+        }
     }
 
     pub fn is_ty(&self) -> bool {
-        self.kind() == IdentKind::Ty
+        match self.kind() {
+            Some(IdentKind::Ty) => true,
+            _ => false,
+        }
     }
 
     pub fn is_op(&self) -> bool {
-        self.kind() == IdentKind::Op
+        match self.kind() {
+            Some(IdentKind::Op) => true,
+            _ => false,
+        }
     }
 
     pub fn original_string(&self) -> String {

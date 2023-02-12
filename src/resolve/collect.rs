@@ -2,13 +2,13 @@ use crate::{
     ast::{
         expr::{Block, Expr, ExprKind, PathExpr},
         item::{Item, ItemKind},
-        ty::{Ty, TyKind},
+        ty::{Ty, TyKind, TyPath},
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    resolve::def::{DeclareBuiltin, Namespace},
+    resolve::{def::Namespace, builtin::DeclareBuiltin},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Internable},
 };
@@ -106,9 +106,15 @@ impl<'ast> DefCollector<'ast> {
             &DeclareBuiltin::ident(),
         );
 
+        // `builtin` is defined in both `Value` and `Type` namespaces
         assert!(self
             .module()
             .define(Namespace::Value, DeclareBuiltin::sym(), def_id)
+            .is_none());
+
+        assert!(self
+            .module()
+            .define(Namespace::Type, DeclareBuiltin::sym(), def_id)
             .is_none());
 
         self.declare_builtin_func_mod = Some(self.current_module);
@@ -117,11 +123,6 @@ impl<'ast> DefCollector<'ast> {
         self.sess
             .def_table
             .set_declare_builtin(DeclareBuiltin::new(def_id));
-    }
-
-    fn define_builtin(&mut self, name: &Ident, node_id: NodeId) -> DefId {
-        let builtin = Builtin::from_sym(name.sym());
-        self.define(node_id, DefKind::Builtin(builtin), name)
     }
 
     fn check_path_is_declare_builtin(path: &PR<Path>) -> bool {
@@ -150,7 +151,7 @@ impl<'ast> DefCollector<'ast> {
         }
 
         match ty.kind() {
-            TyKind::Path(path) => Self::check_path_is_declare_builtin(path),
+            TyKind::Path(TyPath(path)) => Self::check_path_is_declare_builtin(path),
             _ => false,
         }
     }
@@ -164,13 +165,15 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
         match item.kind() {
             ItemKind::Decl(_, _, body) => {
                 if self.check_expr_for_builtin(body.as_ref().unwrap()) {
-                    self.define_builtin(item.name().unwrap(), item.id());
+                    let builtin = Builtin::from_sym(Namespace::Value, item.name().unwrap().sym());
+                    self.define(item.id(), DefKind::Builtin(builtin), item.name().unwrap());
                     return;
                 }
             },
             ItemKind::Type(_, ty) => {
                 if self.check_ty_for_builtin(ty.as_ref().unwrap()) {
-                    self.define_builtin(item.name().unwrap(), item.id());
+                    let builtin = Builtin::from_sym(Namespace::Type, item.name().unwrap().sym());
+                    self.define(item.id(), DefKind::Builtin(builtin), item.name().unwrap());
                     return;
                 }
             },

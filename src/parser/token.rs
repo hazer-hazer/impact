@@ -218,6 +218,9 @@ pub enum ComplexSymbol {
     OpIdent,
     Op(Op, SpanLen),
     Kw(Kw, SpanLen),
+    // If after `(` we have whitespace-like char,
+    //  it is possibly a unit (`()`) if nothing is between parentheses
+    MaybeUnit,
     None,
 }
 
@@ -237,6 +240,9 @@ impl TokenKind {
 
     pub fn try_from_chars(char1: char, char2: Option<char>) -> ComplexSymbol {
         match (char1, char2) {
+            ('(', Some(')')) => ComplexSymbol::Kw(Kw::Unit, 2),
+            ('(', Some(next)) if next.is_whitespace() => ComplexSymbol::MaybeUnit,
+
             ('(', Some(next)) if next.is_custom_op() => ComplexSymbol::OpIdent,
 
             ('/', Some('/')) => ComplexSymbol::LineComment,
@@ -326,7 +332,10 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
             | (TokenKind::OpIdent(_), TokenCmp::OpIdent)
-            | (TokenKind::OpIdent(_) | TokenKind::Ident(_), TokenCmp::DeclName)
+            | (
+                TokenKind::OpIdent(_) | TokenKind::Ident(_) | TokenKind::Kw(Kw::Unit),
+                TokenCmp::DeclName,
+            )
             | (TokenKind::BlockStart, TokenCmp::BlockStart)
             | (TokenKind::BlockEnd, TokenCmp::BlockEnd)
             | (

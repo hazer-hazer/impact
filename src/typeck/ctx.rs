@@ -84,7 +84,12 @@ impl Ctx {
     }
 
     pub fn type_term(&mut self, name: Ident, ty: Ty) {
-        assert!(self.terms.insert(name.sym(), ty).is_none())
+        assert!(
+            self.terms.insert(name.sym(), ty).is_none(),
+            "{} is already typed as {}",
+            name,
+            ty,
+        )
     }
 
     /// Returns solution if existential is in context

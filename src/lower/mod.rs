@@ -4,7 +4,7 @@ use crate::{
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
-        ty::{Ty, TyKind},
+        ty::{Ty, TyKind, TyPath},
         NodeId, NodeMap, Path, PathSeg, WithNodeId, AST, N, PR, ROOT_NODE_ID,
     },
     cli::verbose,
@@ -15,10 +15,7 @@ use crate::{
     },
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
-    resolve::{
-        def::{DeclareBuiltin, DefId},
-        res::NamePath,
-    },
+    resolve::{builtin::DeclareBuiltin, def::DefId, res::NamePath},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
 };
@@ -260,7 +257,6 @@ impl<'ast> Lower<'ast> {
     // Expressions //
     fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
         let kind = match expr.kind() {
-            ExprKind::Unit => hir::expr::ExprKind::Unit,
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
             ExprKind::Paren(inner) => return lower_pr!(self, inner, lower_expr),
             ExprKind::Path(path) => self.lower_path_expr(path),
@@ -324,11 +320,13 @@ impl<'ast> Lower<'ast> {
 
     fn lower_infix_expr(&mut self, infix: &Infix) -> hir::expr::ExprKind {
         // Note [TRANSFORM]: [lhs] [op] [rhs] -> [op] [lhs] [rhs]
-        let op_path = self.lower_path(&infix.op);
-        let op_path = self.expr_path(infix.op.span(), op_path);
+        let op_path_span = infix.op.0.as_ref().unwrap().span();
+        let op_path = lower_pr!(self, &infix.op.0, lower_path);
+        let op_path = self.expr_path(op_path_span, op_path);
+
         let first_op_arg = lower_pr!(self, &infix.lhs, lower_expr);
         hir::expr::ExprKind::Call(hir::expr::Call {
-            lhs: self.expr_call(infix.op.span().to(infix.lhs.span()), op_path, first_op_arg),
+            lhs: self.expr_call(op_path_span.to(infix.lhs.span()), op_path, first_op_arg),
             arg: lower_pr!(self, &infix.rhs, lower_expr),
         })
     }
@@ -361,8 +359,7 @@ impl<'ast> Lower<'ast> {
     // Types //
     fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
         let kind = match ty.kind() {
-            TyKind::Unit => self.lower_unit_ty(),
-            TyKind::Path(path) => self.lower_path_ty(path),
+            TyKind::Path(path) => self.lower_ty_path(path),
             TyKind::Func(param_ty, return_ty) => self.lower_func_ty(param_ty, return_ty),
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
         };
@@ -372,12 +369,8 @@ impl<'ast> Lower<'ast> {
         self.add_node(Node::TyNode(hir::ty::TyNode::new(id, kind, ty.span())))
     }
 
-    fn lower_unit_ty(&mut self) -> hir::ty::TyKind {
-        hir::ty::TyKind::Unit
-    }
-
-    fn lower_path_ty(&mut self, path: &PR<Path>) -> hir::ty::TyKind {
-        hir::ty::TyKind::Path(lower_pr!(self, path, lower_path))
+    fn lower_ty_path(&mut self, path: &TyPath) -> hir::ty::TyKind {
+        hir::ty::TyKind::Path(hir::ty::TyPath(lower_pr!(self, &path.0, lower_path)))
     }
 
     fn lower_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> hir::ty::TyKind {

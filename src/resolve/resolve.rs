@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{
-        expr::Block,
+        expr::{Block, PathExpr},
         item::{Item, ItemKind},
         pat::{Pat, PatKind},
+        ty::TyPath,
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST,
     },
@@ -16,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    def::{ModuleId, ROOT_DEF_ID, ROOT_MODULE_ID},
+    def::{ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
     res::{NamePath, Res},
 };
 
@@ -121,7 +122,7 @@ impl<'ast> NameResolver<'ast> {
         None
     }
 
-    fn resolve_path(&mut self, path: &Path) -> Res {
+    fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res {
         let segments = path.segments();
 
         // TODO: When generics added, don't resolve local if segment has generics
@@ -152,8 +153,14 @@ impl<'ast> NameResolver<'ast> {
                 return Res::error();
             }
 
-            let def_id = match search_mod.get_by_ident(seg.expect_name()) {
-                Some(&def_id) => def_id,
+            let ns = if is_target {
+                target_ns
+            } else {
+                Namespace::Type
+            };
+
+            let def_id = match search_mod.get_from_ns(ns, seg.expect_name()) {
+                Some(def_id) => def_id,
                 None => {
                     let prefix = path.prefix_str(seg_index);
                     MessageBuilder::error()
@@ -169,18 +176,24 @@ impl<'ast> NameResolver<'ast> {
             };
 
             if is_target {
-                match self.sess.def_table.get_def(def_id).unwrap().kind() {
+                let def = self.sess.def_table.get_def(def_id).unwrap();
+
+                match def.kind() {
                     DefKind::Root
                     | DefKind::TyAlias
                     | DefKind::Mod
                     | DefKind::Func
                     | DefKind::Var => {
+                        assert_eq!(def.kind().namespace(), target_ns);
                         return Res::def(def_id);
                     },
                     DefKind::DeclareBuiltin => {
+                        // Is does not matter in which namespace we found `builtin`
+                        // Yeah, crutches
                         return Res::declare_builtin();
                     },
                     DefKind::Builtin(_) => {
+                        assert_eq!(def.kind().namespace(), target_ns);
                         return Res::builtin(def_id);
                     },
                 }
@@ -209,7 +222,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 ItemKind::Decl(name, params, body) => {
                     self.visit_decl_item(name, params, body, item.id())
                 },
-                ItemKind::Mod(name, items) => unreachable!(),
+                ItemKind::Mod(_, _) => unreachable!(),
             }
             return;
         }
@@ -252,12 +265,22 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         self.exit_scope();
     }
 
-    fn visit_path(&mut self, path: &'ast Path) {
-        let res = self.resolve_path(path);
-
-        verbose!("Resolved path `{}` as {}", path, res);
+    fn visit_path_expr(&mut self, path: &'ast PathExpr) {
+        let path = path.0.as_ref().unwrap();
+        let res = self.resolve_path(Namespace::Value, path);
 
         self.sess.res.set(NamePath::new(path.id()), res);
+    }
+
+    fn visit_ty_path(&mut self, path: &'ast TyPath) {
+        let path = path.0.as_ref().unwrap();
+        let res = self.resolve_path(Namespace::Type, path);
+
+        self.sess.res.set(NamePath::new(path.id()), res);
+    }
+
+    fn visit_path(&mut self, _: &'ast Path) {
+        unreachable!()
     }
 }
 

@@ -17,9 +17,9 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 lazy_static! {
-    static ref PASCAL_CASE_REGEX: Regex = Regex::new(r"^[A-Z][A-z\d]*$").unwrap();
-    static ref CAMEL_CASE_REGEX: Regex =
-        Regex::new(r"^([a-z][A-z\d]*|[!\$\+\-\*/%\?\^\|\&\~=]+)$").unwrap();
+    static ref TYPENAME_REGEX: Regex = Regex::new(r"^[A-Z][A-z\d]*$").unwrap();
+    static ref VARNAME_REGEX: Regex =
+        Regex::new(r"^([a-z][A-z\d]*|[!\$\+\-\*/%\?\^\|\&\~=]+)|\(\)$").unwrap();
     static ref SNAKE_CASE_REGEX: Regex = Regex::new(r"^[a-z]+(?:_[a-z\d]+)*$").unwrap();
     static ref KEBAB_CASE_REGEX: Regex = Regex::new(r"^[a-z]+(?:-[a-z\d]+)*$").unwrap();
     static ref SCREAMING_SNAKE_CASE_REGEX: Regex = Regex::new(r"^[A-Z]+(?:_[A-Z\d]+)*$").unwrap();
@@ -105,7 +105,7 @@ impl<'ast> AstValidator<'ast> {
         let sym = name.sym();
         let str = sym.as_str();
 
-        if !PASCAL_CASE_REGEX.is_match(str) {
+        if !TYPENAME_REGEX.is_match(str) {
             let to = Self::to_case(str, Case::Pascal);
             return Some(Solution::new(SolutionKind::Rename { kind, name, to }));
         }
@@ -124,7 +124,7 @@ impl<'ast> AstValidator<'ast> {
         let sym = name.sym();
         let str = sym.as_str();
 
-        if !CAMEL_CASE_REGEX.is_match(str) {
+        if !VARNAME_REGEX.is_match(str) {
             let to = Self::to_case(str, Case::Camel);
             return Some(Solution::new(SolutionKind::Rename { kind, name, to }));
         }

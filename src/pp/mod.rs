@@ -174,7 +174,7 @@ impl<'a, D> AstLikePP<'a, D> {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
             Kw::Type | Kw::Mod => ("", " "),
-            Kw::Underscore | Kw::Let | Kw::Root | Kw::Unknown => ("", ""),
+            Kw::Unit | Kw::Underscore | Kw::Let | Kw::Root | Kw::Unknown => ("", ""),
         };
 
         self.str(pre);
@@ -269,7 +269,7 @@ impl<'a, D> AstLikePP<'a, D> {
             ResKind::Local(node_id) => Some(*node_id),
             ResKind::Builtin(def_id) | ResKind::Def(def_id) => {
                 Some(self.sess.def_table.get_node_id(*def_id).expect(&format!(
-                    "Name resolution for definition {} by name {}",
+                    "Name resolution to def {} by name {}",
                     def_id,
                     path.to_string()
                 )))

@@ -153,7 +153,7 @@ impl Display for Lit {
 #[derive(Debug)]
 pub struct Infix {
     pub lhs: PR<N<Expr>>,
-    pub op: Path,
+    pub op: PathExpr,
     pub rhs: PR<N<Expr>>,
 }
 
@@ -215,6 +215,12 @@ impl Display for Block {
 #[derive(Debug)]
 pub struct PathExpr(pub PR<Path>);
 
+impl Display for PathExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", pr_display(&self.0))
+    }
+}
+
 #[derive(Debug)]
 pub struct Lambda {
     pub param: PR<Pat>,
@@ -258,7 +264,6 @@ impl Display for TyExpr {
 
 #[derive(Debug)]
 pub enum ExprKind {
-    Unit,
     Lit(Lit),
     Paren(PR<Box<Expr>>),
     Path(PathExpr),
@@ -273,7 +278,7 @@ pub enum ExprKind {
 impl IsBlockEnded for ExprKind {
     fn is_block_ended(&self) -> bool {
         match self {
-            Self::Unit | Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => false,
+            Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => false,
             Self::Block(_) | Self::Let(_) => true,
             Self::Infix(infix) => is_block_ended!(infix.rhs),
             Self::Lambda(lambda) => is_block_ended!(lambda.body),
@@ -285,10 +290,9 @@ impl IsBlockEnded for ExprKind {
 impl Display for ExprKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unit => write!(f, "()"),
             Self::Lit(lit) => write!(f, "{}", lit),
             Self::Paren(expr) => write!(f, "({})", pr_display(expr)),
-            Self::Path(path) => write!(f, "{}", pr_display(&path.0)),
+            Self::Path(path) => write!(f, "{}", path),
             Self::Block(block) => write!(f, "{}", pr_display(block)),
             Self::Infix(infix) => write!(f, "{}", infix),
             Self::Lambda(lambda) => write!(f, "{}", lambda),
@@ -302,7 +306,6 @@ impl Display for ExprKind {
 impl NodeKindStr for ExprKind {
     fn kind_str(&self) -> String {
         match self {
-            Self::Unit => "unit expression ()",
             Self::Lit(_) => "literal",
             Self::Paren(_) => "parenthesized expression", // FIXME: Inner expression `kind_str`
             Self::Block(_) => "block expression",

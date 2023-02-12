@@ -115,7 +115,6 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     // Expressions //
     fn visit_expr(&mut self, expr: &'ast Expr) {
         match expr.kind() {
-            ExprKind::Unit => self.visit_unit_expr(),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit),
             ExprKind::Paren(inner) => {
                 self.ch('(');
@@ -133,10 +132,6 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         self.node_id(expr);
     }
 
-    fn visit_unit_expr(&mut self) {
-        self.str("()");
-    }
-
     fn visit_lit_expr(&mut self, lit: &'ast Lit) {
         self.string(lit);
     }
@@ -144,7 +139,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
         self.str(" ");
-        self.visit_path(&infix.op);
+        self.visit_path_expr(&infix.op);
         self.str(" ");
         walk_pr!(self, &infix.rhs, visit_expr);
     }
@@ -176,16 +171,11 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     // Types //
     fn visit_ty(&mut self, ty: &'ast Ty) {
         match ty.kind() {
-            TyKind::Unit => self.visit_unit_ty(),
-            TyKind::Path(path) => self.visit_path_ty(path),
+            TyKind::Path(path) => self.visit_ty_path(path),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
         }
         self.node_id(ty);
-    }
-
-    fn visit_unit_ty(&mut self) {
-        self.str("()");
     }
 
     fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {
