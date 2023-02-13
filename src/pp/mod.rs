@@ -267,7 +267,11 @@ impl<'a, D> AstLikePP<'a, D> {
 
         let node_id = match res.kind() {
             ResKind::Local(node_id) => Some(*node_id),
-            ResKind::Builtin(def_id) | ResKind::Def(def_id) => {
+            &ResKind::Builtin(bt) => self
+                .sess
+                .def_table
+                .get_node_id(self.sess.def_table.builtin_def_id(bt).unwrap()),
+            ResKind::Def(def_id) => {
                 Some(self.sess.def_table.get_node_id(*def_id).expect(&format!(
                     "Name resolution to def {} by name {}",
                     def_id,

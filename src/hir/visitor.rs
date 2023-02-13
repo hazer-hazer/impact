@@ -81,7 +81,6 @@ pub trait HirVisitor {
     fn visit_expr(&mut self, expr: &Expr, hir: &HIR) {
         let expr = hir.expr(*expr);
         match &expr.kind() {
-            ExprKind::Unit => self.visit_unit_expr(hir),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
             ExprKind::Block(block) => self.visit_block_expr(block, hir),
@@ -91,8 +90,6 @@ pub trait HirVisitor {
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
         }
     }
-
-    fn visit_unit_expr(&mut self, _hir: &HIR) {}
 
     fn visit_lit_expr(&mut self, _: &Lit, _hir: &HIR) {}
 
@@ -127,13 +124,10 @@ pub trait HirVisitor {
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
         let ty = hir.ty(*ty);
         match &ty.kind {
-            TyKind::Unit => self.visit_unit_ty(hir),
             TyKind::Path(path) => self.visit_ty_path(path, hir),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
         }
     }
-
-    fn visit_unit_ty(&mut self, _hir: &HIR) {}
 
     fn visit_ty_path(&mut self, path: &TyPath, hir: &HIR) {
         self.visit_path(&path.0, hir)

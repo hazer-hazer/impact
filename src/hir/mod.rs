@@ -324,8 +324,7 @@ impl HIR {
     pub fn expr_result_span(&self, expr_id: Expr) -> Span {
         let expr = self.expr(expr_id);
         match expr.kind() {
-            ExprKind::Unit
-            | ExprKind::Lit(_)
+            ExprKind::Lit(_)
             | ExprKind::Path(_)
             | ExprKind::Lambda(_)
             | ExprKind::Call(_)

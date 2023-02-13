@@ -30,20 +30,22 @@ pub enum IntKind {
     Int,
 }
 
-impl From<hir::expr::IntKind> for IntKind {
-    fn from(kind: hir::expr::IntKind) -> Self {
+impl TryFrom<hir::expr::IntKind> for IntKind {
+    type Error = ();
+
+    fn try_from(kind: hir::expr::IntKind) -> Result<Self, Self::Error> {
         match kind {
-            hir::expr::IntKind::Unknown => todo!(),
-            hir::expr::IntKind::U8 => Self::U8,
-            hir::expr::IntKind::U16 => Self::U16,
-            hir::expr::IntKind::U32 => Self::U32,
-            hir::expr::IntKind::U64 => Self::U64,
-            hir::expr::IntKind::Uint => Self::Uint,
-            hir::expr::IntKind::I8 => Self::I8,
-            hir::expr::IntKind::I16 => Self::I16,
-            hir::expr::IntKind::I32 => Self::I32,
-            hir::expr::IntKind::I64 => Self::I64,
-            hir::expr::IntKind::Int => Self::Int,
+            hir::expr::IntKind::Unknown => Err(()),
+            hir::expr::IntKind::U8 => Ok(Self::U8),
+            hir::expr::IntKind::U16 => Ok(Self::U16),
+            hir::expr::IntKind::U32 => Ok(Self::U32),
+            hir::expr::IntKind::U64 => Ok(Self::U64),
+            hir::expr::IntKind::Uint => Ok(Self::Uint),
+            hir::expr::IntKind::I8 => Ok(Self::I8),
+            hir::expr::IntKind::I16 => Ok(Self::I16),
+            hir::expr::IntKind::I32 => Ok(Self::I32),
+            hir::expr::IntKind::I64 => Ok(Self::I64),
+            hir::expr::IntKind::Int => Ok(Self::Int),
         }
     }
 }
@@ -86,12 +88,14 @@ pub enum FloatKind {
     F64,
 }
 
-impl From<hir::expr::FloatKind> for FloatKind {
-    fn from(kind: hir::expr::FloatKind) -> Self {
+impl TryFrom<hir::expr::FloatKind> for FloatKind {
+    type Error = ();
+
+    fn try_from(kind: hir::expr::FloatKind) -> Result<Self, Self::Error> {
         match kind {
-            hir::expr::FloatKind::Unknown => todo!(),
-            hir::expr::FloatKind::F32 => Self::F32,
-            hir::expr::FloatKind::F64 => Self::F64,
+            hir::expr::FloatKind::Unknown => Err(()),
+            hir::expr::FloatKind::F32 => Ok(Self::F32),
+            hir::expr::FloatKind::F64 => Ok(Self::F64),
         }
     }
 }
@@ -114,18 +118,22 @@ impl Display for FloatKind {
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum PrimTy {
     Bool,
+    IntEx(ExistentialId),
     Int(IntKind),
+    FloatEx(ExistentialId),
     Float(FloatKind),
     String,
 }
 
-impl From<Lit> for PrimTy {
-    fn from(lit: Lit) -> Self {
-        match lit {
-            Lit::Bool(_) => Self::Bool,
-            Lit::Int(_, kind) => Self::Int(IntKind::from(kind)),
-            Lit::Float(_, kind) => Self::Float(FloatKind::from(kind)),
-            Lit::String(_) => Self::String,
+impl TryFrom<Lit> for PrimTy {
+    type Error = ();
+
+    fn try_from(kind: Lit) -> Result<Self, Self::Error> {
+        match kind {
+            Lit::Bool(_) => Ok(Self::Bool),
+            Lit::Int(_, kind) => IntKind::try_from(kind).map(|kind| PrimTy::Int(kind)),
+            Lit::Float(_, kind) => FloatKind::try_from(kind).map(|kind| PrimTy::Float(kind)),
+            Lit::String(_) => Ok(Self::String),
         }
     }
 }
@@ -137,6 +145,8 @@ impl Display for PrimTy {
             PrimTy::String => write!(f, "string"),
             PrimTy::Int(kind) => write!(f, "{}", kind),
             PrimTy::Float(kind) => write!(f, "{}", kind),
+            PrimTy::IntEx(ex) => write!(f, "int^{}", ex),
+            PrimTy::FloatEx(ex) => write!(f, "float^{}", ex),
         }
     }
 }
@@ -150,7 +160,7 @@ pub enum TyKind {
     Error,
 
     Unit,
-    Lit(PrimTy),
+    Prim(PrimTy),
     Var(Ident),
     Existential(ExistentialId),
     Func(Ty, Ty),
@@ -215,7 +225,7 @@ impl TyS {
     }
 
     pub fn lit(lit_ty: PrimTy) -> Self {
-        Self::new(TyKind::Lit(lit_ty))
+        Self::new(TyKind::Prim(lit_ty))
     }
 
     pub fn error() -> Self {
@@ -232,7 +242,7 @@ impl Display for TyS {
         match self.kind() {
             TyKind::Error => write!(f, "[ERROR]"),
             TyKind::Unit => write!(f, "()"),
-            TyKind::Lit(lit) => write!(f, "{}", lit),
+            TyKind::Prim(lit) => write!(f, "{}", lit),
             TyKind::Var(ident) => write!(f, "{}", ident),
             TyKind::Existential(ident) => write!(f, "{}", ident),
             TyKind::Func(param_ty, return_ty) => write!(f, "{} -> {}", param_ty, return_ty),
@@ -281,6 +291,15 @@ impl TyInterner {
 pub enum Subst {
     Existential(ExistentialId),
     Name(Ident),
+}
+
+impl Display for Subst {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Subst::Existential(ex) => ex.fmt(f),
+            Subst::Name(name) => name.fmt(f),
+        }
+    }
 }
 
 impl PartialEq<Ident> for Subst {

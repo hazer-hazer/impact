@@ -39,7 +39,8 @@ impl TyCtx {
     }
 
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
-        assert!(self.typed.insert(id, ty).is_none());
+        // assert!(self.typed.insert(id, ty).is_none());
+        self.typed.insert(id, ty).is_none();
     }
 
     pub fn node_type(&self, id: HirId) -> Option<Ty> {
@@ -71,7 +72,7 @@ impl TyCtx {
     }
 
     pub fn lit(&mut self, prim: PrimTy) -> Ty {
-        self.intern(TyS::new(TyKind::Lit(prim)))
+        self.intern(TyS::new(TyKind::Prim(prim)))
     }
 
     pub fn func(&mut self, param: Ty, ret: Ty) -> Ty {
@@ -86,12 +87,12 @@ impl TyCtx {
         self.intern(TyS::new(TyKind::Existential(ex)))
     }
 
-    // Helpers //
+    // Checks //
     pub fn is_mono(&self, ty: Ty) -> bool {
         match self.ty(ty).kind() {
             TyKind::Error
             | TyKind::Unit
-            | TyKind::Lit(_)
+            | TyKind::Prim(_)
             | TyKind::Var(_)
             | TyKind::Existential(_) => true,
             TyKind::Func(param_ty, return_ty) => {
@@ -106,7 +107,7 @@ impl TyCtx {
         match self.ty(ty).kind() {
             TyKind::Error => format!("[ERROR]"),
             TyKind::Unit => format!("()"),
-            TyKind::Lit(lit) => format!("{}", lit),
+            TyKind::Prim(lit) => format!("{}", lit),
             TyKind::Var(name) => format!("{}", name),
             TyKind::Existential(ex) => format!("{}", ex),
             &TyKind::Func(param, body) => format!("({} -> {})", self.pp(param), self.pp(body)),

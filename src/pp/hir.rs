@@ -111,7 +111,6 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.hir_id(expr);
 
         match &expr.kind() {
-            ExprKind::Unit => self.visit_unit_expr(hir),
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
             ExprKind::Block(block) => self.visit_block_expr(block, hir),
@@ -121,10 +120,6 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
         }
         self.pp.ty_anno(expr_id);
-    }
-
-    fn visit_unit_expr(&mut self, _hir: &HIR) {
-        self.pp.str("()");
     }
 
     fn visit_lit_expr(&mut self, lit: &Lit, _hir: &HIR) {
@@ -161,14 +156,9 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.hir_id(ty);
 
         match &ty.kind {
-            TyKind::Unit => self.visit_unit_ty(hir),
             TyKind::Path(path) => self.visit_ty_path(path, hir),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
         }
-    }
-
-    fn visit_unit_ty(&mut self, _hir: &HIR) {
-        self.pp.str("()");
     }
 
     fn visit_func_ty(&mut self, param_ty: &Ty, return_ty: &Ty, hir: &HIR) {
@@ -178,12 +168,15 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     // Patterns //
-    fn visit_pat(&mut self, pat: &Pat, hir: &HIR) {
-        let pat = hir.pat(*pat);
+    fn visit_pat(&mut self, &pat_id: &Pat, hir: &HIR) {
+        let pat = hir.pat(pat_id);
         self.pp.hir_id(pat);
 
         match pat.kind() {
-            PatKind::Ident(ident) => self.visit_ident_pat(&ident, hir),
+            PatKind::Ident(ident) => {
+                self.visit_ident_pat(&ident, hir);
+                self.pp.ty_anno(pat_id);
+            },
         }
     }
 

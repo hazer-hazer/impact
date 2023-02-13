@@ -192,9 +192,9 @@ impl<'ast> NameResolver<'ast> {
                         // Yeah, crutches
                         return Res::declare_builtin();
                     },
-                    DefKind::Builtin(_) => {
+                    &DefKind::Builtin(bt) => {
                         assert_eq!(def.kind().namespace(), target_ns);
-                        return Res::builtin(def_id);
+                        return Res::builtin(bt);
                     },
                 }
             } else {

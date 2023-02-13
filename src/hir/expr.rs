@@ -158,7 +158,6 @@ pub struct Body {
 
 #[derive(Debug)]
 pub enum ExprKind {
-    Unit,
     Lit(Lit),
     Path(PathExpr),
     Block(Block),

@@ -1,4 +1,5 @@
 use crate::{
+    cli::verbose,
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
@@ -238,6 +239,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn solve(&mut self, ex: ExistentialId, solution: Ty) -> Option<Ty> {
+        verbose!("Solve {} as {}", ex, self.tyctx().pp(solution));
         self._ascend_ctx_mut(|ctx| ctx.solve(ex, solution))
             .map_or(None, |(ty, _)| Some(ty))
     }
@@ -259,18 +261,33 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn apply_ctx_on(&mut self, ty: Ty) -> Ty {
+        let res = self._apply_ctx_on(ty);
+        if ty != res {
+            verbose!(
+                "[APPLY CTX] {} => {}",
+                self.tyctx().pp(ty),
+                self.tyctx().pp(res)
+            );
+        }
+        res
+    }
+
+    fn _apply_ctx_on(&mut self, ty: Ty) -> Ty {
         match self.tyctx().ty(ty).kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => ty,
-            &TyKind::Existential(ex) => self
+            TyKind::Error | TyKind::Unit | TyKind::Var(_) => ty,
+            &TyKind::Prim(PrimTy::FloatEx(ex))
+            | &TyKind::Prim(PrimTy::IntEx(ex))
+            | &TyKind::Existential(ex) => self
                 .ascend_ctx(|ctx| ctx.get_solution(ex))
-                .map_or(ty, |ty| self.apply_ctx_on(ty)),
+                .map_or(ty, |ty| self._apply_ctx_on(ty)),
+            &TyKind::Prim(_) => ty,
             &TyKind::Func(param_ty, return_ty) => {
-                let param = self.apply_ctx_on(param_ty);
-                let ret = self.apply_ctx_on(return_ty);
+                let param = self._apply_ctx_on(param_ty);
+                let ret = self._apply_ctx_on(return_ty);
                 self.tyctx_mut().func(param, ret)
             },
             &TyKind::Forall(ident, body) => {
-                let body = self.apply_ctx_on(body);
+                let body = self._apply_ctx_on(body);
                 self.tyctx_mut().forall(ident, body)
             },
         }
@@ -278,7 +295,7 @@ impl<'hir> Typecker<'hir> {
 
     pub fn ty_occurs_in(&mut self, ty: Ty, name: Subst) -> bool {
         match self.tyctx().ty(ty).kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Lit(_) => false,
+            TyKind::Error | TyKind::Unit | TyKind::Prim(_) => false,
             &TyKind::Var(name_) if name == name_ => true,
             TyKind::Var(_) => false,
             &TyKind::Existential(ex) if name == ex => {
@@ -296,7 +313,7 @@ impl<'hir> Typecker<'hir> {
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<()> {
         match self.tyctx().ty(ty).kind() {
-            TyKind::Unit | TyKind::Lit(_) => Ok(()),
+            TyKind::Unit | TyKind::Prim(_) => Ok(()),
             &TyKind::Var(ident) => {
                 if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
                     Ok(())
@@ -332,8 +349,15 @@ impl<'hir> Typecker<'hir> {
 
     // Substitution //
     pub fn substitute(&mut self, ty: Ty, subst: Subst, with: Ty) -> Ty {
+        verbose!(
+            "Substitute {} in {} with {}",
+            subst,
+            self.tyctx().pp(ty),
+            self.tyctx().pp(with)
+        );
+
         match self.tyctx().ty(ty).kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Lit(_) => ty,
+            TyKind::Error | TyKind::Unit | TyKind::Prim(_) => ty,
             &TyKind::Var(ident) => {
                 if subst == ident {
                     with
@@ -378,7 +402,6 @@ impl<'hir> Typecker<'hir> {
         // TODO: Allow recursive?
 
         match ty.kind {
-            hir::ty::TyKind::Unit => self.tyctx_mut().unit(),
             hir::ty::TyKind::Path(TyPath(path)) => self.conv_path(path),
             hir::ty::TyKind::Func(param, body) => {
                 let param = self.conv(param);
@@ -394,8 +417,6 @@ impl<'hir> Typecker<'hir> {
             &ResKind::Def(def_id) => {
                 let def = self.sess.def_table.get_def(def_id).unwrap();
                 match def.kind() {
-                    &DefKind::Builtin(bt) if bt.is_ty() => self.tyctx().builtin_ty(bt),
-
                     DefKind::TyAlias => {
                         // Path conversion is done linearly, i.e. we get type alias from HIR and convert its type, caching it
                         // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
@@ -419,6 +440,7 @@ impl<'hir> Typecker<'hir> {
                     | DefKind::Var => unreachable!(),
                 }
             },
+            &ResKind::Builtin(bt) if bt.is_ty() => self.tyctx().builtin_ty(bt),
             _ => unreachable!(),
         }
     }
@@ -462,9 +484,10 @@ impl<'hir> Typecker<'hir> {
 
     // Synthesis //
     fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
+        verbose!("Synth type of expression {}", expr_id);
+
         let expr = self.hir.expr(expr_id);
         let expr_ty = match expr.kind() {
-            ExprKind::Unit => Ok(self.tyctx_mut().unit()),
             ExprKind::Lit(lit) => self.synth_lit(lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
@@ -484,8 +507,20 @@ impl<'hir> Typecker<'hir> {
     fn synth_lit(&mut self, lit: &Lit) -> TyResult<Ty> {
         let prim = match lit {
             Lit::Bool(_) => PrimTy::Bool,
-            Lit::Int(_, kind) => PrimTy::Int(self.conv_int_kind(*kind)),
-            Lit::Float(_, kind) => PrimTy::Float(self.conv_float_kind(*kind)),
+            &Lit::Int(_, kind) if kind != hir::expr::IntKind::Unknown => {
+                PrimTy::Int(self.conv_int_kind(kind))
+            },
+            Lit::Int(_, _) => {
+                let ex = self.add_fresh_ex();
+                PrimTy::IntEx(ex.0)
+            },
+            &Lit::Float(_, kind) if kind != hir::expr::FloatKind::Unknown => {
+                PrimTy::Float(self.conv_float_kind(kind))
+            },
+            Lit::Float(_, _) => {
+                let ex = self.add_fresh_ex();
+                PrimTy::FloatEx(ex.0)
+            },
             Lit::String(_) => PrimTy::String,
         };
 
@@ -529,22 +564,35 @@ impl<'hir> Typecker<'hir> {
     fn synth_lambda(&mut self, lambda: &Lambda) -> TyResult<Ty> {
         // Parameter is a pattern which can contain multiple name bindings
         // FIXME: Should these existentials be inside context?
-        let param_names = self.hir.pat_names(lambda.param).map_or(vec![], |names| {
-            names
-                .iter()
-                .map(|&name| (name, self.add_fresh_ex()))
-                .collect::<Vec<_>>()
-        });
+        // let param_names = self.hir.pat_names(lambda.param).map_or(vec![], |names| {
+        //     names
+        //         .iter()
+        //         .map(|&name| (name, self.add_fresh_ex()))
+        //         .collect::<Vec<_>>()
+        // });
+
+        let param_name = match self.hir.pat(lambda.param).kind() {
+            &hir::pat::PatKind::Ident(name) => name,
+        };
+        let param_name_ex = self.add_fresh_ex();
 
         let body_ex = self.add_fresh_ex();
 
         self.under_new_ctx(|this| {
             // FIXME: What if pattern w/o name?
-            param_names.iter().for_each(|(name, name_ex)| {
-                this.type_term(*name, name_ex.1);
-            });
+            // param_names.iter().for_each(|(name, name_ex)| {
+            //     this.type_term(*name, name_ex.1);
+            // });
 
-            this.check(lambda.body, body_ex.1)
+            this.type_term(param_name, param_name_ex.1);
+
+            let body_ty = this.check(lambda.body, body_ex.1)?;
+
+            let param_ty = this.apply_ctx_on(param_name_ex.1);
+
+            this.tyctx_mut().type_node(lambda.param, param_ty);
+
+            Ok(body_ty)
         })
     }
 
@@ -555,10 +603,16 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _synth_call(&mut self, lhs_ty: Ty, arg: Expr) -> TyResult<Ty> {
+        verbose!(
+            "Synthesize call {} with arg {}",
+            self.tyctx().pp(lhs_ty),
+            arg
+        );
+
         match self.tyctx().ty(lhs_ty).kind() {
             // FIXME: Or return Ok(lhs_ty)?
             TyKind::Error => Err(TyError()),
-            TyKind::Unit | TyKind::Lit(_) | TyKind::Var(_) => todo!("Non-callable type"),
+            TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => todo!("Non-callable type"),
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
@@ -638,8 +692,17 @@ impl<'hir> Typecker<'hir> {
     // Check //
     fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
-            Ok(ok) => Ok(ok),
+            Ok(ok) => {
+                verbose!("[+] Expr {} is of type {}", expr_id, self.tyctx().pp(ty));
+                Ok(self.apply_ctx_on(ok))
+            },
             Err(err) => {
+                verbose!(
+                    "[-] Expr {} is NOT of type {}",
+                    expr_id,
+                    self.tyctx().pp(ty)
+                );
+
                 let ty = self.tyctx().ty(ty);
 
                 let span = self.hir.expr_result_span(expr_id);
@@ -667,12 +730,16 @@ impl<'hir> Typecker<'hir> {
         let expr = self.hir.expr(expr_id);
         let tys = self.tyctx().ty(ty);
 
-        match (&expr.kind(), tys.kind()) {
-            (ExprKind::Lit(lit), TyKind::Lit(prim)) => {
-                if *prim != PrimTy::from(*lit) {
-                    Err(TyError())
-                } else {
-                    Ok(ty)
+        match (expr.kind(), tys.kind()) {
+            (&ExprKind::Lit(lit), &TyKind::Prim(prim)) => {
+                if let Ok(lit_prim) = PrimTy::try_from(lit) {
+                    if lit_prim == prim {
+                        return Ok(ty);
+                    } else {
+                        // Unequal literals (not existentials as we not failed
+                        //  to construct PrimTy of Lit without context)
+                        return Err(TyError());
+                    }
                 }
             },
 
@@ -681,31 +748,46 @@ impl<'hir> Typecker<'hir> {
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];
 
-                self.under_ctx(Ctx::new_with_term(param_name, param_ty), |this| {
+                return self.under_ctx(Ctx::new_with_term(param_name, param_ty), |this| {
                     this._check(lambda.body, body_ty)
+                });
+            },
+
+            (_, &TyKind::Forall(alpha, body)) => {
+                return self.under_ctx(Ctx::new_with_var(alpha), |this| {
+                    this._check(expr_id, body)?;
+                    Ok(ty)
                 })
             },
 
-            (_, &TyKind::Forall(alpha, body)) => self.under_ctx(Ctx::new_with_var(alpha), |this| {
-                this._check(expr_id, body)?;
-                Ok(ty)
-            }),
-
-            _ => {
-                let expr_ty = self.synth_expr(expr_id)?;
-                let l = self.apply_ctx_on(expr_ty);
-                let r = self.apply_ctx_on(ty);
-
-                self.subtype(Spanned::new(expr.span(), l), r)
-            },
+            _ => {},
         }
+
+        let expr_ty = self.synth_expr(expr_id)?;
+        let l = self.apply_ctx_on(expr_ty);
+        let r = self.apply_ctx_on(ty);
+
+        self.subtype(Spanned::new(expr.span(), l), r)
     }
 
     // Subtyping //
     fn subtype(&mut self, check_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
         match self._subtype(*check_ty.node(), r_ty) {
-            Ok(_) => Ok(r_ty),
+            Ok(ty) => {
+                verbose!(
+                    "[+] {} is a subtype of {}",
+                    self.tyctx().pp(*check_ty.node()),
+                    self.tyctx().pp(ty)
+                );
+                Ok(self.apply_ctx_on(ty))
+            },
             Err(err) => {
+                verbose!(
+                    "[-] {} is NOT a subtype of {}",
+                    self.tyctx().pp(*check_ty.node()),
+                    self.tyctx().pp(r_ty)
+                );
+
                 let span = check_ty.span();
                 let l_ty = self.tyctx().ty(*check_ty.node());
                 let r_ty = self.tyctx().ty(r_ty);
@@ -721,16 +803,48 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<()> {
+    fn prim_subtype(&mut self, l_prim: PrimTy, r_prim: PrimTy) -> TyResult<Ty> {
+        let eq = match (l_prim, r_prim) {
+            (PrimTy::Bool, PrimTy::Bool) => true,
+            (PrimTy::Int(kind), PrimTy::Int(kind_)) => kind == kind_,
+            (PrimTy::Float(kind), PrimTy::Float(kind_)) => kind == kind_,
+            (PrimTy::String, PrimTy::String) => true,
+
+            (PrimTy::IntEx(ex), PrimTy::IntEx(ex_)) if ex == ex_ => true,
+            (PrimTy::IntEx(ex), PrimTy::Int(int)) | (PrimTy::Int(int), PrimTy::IntEx(ex)) => {
+                let int = self.tyctx_mut().lit(PrimTy::Int(int));
+                return self.try_instantiate_common(ex, int);
+            },
+
+            (PrimTy::FloatEx(ex), PrimTy::FloatEx(ex_)) if ex == ex_ => true,
+            (PrimTy::Float(float), PrimTy::FloatEx(ex))
+            | (PrimTy::FloatEx(ex), PrimTy::Float(float)) => {
+                let float = self.tyctx_mut().lit(PrimTy::Float(float));
+                return self.try_instantiate_common(ex, float);
+            },
+
+            _ => false,
+        };
+
+        if eq {
+            Ok(self.tyctx_mut().lit(r_prim))
+        } else {
+            Err(TyError())
+        }
+    }
+
+    fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         assert!(self.ty_wf(l_ty).is_ok());
         assert!(self.ty_wf(r_ty).is_ok());
 
         match (self.tyctx().ty(l_ty).kind(), self.tyctx().ty(r_ty).kind()) {
-            (TyKind::Lit(kind), TyKind::Lit(kind_)) if kind == kind_ => Ok(()),
+            (&TyKind::Prim(prim), &TyKind::Prim(prim_)) => self.prim_subtype(prim, prim_),
 
-            (TyKind::Var(name1), TyKind::Var(name2)) if name1.sym() == name2.sym() => Ok(()),
+            (TyKind::Var(name1), TyKind::Var(name2)) if name1.sym() == name2.sym() => Ok(r_ty),
 
-            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => self.ty_wf(l_ty),
+            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => {
+                self.ty_wf(l_ty).map(|_| r_ty)
+            },
 
             (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2)) => {
                 // self.under_new_ctx(|this| {
@@ -743,6 +857,7 @@ impl<'hir> Typecker<'hir> {
             },
 
             (&TyKind::Forall(alpha, body), _) => {
+                verbose!("forall {}. {} subtype of (?)", alpha, self.tyctx().pp(body));
                 let ex = self.fresh_ex();
                 let ex_ty = self.tyctx_mut().existential(ex);
                 let with_substituted_alpha = self.substitute(body, Subst::Name(alpha), ex_ty);
@@ -778,7 +893,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn try_instantiate_common(&mut self, ex: ExistentialId, ty: Ty) -> TyResult<()> {
+    fn try_instantiate_common(&mut self, ex: ExistentialId, ty: Ty) -> TyResult<Ty> {
         let tys = self.tyctx().ty(ty);
 
         // Inst(L|R)Reach
@@ -786,35 +901,46 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Existential(ty_ex) => {
                 let ex_depth = self.find_unbound_ex_depth(ex);
                 let ty_ex_depth = self.find_unbound_ex_depth(ty_ex);
-                if ex_depth < ty_ex_depth {
+                if ex_depth <= ty_ex_depth {
                     let ex_ty = self.tyctx_mut().existential(ex);
+
+                    verbose!(
+                        "Instantiate L|R Reach {} = {}",
+                        ty_ex,
+                        self.tyctx().pp(ex_ty)
+                    );
+
                     self.solve(ty_ex, ex_ty);
-                    return Ok(());
+                    return Ok(self.apply_ctx_on(ex_ty));
                 }
             },
             _ => {},
         }
 
+        // Inst(L|R)Solve
         if self.tyctx().is_mono(ty) {
+            verbose!("Instantiate L|R Solve {} = {}", ex, self.tyctx().pp(ty));
             // FIXME: check WF?
             self.solve(ex, ty);
-            return Ok(());
+            return Ok(self.apply_ctx_on(ty));
         }
 
         Err(TyError())
     }
 
-    fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<()> {
+    fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<Ty> {
         if let Ok(ok) = self.try_instantiate_common(ex, r_ty) {
             return Ok(ok);
         }
+
+        verbose!("Instantiate Left {} = {}", ex, self.tyctx().pp(r_ty));
 
         let ty = self.tyctx().ty(r_ty);
 
         match ty.kind() {
             TyKind::Error
             | TyKind::Unit
-            | TyKind::Lit(_)
+            | TyKind::Prim(_)
             | TyKind::Var(_)
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
@@ -840,17 +966,19 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn instantiate_r(&mut self, l_ty: Ty, ex: ExistentialId) -> TyResult<()> {
+    fn instantiate_r(&mut self, l_ty: Ty, ex: ExistentialId) -> TyResult<Ty> {
         if let Ok(ok) = self.try_instantiate_common(ex, l_ty) {
             return Ok(ok);
         }
+
+        verbose!("Instantiate Right {} = {}", ex, self.tyctx().pp(l_ty));
 
         let ty = self.tyctx().ty(l_ty);
 
         match ty.kind() {
             TyKind::Error
             | TyKind::Unit
-            | TyKind::Lit(_)
+            | TyKind::Prim(_)
             | TyKind::Var(_)
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
@@ -869,6 +997,12 @@ impl<'hir> Typecker<'hir> {
                 this.instantiate_r(range_ty, range_ex.0)
             }),
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
+                verbose!(
+                    "Instantiate forall Right {} = {}",
+                    ex,
+                    this.tyctx().pp(l_ty)
+                );
+
                 let alpha_ex = this.fresh_ex();
 
                 this.under_ctx(Ctx::new_with_ex(alpha_ex), |this| {

@@ -98,6 +98,7 @@ impl Display for Punct {
     }
 }
 
+// TODO: Generalize `IntKind` to any suffix
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum IntKind {
     Unknown,
@@ -137,6 +138,7 @@ impl Display for IntKind {
     }
 }
 
+// TODO: Generalize `FloatKind` to any suffix
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FloatKind {
     Unknown,

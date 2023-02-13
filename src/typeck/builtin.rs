@@ -54,14 +54,14 @@ pub(super) fn builtins(tyctx: &mut TyCtx) -> HashMap<Builtin, Ty> {
             Builtin::Add,
             ty!(
                 tyctx;
-                forall a. forall b. a -> (a -> a)
+                forall a. a -> a -> a
             ),
         ),
         (
             Builtin::Minus,
             ty!(
                 tyctx;
-                forall a. forall b. a -> (a -> a)
+                forall a. a -> a -> a
             ),
         ),
         // Types //

@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::ast::NodeId;
 
-use super::def::DefId;
+use super::{def::DefId, builtin::Builtin};
 
 // #[derive(Debug, Clone, Copy)]
 // pub struct LocalId(NodeId);
@@ -12,7 +12,7 @@ pub enum ResKind {
     Local(NodeId),
     Def(DefId), // Definition, e.g. imported function
     MakeBuiltin,
-    Builtin(DefId),
+    Builtin(Builtin),
     Error,
 }
 
@@ -44,9 +44,9 @@ impl Res {
         }
     }
 
-    pub fn builtin(def_id: DefId) -> Self {
+    pub fn builtin(builtin: Builtin) -> Self {
         Self {
-            kind: ResKind::Builtin(def_id),
+            kind: ResKind::Builtin(builtin),
         }
     }
 

@@ -32,7 +32,6 @@ pub struct TyPath(pub Path);
 
 #[derive(Debug)]
 pub enum TyKind {
-    Unit,
     Path(TyPath),
     Func(Ty, Ty),
 }
