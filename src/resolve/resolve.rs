@@ -107,13 +107,29 @@ impl<'ast> NameResolver<'ast> {
         self.scopes.pop();
     }
 
-    fn resolve_local(&mut self, name: &Ident) -> Option<Res> {
+    fn resolve_local(&mut self, target_ns: Namespace, name: &Ident) -> Option<Res> {
         let mut scope_id = self.scopes.len() - 1;
         loop {
             let local = &self.scopes[scope_id].locals.get(&name.sym());
             if let Some(&local) = local {
                 return Some(Res::local(local));
             }
+
+            match &self.scopes[scope_id].kind {
+                ScopeKind::Func => {},
+                &ScopeKind::Module(module_id) => {
+                    // AGENDA: Check def kind
+                    if let Some(def_id) = self
+                        .sess
+                        .def_table
+                        .get_module(module_id)
+                        .get_from_ns(target_ns, name)
+                    {
+                        return Some(Res::def(def_id));
+                    }
+                },
+            }
+
             if scope_id == 0 {
                 break;
             }
@@ -128,7 +144,7 @@ impl<'ast> NameResolver<'ast> {
         // TODO: When generics added, don't resolve local if segment has generics
         if segments.len() == 1 {
             // TODO: Assert that segment is lowercase for local variable?
-            if let Some(local) = self.resolve_local(segments[0].expect_name()) {
+            if let Some(local) = self.resolve_local(target_ns, segments[0].expect_name()) {
                 return local;
             }
         }

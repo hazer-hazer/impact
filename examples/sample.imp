@@ -7,4 +7,8 @@ type () = builtin
 (-) = builtin
 
 main a =
-    l = 123
+    foo p =
+        l = 123
+        l
+
+    foo 123

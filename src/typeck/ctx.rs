@@ -1,12 +1,11 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
 use crate::{
-    cli::color::{Color, Colorize},
-    dt::idx::{declare_idx, IndexVec},
+    dt::idx::IndexVec,
     span::span::{Ident, Symbol},
 };
 
-use super::ty::{Existential, Ty, ExistentialId, ExistentialKind};
+use super::ty::{Existential, ExistentialId, ExistentialKind, Ty};
 
 #[derive(Default, Clone, Debug)]
 pub struct InferCtx {
@@ -111,6 +110,19 @@ impl InferCtx {
 
     pub fn existentials(&self) -> &[Existential] {
         self.existentials.as_ref()
+    }
+
+    pub fn unsolved(&self) -> Vec<Existential> {
+        self.existentials
+            .iter()
+            .filter_map(|&ex| {
+                if let None = self.get_solution(ex) {
+                    Some(ex)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn int_exes(&self) -> Vec<Existential> {

@@ -32,7 +32,7 @@ fn main() {
         .pp_stages(PPStages::All)
         .verbose_messages(true)
         .parser_debug(false)
-        .pp_ast_ids(true)
+        .pp_ast_ids(false)
         .emit();
 
     let interface = Interface::new(config);

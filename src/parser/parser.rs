@@ -14,7 +14,7 @@ use crate::{
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Internable, Kw, Span, WithSpan},
+    span::span::{Ident, Kw, Span, WithSpan},
 };
 
 use super::token::{Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
