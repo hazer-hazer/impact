@@ -31,8 +31,8 @@ fn main() {
         .compilation_depth(StageName::Unset)
         .pp_stages(PPStages::All)
         .verbose_messages(true)
-        .parser_debug(true)
-        .pp_ast_ids(false)
+        .parser_debug(false)
+        .pp_ast_ids(true)
         .emit();
 
     let interface = Interface::new(config);

@@ -7,7 +7,4 @@ type () = builtin
 (-) = builtin
 
 main a =
-    l = 123: i32
-
-    b = 123
-    a + b
+    l = 123

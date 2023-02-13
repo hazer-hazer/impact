@@ -10,7 +10,6 @@
     "Exvar",
     "Forall",
     "formedness",
-    "funcs",
     "idents",
     "illformed",
     "interner",

@@ -403,14 +403,19 @@ impl<'ast> Lower<'ast> {
     fn lower_block(&mut self, block: &Block) -> hir::expr::Block {
         assert!(!block.stmts().is_empty());
 
-        let stmts = block.stmts()[0..block.stmts().len() - 1]
+        let mut stmts = block.stmts()[0..block.stmts().len() - 1]
             .iter()
             .map(|stmt| lower_pr!(self, stmt, lower_stmt))
             .collect::<Vec<_>>();
 
         let expr = match block.stmts().last().unwrap().as_ref().unwrap().kind() {
             StmtKind::Expr(expr) => Some(lower_pr!(self, expr, lower_expr)),
-            StmtKind::Item(_) => None,
+            StmtKind::Item(item) => {
+                let span = item.span();
+                let item = lower_pr!(self, item, lower_item);
+                stmts.push(self.stmt_item(span, item));
+                None
+            },
         };
 
         let id = self.lower_node_id(block.id());
@@ -418,6 +423,15 @@ impl<'ast> Lower<'ast> {
     }
 
     // Synthesis //
+    fn stmt(&mut self, span: Span, kind: hir::stmt::StmtKind) -> hir::stmt::Stmt {
+        let id = self.next_hir_id();
+        self.add_node(Node::StmtNode(hir::stmt::StmtNode::new(id, kind, span)))
+    }
+
+    fn stmt_item(&mut self, span: Span, item: ItemId) -> hir::stmt::Stmt {
+        self.stmt(span, hir::stmt::StmtKind::Item(item))
+    }
+
     fn item(
         &mut self,
         span: Span,

@@ -20,8 +20,11 @@ use crate::{
 };
 
 use self::{
-    ctx::{Ctx, ExistentialId},
-    ty::{FloatKind, IntKind, PrimTy, Ty, TyError, TyKind, TyResult},
+    ctx::InferCtx,
+    ty::{
+        Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, PrimTy, Ty, TyError,
+        TyKind, TyResult,
+    },
     tyctx::TyCtx,
 };
 
@@ -34,7 +37,7 @@ pub struct Typecker<'hir> {
     hir: &'hir HIR,
 
     // Context //
-    ctx_stack: Vec<Ctx>,
+    ctx_stack: Vec<InferCtx>,
     try_mode: bool,
     existential: ExistentialId,
 
@@ -116,7 +119,7 @@ impl<'hir> Typecker<'hir> {
     // }
 
     // Context //
-    fn ctx(&mut self) -> &mut Ctx {
+    fn ctx(&mut self) -> &mut InferCtx {
         self.ctx_stack.last_mut().unwrap()
     }
 
@@ -124,7 +127,7 @@ impl<'hir> Typecker<'hir> {
         self.ctx_stack.len()
     }
 
-    fn enter_ctx(&mut self, ctx: Ctx) {
+    fn enter_ctx(&mut self, ctx: InferCtx) {
         self.ctx_stack.push(ctx);
     }
 
@@ -135,7 +138,7 @@ impl<'hir> Typecker<'hir> {
     /// Returns try mode flag and context depth before try mode to restore to them
     fn enter_try_mode(&mut self) -> (bool, usize) {
         let restore = (self.try_mode, self.ctx_depth());
-        self.enter_ctx(Ctx::default());
+        self.enter_ctx(InferCtx::default());
         self.try_mode = true;
         restore
     }
@@ -156,7 +159,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    pub fn under_ctx<T>(&mut self, ctx: Ctx, mut f: impl FnMut(&mut Self) -> T) -> T {
+    pub fn under_ctx<T>(&mut self, ctx: InferCtx, mut f: impl FnMut(&mut Self) -> T) -> T {
         self.enter_ctx(ctx);
         let res = f(self);
         self.exit_ctx();
@@ -165,7 +168,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn under_new_ctx<T>(&mut self, f: impl FnMut(&mut Self) -> T) -> T {
-        self.under_ctx(Ctx::default(), f)
+        self.under_ctx(InferCtx::default(), f)
     }
 
     fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T> {
@@ -177,7 +180,7 @@ impl<'hir> Typecker<'hir> {
     /// Goes up from current context to the root looking for something in each scope
     /// Returns result of the callback (if some returned) and depth of context scope
     /// where callback returned result
-    fn _ascend_ctx<T>(&self, mut f: impl FnMut(&Ctx) -> Option<T>) -> Option<(T, usize)> {
+    fn _ascend_ctx<T>(&self, mut f: impl FnMut(&InferCtx) -> Option<T>) -> Option<(T, usize)> {
         let mut ctx_index = self.ctx_stack.len() - 1;
 
         loop {
@@ -198,7 +201,7 @@ impl<'hir> Typecker<'hir> {
 
     fn _ascend_ctx_mut<T>(
         &mut self,
-        mut f: impl FnMut(&mut Ctx) -> Option<T>,
+        mut f: impl FnMut(&mut InferCtx) -> Option<T>,
     ) -> Option<(T, usize)> {
         let mut ctx_index = self.ctx_stack.len() - 1;
 
@@ -218,37 +221,42 @@ impl<'hir> Typecker<'hir> {
         None
     }
 
-    fn ascend_ctx<T>(&self, f: impl FnMut(&Ctx) -> Option<T>) -> Option<T> {
+    fn ascend_ctx<T>(&self, f: impl FnMut(&InferCtx) -> Option<T>) -> Option<T> {
         self._ascend_ctx(f).map_or(None, |(val, _depth)| Some(val))
     }
 
-    fn find_unbound_ex_depth(&self, ex: ExistentialId) -> usize {
+    fn find_unbound_ex_depth(&self, ex: Existential) -> usize {
         self._ascend_ctx(|ctx| if ctx.has_ex(ex) { Some(()) } else { None })
             .expect("Undefined existential id")
             .1
     }
 
-    fn fresh_ex(&mut self) -> ExistentialId {
-        *self.existential.inc()
+    fn fresh_ex(&mut self, kind: ExistentialKind) -> Existential {
+        Existential::new(kind, *self.existential.inc())
     }
 
-    fn add_fresh_ex(&mut self) -> (ExistentialId, Ty) {
-        let ex = self.fresh_ex();
+    fn add_fresh_ex(&mut self, kind: ExistentialKind) -> (Existential, Ty) {
+        let ex = self.fresh_ex(kind);
         self.add_ex(ex);
         (ex, self.tyctx_mut().existential(ex))
     }
 
-    fn solve(&mut self, ex: ExistentialId, solution: Ty) -> Option<Ty> {
+    fn add_fresh_common_ex(&mut self) -> (Existential, Ty) {
+        self.add_fresh_ex(ExistentialKind::Common)
+    }
+
+    fn solve(&mut self, ex: Existential, solution: Ty) -> Ty {
         verbose!("Solve {} as {}", ex, self.tyctx().pp(solution));
         self._ascend_ctx_mut(|ctx| ctx.solve(ex, solution))
             .map_or(None, |(ty, _)| Some(ty))
+            .unwrap()
     }
 
     fn type_term(&mut self, name: Ident, ty: Ty) {
         self.ctx().type_term(name, ty)
     }
 
-    fn add_ex(&mut self, ex: ExistentialId) {
+    fn add_ex(&mut self, ex: Existential) {
         self.ctx().add_ex(ex);
     }
 
@@ -257,8 +265,40 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
-        self.ascend_ctx(|ctx: &Ctx| ctx.get_term(name))
+        self.ascend_ctx(|ctx: &InferCtx| ctx.get_term(name))
     }
+
+    // pub fn get_int_ex_solution(&self, ex: Existential) -> Option<Ty> {
+    //     self.ascend_ctx(|ctx| ctx.get_solution(ex)).map(|sol| {
+    //         // FIXME: Move to tyctx helper `int_ex_solution`
+    //         let ty = self.tyctx().ty(sol);
+    //         match ty.kind() {
+    //             TyKind::Prim(PrimTy::Int(_) | PrimTy::IntEx(_))
+    //             // | TyKind::Existential(_)
+    //             => sol,
+    //             _ => panic!(
+    //                 "Unexpected solution of integer existential {}",
+    //                 self.tyctx().pp(sol)
+    //             ),
+    //         }
+    //     })
+    // }
+
+    // pub fn get_float_ex_solution(&self, ex: Existential) -> Option<Ty> {
+    //     self.ascend_ctx(|ctx| ctx.get_solution(ex)).map(|sol| {
+    //         // FIXME: Move to tyctx helper `float_ex_solution`
+    //         let ty = self.tyctx().ty(sol);
+    //         match ty.kind() {
+    //             TyKind::Prim(PrimTy::Float(_) | PrimTy::FloatEx(_))
+    //             // | TyKind::Existential(_)
+    //             => sol,
+    //             _ => panic!(
+    //                 "Unexpected solution of integer existential {}",
+    //                 self.tyctx().pp(sol)
+    //             ),
+    //         }
+    //     })
+    // }
 
     fn apply_ctx_on(&mut self, ty: Ty) -> Ty {
         let res = self._apply_ctx_on(ty);
@@ -274,18 +314,18 @@ impl<'hir> Typecker<'hir> {
 
     fn _apply_ctx_on(&mut self, ty: Ty) -> Ty {
         match self.tyctx().ty(ty).kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Var(_) => ty,
-            &TyKind::Prim(PrimTy::FloatEx(ex))
-            | &TyKind::Prim(PrimTy::IntEx(ex))
-            | &TyKind::Existential(ex) => self
+            TyKind::Error | TyKind::Unit | TyKind::Var(_) | TyKind::Prim(_) => ty,
+
+            &TyKind::Existential(ex) => self
                 .ascend_ctx(|ctx| ctx.get_solution(ex))
                 .map_or(ty, |ty| self._apply_ctx_on(ty)),
-            &TyKind::Prim(_) => ty,
+
             &TyKind::Func(param_ty, return_ty) => {
                 let param = self._apply_ctx_on(param_ty);
                 let ret = self._apply_ctx_on(return_ty);
                 self.tyctx_mut().func(param, ret)
             },
+
             &TyKind::Forall(ident, body) => {
                 let body = self._apply_ctx_on(body);
                 self.tyctx_mut().forall(ident, body)
@@ -334,8 +374,8 @@ impl<'hir> Typecker<'hir> {
                 self.ty_wf(param_ty)?;
                 self.ty_wf(return_ty)
             },
-            &TyKind::Forall(ident, body) => self.under_new_ctx(|this| {
-                let alpha = this.tyctx_mut().var(ident);
+            &TyKind::Forall(alpha, body) => self.under_new_ctx(|this| {
+                let alpha = this.tyctx_mut().var(alpha);
                 let open_forall = this.open_forall(body, alpha);
                 this.ty_wf(open_forall)?;
                 Ok(())
@@ -345,6 +385,33 @@ impl<'hir> Typecker<'hir> {
                 Err(TyError())
             },
         }
+    }
+
+    /// Substitute all occurrences of universally quantified type inside it body
+    pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
+        match self.tyctx().ty(ty).kind() {
+            &TyKind::Forall(alpha, body) => self.substitute(ty, Subst::Name(alpha), body),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Solves number (int or float) existentials
+    ///  to defaults in current context (without ascending)
+    pub fn default_number_exes(&mut self) {
+        verbose!("Default number existentials");
+
+        let default_int = self.tyctx_mut().default_int();
+        let default_float = self.tyctx_mut().default_float();
+
+        self.ctx().int_exes().iter().for_each(|&ex| {
+            verbose!("Default int ex {}", ex);
+            self.solve(ex, default_int);
+        });
+
+        self.ctx().float_exes().iter().for_each(|&ex| {
+            verbose!("Default float ex {}", ex);
+            self.solve(ex, default_float);
+        });
     }
 
     // Substitution //
@@ -385,14 +452,6 @@ impl<'hir> Typecker<'hir> {
                     self.tyctx_mut().forall(ident, subst)
                 }
             },
-        }
-    }
-
-    /// Substitute all occurrences of universally quantified type inside it body
-    pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
-        match self.tyctx().ty(ty).kind() {
-            &TyKind::Forall(alpha, body) => self.substitute(ty, Subst::Name(alpha), body),
-            _ => unreachable!(),
         }
     }
 
@@ -458,9 +517,13 @@ impl<'hir> Typecker<'hir> {
         ty
     }
 
-    fn conv_int_kind(&self, kind: hir::expr::IntKind) -> IntKind {
+    fn conv_int_kind(&mut self, kind: hir::expr::IntKind) -> Ty {
         match kind {
-            hir::expr::IntKind::Unknown => IntKind::I32, // FIXME: Infer
+            hir::expr::IntKind::Unknown => return self.add_fresh_ex(ExistentialKind::Int).1,
+            _ => {},
+        }
+
+        self.tyctx_mut().prim(PrimTy::Int(match kind {
             hir::expr::IntKind::U8 => IntKind::U8,
             hir::expr::IntKind::U16 => IntKind::U16,
             hir::expr::IntKind::U32 => IntKind::U32,
@@ -471,14 +534,15 @@ impl<'hir> Typecker<'hir> {
             hir::expr::IntKind::I32 => IntKind::I32,
             hir::expr::IntKind::I64 => IntKind::I64,
             hir::expr::IntKind::Int => IntKind::Int,
-        }
+            hir::expr::IntKind::Unknown => unreachable!(),
+        }))
     }
 
-    fn conv_float_kind(&self, kind: hir::expr::FloatKind) -> FloatKind {
+    fn conv_float_kind(&mut self, kind: hir::expr::FloatKind) -> Ty {
         match kind {
-            hir::expr::FloatKind::Unknown => FloatKind::F32, // FIXME: Infer
-            hir::expr::FloatKind::F32 => FloatKind::F32,
-            hir::expr::FloatKind::F64 => FloatKind::F64,
+            hir::expr::FloatKind::Unknown => self.add_fresh_ex(ExistentialKind::Float).1,
+            hir::expr::FloatKind::F32 => self.tyctx_mut().prim(PrimTy::Float(FloatKind::F32)),
+            hir::expr::FloatKind::F64 => self.tyctx_mut().prim(PrimTy::Float(FloatKind::F64)),
         }
     }
 
@@ -507,24 +571,13 @@ impl<'hir> Typecker<'hir> {
     fn synth_lit(&mut self, lit: &Lit) -> TyResult<Ty> {
         let prim = match lit {
             Lit::Bool(_) => PrimTy::Bool,
-            &Lit::Int(_, kind) if kind != hir::expr::IntKind::Unknown => {
-                PrimTy::Int(self.conv_int_kind(kind))
-            },
-            Lit::Int(_, _) => {
-                let ex = self.add_fresh_ex();
-                PrimTy::IntEx(ex.0)
-            },
-            &Lit::Float(_, kind) if kind != hir::expr::FloatKind::Unknown => {
-                PrimTy::Float(self.conv_float_kind(kind))
-            },
-            Lit::Float(_, _) => {
-                let ex = self.add_fresh_ex();
-                PrimTy::FloatEx(ex.0)
-            },
             Lit::String(_) => PrimTy::String,
+
+            &Lit::Int(_, kind) => return Ok(self.conv_int_kind(kind)),
+            &Lit::Float(_, kind) => return Ok(self.conv_float_kind(kind)),
         };
 
-        Ok(self.tyctx_mut().lit(prim))
+        Ok(self.tyctx_mut().prim(prim))
     }
 
     fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
@@ -551,14 +604,68 @@ impl<'hir> Typecker<'hir> {
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
         let block = self.hir.block(block);
 
-        block.stmts().iter().try_for_each(|&stmt| {
-            self.synth_stmt(stmt)?;
-            Ok(())
-        })?;
+        // Note: Kind of stupid shit
+        // FIXME: Move to HIR helper `get_block_decls
+        // FIXME: OR replace with stack of block contexts
+        // let decls = block
+        //     .stmts()
+        //     .iter()
+        //     .filter_map(|&stmt| match self.hir.stmt(stmt).kind() {
+        //         StmtKind::Expr(_) => None,
+        //         &StmtKind::Item(item) => match self.hir.item(item).kind() {
+        //             ItemKind::TyAlias(_) | ItemKind::Mod(_) => None,
+        //             ItemKind::Decl(_) => Some(item),
+        //         },
+        //     })
+        //     .collect::<Vec<ItemId>>();
 
-        block
-            .expr()
-            .map_or(Ok(self.tyctx_mut().unit()), |&expr| self.synth_expr(expr))
+        self.under_new_ctx(|this| {
+            block.stmts().iter().try_for_each(|&stmt| {
+                this.synth_stmt(stmt)?;
+                Ok(())
+            })?;
+
+            let res_ty = block
+                .expr()
+                .map_or(Ok(this.tyctx_mut().unit()), |&expr| this.synth_expr(expr));
+
+            this.default_number_exes();
+
+            res_ty
+        })
+
+        // decls.into_iter().for_each(|item_id| {
+        //     let hir_id = item_id.hir_id();
+        //     let ty = self.tyctx().node_type(hir_id).unwrap();
+
+        //     if self.tyctx().is_instantiated(ty) {
+        //         return;
+        //     }
+
+        //     let tys = self.tyctx().ty(ty);
+
+        //     match tys.kind() {
+        //         TyKind::Error => todo!(),
+        //         TyKind::Var(_) => todo!(),
+        //         TyKind::Existential(_) => todo!(),
+        //         TyKind::Func(_, _) => todo!(),
+        //         TyKind::Forall(_, _) => todo!(),
+
+        //         &TyKind::Prim(PrimTy::IntEx(ex)) => {
+        //             let int = self.tyctx_mut().prim(PrimTy::Int(DEFAULT_INT_KIND));
+        //             self.solve(ex, int);
+        //             self.tyctx_mut().type_node(hir_id, int);
+        //         },
+
+        //         &TyKind::Prim(PrimTy::FloatEx(ex)) => {
+        //             let float = self.tyctx_mut().prim(PrimTy::Float(DEFAULT_FLOAT_KIND));
+        //             self.solve(ex, float);
+        //             self.tyctx_mut().type_node(hir_id, float);
+        //         },
+
+        //         TyKind::Unit | TyKind::Prim(_) => unreachable!(),
+        //     }
+        // });
     }
 
     fn synth_lambda(&mut self, lambda: &Lambda) -> TyResult<Ty> {
@@ -574,9 +681,9 @@ impl<'hir> Typecker<'hir> {
         let param_name = match self.hir.pat(lambda.param).kind() {
             &hir::pat::PatKind::Ident(name) => name,
         };
-        let param_name_ex = self.add_fresh_ex();
+        let param_name_ex = self.add_fresh_common_ex();
 
-        let body_ex = self.add_fresh_ex();
+        let body_ex = self.add_fresh_common_ex();
 
         self.under_new_ctx(|this| {
             // FIXME: What if pattern w/o name?
@@ -592,7 +699,7 @@ impl<'hir> Typecker<'hir> {
 
             this.tyctx_mut().type_node(lambda.param, param_ty);
 
-            Ok(body_ty)
+            Ok(this.tyctx_mut().func(param_ty, body_ty))
         })
     }
 
@@ -616,8 +723,8 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
-                    let param_ex = this.add_fresh_ex();
-                    let body_ex = this.add_fresh_ex();
+                    let param_ex = this.add_fresh_common_ex();
+                    let body_ex = this.add_fresh_common_ex();
                     let func_ty = this.tyctx_mut().func(param_ex.1, body_ex.1);
                     this.solve(ex, func_ty);
 
@@ -630,7 +737,7 @@ impl<'hir> Typecker<'hir> {
                 Ok(body)
             },
             &TyKind::Forall(alpha, ty) => {
-                let alpha_ex = self.add_fresh_ex();
+                let alpha_ex = self.add_fresh_common_ex();
                 let substituted_ty = self.substitute(ty, Subst::Name(alpha), alpha_ex.1);
                 self._synth_call(substituted_ty, arg)
             },
@@ -748,13 +855,13 @@ impl<'hir> Typecker<'hir> {
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];
 
-                return self.under_ctx(Ctx::new_with_term(param_name, param_ty), |this| {
+                return self.under_ctx(InferCtx::new_with_term(param_name, param_ty), |this| {
                     this._check(lambda.body, body_ty)
                 });
             },
 
             (_, &TyKind::Forall(alpha, body)) => {
-                return self.under_ctx(Ctx::new_with_var(alpha), |this| {
+                return self.under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this._check(expr_id, body)?;
                     Ok(ty)
                 })
@@ -803,48 +910,49 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn prim_subtype(&mut self, l_prim: PrimTy, r_prim: PrimTy) -> TyResult<Ty> {
-        let eq = match (l_prim, r_prim) {
-            (PrimTy::Bool, PrimTy::Bool) => true,
-            (PrimTy::Int(kind), PrimTy::Int(kind_)) => kind == kind_,
-            (PrimTy::Float(kind), PrimTy::Float(kind_)) => kind == kind_,
-            (PrimTy::String, PrimTy::String) => true,
+    // fn prim_subtype(&mut self, l_prim: PrimTy, r_prim: PrimTy) -> TyResult<Ty> {
+    //     let eq = match (l_prim, r_prim) {
+    //         (PrimTy::Bool, PrimTy::Bool) => true,
+    //         (PrimTy::Int(kind), PrimTy::Int(kind_)) => kind == kind_,
+    //         (PrimTy::Float(kind), PrimTy::Float(kind_)) => kind == kind_,
+    //         (PrimTy::String, PrimTy::String) => true,
 
-            (PrimTy::IntEx(ex), PrimTy::IntEx(ex_)) if ex == ex_ => true,
-            (PrimTy::IntEx(ex), PrimTy::Int(int)) | (PrimTy::Int(int), PrimTy::IntEx(ex)) => {
-                let int = self.tyctx_mut().lit(PrimTy::Int(int));
-                return self.try_instantiate_common(ex, int);
-            },
+    //         _ => false,
+    //     };
 
-            (PrimTy::FloatEx(ex), PrimTy::FloatEx(ex_)) if ex == ex_ => true,
-            (PrimTy::Float(float), PrimTy::FloatEx(ex))
-            | (PrimTy::FloatEx(ex), PrimTy::Float(float)) => {
-                let float = self.tyctx_mut().lit(PrimTy::Float(float));
-                return self.try_instantiate_common(ex, float);
-            },
-
-            _ => false,
-        };
-
-        if eq {
-            Ok(self.tyctx_mut().lit(r_prim))
-        } else {
-            Err(TyError())
-        }
-    }
+    //     if eq {
+    //         Ok(self.tyctx_mut().prim(r_prim))
+    //     } else {
+    //         Err(TyError())
+    //     }
+    // }
 
     fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         assert!(self.ty_wf(l_ty).is_ok());
         assert!(self.ty_wf(r_ty).is_ok());
 
         match (self.tyctx().ty(l_ty).kind(), self.tyctx().ty(r_ty).kind()) {
-            (&TyKind::Prim(prim), &TyKind::Prim(prim_)) => self.prim_subtype(prim, prim_),
+            (&TyKind::Prim(prim), &TyKind::Prim(prim_)) if prim == prim_ => Ok(r_ty),
 
             (TyKind::Var(name1), TyKind::Var(name2)) if name1.sym() == name2.sym() => Ok(r_ty),
 
             (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => {
                 self.ty_wf(l_ty).map(|_| r_ty)
             },
+
+            (&TyKind::Existential(int_ex), TyKind::Prim(PrimTy::Int(_))) if int_ex.is_int() => {
+                Ok(self.solve(int_ex, r_ty))
+            },
+
+            (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TyError()),
+
+            (&TyKind::Existential(float_ex), TyKind::Prim(PrimTy::Float(_)))
+                if float_ex.is_float() =>
+            {
+                Ok(self.solve(float_ex, r_ty))
+            },
+
+            (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TyError()),
 
             (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2)) => {
                 // self.under_new_ctx(|this| {
@@ -858,20 +966,21 @@ impl<'hir> Typecker<'hir> {
 
             (&TyKind::Forall(alpha, body), _) => {
                 verbose!("forall {}. {} subtype of (?)", alpha, self.tyctx().pp(body));
-                let ex = self.fresh_ex();
+                let ex = self.fresh_ex(ExistentialKind::Common);
                 let ex_ty = self.tyctx_mut().existential(ex);
                 let with_substituted_alpha = self.substitute(body, Subst::Name(alpha), ex_ty);
 
-                self.under_ctx(Ctx::new_with_ex(ex), |this| {
+                self.under_ctx(InferCtx::new_with_ex(ex), |this| {
                     this._subtype(with_substituted_alpha, r_ty)
                 })
             },
 
-            (_, &TyKind::Forall(alpha, body)) => {
-                self.under_ctx(Ctx::new_with_var(alpha), |this| this._subtype(l_ty, body))
-            },
+            (_, &TyKind::Forall(alpha, body)) => self
+                .under_ctx(InferCtx::new_with_var(alpha), |this| {
+                    this._subtype(l_ty, body)
+                }),
 
-            (&TyKind::Existential(ex), _) => {
+            (&TyKind::Existential(ex), _) if ex.is_common() => {
                 if !self.ty_occurs_in(r_ty, Subst::Existential(ex)) {
                     self.instantiate_l(ex, r_ty)
                 } else {
@@ -880,7 +989,7 @@ impl<'hir> Typecker<'hir> {
                 }
             },
 
-            (_, &TyKind::Existential(ex)) => {
+            (_, &TyKind::Existential(ex)) if ex.is_common() => {
                 if !self.ty_occurs_in(l_ty, Subst::Existential(ex)) {
                     self.instantiate_r(l_ty, ex)
                 } else {
@@ -893,7 +1002,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn try_instantiate_common(&mut self, ex: ExistentialId, ty: Ty) -> TyResult<Ty> {
+    fn try_instantiate_common(&mut self, ex: Existential, ty: Ty) -> TyResult<Ty> {
         let tys = self.tyctx().ty(ty);
 
         // Inst(L|R)Reach
@@ -928,7 +1037,7 @@ impl<'hir> Typecker<'hir> {
         Err(TyError())
     }
 
-    fn instantiate_l(&mut self, ex: ExistentialId, r_ty: Ty) -> TyResult<Ty> {
+    fn instantiate_l(&mut self, ex: Existential, r_ty: Ty) -> TyResult<Ty> {
         if let Ok(ok) = self.try_instantiate_common(ex, r_ty) {
             return Ok(ok);
         }
@@ -946,8 +1055,8 @@ impl<'hir> Typecker<'hir> {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             &TyKind::Func(param, body) => self.try_to(|this| {
-                let range_ex = this.add_fresh_ex();
-                let domain_ex = this.add_fresh_ex();
+                let range_ex = this.add_fresh_common_ex();
+                let domain_ex = this.add_fresh_common_ex();
 
                 let func_ty = this.tyctx_mut().func(domain_ex.1, range_ex.1);
 
@@ -959,14 +1068,14 @@ impl<'hir> Typecker<'hir> {
                 this.instantiate_l(range_ex.0, range_ty)
             }),
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
-                this.under_ctx(Ctx::new_with_var(alpha), |this| {
+                this.under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this.instantiate_l(ex, body)
                 })
             }),
         }
     }
 
-    fn instantiate_r(&mut self, l_ty: Ty, ex: ExistentialId) -> TyResult<Ty> {
+    fn instantiate_r(&mut self, l_ty: Ty, ex: Existential) -> TyResult<Ty> {
         if let Ok(ok) = self.try_instantiate_common(ex, l_ty) {
             return Ok(ok);
         }
@@ -984,8 +1093,8 @@ impl<'hir> Typecker<'hir> {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             &TyKind::Func(param, body) => self.try_to(|this| {
-                let domain_ex = this.add_fresh_ex();
-                let range_ex = this.add_fresh_ex();
+                let domain_ex = this.add_fresh_common_ex();
+                let range_ex = this.add_fresh_common_ex();
 
                 let func_ty = this.tyctx_mut().func(domain_ex.1, range_ex.1);
 
@@ -1003,9 +1112,9 @@ impl<'hir> Typecker<'hir> {
                     this.tyctx().pp(l_ty)
                 );
 
-                let alpha_ex = this.fresh_ex();
+                let alpha_ex = this.fresh_ex(ExistentialKind::Common);
 
-                this.under_ctx(Ctx::new_with_ex(alpha_ex), |this| {
+                this.under_ctx(InferCtx::new_with_ex(alpha_ex), |this| {
                     let alpha_ex_ty = this.tyctx_mut().existential(alpha_ex);
                     let body_ty = this.substitute(body, Subst::Name(alpha), alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)

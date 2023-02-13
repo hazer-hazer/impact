@@ -4,8 +4,7 @@ use crate::{hir::HirId, resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
     builtin::builtins,
-    ctx::ExistentialId,
-    ty::{PrimTy, Ty, TyInterner, TyKind, TyS},
+    ty::{Existential, PrimTy, Ty, TyInterner, TyKind, TyS, DEFAULT_FLOAT_KIND, DEFAULT_INT_KIND},
 };
 
 pub struct TyCtx {
@@ -39,8 +38,8 @@ impl TyCtx {
     }
 
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
-        // assert!(self.typed.insert(id, ty).is_none());
-        self.typed.insert(id, ty).is_none();
+        assert!(self.typed.insert(id, ty).is_none());
+        // self.typed.insert(id, ty).is_none();
     }
 
     pub fn node_type(&self, id: HirId) -> Option<Ty> {
@@ -71,7 +70,7 @@ impl TyCtx {
         self.intern(TyS::new(TyKind::Var(ident)))
     }
 
-    pub fn lit(&mut self, prim: PrimTy) -> Ty {
+    pub fn prim(&mut self, prim: PrimTy) -> Ty {
         self.intern(TyS::new(TyKind::Prim(prim)))
     }
 
@@ -83,11 +82,31 @@ impl TyCtx {
         self.intern(TyS::new(TyKind::Forall(alpha, body)))
     }
 
-    pub fn existential(&mut self, ex: ExistentialId) -> Ty {
+    pub fn existential(&mut self, ex: Existential) -> Ty {
         self.intern(TyS::new(TyKind::Existential(ex)))
     }
 
+    pub fn default_int(&mut self) -> Ty {
+        self.prim(PrimTy::Int(DEFAULT_INT_KIND))
+    }
+
+    pub fn default_float(&mut self) -> Ty {
+        self.prim(PrimTy::Float(DEFAULT_FLOAT_KIND))
+    }
+
     // Checks //
+    pub fn is_instantiated(&self, ty: Ty) -> bool {
+        match self.ty(ty).kind() {
+            TyKind::Error => todo!(),
+            TyKind::Unit
+            | TyKind::Prim(PrimTy::Bool | PrimTy::Float(_) | PrimTy::Int(_) | PrimTy::String) => {
+                true
+            },
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
+            &TyKind::Func(param, body) => self.is_instantiated(param) && self.is_instantiated(body),
+        }
+    }
+
     pub fn is_mono(&self, ty: Ty) -> bool {
         match self.ty(ty).kind() {
             TyKind::Error
@@ -95,9 +114,7 @@ impl TyCtx {
             | TyKind::Prim(_)
             | TyKind::Var(_)
             | TyKind::Existential(_) => true,
-            TyKind::Func(param_ty, return_ty) => {
-                self.is_mono(*param_ty) && self.is_mono(*return_ty)
-            },
+            TyKind::Func(param, body) => self.is_mono(*param) && self.is_mono(*body),
             TyKind::Forall(_, _) => false,
         }
     }

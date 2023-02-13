@@ -66,7 +66,7 @@ pub(super) fn builtins(tyctx: &mut TyCtx) -> HashMap<Builtin, Ty> {
         ),
         // Types //
         (Builtin::UnitTy, tyctx.unit()),
-        (Builtin::I32, tyctx.lit(PrimTy::Int(IntKind::I32))),
+        (Builtin::I32, tyctx.prim(PrimTy::Int(IntKind::I32))),
     ]);
 
     builtins
