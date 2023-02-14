@@ -117,7 +117,7 @@ impl<'hir> Typecker<'hir> {
                     .span(path.span())
                     .text(format!("Term {} does not have a type", path))
                     .emit_single_label(self);
-                TypeckErr()
+                TypeckErr::Reported
             })
     }
 
@@ -213,7 +213,7 @@ impl<'hir> Typecker<'hir> {
 
         match lhs_ty.kind() {
             // FIXME: Or return Ok(lhs_ty)?
-            TyKind::Error => Err(TypeckErr()),
+            TyKind::Error => Ok(lhs_ty),
             TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => todo!("Non-callable type"),
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
@@ -228,7 +228,7 @@ impl<'hir> Typecker<'hir> {
                 })
             },
             &TyKind::Func(param, body) => {
-                self.check(arg, param)?;
+                self.check(arg, param);
                 Ok(body)
             },
             &TyKind::Forall(alpha, ty) => {

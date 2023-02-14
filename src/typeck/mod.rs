@@ -115,8 +115,9 @@ impl<'hir> Typecker<'hir> {
     }
 
     // Errors //
-    fn ty_illformed(&mut self, ty: Ty) {
-        panic!("Illformed type {}; Context:\n{}", ty, self.dump_ctx_stack())
+    fn ty_illformed(&mut self, ty: Ty) -> TyResult<Ty> {
+        panic!("Illformed type {}; Context:\n{}", ty, self.dump_ctx_stack());
+        // Err(TypeckErr::Check)
     }
 
     // fn cyclic_ty(&mut self, ty: Ty, references: Ty, on: ExistentialId) {
@@ -348,16 +349,14 @@ impl<'hir> Typecker<'hir> {
                 if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
                     Ok(ty)
                 } else {
-                    self.ty_illformed(ty);
-                    Err(TypeckErr())
+                    self.ty_illformed(ty)
                 }
             },
             &TyKind::Existential(ex) => {
                 if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() || self.global_ctx.has_ex(ex) {
                     Ok(ty)
                 } else {
-                    self.ty_illformed(ty);
-                    Err(TypeckErr())
+                    self.ty_illformed(ty)
                 }
             },
             &TyKind::Func(param_ty, return_ty) => {
@@ -370,10 +369,7 @@ impl<'hir> Typecker<'hir> {
                 this.ty_wf(open_forall)?;
                 Ok(ty)
             }),
-            _ => {
-                self.ty_illformed(ty);
-                Err(TypeckErr())
-            },
+            _ => self.ty_illformed(ty),
         }
     }
 
@@ -613,7 +609,15 @@ impl<'ast> Stage<()> for Typecker<'ast> {
             this.hir.root().items.iter().for_each(|&item| {
                 let res = this.synth_item(item);
 
-                verbose!("Item typeck result: {:?}", res)
+                match res {
+                    Ok(_) => {},
+                    Err(err) => match err {
+                        TypeckErr::Check | TypeckErr::LateReport => {
+                            panic!("Unreported error in typeck")
+                        },
+                        TypeckErr::Reported => {},
+                    },
+                }
             });
         });
 

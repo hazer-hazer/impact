@@ -21,7 +21,7 @@ impl<'hir> Typecker<'hir> {
                 verbose!("[+] Expr {} is of type {}", expr_id, ty);
                 Ok(self.apply_ctx_on(ok))
             },
-            Err(err) => {
+            Err(_) => {
                 verbose!("[-] Expr {} is NOT of type {}", expr_id, ty);
 
                 let span = self.hir.expr_result_span(expr_id);
@@ -40,7 +40,7 @@ impl<'hir> Typecker<'hir> {
                     .label(span, format!("Must be of type {}", ty))
                     .emit(self);
 
-                Err(err)
+                Err(TypeckErr::Reported)
             },
         }
     }
@@ -56,7 +56,7 @@ impl<'hir> Typecker<'hir> {
                     } else {
                         // Unequal literals (not existentials as we not failed
                         //  to construct PrimTy of Lit without context)
-                        Err(TypeckErr())
+                        Err(TypeckErr::LateReport)
                     }
                 } else {
                     // Infer literal ty
@@ -105,14 +105,14 @@ impl<'hir> Typecker<'hir> {
             Err(err) => {
                 verbose!("[-] {} is NOT a subtype of {}", check_ty.node(), r_ty);
 
-                let span = check_ty.span();
-                let l_ty = *check_ty.node();
+                // let span = check_ty.span();
+                // let l_ty = *check_ty.node();
 
-                MessageBuilder::error()
-                    .span(span)
-                    .text(format!("{} is not a subtype of {}", l_ty, r_ty))
-                    .label(span, format!("{} is not a subtype of {}", l_ty, r_ty))
-                    .emit(self);
+                // MessageBuilder::error()
+                //     .span(span)
+                //     .text(format!("{} is not a subtype of {}", l_ty, r_ty))
+                //     .label(span, format!("{} is not a subtype of {}", l_ty, r_ty))
+                //     .emit(self);
 
                 // TODO: Check this logic
                 match check_ty.node().kind() {
@@ -122,6 +122,7 @@ impl<'hir> Typecker<'hir> {
                     _ => {},
                 }
 
+                // Err(TypeckErr::Reported)
                 Err(err)
             },
         }
@@ -144,7 +145,7 @@ impl<'hir> Typecker<'hir> {
                 Ok(self.solve(int_ex, r_ty))
             },
 
-            (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr()),
+            (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
 
             (&TyKind::Existential(float_ex), TyKind::Prim(PrimTy::Float(_)))
                 if float_ex.is_float() =>
@@ -152,7 +153,7 @@ impl<'hir> Typecker<'hir> {
                 Ok(self.solve(float_ex, r_ty))
             },
 
-            (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr()),
+            (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr::LateReport),
 
             (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2)) => {
                 // self.under_new_ctx(|this| {
