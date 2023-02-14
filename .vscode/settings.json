@@ -12,6 +12,7 @@
     "formedness",
     "idents",
     "illformed",
+    "Internable",
     "interner",
     "Interner",
     "nanos",

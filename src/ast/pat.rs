@@ -7,13 +7,15 @@ use super::{pr_display, NodeId, WithNodeId, PR};
 #[derive(Debug)]
 pub enum PatKind {
     // TODO: Lit
+    Unit,
     Ident(PR<Ident>),
 }
 
 impl Display for PatKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PatKind::Ident(ident) => write!(f, "{}", pr_display(ident)),
+            PatKind::Unit => "()".fmt(f),
+            PatKind::Ident(ident) => pr_display(ident).fmt(f),
         }
     }
 }

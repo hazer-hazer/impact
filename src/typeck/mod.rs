@@ -13,11 +13,8 @@ use crate::{
 };
 
 use self::{
-    ctx::InferCtx,
-    ty::{
-        Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, PrimTy, Ty, TyError,
-        TyKind, TyResult,
-    },
+    ctx::{GlobalCtx, InferCtx},
+    ty::{Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, PrimTy, Ty, TyKind},
     tyctx::TyCtx,
 };
 
@@ -28,13 +25,27 @@ mod synth;
 pub mod ty;
 pub mod tyctx;
 
+#[derive(Debug)]
+pub enum TypeckErr {
+    // TypeckErr used as condition
+    Check,
+
+    // Error must be reported somewhere
+    LateReport,
+
+    Reported,
+}
+
+pub type TyResult<T> = Result<T, TypeckErr>;
+
 pub struct Typecker<'hir> {
     hir: &'hir HIR,
 
     // Context //
+    global_ctx: GlobalCtx,
     ctx_stack: Vec<InferCtx>,
-    try_mode: bool,
     existential: ExistentialId,
+    try_mode: bool,
 
     //
     msg: MessageStorage,
@@ -52,9 +63,10 @@ impl<'hir> Typecker<'hir> {
         Self {
             hir,
 
+            global_ctx: Default::default(),
             ctx_stack: Default::default(),
-            try_mode: false,
             existential: ExistentialId::new(0),
+            try_mode: false,
 
             sess,
             msg: Default::default(),
@@ -97,14 +109,14 @@ impl<'hir> Typecker<'hir> {
             // verbose!(
             //     "Define builtin `{}` type `{}`",
             //     def_name,
-            //     self.tyctx().pp(ty)
+            //     ty
             // );
         });
     }
 
     // Errors //
     fn ty_illformed(&mut self, ty: Ty) {
-        panic!("Illformed type {}", self.tyctx().ty(ty))
+        panic!("Illformed type {}; Context:\n{}", ty, self.dump_ctx_stack())
     }
 
     // fn cyclic_ty(&mut self, ty: Ty, references: Ty, on: ExistentialId) {
@@ -119,7 +131,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn ctx_depth(&self) -> usize {
-        self.ctx_stack.len()
+        self.ctx_stack.len() - 1
     }
 
     fn enter_ctx(&mut self, ctx: InferCtx) {
@@ -128,13 +140,17 @@ impl<'hir> Typecker<'hir> {
 
     fn exit_ctx(&mut self) {
         // assert!(self.ctx().unsolved().is_empty());
+        verbose!("< [EXIT CTX]");
 
-        self.ctx_stack.pop();
+        self.global_ctx.add(self.ctx_stack.pop().unwrap());
     }
 
     /// Returns try mode flag and context depth before try mode to restore to them
     fn enter_try_mode(&mut self) -> (bool, usize) {
         let restore = (self.try_mode, self.ctx_depth());
+
+        verbose!("?> [ENTER TRY CTX]");
+
         self.enter_ctx(InferCtx::default());
         self.try_mode = true;
         restore
@@ -157,6 +173,8 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn under_ctx<T>(&mut self, ctx: InferCtx, mut f: impl FnMut(&mut Self) -> T) -> T {
+        verbose!("> [ENTER CTX]");
+
         self.enter_ctx(ctx);
         let res = f(self);
         self.exit_ctx();
@@ -178,19 +196,19 @@ impl<'hir> Typecker<'hir> {
     /// Returns result of the callback (if some returned) and depth of context scope
     /// where callback returned result
     fn _ascend_ctx<T>(&self, mut f: impl FnMut(&InferCtx) -> Option<T>) -> Option<(T, usize)> {
-        let mut ctx_index = self.ctx_stack.len() - 1;
+        let mut ctx_depth = self.ctx_depth();
 
         loop {
-            let res = f(&self.ctx_stack[ctx_index]);
+            let res = f(&self.ctx_stack[ctx_depth]);
             if let Some(res) = res {
-                return Some((res, ctx_index));
+                return Some((res, ctx_depth));
             }
 
-            if ctx_index == 0 {
+            if ctx_depth == 0 {
                 break;
             }
 
-            ctx_index -= 1;
+            ctx_depth -= 1;
         }
 
         None
@@ -200,19 +218,19 @@ impl<'hir> Typecker<'hir> {
         &mut self,
         mut f: impl FnMut(&mut InferCtx) -> Option<T>,
     ) -> Option<(T, usize)> {
-        let mut ctx_index = self.ctx_stack.len() - 1;
+        let mut ctx_depth = self.ctx_depth();
 
         loop {
-            let res = f(&mut self.ctx_stack[ctx_index]);
+            let res = f(&mut self.ctx_stack[ctx_depth]);
             if let Some(res) = res {
-                return Some((res, ctx_index));
+                return Some((res, ctx_depth));
             }
 
-            if ctx_index == 0 {
+            if ctx_depth == 0 {
                 break;
             }
 
-            ctx_index -= 1;
+            ctx_depth -= 1;
         }
 
         None
@@ -222,10 +240,16 @@ impl<'hir> Typecker<'hir> {
         self._ascend_ctx(f).map_or(None, |(val, _depth)| Some(val))
     }
 
-    fn find_unbound_ex_depth(&self, ex: Existential) -> usize {
-        self._ascend_ctx(|ctx| if ctx.has_ex(ex) { Some(()) } else { None })
-            .expect("Undefined existential id")
-            .1
+    /// Returns (existential context depth, existential position in context)
+    fn find_unbound_ex_depth(&self, ex: Existential) -> (usize, usize) {
+        self._ascend_ctx(|ctx| {
+            if let Some(pos) = ctx.get_ex_index(ex) {
+                Some(pos)
+            } else {
+                None
+            }
+        })
+        .expect("Undefined existential id")
     }
 
     fn fresh_ex(&mut self, kind: ExistentialKind) -> Existential {
@@ -235,7 +259,7 @@ impl<'hir> Typecker<'hir> {
     fn add_fresh_ex(&mut self, kind: ExistentialKind) -> (Existential, Ty) {
         let ex = self.fresh_ex(kind);
         self.add_ex(ex);
-        (ex, self.tyctx_mut().existential(ex))
+        (ex, Ty::existential(ex))
     }
 
     fn add_fresh_common_ex(&mut self) -> (Existential, Ty) {
@@ -243,7 +267,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn solve(&mut self, ex: Existential, solution: Ty) -> Ty {
-        verbose!("Solve {} as {}", ex, self.tyctx().pp(solution));
+        verbose!("Solve {} as {}", ex, solution);
         self._ascend_ctx_mut(|ctx| ctx.solve(ex, solution))
             .map_or(None, |(ty, _)| Some(ty))
             .unwrap()
@@ -261,45 +285,46 @@ impl<'hir> Typecker<'hir> {
         self.ctx().add_var(name);
     }
 
+    fn get_solution(&self, ex: Existential) -> Option<Ty> {
+        self.ascend_ctx(|ctx| ctx.get_solution(ex))
+            .or_else(|| self.global_ctx.get_solution(ex))
+    }
+
     fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
         self.ascend_ctx(|ctx: &InferCtx| ctx.get_term(name))
     }
 
-    fn apply_ctx_on(&mut self, ty: Ty) -> Ty {
+    fn apply_ctx_on(&self, ty: Ty) -> Ty {
         let res = self._apply_ctx_on(ty);
         if ty != res {
-            verbose!(
-                "[APPLY CTX] {} => {}",
-                self.tyctx().pp(ty),
-                self.tyctx().pp(res)
-            );
+            verbose!("[APPLY CTX] {} => {}", ty, res);
         }
         res
     }
 
-    fn _apply_ctx_on(&mut self, ty: Ty) -> Ty {
-        match self.tyctx().ty(ty).kind() {
+    fn _apply_ctx_on(&self, ty: Ty) -> Ty {
+        match ty.kind() {
             TyKind::Error | TyKind::Unit | TyKind::Var(_) | TyKind::Prim(_) => ty,
 
             &TyKind::Existential(ex) => self
-                .ascend_ctx(|ctx| ctx.get_solution(ex))
+                .get_solution(ex)
                 .map_or(ty, |ty| self._apply_ctx_on(ty)),
 
             &TyKind::Func(param_ty, return_ty) => {
                 let param = self._apply_ctx_on(param_ty);
                 let ret = self._apply_ctx_on(return_ty);
-                self.tyctx_mut().func(param, ret)
+                Ty::func(param, ret)
             },
 
             &TyKind::Forall(ident, body) => {
                 let body = self._apply_ctx_on(body);
-                self.tyctx_mut().forall(ident, body)
+                Ty::forall(ident, body)
             },
         }
     }
 
     pub fn ty_occurs_in(&mut self, ty: Ty, name: Subst) -> bool {
-        match self.tyctx().ty(ty).kind() {
+        match ty.kind() {
             TyKind::Error | TyKind::Unit | TyKind::Prim(_) => false,
             &TyKind::Var(name_) if name == name_ => true,
             TyKind::Var(_) => false,
@@ -316,23 +341,23 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    pub fn ty_wf(&mut self, ty: Ty) -> TyResult<()> {
-        match self.tyctx().ty(ty).kind() {
-            TyKind::Unit | TyKind::Prim(_) => Ok(()),
+    pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
+        match ty.kind() {
+            TyKind::Unit | TyKind::Prim(_) => Ok(ty),
             &TyKind::Var(ident) => {
                 if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
-                    Ok(())
+                    Ok(ty)
                 } else {
                     self.ty_illformed(ty);
-                    Err(TyError())
+                    Err(TypeckErr())
                 }
             },
             &TyKind::Existential(ex) => {
-                if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() {
-                    Ok(())
+                if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() || self.global_ctx.has_ex(ex) {
+                    Ok(ty)
                 } else {
                     self.ty_illformed(ty);
-                    Err(TyError())
+                    Err(TypeckErr())
                 }
             },
             &TyKind::Func(param_ty, return_ty) => {
@@ -340,21 +365,21 @@ impl<'hir> Typecker<'hir> {
                 self.ty_wf(return_ty)
             },
             &TyKind::Forall(alpha, body) => self.under_new_ctx(|this| {
-                let alpha = this.tyctx_mut().var(alpha);
+                let alpha = Ty::var(alpha);
                 let open_forall = this.open_forall(body, alpha);
                 this.ty_wf(open_forall)?;
-                Ok(())
+                Ok(ty)
             }),
             _ => {
                 self.ty_illformed(ty);
-                Err(TyError())
+                Err(TypeckErr())
             },
         }
     }
 
     /// Substitute all occurrences of universally quantified type inside it body
     pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
-        match self.tyctx().ty(ty).kind() {
+        match ty.kind() {
             &TyKind::Forall(alpha, body) => self.substitute(ty, Subst::Name(alpha), body),
             _ => unreachable!(),
         }
@@ -365,15 +390,21 @@ impl<'hir> Typecker<'hir> {
     pub fn default_number_exes(&mut self) {
         verbose!("Default number existentials");
 
-        let default_int = self.tyctx_mut().default_int();
-        let default_float = self.tyctx_mut().default_float();
+        let default_int = Ty::default_int();
+        let default_float = Ty::default_float();
 
         self.ctx().int_exes().iter().for_each(|&ex| {
+            if let Some(_) = self.get_solution(ex) {
+                return;
+            }
             verbose!("Default int ex {}", ex);
             self.solve(ex, default_int);
         });
 
         self.ctx().float_exes().iter().for_each(|&ex| {
+            if let Some(_) = self.get_solution(ex) {
+                return;
+            }
             verbose!("Default float ex {}", ex);
             self.solve(ex, default_float);
         });
@@ -381,14 +412,9 @@ impl<'hir> Typecker<'hir> {
 
     // Substitution //
     pub fn substitute(&mut self, ty: Ty, subst: Subst, with: Ty) -> Ty {
-        verbose!(
-            "Substitute {} in {} with {}",
-            subst,
-            self.tyctx().pp(ty),
-            self.tyctx().pp(with)
-        );
+        verbose!("Substitute {} in {} with {}", subst, ty, with);
 
-        match self.tyctx().ty(ty).kind() {
+        match ty.kind() {
             TyKind::Error | TyKind::Unit | TyKind::Prim(_) => ty,
             &TyKind::Var(ident) => {
                 if subst == ident {
@@ -407,14 +433,14 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Func(param_ty, return_ty) => {
                 let param = self.substitute(param_ty, subst, with);
                 let ret = self.substitute(return_ty, subst, with);
-                self.tyctx_mut().func(param, ret)
+                Ty::func(param, ret)
             },
             &TyKind::Forall(ident, body) => {
                 if subst == ident {
-                    self.tyctx_mut().forall(ident, with)
+                    Ty::forall(ident, with)
                 } else {
                     let subst = self.substitute(body, subst, with);
-                    self.tyctx_mut().forall(ident, subst)
+                    Ty::forall(ident, subst)
                 }
             },
         }
@@ -430,7 +456,7 @@ impl<'hir> Typecker<'hir> {
             hir::ty::TyKind::Func(param, body) => {
                 let param = self.conv(param);
                 let ret = self.conv(body);
-                self.tyctx_mut().func(param, ret)
+                Ty::func(param, ret)
             },
         }
     }
@@ -454,7 +480,7 @@ impl<'hir> Typecker<'hir> {
                             .text(format!("{} item used as type", def.kind()))
                             .emit_single_label(self);
 
-                        self.tyctx_mut().error()
+                        Ty::error()
                     },
 
                     // Definitions from value namespace
@@ -488,7 +514,7 @@ impl<'hir> Typecker<'hir> {
             _ => {},
         }
 
-        self.tyctx_mut().prim(PrimTy::Int(match kind {
+        Ty::prim(PrimTy::Int(match kind {
             hir::expr::IntKind::U8 => IntKind::U8,
             hir::expr::IntKind::U16 => IntKind::U16,
             hir::expr::IntKind::U32 => IntKind::U32,
@@ -506,9 +532,76 @@ impl<'hir> Typecker<'hir> {
     fn conv_float_kind(&mut self, kind: hir::expr::FloatKind) -> Ty {
         match kind {
             hir::expr::FloatKind::Unknown => self.add_fresh_ex(ExistentialKind::Float).1,
-            hir::expr::FloatKind::F32 => self.tyctx_mut().prim(PrimTy::Float(FloatKind::F32)),
-            hir::expr::FloatKind::F64 => self.tyctx_mut().prim(PrimTy::Float(FloatKind::F64)),
+            hir::expr::FloatKind::F32 => Ty::prim(PrimTy::Float(FloatKind::F32)),
+            hir::expr::FloatKind::F64 => Ty::prim(PrimTy::Float(FloatKind::F64)),
         }
+    }
+
+    // Debug //
+    fn dump_ctx_stack(&self) -> String {
+        let exes = self.ctx_stack.iter().fold(vec![], |exes, ctx| {
+            exes.into_iter()
+                .chain(ctx.existentials().into_iter())
+                .collect()
+        });
+
+        let exes = exes.into_iter().fold((vec![], vec![]), |mut exes, &ex| {
+            if let Some(sol) = self.get_solution(ex) {
+                exes.1.push((ex, sol));
+            } else {
+                exes.0.push(ex);
+            }
+            exes
+        });
+
+        let vars = self
+            .ctx_stack
+            .iter()
+            .fold(vec![], |vars, ctx| {
+                vars.into_iter().chain(ctx.vars().iter().copied()).collect()
+            })
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let terms = self
+            .ctx_stack
+            .iter()
+            .fold(vec![], |terms, ctx| {
+                terms.into_iter().chain(ctx.terms().into_iter()).collect()
+            })
+            .iter()
+            .map(|(name, ty)| format!("  {}: {}", name, ty))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let solved = exes
+            .1
+            .into_iter()
+            .map(|(ex, sol)| format!("  {} = {}", ex, sol))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let unsolved = exes
+            .0
+            .iter()
+            .map(|ex| format!("{}", ex))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let global_solved = self
+            .global_ctx
+            .solved()
+            .iter_enumerated_flat()
+            .map(|(ex, sol)| format!("  {} = {}", ex, sol))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        format!(
+            "[CTX]\nvars: {}\nterms:\n{}\nsolved:\n{}\nunsolved: {}\nglobal solved: {}",
+            vars, terms, solved, unsolved, global_solved
+        )
     }
 }
 
@@ -518,7 +611,9 @@ impl<'ast> Stage<()> for Typecker<'ast> {
             this.define_builtins();
 
             this.hir.root().items.iter().for_each(|&item| {
-                let _ = this.synth_item(item);
+                let res = this.synth_item(item);
+
+                verbose!("Item typeck result: {:?}", res)
             });
         });
 

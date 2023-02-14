@@ -317,6 +317,7 @@ impl HIR {
 
     pub fn pat_names(&self, pat: Pat) -> Option<Vec<Ident>> {
         match self.pat(pat).kind() {
+            pat::PatKind::Unit => None,
             &pat::PatKind::Ident(name) => Some(vec![name]),
         }
     }

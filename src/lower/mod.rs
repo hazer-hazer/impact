@@ -242,6 +242,7 @@ impl<'ast> Lower<'ast> {
     // Patterns //
     fn lower_pat(&mut self, pat: &Pat) -> hir::pat::Pat {
         let kind = match pat.kind() {
+            PatKind::Unit => hir::pat::PatKind::Unit,
             PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
         };
 

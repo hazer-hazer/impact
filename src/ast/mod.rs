@@ -457,9 +457,12 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
     fn visit_pat(&mut self, pat: &'ast Pat) {
         self.map.map.insert(pat.id(), AstNode::Pat(pat));
         match pat.kind() {
+            pat::PatKind::Unit => self.visit_unit_pat(),
             pat::PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
         }
     }
+
+    fn visit_unit_pat(&mut self) {}
 
     fn visit_ident_pat(&mut self, ident: &'ast Ident) {
         self.visit_ident(ident);

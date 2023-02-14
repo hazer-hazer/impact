@@ -6,9 +6,9 @@ type () = builtin
 (+) = builtin
 (-) = builtin
 
-main a =
+main () =
     foo p =
-        l = 123
+        l = p
         l
 
     foo 123

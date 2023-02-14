@@ -173,6 +173,9 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.hir_id(pat);
 
         match pat.kind() {
+            PatKind::Unit => {
+                self.pp.str("()");
+            },
             PatKind::Ident(ident) => {
                 self.visit_ident_pat(&ident, hir);
                 self.pp.ty_anno(pat_id);

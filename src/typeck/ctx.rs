@@ -1,34 +1,67 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
+    cli::verbose,
     dt::idx::IndexVec,
     span::span::{Ident, Symbol},
 };
 
 use super::ty::{Existential, ExistentialId, ExistentialKind, Ty};
 
+#[derive(Default, Debug)]
+pub struct GlobalCtx {
+    solved: IndexVec<ExistentialId, Option<Ty>>,
+}
+
+impl GlobalCtx {
+    pub fn add(&mut self, ctx: InferCtx) {
+        ctx.solved.iter_enumerated_flat().for_each(|(ex, &sol)| {
+            verbose!("Add ex to global ctx {} = {}", ex, sol);
+            assert!(self.solved.insert(ex, sol).is_none());
+        });
+    }
+
+    pub fn get_solution(&self, ex: Existential) -> Option<Ty> {
+        self.solved.get_flat(ex.id()).copied()
+    }
+
+    pub fn has_ex(&self, ex: Existential) -> bool {
+        self.solved.has(ex.id())
+    }
+
+    pub fn solved(&self) -> &IndexVec<ExistentialId, Option<Ty>> {
+        &self.solved
+    }
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct InferCtx {
-    existentials: Vec<Existential>,
+    /// Existentials defined in current context
+    existentials: HashSet<Existential>,
 
+    /// Existentials solved in current context. Leak to global context.
     // Note: I end up with storing `solved` and unsolved existentials separately due to `try` logic.
     //  We need to enter new "try to"-context under which we do not violate upper context.
     solved: IndexVec<ExistentialId, Option<Ty>>,
-    vars: Vec<Symbol>,
+
+    /// Type variables defined in current context. Do not leak to global context
+    vars: HashSet<Symbol>,
+
+    /// Typed terms. Do not leak to global context
     terms: HashMap<Symbol, Ty>,
 }
 
 impl InferCtx {
     pub fn new_with_var(var: Ident) -> Self {
         Self {
-            vars: vec![var.sym()],
+            vars: HashSet::from([var.sym()]),
             ..Default::default()
         }
     }
 
     pub fn new_with_ex(ex: Existential) -> Self {
         Self {
-            existentials: vec![ex],
+            existentials: HashSet::from([ex]),
             ..Default::default()
         }
     }
@@ -45,16 +78,16 @@ impl InferCtx {
         self.terms.get(&name.sym()).copied()
     }
 
-    pub fn has_var(&self, name: Ident) -> bool {
-        self.get_var(name).is_some()
-    }
-
     pub fn get_var(&self, name: Ident) -> Option<Symbol> {
         self.vars.iter().find(|&&var| var == name.sym()).copied()
     }
 
+    pub fn get_ex_index(&self, ex: Existential) -> Option<usize> {
+        self.existentials.iter().position(|&ex_| ex == ex_)
+    }
+
     pub fn has_ex(&self, ex: Existential) -> bool {
-        self.existentials.iter().any(|&ex_| ex == ex_)
+        self.existentials.contains(&ex)
     }
 
     /// Seems to be a strange function, but useful in `ascend_ctx` checks
@@ -80,13 +113,11 @@ impl InferCtx {
 
     // Setters //
     pub fn add_var(&mut self, name: Ident) {
-        assert!(!self.vars.contains(&name.sym()));
-        self.vars.push(name.sym());
+        assert!(self.vars.insert(name.sym()));
     }
 
     pub fn add_ex(&mut self, ex: Existential) {
-        assert!(!self.has_ex(ex));
-        self.existentials.push(ex);
+        assert!(self.existentials.insert(ex));
     }
 
     pub fn type_term(&mut self, name: Ident, ty: Ty) {
@@ -99,17 +130,19 @@ impl InferCtx {
     }
 
     /// Returns solution if existential is in context
-    pub fn solve(&mut self, ex: Existential, solution: Ty) -> Option<Ty> {
+    pub fn solve(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
         if self.has_ex(ex) {
-            assert!(self.solved.insert(ex.id(), solution).is_none());
-            Some(solution)
+            assert!(
+                self.solved.insert(ex.id(), sol).is_none(),
+                "Tried to override solution of {} = {} to {}",
+                ex,
+                self.solved.get_unwrap(ex.id()),
+                sol
+            );
+            Some(sol)
         } else {
             None
         }
-    }
-
-    pub fn existentials(&self) -> &[Existential] {
-        self.existentials.as_ref()
     }
 
     pub fn unsolved(&self) -> Vec<Existential> {
@@ -143,5 +176,17 @@ impl InferCtx {
                 _ => None,
             })
             .collect()
+    }
+
+    pub fn terms(&self) -> &HashMap<Symbol, Ty> {
+        &self.terms
+    }
+
+    pub fn existentials(&self) -> &HashSet<Existential> {
+        &self.existentials
+    }
+
+    pub fn vars(&self) -> &HashSet<Symbol> {
+        &self.vars
     }
 }

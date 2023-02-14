@@ -4,6 +4,7 @@ use super::{HirId, WithHirId};
 
 #[derive(Debug)]
 pub enum PatKind {
+    Unit,
     Ident(Ident),
 }
 

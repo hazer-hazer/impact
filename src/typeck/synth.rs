@@ -1,19 +1,25 @@
+use std::collections::HashMap;
+
 use crate::{
     cli::verbose,
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
+        pat::Pat,
         stmt::{Stmt, StmtKind},
         HirId, Path,
     },
     message::message::MessageBuilder,
     resolve::def::DefKind,
-    span::span::WithSpan,
+    span::span::{Ident, WithSpan},
     typeck::ty::Subst,
 };
 
-use super::ty::{PrimTy, Ty, TyError, TyKind, TyResult};
+use super::{
+    ty::{PrimTy, Ty, TyKind},
+    TyResult, TypeckErr,
+};
 
 use super::Typecker;
 
@@ -21,7 +27,7 @@ impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         match self.sess.def_table.get_def(item.def_id()).unwrap().kind() {
             &DefKind::Builtin(bt) => return Ok(self.tyctx().builtin_ty(bt)),
-            DefKind::DeclareBuiltin => return Ok(self.tyctx_mut().unit()),
+            DefKind::DeclareBuiltin => return Ok(Ty::unit()),
             _ => {},
         }
 
@@ -31,13 +37,13 @@ impl<'hir> Typecker<'hir> {
             ItemKind::TyAlias(_ty) => {
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                 self.conv_ty_alias(item.def_id());
-                self.tyctx_mut().unit()
+                Ty::unit()
             },
             ItemKind::Mod(Mod { items }) => {
                 for item in items {
                     self.synth_item(*item)?;
                 }
-                self.tyctx_mut().unit()
+                Ty::unit()
             },
             ItemKind::Decl(decl) => {
                 let value_ty = self.synth_expr(decl.value)?;
@@ -67,7 +73,7 @@ impl<'hir> Typecker<'hir> {
             },
         }
 
-        Ok(self.tyctx_mut().unit())
+        Ok(Ty::unit())
     }
 
     pub fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
@@ -100,7 +106,7 @@ impl<'hir> Typecker<'hir> {
             &Lit::Float(_, kind) => return Ok(self.conv_float_kind(kind)),
         };
 
-        Ok(self.tyctx_mut().prim(prim))
+        Ok(Ty::prim(prim))
     }
 
     fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
@@ -111,7 +117,7 @@ impl<'hir> Typecker<'hir> {
                     .span(path.span())
                     .text(format!("Term {} does not have a type", path))
                     .emit_single_label(self);
-                TyError()
+                TypeckErr()
             })
     }
 
@@ -135,7 +141,7 @@ impl<'hir> Typecker<'hir> {
 
             let res_ty = block
                 .expr()
-                .map_or(Ok(this.tyctx_mut().unit()), |&expr| this.synth_expr(expr));
+                .map_or(Ok(Ty::unit()), |&expr| this.synth_expr(expr));
 
             this.default_number_exes();
 
@@ -143,24 +149,56 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
+    fn get_pat_names_types(&self, pat: Pat) -> Vec<Ident> {
+        match self.hir.pat(pat).kind() {
+            hir::pat::PatKind::Unit => vec![],
+            &hir::pat::PatKind::Ident(name) => vec![name],
+        }
+    }
+
+    /// Get pattern type based on current context, applying context to
+    ///  typed terms that appear in pattern as identifiers (Ident pattern)
+    fn get_typed_pat(&self, pat: Pat) -> Ty {
+        match self.hir.pat(pat).kind() {
+            hir::pat::PatKind::Unit => Ty::unit(),
+
+            // Assumed that all names in pattern are typed, at least as existentials
+            &hir::pat::PatKind::Ident(name) => {
+                self.apply_ctx_on(self.lookup_typed_term_ty(name).unwrap())
+            },
+        }
+    }
+
     fn synth_lambda(&mut self, lambda: &Lambda) -> TyResult<Ty> {
-        let param_name = match self.hir.pat(lambda.param).kind() {
-            &hir::pat::PatKind::Ident(name) => name,
-        };
-        let param_name_ex = self.add_fresh_common_ex();
+        // FIXME: Rewrite when `match` added
+
+        let param_names = self.get_pat_names_types(lambda.param);
+
+        let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
+            // FIXME: Should sub-pattern names existentials be defined outside this context?
+            let ex = self.add_fresh_common_ex();
+            self.type_term(name, ex.1);
+
+            assert!(exes.insert(name, ex).is_none());
+            exes
+        });
 
         let body_ex = self.add_fresh_common_ex();
 
         self.under_new_ctx(|this| {
-            this.type_term(param_name, param_name_ex.1);
+            // FIXME: Optimize fold moves of vec
+            param_exes.iter().for_each(|(&name, &ex)| {
+                // FIXME: Should sub-pattern names existentials be defined outside this context?
+                this.type_term(name, ex.1);
+            });
 
             let body_ty = this.check(lambda.body, body_ex.1)?;
 
-            let param_ty = this.apply_ctx_on(param_name_ex.1);
+            let param_ty = this.get_typed_pat(lambda.param);
 
             this.tyctx_mut().type_node(lambda.param, param_ty);
 
-            Ok(this.tyctx_mut().func(param_ty, body_ty))
+            Ok(Ty::func(param_ty, body_ty))
         })
     }
 
@@ -171,22 +209,18 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _synth_call(&mut self, lhs_ty: Ty, arg: Expr) -> TyResult<Ty> {
-        verbose!(
-            "Synthesize call {} with arg {}",
-            self.tyctx().pp(lhs_ty),
-            arg
-        );
+        verbose!("Synthesize call {} with arg {}", lhs_ty, arg);
 
-        match self.tyctx().ty(lhs_ty).kind() {
+        match lhs_ty.kind() {
             // FIXME: Or return Ok(lhs_ty)?
-            TyKind::Error => Err(TyError()),
+            TyKind::Error => Err(TypeckErr()),
             TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => todo!("Non-callable type"),
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
                     let param_ex = this.add_fresh_common_ex();
                     let body_ex = this.add_fresh_common_ex();
-                    let func_ty = this.tyctx_mut().func(param_ex.1, body_ex.1);
+                    let func_ty = Ty::func(param_ex.1, body_ex.1);
                     this.solve(ex, func_ty);
 
                     this.check(arg, param_ex.1)?;

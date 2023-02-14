@@ -5,18 +5,15 @@ use crate::{
     span::span::{Ident, Symbol},
 };
 
-use super::{
-    ty::{IntKind, PrimTy, Ty},
-    tyctx::TyCtx,
-};
+use super::ty::{IntKind, PrimTy, Ty};
 
 macro_rules! ty {
-    ($tyctx: expr; $var: ident) => {
-        $tyctx.var(Ident::synthetic(Symbol::intern(stringify!($var))))
+    ($var: ident) => {
+        Ty::var(Ident::synthetic(Symbol::intern(stringify!($var))))
     };
 
-    ($tyctx: expr; ()) => {
-        $tyctx.unit()
+    (()) => {
+        Ty::unit()
     };
 
     // ($tyctx: expr; $($param: tt)* -> $body: expr) => {{
@@ -25,19 +22,16 @@ macro_rules! ty {
     //     $tyctx.func(param, body)
     // }};
 
-    ($tyctx: expr; $param: tt -> $($body: tt)*) => {{
-        let param = ty!($tyctx; $param);
-        let body = ty!($tyctx; $($body)*);
-        $tyctx.func(param, body)
+    ($param: tt -> $($body: tt)*) => {{
+        Ty::func(ty!($param), ty!($($body)*))
     }};
 
-    ($tyctx: expr; forall $alpha: ident. $($ty: tt)*) => {{
-        let ty = ty!($tyctx; $($ty)*);
-        $tyctx.forall(Ident::synthetic(Symbol::intern(stringify!($alpha))), ty)
+    (forall $alpha: ident. $($ty: tt)*) => {{
+        Ty::forall(Ident::synthetic(Symbol::intern(stringify!($alpha))), ty!($($ty)*))
     }};
 
-    ($tyctx: expr; ($($prior: tt)*)) => {
-        ty!($tyctx; $($prior)*)
+    (($($prior: tt)*)) => {
+        ty!($($prior)*)
     };
 
     // ($tyctx: expr; $any: tt) => {
@@ -45,28 +39,16 @@ macro_rules! ty {
     // };
 }
 
-pub(super) fn builtins(tyctx: &mut TyCtx) -> HashMap<Builtin, Ty> {
+pub(super) fn builtins() -> HashMap<Builtin, Ty> {
     let builtins = HashMap::from([
         // Values //
-        (Builtin::UnitValue, tyctx.unit()),
+        (Builtin::UnitValue, Ty::unit()),
         // Operators //
-        (
-            Builtin::Add,
-            ty!(
-                tyctx;
-                forall a. a -> a -> a
-            ),
-        ),
-        (
-            Builtin::Minus,
-            ty!(
-                tyctx;
-                forall a. a -> a -> a
-            ),
-        ),
+        (Builtin::Add, ty!(forall a. a -> a -> a)),
+        (Builtin::Minus, ty!(forall a. a -> a -> a)),
         // Types //
-        (Builtin::UnitTy, tyctx.unit()),
-        (Builtin::I32, tyctx.prim(PrimTy::Int(IntKind::I32))),
+        (Builtin::UnitTy, Ty::unit()),
+        (Builtin::I32, Ty::prim(PrimTy::Int(IntKind::I32))),
     ]);
 
     builtins

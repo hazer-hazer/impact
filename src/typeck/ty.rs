@@ -1,7 +1,10 @@
+use once_cell::sync::Lazy;
+
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
-    fmt::{Display, Formatter},
+    fmt::Formatter,
     hash::{Hash, Hasher},
+    sync::RwLock,
 };
 
 use crate::{
@@ -20,7 +23,7 @@ pub enum ExistentialKind {
     Float,
 }
 
-impl Display for ExistentialKind {
+impl std::fmt::Display for ExistentialKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExistentialKind::Common => "",
@@ -75,7 +78,7 @@ impl Existential {
     }
 }
 
-impl Display for Existential {
+impl std::fmt::Display for Existential {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.kind(), self.id())
     }
@@ -129,7 +132,7 @@ impl IntKind {
     }
 }
 
-impl Display for IntKind {
+impl std::fmt::Display for IntKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -170,7 +173,7 @@ impl TryFrom<hir::expr::FloatKind> for FloatKind {
 
 pub const DEFAULT_FLOAT_KIND: FloatKind = FloatKind::F32;
 
-impl Display for FloatKind {
+impl std::fmt::Display for FloatKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -204,7 +207,7 @@ impl TryFrom<Lit> for PrimTy {
     }
 }
 
-impl Display for PrimTy {
+impl std::fmt::Display for PrimTy {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             PrimTy::Bool => write!(f, "bool"),
@@ -217,7 +220,107 @@ impl Display for PrimTy {
 
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 
-pub type Ty = TyId;
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub struct Ty(TyId);
+
+impl Ty {
+    // Interning and constructors //
+    pub fn intern(tys: TyS) -> Self {
+        Self(TY_INTERNER.write().unwrap().intern(tys))
+    }
+
+    fn new(kind: TyKind) -> Self {
+        Self::intern(TyS::new(kind))
+    }
+
+    pub fn unit() -> Ty {
+        Self::new(TyKind::Unit)
+    }
+
+    pub fn error() -> Ty {
+        Self::new(TyKind::Error)
+    }
+
+    pub fn var(ident: Ident) -> Ty {
+        Self::new(TyKind::Var(ident))
+    }
+
+    pub fn prim(prim: PrimTy) -> Ty {
+        Self::new(TyKind::Prim(prim))
+    }
+
+    pub fn func(param: Ty, ret: Ty) -> Ty {
+        Self::new(TyKind::Func(param, ret))
+    }
+
+    pub fn forall(alpha: Ident, body: Ty) -> Ty {
+        Self::new(TyKind::Forall(alpha, body))
+    }
+
+    pub fn existential(ex: Existential) -> Ty {
+        Self::new(TyKind::Existential(ex))
+    }
+
+    pub fn default_int() -> Ty {
+        Self::prim(PrimTy::Int(DEFAULT_INT_KIND))
+    }
+
+    pub fn default_float() -> Ty {
+        Self::prim(PrimTy::Float(DEFAULT_FLOAT_KIND))
+    }
+
+    pub fn tys(&self) -> &TyS {
+        TY_INTERNER.read().unwrap().expect(self.0)
+    }
+
+    pub fn kind(&self) -> &TyKind {
+        self.tys().kind()
+    }
+
+    pub fn is_mono(&self) -> bool {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Prim(_)
+            | TyKind::Var(_)
+            | TyKind::Existential(_) => true,
+            TyKind::Func(param, body) => param.is_mono() && body.is_mono(),
+            TyKind::Forall(_, _) => false,
+        }
+    }
+
+    pub fn is_instantiated(&self) -> bool {
+        match self.kind() {
+            TyKind::Error => todo!(),
+            TyKind::Unit
+            | TyKind::Prim(PrimTy::Bool | PrimTy::Float(_) | PrimTy::Int(_) | PrimTy::String) => {
+                true
+            },
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
+            &TyKind::Func(param, body) => param.is_instantiated() && body.is_instantiated(),
+        }
+    }
+}
+
+impl std::fmt::Debug for Ty {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Ty({})", self)
+    }
+}
+
+impl std::fmt::Display for Ty {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.kind() {
+            TyKind::Error => write!(f, "[ERROR]"),
+            TyKind::Unit => write!(f, "()"),
+            TyKind::Prim(lit) => write!(f, "{}", lit),
+            TyKind::Var(name) => write!(f, "{}", name),
+            TyKind::Existential(ex) => write!(f, "{}", ex),
+            &TyKind::Func(param, body) => write!(f, "({} -> {})", param, body),
+            &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
+        }
+    }
+}
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
@@ -230,53 +333,6 @@ pub enum TyKind {
     Func(Ty, Ty),
     Forall(Ident, Ty),
 }
-
-// pub enum MonoTy<'a> {
-//     Error,
-//     Unit,
-//     Lit(PrimTy),
-//     Var(Ident),
-//     Existential(ExistentialId),
-//     Func(&'a MonoTy<'a>, &'a MonoTy<'a>),
-// }
-
-// pub enum PolyTy<'a> {
-//     Func(&'a MonoPolyTy<'a>, &'a MonoPolyTy<'a>),
-//     Forall(Ident, &'a MonoPolyTy<'a>),
-// }
-
-// // I'm so proud of giving such names to structures
-// pub enum MonoPolyTy<'a> {
-//     Mono(MonoTy<'a>),
-//     Poly(PolyTy<'a>),
-// }
-
-// impl<'a> MonoPolyTy<'a> {
-//     pub fn is_mono(&self) -> bool {
-//         match self {
-//             MonoPolyTy::Mono(_) => true,
-//             MonoPolyTy::Poly(_) => false,
-//         }
-//     }
-
-//     pub fn is_poly(&self) -> bool {
-//         !self.is_mono()
-//     }
-
-//     pub fn as_mono(&self) -> Option<&MonoTy> {
-//         match self {
-//             MonoPolyTy::Mono(mono) => Some(mono),
-//             MonoPolyTy::Poly(_) => None,
-//         }
-//     }
-
-//     pub fn as_poly(&self) -> Option<&PolyTy> {
-//         match self {
-//             MonoPolyTy::Mono(_) => None,
-//             MonoPolyTy::Poly(poly) => Some(poly),
-//         }
-//     }
-// }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct TyS {
@@ -301,7 +357,7 @@ impl TyS {
     }
 }
 
-impl Display for TyS {
+impl std::fmt::Display for TyS {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.kind() {
             TyKind::Error => write!(f, "[ERROR]"),
@@ -315,13 +371,12 @@ impl Display for TyS {
     }
 }
 
-pub struct TyError();
-pub type TyResult<T> = Result<T, TyError>;
+static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| Default::default());
 
 #[derive(Default)]
 pub struct TyInterner {
     map: HashMap<u64, TyId>,
-    types: Vec<TyS>,
+    types: Vec<&'static TyS>,
 }
 
 impl TyInterner {
@@ -331,13 +386,15 @@ impl TyInterner {
         state.finish()
     }
 
-    pub fn intern(&mut self, ty: TyS) -> TyId {
-        let hash = Self::hash(&ty);
+    pub fn intern(&mut self, tys: TyS) -> TyId {
+        let hash = Self::hash(&tys);
 
         if let Some(id) = self.map.get(&hash) {
             return *id;
         }
 
+        // !Leaked
+        let ty = Box::leak(Box::new(tys));
         let id = TyId::from(self.types.len());
 
         self.map.insert(hash, id);
@@ -346,8 +403,10 @@ impl TyInterner {
         id
     }
 
-    pub fn expect(&self, ty: TyId) -> &TyS {
-        self.types.get(ty.as_usize()).unwrap()
+    pub fn expect(&self, ty: TyId) -> &'static TyS {
+        self.types
+            .get(ty.as_usize())
+            .expect(&format!("Failed to find type by type id {}", ty))
     }
 }
 
@@ -357,7 +416,7 @@ pub enum Subst {
     Name(Ident),
 }
 
-impl Display for Subst {
+impl std::fmt::Display for Subst {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Subst::Existential(ex) => ex.fmt(f),

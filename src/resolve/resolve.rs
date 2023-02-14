@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    def::{ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
+    def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
     res::{NamePath, Res},
 };
 
@@ -125,7 +125,7 @@ impl<'ast> NameResolver<'ast> {
                         .get_module(module_id)
                         .get_from_ns(target_ns, name)
                     {
-                        return Some(Res::def(def_id));
+                        return Some(self.def_res(target_ns, def_id));
                     }
                 },
             }
@@ -136,6 +136,26 @@ impl<'ast> NameResolver<'ast> {
             scope_id -= 1;
         }
         None
+    }
+
+    fn def_res(&self, target_ns: Namespace, def_id: DefId) -> Res {
+        let def = self.sess.def_table.get_def(def_id).unwrap();
+
+        match def.kind() {
+            DefKind::Root | DefKind::TyAlias | DefKind::Mod | DefKind::Func | DefKind::Var => {
+                assert_eq!(def.kind().namespace(), target_ns);
+                return Res::def(def_id);
+            },
+            DefKind::DeclareBuiltin => {
+                // Is does not matter in which namespace we found `builtin`
+                // Yeah, crutches
+                return Res::declare_builtin();
+            },
+            &DefKind::Builtin(bt) => {
+                assert_eq!(def.kind().namespace(), target_ns);
+                return Res::builtin(bt);
+            },
+        }
     }
 
     fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res {
@@ -192,27 +212,7 @@ impl<'ast> NameResolver<'ast> {
             };
 
             if is_target {
-                let def = self.sess.def_table.get_def(def_id).unwrap();
-
-                match def.kind() {
-                    DefKind::Root
-                    | DefKind::TyAlias
-                    | DefKind::Mod
-                    | DefKind::Func
-                    | DefKind::Var => {
-                        assert_eq!(def.kind().namespace(), target_ns);
-                        return Res::def(def_id);
-                    },
-                    DefKind::DeclareBuiltin => {
-                        // Is does not matter in which namespace we found `builtin`
-                        // Yeah, crutches
-                        return Res::declare_builtin();
-                    },
-                    &DefKind::Builtin(bt) => {
-                        assert_eq!(def.kind().namespace(), target_ns);
-                        return Res::builtin(bt);
-                    },
-                }
+                return self.def_res(target_ns, def_id);
             } else {
                 search_mod = self.sess.def_table.get_module(ModuleId::Module(def_id))
             }
@@ -271,6 +271,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_pat(&mut self, pat: &'ast Pat) {
         verbose!("Visit pat {}", pat.id());
         match pat.kind() {
+            PatKind::Unit => {},
             PatKind::Ident(ident) => self.define_var(pat.id(), ident.as_ref().unwrap()),
         }
     }

@@ -69,9 +69,12 @@ pub trait HirVisitor {
     fn visit_pat(&mut self, pat: &Pat, hir: &HIR) {
         let pat = hir.pat(*pat);
         match pat.kind() {
+            PatKind::Unit => self.visit_unit_pat(),
             PatKind::Ident(ident) => self.visit_ident_pat(&ident, hir),
         }
     }
+
+    fn visit_unit_pat(&mut self) {}
 
     fn visit_ident_pat(&mut self, ident: &Ident, hir: &HIR) {
         self.visit_ident(ident, hir);

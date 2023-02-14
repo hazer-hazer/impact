@@ -555,17 +555,23 @@ impl Parser {
     fn parse_pat(&mut self, expected: &str) -> PR<Pat> {
         let lo = self.span();
 
-        let kind = self.parse_pat_kind();
-        let kind = self.expected(kind, expected)?;
+        let kind = self.parse_pat_kind(expected)?;
 
         Ok(Pat::new(self.next_node_id(), kind, self.close_span(lo)))
     }
 
-    fn parse_pat_kind(&mut self) -> Option<PatKind> {
+    fn parse_pat_kind(&mut self, expected: &str) -> PR<PatKind> {
         if self.is(TokenCmp::Ident) {
-            Some(PatKind::Ident(self.parse_ident("[bug] ident pattern")))
+            Ok(PatKind::Ident(self.parse_ident("[bug] ident pattern")))
+        } else if self.skip(TokenCmp::Punct(Punct::LParen)).is_some() {
+            self.skip_opt_nls();
+            // TODO: Tuple pattern
+            self.expect(TokenCmp::Punct(Punct::RParen))?;
+            Ok(PatKind::Unit)
+        } else if self.skip(TokenCmp::Kw(Kw::Unit)).is_some() {
+            Ok(PatKind::Unit)
         } else {
-            None
+            self.expected(None, expected)
         }
     }
 

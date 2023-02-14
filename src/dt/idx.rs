@@ -136,8 +136,8 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
     {
         self.vec
             .iter()
-            .filter(|v| v.is_some())
             .enumerate()
+            .filter(|(_, v)| v.is_some())
             .map(|(i, v)| (I::from(i), v.as_ref().unwrap()))
     }
 
@@ -345,11 +345,11 @@ macro_rules! declare_idx {
     };
 
     (wrapper $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
-        declare_idx!(private $name, $inner_ty, $format, $color);
+        declare_idx!(@inner $name, $inner_ty, $format, $color);
     };
 
     (new_type $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
-        declare_idx!(private $name, $inner_ty, $format, $color);
+        declare_idx!(@inner $name, $inner_ty, $format, $color);
 
         impl crate::dt::idx::Idx for $name {
             type Inner = $inner_ty;
@@ -368,7 +368,7 @@ macro_rules! declare_idx {
         }
     };
 
-    (private $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
+    (@inner $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
         #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
         pub struct $name($inner_ty);
 

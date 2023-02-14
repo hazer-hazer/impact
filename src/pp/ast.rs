@@ -107,7 +107,12 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     // Patterns //
     fn visit_pat(&mut self, pat: &'ast Pat) {
         match pat.kind() {
-            PatKind::Ident(ident) => walk_pr!(self, ident, name, pat.id(), true),
+            PatKind::Unit => {
+                self.str("()");
+            },
+            PatKind::Ident(ident) => {
+                walk_pr!(self, ident, name, pat.id(), true);
+            },
         }
         self.node_id(pat);
     }
