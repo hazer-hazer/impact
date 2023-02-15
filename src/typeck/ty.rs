@@ -277,6 +277,13 @@ impl Ty {
         self.tys().kind()
     }
 
+    pub fn as_ex(&self) -> Option<Existential> {
+        match self.kind() {
+            &TyKind::Existential(ex) => Some(ex),
+            _ => None,
+        }
+    }
+
     pub fn is_mono(&self) -> bool {
         match self.kind() {
             TyKind::Error
