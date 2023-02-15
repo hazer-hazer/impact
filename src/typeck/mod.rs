@@ -36,6 +36,15 @@ pub enum TypeckErr {
     Reported,
 }
 
+impl TypeckErr {
+    pub fn assert_reported(&self) {
+        match self {
+            TypeckErr::Reported => {},
+            TypeckErr::Check | TypeckErr::LateReport => panic!(),
+        }
+    }
+}
+
 pub type TyResult<T> = Result<T, TypeckErr>;
 
 pub struct Typecker<'hir> {
@@ -132,7 +141,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn ctx_depth(&self) -> usize {
-        self.ctx_stack.len() - 1
+        self.ctx_stack.len()
     }
 
     fn enter_ctx(&mut self, ctx: InferCtx) {
@@ -143,7 +152,8 @@ impl<'hir> Typecker<'hir> {
         // assert!(self.ctx().unsolved().is_empty());
         verbose!("< [EXIT CTX]");
 
-        self.global_ctx.add(self.ctx_stack.pop().unwrap());
+        self.global_ctx
+            .add(self.ctx_depth(), self.ctx_stack.pop().unwrap());
     }
 
     /// Returns try mode flag and context depth before try mode to restore to them
@@ -197,12 +207,12 @@ impl<'hir> Typecker<'hir> {
     /// Returns result of the callback (if some returned) and depth of context scope
     /// where callback returned result
     fn _ascend_ctx<T>(&self, mut f: impl FnMut(&InferCtx) -> Option<T>) -> Option<(T, usize)> {
-        let mut ctx_depth = self.ctx_depth();
+        let mut ctx_depth = self.ctx_depth() - 1;
 
         loop {
             let res = f(&self.ctx_stack[ctx_depth]);
             if let Some(res) = res {
-                return Some((res, ctx_depth));
+                return Some((res, ctx_depth + 1));
             }
 
             if ctx_depth == 0 {
@@ -219,12 +229,12 @@ impl<'hir> Typecker<'hir> {
         &mut self,
         mut f: impl FnMut(&mut InferCtx) -> Option<T>,
     ) -> Option<(T, usize)> {
-        let mut ctx_depth = self.ctx_depth();
+        let mut ctx_depth = self.ctx_depth() - 1;
 
         loop {
             let res = f(&mut self.ctx_stack[ctx_depth]);
             if let Some(res) = res {
-                return Some((res, ctx_depth));
+                return Some((res, ctx_depth + 1));
             }
 
             if ctx_depth == 0 {
@@ -250,7 +260,12 @@ impl<'hir> Typecker<'hir> {
                 None
             }
         })
-        .expect("Undefined existential id")
+        .or_else(|| self.global_ctx.get_ex_index(ex))
+        .expect(&format!(
+            "Undefined existential {}; ctx {}",
+            ex,
+            self.dump_ctx_stack()
+        ))
     }
 
     fn fresh_ex(&mut self, kind: ExistentialKind) -> Existential {
@@ -267,10 +282,17 @@ impl<'hir> Typecker<'hir> {
         self.add_fresh_ex(ExistentialKind::Common)
     }
 
-    fn solve(&mut self, ex: Existential, solution: Ty) -> Ty {
-        verbose!("Solve {} as {}", ex, solution);
-        self._ascend_ctx_mut(|ctx| ctx.solve(ex, solution))
-            .map_or(None, |(ty, _)| Some(ty))
+    fn solve(&mut self, ex: Existential, sol: Ty) -> Ty {
+        verbose!("Solve {} as {}", ex, sol);
+        self._ascend_ctx_mut(|ctx| ctx.solve(ex, sol))
+            .map_or_else(|| self.global_ctx.solve(ex, sol), |(ty, _)| Some(ty))
+            .unwrap()
+    }
+
+    fn add_func_param_sol(&mut self, ex: Existential, sol: Ty) -> Ty {
+        verbose!("Add {} func param solution {}", ex, sol);
+        self._ascend_ctx_mut(|ctx| ctx.add_func_param_sol(ex, sol))
+            .map_or_else(|| todo!("Global ctx func param exes"), |(ty, _)| Some(ty))
             .unwrap()
     }
 
@@ -282,13 +304,18 @@ impl<'hir> Typecker<'hir> {
         self.ctx().add_ex(ex);
     }
 
-    fn add_var(&mut self, name: Ident) {
+    fn add_var(&mut self, name: Ident) -> Ty {
         self.ctx().add_var(name);
+        Ty::var(name)
     }
 
     fn get_solution(&self, ex: Existential) -> Option<Ty> {
         self.ascend_ctx(|ctx| ctx.get_solution(ex))
             .or_else(|| self.global_ctx.get_solution(ex))
+    }
+
+    fn is_unsolved(&self, ex: Existential) -> bool {
+        self.get_solution(ex).is_none()
     }
 
     fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
@@ -344,13 +371,16 @@ impl<'hir> Typecker<'hir> {
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
         match ty.kind() {
+            TyKind::Error => Ok(ty),
             TyKind::Unit | TyKind::Prim(_) => Ok(ty),
             &TyKind::Var(ident) => {
-                if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
-                    Ok(ty)
-                } else {
-                    self.ty_illformed(ty)
-                }
+                // FIXME
+                Ok(ty)
+                // if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
+                //     Ok(ty)
+                // } else {
+                //     self.ty_illformed(ty)
+                // }
             },
             &TyKind::Existential(ex) => {
                 if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() || self.global_ctx.has_ex(ex) {
@@ -363,13 +393,10 @@ impl<'hir> Typecker<'hir> {
                 self.ty_wf(param_ty)?;
                 self.ty_wf(return_ty)
             },
-            &TyKind::Forall(alpha, body) => self.under_new_ctx(|this| {
-                let alpha = Ty::var(alpha);
-                let open_forall = this.open_forall(body, alpha);
-                this.ty_wf(open_forall)?;
-                Ok(ty)
+            &TyKind::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
+                // let open_forall = this.open_forall(body, alpha);
+                this.ty_wf(body)
             }),
-            _ => self.ty_illformed(ty),
         }
     }
 
@@ -594,9 +621,17 @@ impl<'hir> Typecker<'hir> {
             .collect::<Vec<_>>()
             .join("\n");
 
+        let global_exes = self
+            .global_ctx
+            .existentials()
+            .iter()
+            .map(|ex| format!("{}", ex))
+            .collect::<Vec<_>>()
+            .join(", ");
+
         format!(
-            "[CTX]\nvars: {}\nterms:\n{}\nsolved:\n{}\nunsolved: {}\nglobal solved: {}",
-            vars, terms, solved, unsolved, global_solved
+            "[CTX]\nvars: {}\nterms:\n{}\nsolved:\n{}\nunsolved: {}\nglobal solved:\n{}\nglobal existentials: {}\n",
+            vars, terms, solved, unsolved, global_solved, global_exes
         )
     }
 }

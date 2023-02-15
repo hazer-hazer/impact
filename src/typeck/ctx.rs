@@ -11,14 +11,25 @@ use super::ty::{Existential, ExistentialId, ExistentialKind, Ty};
 #[derive(Default, Debug)]
 pub struct GlobalCtx {
     solved: IndexVec<ExistentialId, Option<Ty>>,
+
+    // FIXME: This might be absolutely wrong
+    existentials: IndexVec<ExistentialId, Option<(usize, usize)>>,
 }
 
 impl GlobalCtx {
-    pub fn add(&mut self, ctx: InferCtx) {
-        ctx.solved.iter_enumerated_flat().for_each(|(ex, &sol)| {
-            verbose!("Add ex to global ctx {} = {}", ex, sol);
-            assert!(self.solved.insert(ex, sol).is_none());
-        });
+    pub fn add(&mut self, depth: usize, ctx: InferCtx) {
+        ctx.existentials()
+            .iter()
+            .enumerate()
+            .for_each(|(index, &ex)| {
+                if let Some(sol) = ctx.get_solution(ex) {
+                    verbose!("Add ex to global ctx {} = {}", ex, sol);
+                    assert!(self.solved.insert(ex.id(), sol).is_none());
+                } else {
+                    verbose!("Add ex to global ctx {}", ex);
+                    assert!(self.existentials.insert(ex.id(), (depth, index)).is_none())
+                }
+            });
     }
 
     pub fn get_solution(&self, ex: Existential) -> Option<Ty> {
@@ -26,11 +37,52 @@ impl GlobalCtx {
     }
 
     pub fn has_ex(&self, ex: Existential) -> bool {
+        assert!(self.existentials().contains(&ex.id()));
         self.solved.has(ex.id())
+    }
+
+    pub fn get_ex_index(&self, ex: Existential) -> Option<(usize, usize)> {
+        self.existentials.get_flat(ex.id()).copied()
     }
 
     pub fn solved(&self) -> &IndexVec<ExistentialId, Option<Ty>> {
         &self.solved
+    }
+
+    // FIXME: Copypaste
+    pub fn solve(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
+        if self.has_ex(ex) {
+            assert!(
+                self.solved.insert(ex.id(), sol).is_none(),
+                "Tried to override solution of {} = {} to {}",
+                ex,
+                self.solved.get_unwrap(ex.id()),
+                sol
+            );
+            Some(sol)
+        } else {
+            None
+        }
+    }
+
+    pub fn existentials(&self) -> Vec<ExistentialId> {
+        self.existentials
+            .iter_enumerated_flat()
+            .map(|(ex, _)| ex)
+            .collect()
+    }
+
+    pub fn unsolved(&self) -> Vec<ExistentialId> {
+        self.existentials
+            .iter_enumerated_flat()
+            .filter_map(|(ex, _)| {
+                if let None = self.solved.get(ex) {
+                    Some(ex)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -43,6 +95,8 @@ pub struct InferCtx {
     // Note: I end up with storing `solved` and unsolved existentials separately due to `try` logic.
     //  We need to enter new "try to"-context under which we do not violate upper context.
     solved: IndexVec<ExistentialId, Option<Ty>>,
+
+    func_param_solutions: IndexVec<ExistentialId, Option<Vec<Ty>>>,
 
     /// Type variables defined in current context. Do not leak to global context
     vars: HashSet<Symbol>,
@@ -145,6 +199,30 @@ impl InferCtx {
         }
     }
 
+    pub fn add_func_param_sol(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
+        if self.has_ex(ex) {
+            // FIXME: Can function parameter existential be other than Common?
+            match ex.kind() {
+                ExistentialKind::Common => {},
+                _ => panic!(),
+            }
+
+            if !self.func_param_solutions.has(ex.id()) {
+                self.func_param_solutions.insert(ex.id(), vec![]);
+            } else {
+                // FIXME: Should we panic?
+                assert!(!self.func_param_solutions.get_unwrap(ex.id()).contains(&sol));
+            }
+
+            self.func_param_solutions.get_mut_unwrap(ex.id()).push(sol);
+
+            Some(sol)
+        } else {
+            None
+        }
+    }
+
+    // Getters //
     pub fn unsolved(&self) -> Vec<Existential> {
         self.existentials
             .iter()

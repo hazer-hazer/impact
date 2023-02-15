@@ -12,7 +12,7 @@ use crate::{
     },
     message::message::MessageBuilder,
     resolve::def::DefKind,
-    span::span::{Ident, WithSpan},
+    span::span::{Ident, Spanned, WithSpan},
     typeck::ty::Subst,
 };
 
@@ -84,7 +84,7 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Lit(lit) => self.synth_lit(lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
-            ExprKind::Lambda(lambda) => self.synth_lambda(lambda),
+            ExprKind::Lambda(lambda) => self.synth_lambda_generic(lambda),
             ExprKind::Call(call) => self.synth_call(call),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(ty_expr),
@@ -149,10 +149,17 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    fn get_pat_names_types(&self, pat: Pat) -> Vec<Ident> {
+    fn get_pat_names(&self, pat: Pat) -> Vec<Ident> {
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![],
             &hir::pat::PatKind::Ident(name) => vec![name],
+        }
+    }
+
+    fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
+        match self.hir.pat(pat).kind() {
+            hir::pat::PatKind::Unit => Some(Ty::unit()),
+            hir::pat::PatKind::Ident(_) => None,
         }
     }
 
@@ -169,10 +176,77 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn synth_lambda(&mut self, lambda: &Lambda) -> TyResult<Ty> {
+    fn synth_lambda_generic(&mut self, lambda: &Lambda) -> TyResult<Ty> {
         // FIXME: Rewrite when `match` added
 
-        let param_names = self.get_pat_names_types(lambda.param);
+        // Get parameter type from pattern if possible, e.g. `()` is of type `()`.
+        let early_param_ty = self.get_early_pat_type(lambda.param);
+
+        let param_names = self.get_pat_names(lambda.param);
+
+        let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
+            // FIXME: Should sub-pattern names existentials be defined outside this context?
+            let ex = self.add_fresh_common_ex();
+            self.type_term(name, ex.1);
+
+            assert!(exes.insert(name, ex).is_none());
+            exes
+        });
+
+        let body_ex = self.add_fresh_common_ex();
+
+        self.under_new_ctx(|this| {
+            // FIXME: Optimize fold moves of vec
+            param_exes.iter().for_each(|(&name, &ex)| {
+                // FIXME: Should sub-pattern names existentials be defined outside this context?
+                this.type_term(name, ex.1);
+            });
+
+            let body_ty = this.check_discard_err(lambda.body, body_ex.1);
+
+            // Apply context to function parameter to get its type.
+            let param_ty = this.get_typed_pat(lambda.param);
+
+            // If we know of which type function parameter is -- check inferred one against it
+            let param_ty = if let Some(early) = early_param_ty {
+                this.check_ty_discard_err(
+                    Spanned::new(this.hir.pat(lambda.param).span(), param_ty),
+                    early,
+                )
+            } else {
+                param_ty
+            };
+
+            verbose!("Param ty {}", param_ty);
+
+            this.tyctx_mut().type_node(lambda.param, param_ty);
+
+            let func_ty =
+                param_exes
+                    .iter()
+                    .fold(Ty::func(param_ty, body_ty), |ty, (&name, &(ex, _))| {
+                        verbose!(
+                            "Func type generation {ty}; push {name}: {ex} = {:?}",
+                            this.get_solution(ex)
+                        );
+                        if let Some(_) = this.get_solution(ex) {
+                            ty
+                        } else {
+                            this.solve(ex, Ty::var(name));
+                            Ty::forall(name, ty)
+                        }
+                    });
+
+            verbose!("Func ty {func_ty}");
+
+            Ok(func_ty)
+        })
+    }
+
+    fn synth_lambda_ex(&mut self, lambda: &Lambda) -> TyResult<Ty> {
+        // FIXME: Rewrite when `match` added
+
+        let param_names = self.get_pat_names(lambda.param);
 
         let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
             // FIXME: Should sub-pattern names existentials be defined outside this context?
@@ -223,12 +297,25 @@ impl<'hir> Typecker<'hir> {
                     let func_ty = Ty::func(param_ex.1, body_ex.1);
                     this.solve(ex, func_ty);
 
+                    // TODO: Can we infer param type from application as below in Func?
                     this.check(arg, param_ex.1)?;
+
                     Ok(body_ex.1)
                 })
             },
             &TyKind::Func(param, body) => {
-                self.check(arg, param);
+                // TODO: Let arguments go first
+                // if let Some(param_ex) = param.as_ex() {
+                //     todo!();
+                //     let arg = self.synth_expr(arg)?;
+                //     self.add_func_param_sol(param_ex, arg);
+                // } else {
+                //     self.check_discard_err(arg, param);
+                // }
+                // self.check(arg, param)?;
+
+                self.check_discard_err(arg, param);
+
                 Ok(body)
             },
             &TyKind::Forall(alpha, ty) => {

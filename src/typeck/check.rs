@@ -15,6 +15,16 @@ use super::{
 use super::Typecker;
 
 impl<'hir> Typecker<'hir> {
+    pub fn check_discard_err(&mut self, expr_id: Expr, ty: Ty) -> Ty {
+        match self.check(expr_id, ty) {
+            Ok(ok) => ok,
+            Err(err) => {
+                err.assert_reported();
+                Ty::error()
+            },
+        }
+    }
+
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
@@ -85,6 +95,34 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    pub fn check_ty_discard_err(&mut self, l_ty: Spanned<Ty>, ty: Ty) -> Ty {
+        match self.check_ty(l_ty, ty) {
+            Ok(ok) => ok,
+            Err(err) => {
+                err.assert_reported();
+                Ty::error()
+            },
+        }
+    }
+
+    pub fn check_ty(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
+        match self.subtype(l_ty, r_ty) {
+            Ok(ok) => Ok(ok),
+            Err(_) => {
+                let span = l_ty.span();
+                let l_ty = l_ty.node();
+
+                MessageBuilder::error()
+                    .span(span)
+                    .text(format!("{} is not a subtype of {}", l_ty, r_ty))
+                    .label(span, format!("Must be of type {}", r_ty))
+                    .emit(self);
+
+                Err(TypeckErr::Reported)
+            },
+        }
+    }
+
     // Subtyping //
     fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
@@ -129,10 +167,21 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
+        verbose!(
+            "Subtype {} <: {}",
+            self.apply_ctx_on(l_ty),
+            self.apply_ctx_on(r_ty)
+        );
+
         assert!(self.ty_wf(l_ty).is_ok());
         assert!(self.ty_wf(r_ty).is_ok());
 
         match (l_ty.kind(), r_ty.kind()) {
+            // FIXME: Is these pats ok?
+            (TyKind::Error, _) | (_, TyKind::Error) => Err(TypeckErr::LateReport),
+
+            (TyKind::Unit, TyKind::Unit) => Ok(r_ty),
+
             (&TyKind::Prim(prim), &TyKind::Prim(prim_)) if prim == prim_ => Ok(r_ty),
 
             (TyKind::Var(name1), TyKind::Var(name2)) if name1.sym() == name2.sym() => Ok(r_ty),
@@ -141,12 +190,19 @@ impl<'hir> Typecker<'hir> {
                 self.ty_wf(l_ty).and(self.ty_wf(r_ty))
             },
 
+            // Int existentials //
             (&TyKind::Existential(int_ex), TyKind::Prim(PrimTy::Int(_))) if int_ex.is_int() => {
                 Ok(self.solve(int_ex, r_ty))
             },
 
+            (&TyKind::Existential(int_ex), &TyKind::Existential(ex)) if int_ex.is_int() => {
+                // FIXME: This is a test logic
+                Ok(self.solve(ex, Ty::default_int()))
+            },
+
             (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
 
+            // Float existentials //
             (&TyKind::Existential(float_ex), TyKind::Prim(PrimTy::Float(_)))
                 if float_ex.is_float() =>
             {
@@ -155,6 +211,7 @@ impl<'hir> Typecker<'hir> {
 
             (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr::LateReport),
 
+            //
             (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2)) => {
                 // self.under_new_ctx(|this| {
                 // Enter Θ
