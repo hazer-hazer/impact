@@ -10,12 +10,18 @@ use inkwell::{
 
 use crate::{
     hir::{
-        expr::{Expr, ExprKind, Lambda, Lit, PathExpr},
-        item::{Decl, Item, ItemKind},
-        stmt::{Stmt, StmtKind},
+        expr::{Expr, ExprKind, ExprNode, Lambda, Lit, PathExpr},
+        item::{Decl, ItemKind, ItemNode},
+        stmt::{Stmt, StmtKind, StmtNode},
+        HirId, HIR,
     },
+    message::message::{MessageHolder, MessageStorage},
     resolve::res::Res,
-    typeck::ty::{FloatKind, IntKind},
+    session::Session,
+    typeck::{
+        ty::{FloatKind, IntKind},
+        tyctx::TyCtx,
+    },
 };
 
 pub struct Generator<'ctx> {
@@ -25,9 +31,26 @@ pub struct Generator<'ctx> {
 
     // Values of resolutions
     res_values: HashMap<Res, BasicValueEnum<'ctx>>,
+
+    sess: Session,
+    msg: MessageStorage,
+}
+
+impl<'ctx> MessageHolder for Generator<'ctx> {
+    fn save(&mut self, msg: crate::message::message::Message) {
+        self.msg.add_message(msg)
+    }
 }
 
 impl<'ctx> Generator<'ctx> {
+    fn hir(&self) -> &HIR {
+        &self.sess.hir
+    }
+
+    fn tyctx(&self) -> &TyCtx {
+        &self.sess.tyctx
+    }
+
     fn current_block(&self) -> BasicBlock<'ctx> {
         self.builder.get_insert_block().unwrap()
     }
@@ -110,70 +133,61 @@ impl<'ctx> Generator<'ctx> {
     }
 }
 
-pub trait CodeGen<'g> {
+pub trait NodeCodeGen<'g> {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g>;
 }
 
-impl<'g> CodeGen<'g> for Stmt {
+impl<'g> NodeCodeGen<'g> for StmtNode {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
         match self.kind() {
-            StmtKind::Expr(expr) => expr.codegen(g),
-            StmtKind::Item(item) => todo!("No items in HIR"),
+            &StmtKind::Expr(expr) => g.hir().expr(expr).codegen(g),
+            &StmtKind::Item(item) => g.hir().item(item).codegen(g),
         }
     }
 }
 
-impl<'g> CodeGen<'g> for Lit {
+impl<'g> NodeCodeGen<'g> for PathExpr {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
-        match self {
-            Lit::Bool(val) => g.bool_value(*val),
-            Lit::Int(val, kind) => g.int_value(*val, *kind),
-            Lit::Float(val, kind) => g.float_value(*val, *kind),
-            Lit::String(sym) => g.string_value(sym.as_str()),
-        }
+        g.expect_res_value(g.hir().path(self.0).res())
     }
 }
 
-impl<'g> CodeGen<'g> for PathExpr {
-    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
-        g.expect_res_value(self.0.res())
-    }
-}
-
-impl<'g> CodeGen<'g> for Lambda {
+impl<'g> NodeCodeGen<'g> for Lambda {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
         let block = g.current_block();
         todo!()
     }
 }
 
-impl<'g> CodeGen<'g> for Expr {
+impl<'g> NodeCodeGen<'g> for ExprNode {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
         match self.kind() {
-            ExprKind::Unit => g.unit_value(),
-            ExprKind::Lit(lit) => lit.codegen(g),
+            ExprKind::Lit(lit) => match lit {
+                Lit::Bool(val) => g.bool_value(*val),
+                Lit::Int(val, kind) => g.int_value(*val, g.tyctx().tyof(self.id()).int_kind()),
+                Lit::Float(val, kind) => {
+                    g.float_value(*val, g.tyctx().tyof(self.id()).float_kind())
+                },
+                Lit::String(sym) => g.string_value(sym.as_str()),
+            },
             ExprKind::Path(path) => path.codegen(g),
             ExprKind::Block(_) => todo!(),
             ExprKind::Lambda(_) => todo!(),
             ExprKind::Call(_) => todo!(),
             ExprKind::Let(_) => todo!(),
             ExprKind::Ty(_) => todo!(),
-            ExprKind::Infix(_) => todo!(),
-            ExprKind::Prefix(_) => todo!(),
         }
     }
 }
 
-impl<'g> CodeGen<'g> for Item {
+impl<'g> NodeCodeGen<'g> for ItemNode {
     fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
         match self.kind() {
             ItemKind::Decl(decl) => {
-                assert!(decl.params.is_empty());
-
                 todo!()
                 // g.bind_res_value(Res::local(self), value)
-            }
-            ItemKind::Mod(_) | ItemKind::Type(_) => {}
+            },
+            ItemKind::Mod(_) | ItemKind::TyAlias(_) => {},
         }
 
         g.unit_value()

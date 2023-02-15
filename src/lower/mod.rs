@@ -62,7 +62,6 @@ impl OwnerCollection {
 
 pub struct Lower<'ast> {
     ast: &'ast AST,
-    hir: HIR,
 
     // HirId
     owner_stack: Vec<OwnerCollection>,
@@ -91,12 +90,15 @@ impl<'ast> Lower<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
-            hir: HIR::new(),
             owner_stack: Default::default(),
             node_id_hir_id: Default::default(),
             sess,
             msg: Default::default(),
         }
+    }
+
+    fn hir(&mut self) -> &mut HIR {
+        &mut self.sess.hir
     }
 
     fn _with_owner(&mut self, def_id: DefId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
@@ -124,7 +126,7 @@ impl<'ast> Lower<'ast> {
             .nodes
             .insert(OWNER_SELF_CHILD_ID, owner_node.into());
 
-        self.hir
+        self.hir()
             .add_owner(def_id, self.owner_stack.pop().unwrap().owner);
 
         owner_id
@@ -508,9 +510,9 @@ impl<'ast> Lower<'ast> {
     }
 }
 
-impl<'ast> Stage<HIR> for Lower<'ast> {
-    fn run(mut self) -> StageOutput<HIR> {
+impl<'ast> Stage<()> for Lower<'ast> {
+    fn run(mut self) -> StageOutput<()> {
         self.lower_ast();
-        StageOutput::new(self.sess, self.hir, self.msg)
+        StageOutput::new(self.sess, (), self.msg)
     }
 }

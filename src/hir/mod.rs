@@ -270,6 +270,7 @@ impl Owner {
 #[derive(Debug)]
 pub struct HIR {
     // TODO: Replace with IndexVec
+    // Optimize: Late init IndexVec::with_capacity count of definitions in DefTable
     owners: DefMap<Owner>,
 }
 

@@ -178,11 +178,11 @@ impl<'ast> Interface {
         // Lowering //
         verbose!("=== Lowering ===");
         let stage = StageName::Lower;
-        let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
+        let (_, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = HirPP::new(&sess, AstPPMode::Normal);
-            pp.visit_hir(&hir);
+            pp.visit_hir(&sess.hir);
             let hir = pp.pp.get_string();
             outln!(sess.writer, "Printing HIR\n{}", hir);
         }
@@ -192,11 +192,11 @@ impl<'ast> Interface {
         // Typeck //
         verbose!("=== Type checking ===");
         let stage = StageName::Typeck;
-        let mut typeck_result = Typecker::new(sess, &hir).run();
+        let mut typeck_result = Typecker::new(sess).run();
 
         if typeck_result.sess().config().check_pp_stage(stage) {
             let mut pp = HirPP::new(typeck_result.sess(), AstPPMode::TyAnno);
-            pp.visit_hir(&hir);
+            pp.visit_hir(&sess.hir);
             let hir = pp.pp.get_string();
             outln!(
                 typeck_result.sess_mut().writer,

@@ -23,7 +23,7 @@ use super::{
 
 use super::Typecker;
 
-impl<'hir> Typecker<'hir> {
+impl Typecker {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         match self.sess.def_table.get_def(item.def_id()).unwrap().kind() {
             &DefKind::Builtin(bt) => return Ok(self.tyctx().builtin_ty(bt)),
@@ -31,7 +31,7 @@ impl<'hir> Typecker<'hir> {
             _ => {},
         }
 
-        let item = self.hir.item(item);
+        let item = self.hir().item(item);
 
         let ty = match item.kind() {
             ItemKind::TyAlias(_ty) => {
@@ -62,7 +62,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_stmt(&mut self, stmt: Stmt) -> TyResult<Ty> {
-        let stmt = self.hir.stmt(stmt);
+        let stmt = self.hir().stmt(stmt);
 
         match stmt.kind() {
             &StmtKind::Expr(expr) => {
@@ -79,15 +79,15 @@ impl<'hir> Typecker<'hir> {
     pub fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
         verbose!("Synth type of expression {}", expr_id);
 
-        let expr = self.hir.expr(expr_id);
+        let expr = self.hir().expr(expr_id);
         let expr_ty = match expr.kind() {
-            ExprKind::Lit(lit) => self.synth_lit(lit),
+            ExprKind::Lit(lit) => self.synth_lit(&lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
-            ExprKind::Lambda(lambda) => self.synth_lambda_generic(lambda),
-            ExprKind::Call(call) => self.synth_call(call),
+            ExprKind::Lambda(lambda) => self.synth_lambda_generic(&lambda),
+            ExprKind::Call(call) => self.synth_call(&call),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
-            ExprKind::Ty(ty_expr) => self.synth_ty_expr(ty_expr),
+            ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
         }?;
 
         let expr_ty = self.apply_ctx_on(expr_ty);
@@ -110,7 +110,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
-        let path = self.hir.path(path);
+        let path = self.hir().path(path);
         self.lookup_typed_term_ty(path.target_name())
             .ok_or_else(|| {
                 MessageBuilder::error()
@@ -131,7 +131,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
-        let block = self.hir.block(block);
+        let block = self.hir().block(block);
 
         self.under_new_ctx(|this| {
             block.stmts().iter().try_for_each(|&stmt| {
@@ -150,14 +150,14 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn get_pat_names(&self, pat: Pat) -> Vec<Ident> {
-        match self.hir.pat(pat).kind() {
+        match self.hir().pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![],
             &hir::pat::PatKind::Ident(name) => vec![name],
         }
     }
 
     fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
-        match self.hir.pat(pat).kind() {
+        match self.hir().pat(pat).kind() {
             hir::pat::PatKind::Unit => Some(Ty::unit()),
             hir::pat::PatKind::Ident(_) => None,
         }
@@ -166,7 +166,7 @@ impl<'hir> Typecker<'hir> {
     /// Get pattern type based on current context, applying context to
     ///  typed terms that appear in pattern as identifiers (Ident pattern)
     fn get_typed_pat(&self, pat: Pat) -> Ty {
-        match self.hir.pat(pat).kind() {
+        match self.hir().pat(pat).kind() {
             hir::pat::PatKind::Unit => Ty::unit(),
 
             // Assumed that all names in pattern are typed, at least as existentials
@@ -210,7 +210,7 @@ impl<'hir> Typecker<'hir> {
             // If we know of which type function parameter is -- check inferred one against it
             let param_ty = if let Some(early) = early_param_ty {
                 this.check_ty_discard_err(
-                    Spanned::new(this.hir.pat(lambda.param).span(), param_ty),
+                    Spanned::new(this.hir().pat(lambda.param).span(), param_ty),
                     early,
                 )
             } else {

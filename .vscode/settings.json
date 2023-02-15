@@ -30,6 +30,7 @@
     "skippable",
     "Subtyping",
     "tyctx",
+    "tyof",
     "typeck",
     "Typecker",
     "Uninit",

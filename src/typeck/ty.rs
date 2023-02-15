@@ -307,6 +307,27 @@ impl Ty {
             &TyKind::Func(param, body) => param.is_instantiated() && body.is_instantiated(),
         }
     }
+
+    // Strong getters //
+    pub fn int_kind(&self) -> IntKind {
+        match self.kind() {
+            TyKind::Prim(prim) => match prim {
+                &PrimTy::Int(kind) => kind,
+                _ => panic!(),
+            },
+            _ => panic!(),
+        }
+    }
+
+    pub fn float_kind(&self) -> FloatKind {
+        match self.kind() {
+            TyKind::Prim(prim) => match prim {
+                &PrimTy::Float(kind) => kind,
+                _ => panic!(),
+            },
+            _ => panic!(),
+        }
+    }
 }
 
 impl std::fmt::Debug for Ty {

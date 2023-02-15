@@ -47,9 +47,7 @@ impl TypeckErr {
 
 pub type TyResult<T> = Result<T, TypeckErr>;
 
-pub struct Typecker<'hir> {
-    hir: &'hir HIR,
-
+pub struct Typecker {
     // Context //
     global_ctx: GlobalCtx,
     ctx_stack: Vec<InferCtx>,
@@ -61,17 +59,15 @@ pub struct Typecker<'hir> {
     sess: Session,
 }
 
-impl<'hir> MessageHolder for Typecker<'hir> {
+impl MessageHolder for Typecker {
     fn save(&mut self, msg: Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl<'hir> Typecker<'hir> {
-    pub fn new(sess: Session, hir: &'hir HIR) -> Self {
+impl Typecker {
+    pub fn new(sess: Session) -> Self {
         Self {
-            hir,
-
             global_ctx: Default::default(),
             ctx_stack: Default::default(),
             existential: ExistentialId::new(0),
@@ -80,6 +76,10 @@ impl<'hir> Typecker<'hir> {
             sess,
             msg: Default::default(),
         }
+    }
+
+    fn hir(&self) -> &HIR {
+        &self.sess.hir
     }
 
     fn tyctx(&self) -> &TyCtx {
@@ -373,7 +373,7 @@ impl<'hir> Typecker<'hir> {
         match ty.kind() {
             TyKind::Error => Ok(ty),
             TyKind::Unit | TyKind::Prim(_) => Ok(ty),
-            &TyKind::Var(ident) => {
+            &TyKind::Var(_ident) => {
                 // FIXME
                 Ok(ty)
                 // if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
@@ -471,7 +471,7 @@ impl<'hir> Typecker<'hir> {
 
     // Conversion //
     fn conv(&mut self, ty: hir::ty::Ty) -> Ty {
-        let ty = self.hir.ty(ty);
+        let ty = self.hir().ty(ty);
         // TODO: Allow recursive?
 
         match ty.kind {
@@ -485,7 +485,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn conv_path(&mut self, path: Path) -> Ty {
-        let path = self.hir.path(path);
+        let path = self.hir().path(path);
         match path.res().kind() {
             &ResKind::Def(def_id) => {
                 let def = self.sess.def_table.get_def(def_id).unwrap();
@@ -525,7 +525,7 @@ impl<'hir> Typecker<'hir> {
             return def_ty;
         }
 
-        let ty_alias = self.hir.item(ItemId::new(def.def_id.into())).ty_alias();
+        let ty_alias = self.hir().item(ItemId::new(def.def_id.into())).ty_alias();
         let ty = self.conv(ty_alias.ty);
         self.tyctx_mut().type_node(hir_id, ty);
         ty
@@ -636,12 +636,12 @@ impl<'hir> Typecker<'hir> {
     }
 }
 
-impl<'ast> Stage<()> for Typecker<'ast> {
+impl Stage<()> for Typecker {
     fn run(mut self) -> StageOutput<()> {
         self.under_new_ctx(|this| {
             this.define_builtins();
 
-            this.hir.root().items.iter().for_each(|&item| {
+            this.hir().root().items.iter().for_each(|&item| {
                 let res = this.synth_item(item);
 
                 match res {
@@ -660,27 +660,27 @@ impl<'ast> Stage<()> for Typecker<'ast> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{config::config::ConfigBuilder, hir::HIR, session::Session};
+// #[cfg(test)]
+// mod tests {
+//     use crate::{config::config::ConfigBuilder, hir::HIR, session::Session};
 
-    use super::Typecker;
+//     use super::Typecker;
 
-    fn get_hir() -> HIR {
-        HIR::new()
-    }
+//     fn get_hir() -> HIR {
+//         HIR::new()
+//     }
 
-    fn get_typecker<'a>(hir: &'a HIR) -> Typecker<'a> {
-        Typecker::new(Session::new(ConfigBuilder::new().emit()), hir)
-    }
+//     // fn get_typecker<'a>(hir: &'a HIR) -> Typecker {
+//     //     Typecker::new(Session::new(ConfigBuilder::new().emit()), hir)
+//     // }
 
-    mod substitution {
+//     mod substitution {
 
-        // fn basic() {
-        //     let mut typecker = get_typecker(&get_hir());
-        //     let tyctx = typecker.tyctx_mut();
-        //     let
-        //     typecker.substitute(, subst, with)
-        // }
-    }
-}
+//         // fn basic() {
+//         //     let mut typecker = get_typecker(&get_hir());
+//         //     let tyctx = typecker.tyctx_mut();
+//         //     let
+//         //     typecker.substitute(, subst, with)
+//         // }
+//     }
+// }

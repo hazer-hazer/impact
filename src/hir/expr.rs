@@ -182,6 +182,10 @@ impl ExprNode {
     pub fn kind(&self) -> &ExprKind {
         &self.kind
     }
+
+    pub fn id(&self) -> HirId {
+        self.id
+    }
 }
 
 impl WithHirId for ExprNode {

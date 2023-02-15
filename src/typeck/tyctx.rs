@@ -32,6 +32,11 @@ impl TyCtx {
         self.typed.get(&id).copied()
     }
 
+    /// Unwrap-version of `node_type` with a short name.
+    pub fn tyof(&self, id: HirId) -> Ty {
+        self.node_type(id).expect(&format!("Type of node {} expected", id))
+    }
+
     pub fn builtin_ty(&self, builtin: Builtin) -> Ty {
         self.builtins
             .get(&builtin)
