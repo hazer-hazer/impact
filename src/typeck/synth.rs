@@ -5,7 +5,7 @@ use crate::{
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{ItemId, ItemKind, Mod},
+        item::{Decl, ItemId, ItemKind, Mod},
         pat::Pat,
         stmt::{Stmt, StmtKind},
         HirId, Path,
@@ -23,7 +23,7 @@ use super::{
 
 use super::Typecker;
 
-impl Typecker {
+impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         match self.sess.def_table.get_def(item.def_id()).unwrap().kind() {
             &DefKind::Builtin(bt) => return Ok(self.tyctx().builtin_ty(bt)),
@@ -31,23 +31,22 @@ impl Typecker {
             _ => {},
         }
 
-        let item = self.hir().item(item);
-
-        let ty = match item.kind() {
+        let ty = match self.hir.item(item).kind() {
             ItemKind::TyAlias(_ty) => {
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                 self.conv_ty_alias(item.def_id());
                 Ty::unit()
             },
             ItemKind::Mod(Mod { items }) => {
-                for item in items {
-                    self.synth_item(*item)?;
+                // FIXME: How not to clone?
+                for item in items.clone() {
+                    self.synth_item(item)?;
                 }
                 Ty::unit()
             },
-            ItemKind::Decl(decl) => {
-                let value_ty = self.synth_expr(decl.value)?;
-                self.type_term(item.name(), value_ty);
+            &ItemKind::Decl(Decl { value }) => {
+                let value_ty = self.synth_expr(value)?;
+                self.type_term(self.hir.item(item).name(), value_ty);
 
                 // Note: Actually, declaration type is a unit type, but we save it
                 // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
@@ -62,7 +61,7 @@ impl Typecker {
     }
 
     fn synth_stmt(&mut self, stmt: Stmt) -> TyResult<Ty> {
-        let stmt = self.hir().stmt(stmt);
+        let stmt = self.hir.stmt(stmt);
 
         match stmt.kind() {
             &StmtKind::Expr(expr) => {
@@ -79,8 +78,7 @@ impl Typecker {
     pub fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
         verbose!("Synth type of expression {}", expr_id);
 
-        let expr = self.hir().expr(expr_id);
-        let expr_ty = match expr.kind() {
+        let expr_ty = match self.hir.expr(expr_id).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
@@ -110,11 +108,10 @@ impl Typecker {
     }
 
     fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
-        let path = self.hir().path(path);
-        self.lookup_typed_term_ty(path.target_name())
+        self.lookup_typed_term_ty(self.hir.path(path).target_name())
             .ok_or_else(|| {
                 MessageBuilder::error()
-                    .span(path.span())
+                    .span(self.hir.path(path).span())
                     .text(format!("Term {} does not have a type", path))
                     .emit_single_label(self);
                 TypeckErr::Reported
@@ -131,7 +128,7 @@ impl Typecker {
     }
 
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
-        let block = self.hir().block(block);
+        let block = self.hir.block(block);
 
         self.under_new_ctx(|this| {
             block.stmts().iter().try_for_each(|&stmt| {
@@ -150,14 +147,14 @@ impl Typecker {
     }
 
     fn get_pat_names(&self, pat: Pat) -> Vec<Ident> {
-        match self.hir().pat(pat).kind() {
+        match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![],
             &hir::pat::PatKind::Ident(name) => vec![name],
         }
     }
 
     fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
-        match self.hir().pat(pat).kind() {
+        match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => Some(Ty::unit()),
             hir::pat::PatKind::Ident(_) => None,
         }
@@ -166,7 +163,7 @@ impl Typecker {
     /// Get pattern type based on current context, applying context to
     ///  typed terms that appear in pattern as identifiers (Ident pattern)
     fn get_typed_pat(&self, pat: Pat) -> Ty {
-        match self.hir().pat(pat).kind() {
+        match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => Ty::unit(),
 
             // Assumed that all names in pattern are typed, at least as existentials
@@ -210,7 +207,7 @@ impl Typecker {
             // If we know of which type function parameter is -- check inferred one against it
             let param_ty = if let Some(early) = early_param_ty {
                 this.check_ty_discard_err(
-                    Spanned::new(this.hir().pat(lambda.param).span(), param_ty),
+                    Spanned::new(this.hir.pat(lambda.param).span(), param_ty),
                     early,
                 )
             } else {

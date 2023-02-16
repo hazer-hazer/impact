@@ -11,11 +11,17 @@ use crate::{
     hir::{
         self,
         item::{Decl, ItemId, ItemNode, Mod, TyAlias},
-        HirId, Node, Owner, OwnerChildId, OwnerId, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
+        HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
+        OWNER_SELF_CHILD_ID,
     },
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
-    resolve::{builtin::DeclareBuiltin, def::DefId, res::NamePath},
+    resolve::{
+        self,
+        builtin::DeclareBuiltin,
+        def::DefId,
+        res::{self, NamePath},
+    },
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
 };
@@ -62,6 +68,7 @@ impl OwnerCollection {
 
 pub struct Lower<'ast> {
     ast: &'ast AST,
+    hir: HIR,
 
     // HirId
     owner_stack: Vec<OwnerCollection>,
@@ -90,15 +97,12 @@ impl<'ast> Lower<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
+            hir: HIR::new(),
             owner_stack: Default::default(),
             node_id_hir_id: Default::default(),
             sess,
             msg: Default::default(),
         }
-    }
-
-    fn hir(&mut self) -> &mut HIR {
-        &mut self.sess.hir
     }
 
     fn _with_owner(&mut self, def_id: DefId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
@@ -126,8 +130,8 @@ impl<'ast> Lower<'ast> {
             .nodes
             .insert(OWNER_SELF_CHILD_ID, owner_node.into());
 
-        self.hir()
-            .add_owner(def_id, self.owner_stack.pop().unwrap().owner);
+        let owner = self.owner_stack.pop().unwrap().owner;
+        self.hir.add_owner(def_id, owner);
 
         owner_id
     }
@@ -388,12 +392,23 @@ impl<'ast> Lower<'ast> {
         *ident
     }
 
+    fn lower_res(&mut self, res: res::Res<NodeId>) -> Res {
+        match res.kind() {
+            &res::ResKind::Local(node_id) => Res::local(*self.node_id_hir_id.get_unwrap(node_id)),
+            &res::ResKind::Def(def_id) => Res::def(def_id),
+            &res::ResKind::MakeBuiltin => Res::declare_builtin(),
+            &res::ResKind::Builtin(bt) => Res::builtin(bt),
+            res::ResKind::Error => Res::error(),
+        }
+    }
+
     fn lower_path(&mut self, path: &Path) -> hir::Path {
         let id = self.lower_node_id(path.id());
         let segments = lower_each!(self, path.segments(), lower_path_seg);
+        let res = self.lower_res(self.sess.res.get(NamePath::new(path.id())).unwrap());
         self.add_node(Node::PathNode(hir::PathNode::new(
             id,
-            self.sess.res.get(NamePath::new(path.id())).unwrap(),
+            res,
             segments,
             path.span(),
         )))
@@ -510,9 +525,9 @@ impl<'ast> Lower<'ast> {
     }
 }
 
-impl<'ast> Stage<()> for Lower<'ast> {
-    fn run(mut self) -> StageOutput<()> {
+impl<'ast> Stage<HIR> for Lower<'ast> {
+    fn run(mut self) -> StageOutput<HIR> {
         self.lower_ast();
-        StageOutput::new(self.sess, (), self.msg)
+        StageOutput::new(self.sess, self.hir, self.msg)
     }
 }

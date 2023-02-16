@@ -107,7 +107,7 @@ impl<'ast> NameResolver<'ast> {
         self.scopes.pop();
     }
 
-    fn resolve_local(&mut self, target_ns: Namespace, name: &Ident) -> Option<Res> {
+    fn resolve_local(&mut self, target_ns: Namespace, name: &Ident) -> Option<Res<NodeId>> {
         let mut scope_id = self.scopes.len() - 1;
         loop {
             let local = &self.scopes[scope_id].locals.get(&name.sym());
@@ -138,7 +138,7 @@ impl<'ast> NameResolver<'ast> {
         None
     }
 
-    fn def_res(&self, target_ns: Namespace, def_id: DefId) -> Res {
+    fn def_res(&self, target_ns: Namespace, def_id: DefId) -> Res<NodeId> {
         let def = self.sess.def_table.get_def(def_id).unwrap();
 
         match def.kind() {
@@ -158,7 +158,7 @@ impl<'ast> NameResolver<'ast> {
         }
     }
 
-    fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res {
+    fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res<NodeId> {
         let segments = path.segments();
 
         // TODO: When generics added, don't resolve local if segment has generics

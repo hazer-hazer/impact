@@ -361,6 +361,10 @@ impl Ident {
         self.sym
     }
 
+    pub fn as_str(&self) -> &str {
+        self.sym.as_str()
+    }
+
     pub fn kind(&self) -> Option<IdentKind> {
         match self.sym().to_string().chars().nth(0) {
             Some(first) if first.is_uppercase() => Some(IdentKind::Ty),

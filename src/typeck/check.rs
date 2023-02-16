@@ -14,7 +14,7 @@ use super::{
 
 use super::Typecker;
 
-impl Typecker {
+impl<'hir> Typecker<'hir> {
     pub fn check_discard_err(&mut self, expr_id: Expr, ty: Ty) -> Ty {
         match self.check(expr_id, ty) {
             Ok(ok) => ok,
@@ -34,7 +34,7 @@ impl Typecker {
             Err(_) => {
                 verbose!("[-] Expr {} is NOT of type {}", expr_id, ty);
 
-                let span = self.hir().expr_result_span(expr_id);
+                let span = self.hir.expr_result_span(expr_id);
 
                 MessageBuilder::error()
                     .span(span)
@@ -56,7 +56,7 @@ impl Typecker {
     }
 
     fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
-        let expr = self.hir().expr(expr_id);
+        let expr = self.hir.expr(expr_id);
 
         match (expr.kind(), ty.kind()) {
             (&ExprKind::Lit(lit), &TyKind::Prim(prim)) => {
@@ -75,7 +75,7 @@ impl Typecker {
             },
 
             (&ExprKind::Lambda(Lambda { body, param }), &TyKind::Func(param_ty, body_ty)) => {
-                let param_name = self.hir().pat_names(param).unwrap();
+                let param_name = self.hir.pat_names(param).unwrap();
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];
 
@@ -127,7 +127,7 @@ impl Typecker {
     fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr_ty = self.synth_expr(expr_id)?;
 
-        let span = self.hir().expr(expr_id).span();
+        let span = self.hir.expr(expr_id).span();
         let l = self.apply_ctx_on(expr_ty);
         let r = self.apply_ctx_on(ty);
 

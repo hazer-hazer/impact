@@ -12,7 +12,7 @@ use session::Source;
 
 mod ast;
 mod cli;
-// mod codegen;
+mod codegen;
 mod config;
 mod dt;
 mod hir;

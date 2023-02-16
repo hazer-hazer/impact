@@ -204,7 +204,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_block!(self, block.stmts(), visit_stmt, hir);
         self.pp.indent();
         self.pp.out_indent();
-        block.expr().map(|expr| self.visit_expr(expr, hir));
+        block.expr().map(|expr| self.visit_expr(&expr, hir));
         self.pp.dedent();
     }
 }

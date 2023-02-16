@@ -7,7 +7,6 @@ use crate::{
     cli::color::{Color, Colorize},
     config::config::Config,
     dt::idx::{declare_idx, Idx},
-    hir::HIR,
     interface::{interface::InterruptionReason, writer::Writer},
     message::{
         message::{Message, MessageStorage},
@@ -205,7 +204,7 @@ pub struct Session {
     pub def_table: DefTable,
     pub res: Resolutions,
     pub tyctx: TyCtx,
-    pub hir: HIR,
+    // pub hir: HIR,
 }
 
 impl Session {
@@ -218,7 +217,6 @@ impl Session {
             def_table: Default::default(),
             res: Resolutions::default(),
             tyctx: TyCtx::new(),
-            hir: HIR::new(),
         }
     }
 

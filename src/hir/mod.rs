@@ -8,8 +8,8 @@ use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, Idx, IndexVec},
     resolve::{
+        self,
         def::{DefId, DefMap, ROOT_DEF_ID},
-        res::Res,
     },
     span::span::{Ident, Span, WithSpan},
 };
@@ -384,6 +384,8 @@ impl Display for PathSeg {
         write!(f, "{}", self.ident)
     }
 }
+
+pub type Res = resolve::res::Res<HirId>;
 
 #[derive(Debug)]
 pub struct PathNode {

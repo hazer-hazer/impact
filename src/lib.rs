@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 pub mod ast;
 pub mod cli;
-// pub mod codegen;
+pub mod codegen;
 pub mod config;
 pub mod dt;
 pub mod hir;
