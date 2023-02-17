@@ -17,9 +17,8 @@ use crate::{
     message::message::MessageStorage,
     parser::token::{FloatKind, IntKind},
     resolve::{
-        self,
         builtin::DeclareBuiltin,
-        def::DefId,
+        def::{DefId},
         res::{self, NamePath},
     },
     session::{Session, Stage, StageOutput},
@@ -394,11 +393,11 @@ impl<'ast> Lower<'ast> {
 
     fn lower_res(&mut self, res: res::Res<NodeId>) -> Res {
         match res.kind() {
-            &res::ResKind::Local(node_id) => Res::local(*self.node_id_hir_id.get_unwrap(node_id)),
-            &res::ResKind::Def(def_id) => Res::def(def_id),
-            &res::ResKind::MakeBuiltin => Res::declare_builtin(),
-            &res::ResKind::Builtin(bt) => Res::builtin(bt),
-            res::ResKind::Error => Res::error(),
+            &res::ResKind::Local(node_id) => Res::Node(*self.node_id_hir_id.get_unwrap(node_id)),
+            &res::ResKind::Def(def_id) => Res::Node(HirId::new_owner(def_id)),
+            &res::ResKind::MakeBuiltin => Res::MakeBuiltin,
+            &res::ResKind::Builtin(bt) => Res::Builtin(bt),
+            res::ResKind::Error => Res::Error,
         }
     }
 

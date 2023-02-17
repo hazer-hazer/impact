@@ -4,7 +4,10 @@
 
 use crate::{
     ast::{AstMetadata, NodeId},
-    cli::color::{Color, Colorize},
+    cli::{
+        color::{Color, Colorize},
+        verbose,
+    },
     config::config::Config,
     dt::idx::{declare_idx, Idx},
     interface::{interface::InterruptionReason, writer::Writer},
@@ -86,14 +89,20 @@ impl Source {
 
         for i in 0..self.lines_positions.len() {
             let line_pos = self.lines_positions[i];
+
+            // We encountered line further than span
+            if span.hi() < line_pos {
+                break;
+            }
+
             let next_line_pos = *self
                 .lines_positions
                 .get(i + 1)
                 .unwrap_or(&(self.source_size() as u32));
 
-            // We encountered line further than span
-            if span.lo() < line_pos {
-                break;
+            if next_line_pos <= span.lo() {
+                // Do not include line if span starts on the next line
+                continue;
             }
 
             let line_range = line_pos..=next_line_pos;
@@ -175,6 +184,7 @@ impl Source {
 
 #[derive(Default)]
 pub struct SourceMap {
+    // FIXME: Use IndexVec
     sources: Vec<Source>,
 }
 

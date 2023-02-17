@@ -1,40 +1,40 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
-    module::Module,
+    module::{Linkage, Module},
     types::{BasicType, BasicTypeEnum, PointerType},
-    values::{BasicValue, BasicValueEnum, CallableValue, FunctionValue, InstructionOpcode},
+    values::{BasicValue, BasicValueEnum, FunctionValue, InstructionOpcode},
     AddressSpace,
 };
 
 use crate::{
-    hir::{
-        expr::{BlockNode, Call, ExprKind, ExprNode, Lambda, Lit, PathExpr},
-        item::{ItemKind, ItemNode},
-        stmt::{StmtKind, StmtNode},
-        Path, PathNode, Res, HIR,
-    },
-    message::message::{MessageHolder, MessageStorage},
+    hir::{HirId, Res, HIR},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
     resolve::def::DefId,
-    session::Session,
-    span::span::{Ident, Internable},
+    session::{Session, Stage, StageOutput},
+    span::span::{Ident, Internable, Symbol},
     typeck::{
         ty::{FloatKind, IntKind, PrimTy, Ty, TyKind},
         tyctx::TyCtx,
     },
 };
 
-pub struct Generator<'ctx> {
-    hir: &'ctx HIR,
+use super::nodes::NodeCodeGen;
+
+pub struct CodeGen<'ctx> {
+    pub hir: &'ctx HIR,
 
     ctx: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
 
-    // Values of resolutions
+    /// Values of resolutions.
+    /// We don't map resolved paths to values,
+    ///  but different kinds of resolved items to their values,
+    ///  i.e. in `a = 1` it is `Local(NodeId): 1`.
     res_values: HashMap<Res, BasicValueEnum<'ctx>>,
 
     // States //
@@ -45,27 +45,61 @@ pub struct Generator<'ctx> {
     msg: MessageStorage,
 }
 
-impl<'ctx> MessageHolder for Generator<'ctx> {
+impl<'ctx> MessageHolder for CodeGen<'ctx> {
     fn save(&mut self, msg: crate::message::message::Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl<'ctx> Generator<'ctx> {
-    fn tyctx(&self) -> &TyCtx {
+impl<'ctx> CodeGen<'ctx> {
+    pub fn new(sess: Session, hir: &'ctx HIR, ctx: &'ctx Context) -> Self {
+        Self {
+            sess,
+            hir,
+            ctx,
+
+            // FIXME
+            module: ctx.create_module("kek"),
+            builder: ctx.create_builder(),
+
+            res_values: Default::default(),
+            current_def: Default::default(),
+            msg: MessageStorage::default(),
+        }
+    }
+
+    pub(super) fn tyctx(&self) -> &TyCtx {
         &self.sess.tyctx
     }
 
-    fn current_block(&self) -> BasicBlock<'ctx> {
+    pub(super) fn builder(&mut self) -> &mut Builder<'ctx> {
+        &mut self.builder
+    }
+
+    pub(super) fn current_block(&self) -> BasicBlock<'ctx> {
         self.builder.get_insert_block().unwrap()
     }
 
-    // Definitions //
-    fn bind_res_value(&mut self, res: Res, value: BasicValueEnum<'ctx>) {
-        self.res_values.insert(res, value);
+    pub(super) fn under_def<T>(
+        &mut self,
+        def: (Ident, DefId),
+        mut f: impl FnMut(&mut Self) -> T,
+    ) -> T {
+        self.current_def = Some(def);
+
+        let res = f(self);
+
+        self.current_def = None;
+
+        res
     }
 
-    fn expect_res_value(&self, res: &Res) -> BasicValueEnum<'ctx> {
+    // Definitions //
+    pub(super) fn bind_res_value(&mut self, res: Res, value: BasicValueEnum<'ctx>) {
+        assert!(self.res_values.insert(res, value).is_none());
+    }
+
+    pub(super) fn expect_res_value(&self, res: &Res) -> BasicValueEnum<'ctx> {
         *self
             .res_values
             .get(&res)
@@ -73,7 +107,7 @@ impl<'ctx> Generator<'ctx> {
     }
 
     // Types //
-    fn conv_ty(&self, ty: Ty) -> BasicTypeEnum<'ctx> {
+    pub(super) fn conv_ty(&self, ty: Ty) -> BasicTypeEnum<'ctx> {
         match ty.kind() {
             TyKind::Error => panic!("Error type at codegen stage"),
             TyKind::Unit => self.ctx.struct_type(&[], false).into(),
@@ -93,7 +127,7 @@ impl<'ctx> Generator<'ctx> {
         }
     }
 
-    fn conv_func_ty(&self, func_ty: (Ty, Ty)) -> PointerType<'ctx> {
+    pub(super) fn conv_func_ty(&self, func_ty: (Ty, Ty)) -> PointerType<'ctx> {
         let param = self.conv_ty(func_ty.0);
         let body = self.conv_ty(func_ty.1);
         body.fn_type(&[param.into()], false)
@@ -101,7 +135,7 @@ impl<'ctx> Generator<'ctx> {
     }
 
     // Values //
-    fn bool_value(&self, val: bool) -> BasicValueEnum<'ctx> {
+    pub(super) fn bool_value(&self, val: bool) -> BasicValueEnum<'ctx> {
         self.ctx.bool_type().const_int(val as u64, true).into()
     }
 
@@ -123,7 +157,7 @@ impl<'ctx> Generator<'ctx> {
         }
     }
 
-    fn int_value(&self, val: u64, kind: IntKind) -> BasicValueEnum<'ctx> {
+    pub(super) fn int_value(&self, val: u64, kind: IntKind) -> BasicValueEnum<'ctx> {
         let bits = self.int_bits(kind);
         let unsigned = kind.is_unsigned();
         self.ctx
@@ -132,14 +166,14 @@ impl<'ctx> Generator<'ctx> {
             .as_basic_value_enum()
     }
 
-    fn float_value(&self, val: f64, kind: FloatKind) -> BasicValueEnum<'ctx> {
+    pub(super) fn float_value(&self, val: f64, kind: FloatKind) -> BasicValueEnum<'ctx> {
         match kind {
             FloatKind::F32 => self.ctx.f32_type().const_float(val).into(),
             FloatKind::F64 => self.ctx.f64_type().const_float(val).into(),
         }
     }
 
-    fn string_value(&self, str: &str) -> BasicValueEnum<'ctx> {
+    pub(super) fn string_value(&self, str: &str) -> BasicValueEnum<'ctx> {
         let lit = self.ctx.const_string(str.as_bytes(), true);
 
         let global = self
@@ -159,13 +193,22 @@ impl<'ctx> Generator<'ctx> {
         cast.as_basic_value_enum()
     }
 
-    fn unit_value(&self) -> BasicValueEnum<'ctx> {
+    pub(super) fn unit_value(&self) -> BasicValueEnum<'ctx> {
         // TODO: Compile to void for functions
         let unit = self.ctx.struct_type(&[], false);
         unit.const_zero().into()
     }
 
-    fn function(&self, name: &str, ty: Ty) -> (FunctionValue<'ctx>, BasicValueEnum<'ctx>) {
+    pub(super) fn get_lambda_name(&self) -> Symbol {
+        self.current_def
+            .map_or("lambda".intern(), |(name, _)| name.sym())
+    }
+
+    pub(super) fn function(
+        &self,
+        name: &str,
+        ty: Ty,
+    ) -> (FunctionValue<'ctx>, BasicValueEnum<'ctx>) {
         let raw_ty = self
             .conv_func_ty(ty.as_func())
             .get_element_type()
@@ -173,7 +216,7 @@ impl<'ctx> Generator<'ctx> {
 
         let func = self
             .module
-            .add_function(name, raw_ty, Some(inkwell::module::Linkage::Internal));
+            .add_function(name, raw_ty, Some(Linkage::Internal));
 
         let func_ptr = func.as_global_value().as_pointer_value().into();
 
@@ -196,111 +239,58 @@ impl<'ctx> Generator<'ctx> {
         )
     }
 
-    fn build_return(&mut self, ret_val: BasicValueEnum<'ctx>) {
+    pub(super) fn build_return(&mut self, ret_val: BasicValueEnum<'ctx>) {
         if !self.is_at_block_terminator() {
             self.builder.build_return(Some(&ret_val));
         }
     }
-}
 
-pub trait NodeCodeGen<'g> {
-    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g>;
-}
+    fn build_main(&mut self) {
+        // main function //
+        // FIXME: There might be better place for this logic
 
-impl<'g> NodeCodeGen<'g> for StmtNode {
-    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
-        match self.kind() {
-            &StmtKind::Expr(expr) => g.hir.expr(expr).codegen(g),
-            &StmtKind::Item(item) => g.hir.item(item).codegen(g),
+        let main_func_def_id = match self.sess.def_table.main_func() {
+            Ok(ok) => ok,
+            Err(err) => {
+                err.emit(self);
+                return;
+            },
+        };
+
+        // FIXME: Actually must be `() -> ()`
+        let expected_main_func_ty = Ty::func(Ty::unit(), Ty::unit());
+
+        if expected_main_func_ty != self.tyctx().tyof(HirId::new_owner(main_func_def_id)) {
+            let span = self.sess.def_table.def_name_span(main_func_def_id);
+            MessageBuilder::error()
+                .span(span)
+                .text(format!("'main' function has invalid type"))
+                .label(span, format!("Must have type {}", expected_main_func_ty))
+                .emit(self);
+            return;
         }
-    }
-}
 
-impl<'g> NodeCodeGen<'g> for PathNode {
-    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
-        g.expect_res_value(self.res())
-    }
-}
+        let i32_ty = self.ctx.i32_type();
+        let main_func_ty = i32_ty.fn_type(&[], false);
+        let main_func_val = self
+            .module
+            .add_function("main", main_func_ty, Some(Linkage::External));
+        let basic_block = self.ctx.append_basic_block(main_func_val, "entry");
 
-impl<'g> NodeCodeGen<'g> for ExprNode {
-    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
-        match self.kind() {
-            ExprKind::Lit(lit) => match lit {
-                Lit::Bool(val) => g.bool_value(*val),
+        self.builder.position_at_end(basic_block);
 
-                // FIXME: Assert int/float kinds eq to types
-                Lit::Int(val, _kind) => g.int_value(*val, g.tyctx().tyof(self.id()).as_int_kind()),
-                Lit::Float(val, _kind) => {
-                    g.float_value(*val, g.tyctx().tyof(self.id()).as_float_kind())
-                },
-
-                Lit::String(sym) => g.string_value(sym.as_str()),
-            },
-            &ExprKind::Path(PathExpr(path)) => g.hir.path(path).codegen(g),
-            ExprKind::Block(_) => todo!(),
-            &ExprKind::Lambda(Lambda { param, body }) => {
-                let caller_block = g.current_block();
-                let name = g
-                    .current_def
-                    .map_or("lambda".intern(), |(name, _)| name.sym());
-
-                let (func, func_val) = g.function(name.as_str(), g.tyctx().tyof(self.id()));
-
-                g.bind_res_value(Res::local(param), func.get_nth_param(0).unwrap());
-
-                let ret_val = g.hir.expr(body).codegen(g);
-
-                g.build_return(ret_val);
-                g.builder.position_at_end(caller_block);
-
-                func_val
-            },
-            &ExprKind::Call(Call { lhs, arg }) => {
-                let func = g.hir.expr(lhs).codegen(g).into_pointer_value();
-                let arg = g.hir.expr(arg).codegen(g);
-
-                let func = CallableValue::try_from(func).unwrap();
-                g.builder
-                    .build_call(func, &[arg.into()], "")
-                    .try_as_basic_value()
-                    .left()
-                    .unwrap()
-            },
-            ExprKind::Let(_) => todo!(),
-            ExprKind::Ty(_) => todo!(),
-        }
-    }
-}
-
-impl<'g> NodeCodeGen<'g> for BlockNode {
-    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
-        assert!(!self.stmts().is_empty() || self.expr().is_some());
-
-        self.stmts().iter().for_each(|&stmt| {
-            g.hir.stmt(stmt).codegen(g);
+        self.hir.root().items.iter().for_each(|&item| {
+            self.hir.item(item).codegen(self);
         });
 
-        if let Some(&expr) = self.expr() {
-            g.hir.expr(expr).codegen(g)
-        } else {
-            g.unit_value()
-        }
+        let success_ret = i32_ty.const_int(0, true);
+        self.build_return(success_ret.into());
     }
 }
 
-impl<'g> NodeCodeGen<'g> for ItemNode {
-    fn codegen(&self, g: &mut Generator<'g>) -> BasicValueEnum<'g> {
-        match self.kind() {
-            ItemKind::Decl(_decl) => {
-                g.current_def = Some((self.name(), self.def_id()));
-
-                assert!(g.res_values.contains_key(self.def_id()))
-
-                g.current_def = None
-            },
-            ItemKind::Mod(_) | ItemKind::TyAlias(_) => {},
-        }
-
-        g.unit_value()
+impl<'ctx> Stage<Module<'ctx>> for CodeGen<'ctx> {
+    fn run(mut self) -> StageOutput<Module<'ctx>> {
+        self.build_main();
+        StageOutput::new(self.sess, self.module, self.msg)
     }
 }

@@ -1,3 +1,4 @@
+use crate::cli::verbose;
 use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
 use crate::parser::token::{Punct, Token, TokenKind, TokenStream};
 use crate::session::SourceId;

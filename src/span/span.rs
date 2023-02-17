@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 
 use crate::{
+    cli::verbose,
     parser::{
         lexer::LexerCharCheck,
         token::{Token, TokenKind},
@@ -197,18 +198,26 @@ pub struct Span {
 impl Span {
     pub fn new_error() -> Self {
         Self {
-            pos: SpanPos::MAX,
-            len: SpanLen::MAX,
+            pos: 0,
+            len: 1,
             source: DUMMY_SOURCE_ID,
         }
     }
 
     pub fn is_error(&self) -> bool {
-        self.pos == SpanPos::MAX && self.len == SpanPos::MAX
+        self.source == DUMMY_SOURCE_ID
     }
 
     pub fn new(pos: SpanPos, len: SpanLen, source: SourceId) -> Self {
         Self { pos, len, source }
+    }
+
+    pub fn new_file_top(source: SourceId) -> Self {
+        Self {
+            pos: 0,
+            len: 1,
+            source,
+        }
     }
 
     pub fn lo(&self) -> SpanPos {

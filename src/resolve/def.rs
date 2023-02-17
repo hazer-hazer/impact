@@ -2,9 +2,14 @@ use std::{array, collections::HashMap, fmt::Display};
 
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
-    cli::color::{Color, Colorize},
+    cli::{
+        color::{Color, Colorize},
+        verbose,
+    },
     dt::idx::{declare_idx, Idx, IndexVec},
-    span::span::{Ident, IdentKind, Kw, Span, Symbol},
+    message::message::MessageBuilder,
+    session::SourceId,
+    span::span::{Ident, IdentKind, Internable, Kw, Span, Symbol},
 };
 
 use super::builtin::{Builtin, DeclareBuiltin};
@@ -264,6 +269,7 @@ impl Module {
         self.per_ns.get_mut(ns).insert(sym, def_id)
     }
 
+    // FIXME: Use `Symbol` instead of `Ident`
     pub fn get_from_ns(&self, ns: Namespace, ident: &Ident) -> Option<DefId> {
         self.per_ns.get(ns).get(&ident.sym()).copied()
     }
@@ -287,8 +293,11 @@ pub struct DefTable {
     builtins: HashMap<Builtin, DefId>,
     node_id_builtin: NodeMap<Builtin>,
 
+    main_func: Option<DefId>,
+
     /// Span of definition name
-    def_id_span: HashMap<DefId, Span>,
+    def_name_span: HashMap<DefId, Span>,
+
     defs: Vec<Def>,
 }
 
@@ -315,13 +324,13 @@ impl DefTable {
         }
     }
 
-    pub(super) fn add_root_module(&mut self) -> ModuleId {
+    pub(super) fn add_root_module(&mut self, source: SourceId) -> ModuleId {
         assert!(self.defs.is_empty());
         // FIXME: Review usage of DUMMY_NODE_ID for root module
         let def_id = self.define(
             ROOT_NODE_ID,
             DefKind::Root,
-            &Ident::synthetic(Symbol::from_kw(Kw::Root)),
+            &Ident::new(Span::new_file_top(source), Symbol::from_kw(Kw::Root)),
         );
         assert!(self.modules.insert(ROOT_DEF_ID, Module::root()).is_none());
         assert_eq!(def_id, ROOT_DEF_ID);
@@ -345,9 +354,12 @@ impl DefTable {
     }
 
     // TODO: Add accessibility modifiers?
-    pub(super) fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
+    pub(super) fn define(&mut self, node_id: NodeId, kind: DefKind, name: &Ident) -> DefId {
         let def_id = DefId(self.defs.len() as u32);
-        self.defs.push(Def::new(def_id, kind, *ident));
+        self.defs.push(Def::new(def_id, kind, *name));
+
+        verbose!("def {} span {}", def_id, name.span());
+        assert!(self.def_name_span.insert(def_id, name.span()).is_none());
 
         if node_id != DUMMY_NODE_ID {
             assert!(self.node_id_def_id.insert(node_id, def_id).is_none());
@@ -416,5 +428,55 @@ impl DefTable {
 
     pub fn is_builtin(&self, node_id: NodeId) -> bool {
         self.node_id_builtin.has(node_id)
+    }
+
+    pub fn root_span(&self) -> Span {
+        self.def_name_span.get(&ROOT_DEF_ID).copied().unwrap()
+    }
+
+    pub fn def_name_span(&self, def_id: DefId) -> Span {
+        // FIXME: Span always exists?
+        self.def_name_span
+            .get(&def_id)
+            .copied()
+            .expect(&format!("Cannot find name span of def{}", def_id))
+    }
+
+    pub fn main_func(&mut self) -> Result<DefId, MessageBuilder> {
+        if let Some(main_func) = self.main_func {
+            return Ok(main_func);
+        }
+
+        let root_mod = self.modules.get_unwrap(ROOT_DEF_ID);
+        let main = root_mod.get_from_ns(Namespace::Value, &Ident::synthetic("main".intern()));
+
+        match main {
+            Some(def_id) => {
+                let def = self.get_def(def_id).unwrap();
+                match def.kind() {
+                    DefKind::Func => {
+                        self.main_func = Some(def_id);
+                        Ok(def_id)
+                    },
+                    _ => Err(MessageBuilder::error()
+                        .span(self.def_name_span(def_id))
+                        .text(format!(
+                            "'main' function is not defined, but {} named 'main' found",
+                            def.kind()
+                        ))
+                        .label(
+                            self.def_name_span(def_id),
+                            format!(
+                                "Consider renaming {} and define 'main' function",
+                                def.kind()
+                            ),
+                        )),
+                }
+            },
+            None => Err(MessageBuilder::error()
+                .span(self.root_span())
+                .text(format!("'main' function is not defined"))
+                .label(self.root_span(), format!("Define function 'main'"))),
+        }
     }
 }

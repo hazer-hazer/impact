@@ -11,6 +11,7 @@ pub enum StageName {
     NameRes,
     Lower,
     Typeck,
+    Codegen,
     Unset,
 }
 
@@ -24,6 +25,7 @@ impl StageName {
             "nameres" => Self::NameRes,
             "lower" => Self::Lower,
             "typeck" => Self::Typeck,
+            "codegen" => Self::Codegen,
             _ => panic!("Invalid stage name `{}`", name),
         }
     }
@@ -42,6 +44,7 @@ impl Display for StageName {
                 StageName::NameRes => "name resolution",
                 StageName::Lower => "lowering",
                 StageName::Typeck => "type checking",
+                StageName::Codegen => "codegen",
                 StageName::Unset => "[unknown]",
             }
         )

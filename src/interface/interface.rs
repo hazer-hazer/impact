@@ -1,8 +1,11 @@
 use std::fmt::Display;
 
+use inkwell::context::Context;
+
 use crate::{
     ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, MappedAst, NodeId},
     cli::verbose,
+    codegen::codegen::CodeGen,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
     interface::writer::outln,
@@ -102,6 +105,7 @@ impl<'ast> Interface {
         // Parsing //
         verbose!("=== Parsing ===");
         let stage = StageName::Parser;
+
         let mut parse_result = Parser::new(sess, tokens).run();
 
         if parse_result.sess().config().check_pp_stage(stage) {
@@ -124,6 +128,7 @@ impl<'ast> Interface {
         // AST Validation //
         verbose!("=== AST Validation ===");
         let stage = StageName::AstValidation;
+
         let (_, sess) = AstValidator::new(sess, &ast).run_and_emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
@@ -178,6 +183,7 @@ impl<'ast> Interface {
         // Lowering //
         verbose!("=== Lowering ===");
         let stage = StageName::Lower;
+
         let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
         if sess.config().check_pp_stage(stage) {
@@ -206,6 +212,15 @@ impl<'ast> Interface {
         }
 
         let (_, sess) = typeck_result.emit(true)?;
+
+        let sess = self.should_stop(sess, stage)?;
+
+        // Codegen //
+        verbose!("=== Codegen ===");
+        let stage = StageName::Codegen;
+
+        let ctx = Context::create();
+        let (_module, sess) = CodeGen::new(sess, &hir, &ctx).run_and_emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
 

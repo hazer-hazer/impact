@@ -8,3 +8,5 @@ type () = builtin
 
 main () =
     123 + 123
+
+    ()

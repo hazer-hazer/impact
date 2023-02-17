@@ -773,7 +773,9 @@ impl Parser {
                 TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val)))), true),
                 TokenKind::Int(val, kind) => (Some(Ok(ExprKind::Lit(Lit::Int(val, kind)))), true),
                 TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
-                TokenKind::Ident(_) | TokenKind::OpIdent(_) => (
+
+                // FIXME: Add TokenCmp::PathFirst
+                tok if tok == TokenCmp::DeclName => (
                     Some(Ok(ExprKind::Path(PathExpr(
                         self.parse_path("[BUG] First identifier in path expression"),
                     )))),

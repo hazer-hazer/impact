@@ -83,7 +83,7 @@ where
             ResKind::Def(def_id) => write!(f, "{}", def_id),
             ResKind::Local(node_id) => write!(f, "{}", node_id),
             ResKind::MakeBuiltin => write!(f, "[`builtin`]"),
-            ResKind::Builtin(def_id) => write!(f, "[builtin{}]", def_id),
+            ResKind::Builtin(bt) => write!(f, "[builtin {}]", bt),
             ResKind::Error => write!(f, "[ERROR]"),
         }
     }

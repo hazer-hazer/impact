@@ -8,8 +8,8 @@ use crate::{
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    resolve::{def::Namespace, builtin::DeclareBuiltin},
-    session::{Session, Stage, StageOutput},
+    resolve::{builtin::DeclareBuiltin, def::Namespace},
+    session::{Session, SourceId, Stage, StageOutput},
     span::span::{Ident, Internable},
 };
 
@@ -76,14 +76,14 @@ impl<'ast> DefCollector<'ast> {
     }
 
     fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
-        verbose!("Define {} {} {}", node_id, kind, ident);
-
         if ident.sym() == DeclareBuiltin::sym() {
             self.in_declare_builtin_func_scope = false;
         }
 
         let def_id = self.sess.def_table.define(node_id, kind, ident);
         let old_def = self.module().define(kind.namespace(), ident.sym(), def_id);
+
+        verbose!("Define {} {} {} - {}", node_id, kind, ident, def_id);
 
         if let Some(old_def) = old_def {
             let old_def = self.sess.def_table.get_def(old_def).unwrap();
@@ -219,8 +219,12 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
 
 impl<'ast> Stage<()> for DefCollector<'ast> {
     fn run(mut self) -> StageOutput<()> {
+        // FIXME: SourceId(0) is root file?
         assert_eq!(
-            self.sess.def_table.add_root_module().as_module(),
+            self.sess
+                .def_table
+                .add_root_module(SourceId::new(0))
+                .as_module(),
             ROOT_DEF_ID
         );
 

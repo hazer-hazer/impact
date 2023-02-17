@@ -8,7 +8,7 @@ use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, Idx, IndexVec},
     resolve::{
-        self,
+        builtin::Builtin,
         def::{DefId, DefMap, ROOT_DEF_ID},
     },
     span::span::{Ident, Span, WithSpan},
@@ -385,7 +385,24 @@ impl Display for PathSeg {
     }
 }
 
-pub type Res = resolve::res::Res<HirId>;
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub enum Res {
+    Node(HirId),
+    MakeBuiltin,
+    Builtin(Builtin),
+    Error,
+}
+
+impl Display for Res {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Res::Node(hir_id) => hir_id.fmt(f),
+            Res::MakeBuiltin => write!(f, "[`builtin`]"),
+            Res::Builtin(bt) => write!(f, "[builtin {}]", bt),
+            Res::Error => write!(f, "[ERROR]"),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct PathNode {

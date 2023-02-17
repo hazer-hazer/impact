@@ -4,13 +4,12 @@ use crate::{
         self,
         item::{ItemId, TyAlias},
         ty::TyPath,
-        HirId, Path, HIR,
+        HirId, Path, Res, HIR,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefKind, Namespace},
-        res::ResKind,
     },
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
@@ -491,8 +490,10 @@ impl<'hir> Typecker<'hir> {
 
     fn conv_path(&mut self, path: Path) -> Ty {
         let path = self.hir.path(path);
-        match path.res().kind() {
-            &ResKind::Def(def_id) => {
+        match path.res() {
+            &Res::Node(hir_id) => {
+                let def_id = hir_id.as_owner().unwrap().into();
+
                 let def = self.sess.def_table.get_def(def_id).unwrap();
                 match def.kind() {
                     DefKind::TyAlias => {
@@ -518,7 +519,7 @@ impl<'hir> Typecker<'hir> {
                     | DefKind::Var => unreachable!(),
                 }
             },
-            &ResKind::Builtin(bt) if bt.is_ty() => self.tyctx().builtin_ty(bt),
+            &Res::Builtin(bt) if bt.is_ty() => self.tyctx().builtin_ty(bt),
             _ => unreachable!(),
         }
     }

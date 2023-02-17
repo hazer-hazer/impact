@@ -29,6 +29,7 @@
     "sess",
     "skippable",
     "Subtyping",
+    "thir",
     "tyctx",
     "tyof",
     "typeck",
