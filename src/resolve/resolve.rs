@@ -9,7 +9,7 @@ use crate::{
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST,
     },
-    cli::verbose,
+    cli::verboseln,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::def::DefKind,
     session::{Session, Stage, StageOutput},
@@ -64,7 +64,7 @@ impl<'ast> NameResolver<'ast> {
     }
 
     fn define_var(&mut self, node_id: NodeId, ident: &Ident) {
-        verbose!("Define var {} {}", node_id, ident);
+        verboseln!("Define var {} {}", node_id, ident);
 
         let old_local = self.scope_mut().locals.insert(ident.sym(), node_id);
 
@@ -92,22 +92,22 @@ impl<'ast> NameResolver<'ast> {
     }
 
     fn enter_module_scope(&mut self, module_id: ModuleId) {
-        verbose!("Enter module scope {}", module_id);
+        verboseln!("Enter module scope {}", module_id);
 
         self.scopes.push(Scope::new(ScopeKind::Module(module_id)));
     }
 
     fn enter_func_scope(&mut self) {
-        verbose!("Enter func scope");
+        verboseln!("Enter func scope");
         self.scopes.push(Scope::new(ScopeKind::Func));
     }
 
     fn exit_scope(&mut self) {
-        verbose!("Exit scope");
+        verboseln!("Exit scope");
         self.scopes.pop();
     }
 
-    fn resolve_local(&mut self, target_ns: Namespace, name: &Ident) -> Option<Res<NodeId>> {
+    fn resolve_local(&mut self, target_ns: Namespace, name: &Ident) -> Option<Res> {
         let mut scope_id = self.scopes.len() - 1;
         loop {
             let local = &self.scopes[scope_id].locals.get(&name.sym());
@@ -138,7 +138,7 @@ impl<'ast> NameResolver<'ast> {
         None
     }
 
-    fn def_res(&self, target_ns: Namespace, def_id: DefId) -> Res<NodeId> {
+    fn def_res(&self, target_ns: Namespace, def_id: DefId) -> Res {
         let def = self.sess.def_table.get_def(def_id).unwrap();
 
         match def.kind() {
@@ -158,7 +158,7 @@ impl<'ast> NameResolver<'ast> {
         }
     }
 
-    fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res<NodeId> {
+    fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res {
         let segments = path.segments();
 
         // TODO: When generics added, don't resolve local if segment has generics
@@ -269,7 +269,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     }
 
     fn visit_pat(&mut self, pat: &'ast Pat) {
-        verbose!("Visit pat {}", pat.id());
+        verboseln!("Visit pat {}", pat.id());
         match pat.kind() {
             PatKind::Unit => {},
             PatKind::Ident(ident) => self.define_var(pat.id(), ident.as_ref().unwrap()),

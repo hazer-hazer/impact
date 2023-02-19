@@ -1,5 +1,5 @@
 use crate::{
-    cli::verbose,
+    cli::{verbose, verboseln},
     hir::expr::{Expr, ExprKind, Lambda},
     message::message::MessageBuilder,
     span::span::{Spanned, WithSpan},
@@ -28,11 +28,11 @@ impl<'hir> Typecker<'hir> {
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
-                verbose!("[+] Expr {} is of type {}", expr_id, ty);
+                verboseln!("[+] Expr {} is of type {}", expr_id, ty);
                 Ok(self.apply_ctx_on(ok))
             },
             Err(_) => {
-                verbose!("[-] Expr {} is NOT of type {}", expr_id, ty);
+                verboseln!("[-] Expr {} is NOT of type {}", expr_id, ty);
 
                 let span = self.hir.expr_result_span(expr_id);
 
@@ -125,7 +125,11 @@ impl<'hir> Typecker<'hir> {
 
     // Subtyping //
     fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
+        verboseln!("Subtype expr {} / {}", expr_id, ty);
+
         let expr_ty = self.synth_expr(expr_id)?;
+
+        verboseln!("Subtype expr ty: {}", expr_ty);
 
         let span = self.hir.expr(expr_id).span();
         let l = self.apply_ctx_on(expr_ty);
@@ -137,11 +141,11 @@ impl<'hir> Typecker<'hir> {
     fn subtype(&mut self, check_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
         match self._subtype(*check_ty.node(), r_ty) {
             Ok(ty) => {
-                verbose!("[+] {} is a subtype of {}", check_ty.node(), ty);
+                verboseln!("[+] {} is a subtype of {}", check_ty.node(), ty);
                 Ok(self.apply_ctx_on(ty))
             },
             Err(err) => {
-                verbose!("[-] {} is NOT a subtype of {}", check_ty.node(), r_ty);
+                verboseln!("[-] {} is NOT a subtype of {}", check_ty.node(), r_ty);
 
                 // let span = check_ty.span();
                 // let l_ty = *check_ty.node();
@@ -167,7 +171,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
-        verbose!(
+        verboseln!(
             "Subtype {} <: {}",
             self.apply_ctx_on(l_ty),
             self.apply_ctx_on(r_ty)
@@ -184,7 +188,7 @@ impl<'hir> Typecker<'hir> {
 
             (&TyKind::Prim(prim), &TyKind::Prim(prim_)) if prim == prim_ => Ok(r_ty),
 
-            (TyKind::Var(name1), TyKind::Var(name2)) if name1.sym() == name2.sym() => Ok(r_ty),
+            (TyKind::Var(var), TyKind::Var(var_)) if var == var_ => Ok(r_ty),
 
             (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => {
                 self.ty_wf(l_ty).and(self.ty_wf(r_ty))
@@ -223,10 +227,10 @@ impl<'hir> Typecker<'hir> {
             },
 
             (&TyKind::Forall(alpha, body), _) => {
-                verbose!("forall {}. {} subtype of (?)", alpha, body);
+                verboseln!("forall {}. {} subtype of (?)", alpha, body);
                 let ex = self.fresh_ex(ExistentialKind::Common);
                 let ex_ty = Ty::existential(ex);
-                let with_substituted_alpha = self.substitute(body, Subst::Name(alpha), ex_ty);
+                let with_substituted_alpha = self.substitute(body, Subst::Var(alpha), ex_ty);
 
                 self.under_ctx(InferCtx::new_with_ex(ex), |this| {
                     this._subtype(with_substituted_alpha, r_ty)
@@ -258,16 +262,26 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    #[deprecated]
     fn try_instantiate_common(&mut self, ex: Existential, ty: Ty) -> TyResult<Ty> {
         // Inst(L|R)Reach
         match ty.kind() {
             &TyKind::Existential(ty_ex) => {
                 let ex_depth = self.find_unbound_ex_depth(ex);
                 let ty_ex_depth = self.find_unbound_ex_depth(ty_ex);
+
+                assert!(self.get_solution(ex).is_none());
+                assert!(self.get_solution(ty_ex).is_none());
+
+                verboseln!(
+                    "Existential depth {:?} /vs/ ty depth {:?}",
+                    ex_depth,
+                    ty_ex_depth
+                );
                 if ex_depth <= ty_ex_depth {
                     let ex_ty = Ty::existential(ex);
 
-                    verbose!("Instantiate L|R Reach {} = {}", ty_ex, ex_ty);
+                    verboseln!("Instantiate L|R Reach {} = {}", ty_ex, ex_ty);
 
                     self.solve(ty_ex, ex_ty);
                     return Ok(self.apply_ctx_on(ex_ty));
@@ -278,7 +292,7 @@ impl<'hir> Typecker<'hir> {
 
         // Inst(L|R)Solve
         if ty.is_mono() {
-            verbose!("Instantiate L|R Solve {} = {}", ex, ty);
+            verboseln!("Instantiate L|R Solve {} = {}", ex, ty);
             // FIXME: check WF?
             self.solve(ex, ty);
             return Ok(self.apply_ctx_on(ty));
@@ -288,11 +302,20 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn instantiate_l(&mut self, ex: Existential, r_ty: Ty) -> TyResult<Ty> {
-        if let Ok(ok) = self.try_instantiate_common(ex, r_ty) {
-            return Ok(ok);
+        verboseln!("Instantiate Left {} / {}", ex, r_ty);
+
+        if let &TyKind::Existential(beta_ex) = r_ty.kind() {
+            verbose!("InstLReach check {} / {}", ex, beta_ex);
+            if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
+                verboseln!("InstLReach: ");
+                return Ok(self.solve(beta_ex, r_ty));
+            }
         }
 
-        verbose!("Instantiate Left {} = {}", ex, r_ty);
+        if r_ty.is_mono() {
+            verboseln!("InstLSolve: ");
+            return Ok(self.solve(ex, r_ty));
+        }
 
         match r_ty.kind() {
             TyKind::Error
@@ -324,11 +347,19 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn instantiate_r(&mut self, l_ty: Ty, ex: Existential) -> TyResult<Ty> {
-        if let Ok(ok) = self.try_instantiate_common(ex, l_ty) {
-            return Ok(ok);
+        verboseln!("Instantiate Right {} / {}", ex, l_ty);
+
+        if let &TyKind::Existential(beta_ex) = l_ty.kind() {
+            if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
+                verbose!("InstRReach: ");
+                return Ok(self.solve(beta_ex, l_ty));
+            }
         }
 
-        verbose!("Instantiate Right {} = {}", ex, l_ty);
+        if l_ty.is_mono() {
+            verbose!("InstRSolve: ");
+            return Ok(self.solve(ex, l_ty));
+        }
 
         match l_ty.kind() {
             TyKind::Error
@@ -352,13 +383,13 @@ impl<'hir> Typecker<'hir> {
                 this.instantiate_r(range_ty, range_ex.0)
             }),
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
-                verbose!("Instantiate forall Right {} = {}", ex, l_ty);
+                verboseln!("Instantiate forall Right {} = {}", ex, l_ty);
 
                 let alpha_ex = this.fresh_ex(ExistentialKind::Common);
 
                 this.under_ctx(InferCtx::new_with_ex(alpha_ex), |this| {
                     let alpha_ex_ty = Ty::existential(alpha_ex);
-                    let body_ty = this.substitute(body, Subst::Name(alpha), alpha_ex_ty);
+                    let body_ty = this.substitute(body, Subst::Var(alpha), alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)
                 })
             }),

@@ -706,7 +706,7 @@ impl Parser {
 
         let lhs = self.parse_primary();
 
-        if let Some(lhs) = lhs {
+        if let Some(mut lhs) = lhs {
             // FIXME: Ok precedence?
             if self.skip(TokenCmp::Punct(Punct::Colon)).is_some() {
                 let ty = self.parse_ty();
@@ -718,19 +718,17 @@ impl Parser {
                 ))));
             }
 
-            let arg = self.parse_postfix();
-
-            if let Some(arg) = arg {
+            while let Some(arg) = self.parse_primary() {
                 self.mark_late_check("function call");
 
-                Some(Ok(Box::new(Expr::new(
+                lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
                     ExprKind::Call(Call { lhs, arg }),
                     self.close_span(lo),
-                ))))
-            } else {
-                Some(lhs)
+                )));
             }
+
+            Some(lhs)
         } else {
             lhs
         }

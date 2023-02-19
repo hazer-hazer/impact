@@ -1,5 +1,5 @@
 use crate::{
-    cli::{color::Colorize, verbose},
+    cli::{color::Colorize},
     session::{LineInfo, Session, SpanSourceInfo},
 };
 

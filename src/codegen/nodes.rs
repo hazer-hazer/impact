@@ -1,8 +1,4 @@
-
-
-use inkwell::{
-    values::{BasicValueEnum, CallableValue},
-};
+use inkwell::values::{BasicValueEnum, CallableValue};
 
 use crate::{
     hir::{
@@ -11,16 +7,19 @@ use crate::{
         stmt::{StmtKind, StmtNode},
         HirId, PathNode, Res,
     },
+    resolve::def::DefKind,
 };
 
 use super::codegen::CodeGen;
 
+type CodeGenResult<'g, T = Option<BasicValueEnum<'g>>> = Result<T, ()>;
+
 pub trait NodeCodeGen<'g> {
-    fn codegen(&self, g: &mut CodeGen<'g>) -> BasicValueEnum<'g>;
+    fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g>;
 }
 
 impl<'g> NodeCodeGen<'g> for StmtNode {
-    fn codegen(&self, g: &mut CodeGen<'g>) -> BasicValueEnum<'g> {
+    fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
         match self.kind() {
             &StmtKind::Expr(expr) => g.hir.expr(expr).codegen(g),
             &StmtKind::Item(item) => g.hir.item(item).codegen(g),
@@ -29,14 +28,14 @@ impl<'g> NodeCodeGen<'g> for StmtNode {
 }
 
 impl<'g> NodeCodeGen<'g> for PathNode {
-    fn codegen(&self, g: &mut CodeGen<'g>) -> BasicValueEnum<'g> {
-        g.expect_res_value(self.res())
+    fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
+        Ok(Some(g.expect_res_value(self.res())))
     }
 }
 
 impl<'g> NodeCodeGen<'g> for ExprNode {
-    fn codegen(&self, g: &mut CodeGen<'g>) -> BasicValueEnum<'g> {
-        match self.kind() {
+    fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
+        Ok(Some(match self.kind() {
             ExprKind::Lit(lit) => match lit {
                 Lit::Bool(val) => g.bool_value(*val),
 
@@ -48,7 +47,7 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
 
                 Lit::String(sym) => g.string_value(sym.as_str()),
             },
-            &ExprKind::Path(PathExpr(path)) => g.hir.path(path).codegen(g),
+            &ExprKind::Path(PathExpr(path)) => g.hir.path(path).codegen(g)?.unwrap(),
             ExprKind::Block(_) => todo!(),
             &ExprKind::Lambda(Lambda { param, body }) => {
                 let caller_block = g.current_block();
@@ -58,7 +57,7 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
 
                 g.bind_res_value(Res::Node(param), func.get_nth_param(0).unwrap());
 
-                let ret_val = g.hir.expr(body).codegen(g);
+                let ret_val = g.hir.expr(body).codegen(g)?.unwrap();
 
                 g.build_return(ret_val);
                 g.builder().position_at_end(caller_block);
@@ -66,8 +65,8 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
                 func_val
             },
             &ExprKind::Call(Call { lhs, arg }) => {
-                let func = g.hir.expr(lhs).codegen(g).into_pointer_value();
-                let arg = g.hir.expr(arg).codegen(g);
+                let func = g.hir.expr(lhs).codegen(g)?.unwrap().into_pointer_value();
+                let arg = g.hir.expr(arg).codegen(g)?.unwrap();
 
                 let func = CallableValue::try_from(func).unwrap();
                 g.builder()
@@ -78,12 +77,12 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
             },
             ExprKind::Let(_) => todo!(),
             ExprKind::Ty(_) => todo!(),
-        }
+        }))
     }
 }
 
 impl<'g> NodeCodeGen<'g> for BlockNode {
-    fn codegen(&self, g: &mut CodeGen<'g>) -> BasicValueEnum<'g> {
+    fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
         assert!(!self.stmts().is_empty() || self.expr().is_some());
 
         self.stmts().iter().for_each(|&stmt| {
@@ -93,22 +92,32 @@ impl<'g> NodeCodeGen<'g> for BlockNode {
         if let Some(&expr) = self.expr() {
             g.hir.expr(expr).codegen(g)
         } else {
-            g.unit_value()
+            Ok(Some(g.unit_value()))
         }
     }
 }
 
 impl<'g> NodeCodeGen<'g> for ItemNode {
-    fn codegen(&self, g: &mut CodeGen<'g>) -> BasicValueEnum<'g> {
-        match self.kind() {
-            &ItemKind::Decl(Decl { value }) => g.under_def((self.name(), self.def_id()), |g| {
-                let val = g.hir.expr(value).codegen(g);
+    fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
+        match g.sess.def_table.get_def(self.def_id()).unwrap().kind() {
+            DefKind::DeclareBuiltin => return Ok(None),
+            DefKind::Builtin(_) => todo!(),
+            _ => {},
+        }
 
-                g.bind_res_value(Res::Node(HirId::new_owner(self.def_id())), val);
-            }),
+        match self.kind() {
+            &ItemKind::Decl(Decl { value }) => {
+                g.under_def((self.name(), self.def_id()), |g| -> CodeGenResult<'g, ()> {
+                    let val = g.hir.expr(value).codegen(g)?.unwrap();
+
+                    g.bind_res_value(Res::Node(HirId::new_owner(self.def_id())), val);
+
+                    Ok(())
+                })?;
+            },
             ItemKind::Mod(_) | ItemKind::TyAlias(_) => {},
         }
 
-        g.unit_value()
+        Ok(Some(g.unit_value()))
     }
 }

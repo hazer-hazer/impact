@@ -7,7 +7,7 @@ use crate::{
         ty::{Ty, TyKind, TyPath},
         NodeId, NodeMap, Path, PathSeg, WithNodeId, AST, N, PR, ROOT_NODE_ID,
     },
-    cli::verbose,
+    cli::verboseln,
     hir::{
         self,
         item::{Decl, ItemId, ItemNode, Mod, TyAlias},
@@ -18,7 +18,7 @@ use crate::{
     parser::token::{FloatKind, IntKind},
     resolve::{
         builtin::DeclareBuiltin,
-        def::{DefId},
+        def::DefId,
         res::{self, NamePath},
     },
     session::{Session, Stage, StageOutput},
@@ -105,7 +105,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn _with_owner(&mut self, def_id: DefId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
-        verbose!("With owner {}", def_id);
+        verboseln!("With owner {}", def_id);
 
         let owner_id = OwnerId::new(def_id);
 
@@ -152,6 +152,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_node_id(&mut self, id: NodeId) -> HirId {
+        verboseln!("Lower node id {}", id);
         if let Some(hir_id) = self.node_id_hir_id.get_flat(id) {
             *hir_id
         } else {
@@ -226,18 +227,22 @@ impl<'ast> Lower<'ast> {
     fn lower_decl_item(
         &mut self,
         _: &PR<Ident>,
-        params: &Vec<PR<Pat>>,
+        ast_params: &Vec<PR<Pat>>,
         body: &PR<N<Expr>>,
     ) -> hir::item::ItemKind {
-        if params.is_empty() {
+        if ast_params.is_empty() {
             hir::item::ItemKind::Decl(Decl {
                 value: lower_pr!(self, body, lower_expr),
             })
         } else {
+            let params = ast_params
+                .iter()
+                .map(|param| lower_pr!(self, param, lower_pat))
+                .collect::<Vec<_>>();
+
             let mut value = lower_pr!(self, body, lower_expr);
-            for ast_param in params.iter().rev() {
-                let param = lower_pr!(self, ast_param, lower_pat);
-                let span = ast_param.span().to(body.span());
+            for (index, &param) in params.iter().enumerate().rev() {
+                let span = ast_params[index].span().to(body.span());
                 value = self.expr_lambda(span, param, value);
             }
             hir::item::ItemKind::Decl(Decl { value })
@@ -246,12 +251,13 @@ impl<'ast> Lower<'ast> {
 
     // Patterns //
     fn lower_pat(&mut self, pat: &Pat) -> hir::pat::Pat {
+        verboseln!("lower pat {}", pat.id());
+        let id = self.lower_node_id(pat.id());
+
         let kind = match pat.kind() {
             PatKind::Unit => hir::pat::PatKind::Unit,
             PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
         };
-
-        let id = self.lower_node_id(pat.id());
 
         self.add_node(hir::Node::PatNode(hir::pat::PatNode::new(
             id,
@@ -391,9 +397,13 @@ impl<'ast> Lower<'ast> {
         *ident
     }
 
-    fn lower_res(&mut self, res: res::Res<NodeId>) -> Res {
+    fn lower_res(&mut self, res: res::Res) -> Res {
         match res.kind() {
-            &res::ResKind::Local(node_id) => Res::Node(*self.node_id_hir_id.get_unwrap(node_id)),
+            &res::ResKind::Local(node_id) => Res::Node(
+                *self
+                    .node_id_hir_id
+                    .get_expect(node_id, &format!("Local variable resolution {}", res)),
+            ),
             &res::ResKind::Def(def_id) => Res::Node(HirId::new_owner(def_id)),
             &res::ResKind::MakeBuiltin => Res::MakeBuiltin,
             &res::ResKind::Builtin(bt) => Res::Builtin(bt),

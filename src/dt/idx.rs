@@ -120,6 +120,16 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
         self[i].replace(v)
     }
 
+    pub fn upsert_default(&mut self, i: I) -> &mut T
+    where
+        T: Default,
+    {
+        if !self.has(i) {
+            self.insert(i, Default::default());
+        }
+        self.get_mut_unwrap(i)
+    }
+
     #[inline]
     pub fn get_flat(&self, i: I) -> Option<&T> {
         if let Some(v) = self.get(i) {

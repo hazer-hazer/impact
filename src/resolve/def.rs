@@ -4,7 +4,7 @@ use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::{
         color::{Color, Colorize},
-        verbose,
+        verboseln,
     },
     dt::idx::{declare_idx, Idx, IndexVec},
     message::message::MessageBuilder,
@@ -358,7 +358,7 @@ impl DefTable {
         let def_id = DefId(self.defs.len() as u32);
         self.defs.push(Def::new(def_id, kind, *name));
 
-        verbose!("def {} span {}", def_id, name.span());
+        verboseln!("def {} span {}", def_id, name.span());
         assert!(self.def_name_span.insert(def_id, name.span()).is_none());
 
         if node_id != DUMMY_NODE_ID {

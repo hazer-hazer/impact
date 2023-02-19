@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    cli::verbose,
+    cli::verboseln,
     dt::idx::IndexVec,
     span::span::{Ident, Symbol},
 };
 
-use super::ty::{Existential, ExistentialId, ExistentialKind, Ty};
+use super::ty::{Existential, ExistentialId, ExistentialKind, Ty, TyKind, TyVarId};
 
 #[derive(Default, Debug)]
 pub struct GlobalCtx {
@@ -14,6 +14,8 @@ pub struct GlobalCtx {
 
     // FIXME: This might be absolutely wrong
     existentials: IndexVec<ExistentialId, Option<(usize, usize)>>,
+
+    ty_bindings: IndexVec<TyVarId, Option<Vec<Ty>>>,
 }
 
 impl GlobalCtx {
@@ -23,10 +25,10 @@ impl GlobalCtx {
             .enumerate()
             .for_each(|(index, &ex)| {
                 if let Some(sol) = ctx.get_solution(ex) {
-                    verbose!("Add ex to global ctx {} = {}", ex, sol);
+                    verboseln!("Add ex to global ctx {} = {}", ex, sol);
                     assert!(self.solved.insert(ex.id(), sol).is_none());
                 } else {
-                    verbose!("Add ex to global ctx {}", ex);
+                    verboseln!("Add ex to global ctx {}", ex);
                     assert!(self.existentials.insert(ex.id(), (depth, index)).is_none())
                 }
             });
@@ -37,8 +39,7 @@ impl GlobalCtx {
     }
 
     pub fn has_ex(&self, ex: Existential) -> bool {
-        assert!(self.existentials().contains(&ex.id()));
-        self.solved.has(ex.id())
+        self.existentials().contains(&ex.id()) || self.solved.has(ex.id())
     }
 
     pub fn get_ex_index(&self, ex: Existential) -> Option<(usize, usize)> {
@@ -47,6 +48,11 @@ impl GlobalCtx {
 
     pub fn solved(&self) -> &IndexVec<ExistentialId, Option<Ty>> {
         &self.solved
+    }
+
+    pub fn bind_ty_var(&mut self, var: TyVarId, ty: Ty) {
+        verboseln!("Bind type variable {} = {}", var, ty);
+        self.ty_bindings.upsert_default(var).push(ty);
     }
 
     // FIXME: Copypaste
@@ -62,6 +68,16 @@ impl GlobalCtx {
             Some(sol)
         } else {
             None
+        }
+    }
+
+    pub fn apply_on(&self, ty: Ty) -> Ty {
+        match ty.kind() {
+            TyKind::Error | TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => ty,
+            // FIXME: Can we panic on unwrap?
+            &TyKind::Existential(ex) => self.apply_on(self.get_solution(ex).unwrap()),
+            &TyKind::Func(param, body) => Ty::func(self.apply_on(param), self.apply_on(body)),
+            &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
         }
     }
 
@@ -84,6 +100,10 @@ impl GlobalCtx {
             })
             .collect()
     }
+
+    pub fn ty_bindings(&self) -> &IndexVec<TyVarId, Option<Vec<Ty>>> {
+        &self.ty_bindings
+    }
 }
 
 #[derive(Default, Clone, Debug)]
@@ -99,16 +119,16 @@ pub struct InferCtx {
     func_param_solutions: IndexVec<ExistentialId, Option<Vec<Ty>>>,
 
     /// Type variables defined in current context. Do not leak to global context
-    vars: HashSet<Symbol>,
+    vars: HashSet<TyVarId>,
 
     /// Typed terms. Do not leak to global context
     terms: HashMap<Symbol, Ty>,
 }
 
 impl InferCtx {
-    pub fn new_with_var(var: Ident) -> Self {
+    pub fn new_with_var(var: TyVarId) -> Self {
         Self {
-            vars: HashSet::from([var.sym()]),
+            vars: HashSet::from([var]),
             ..Default::default()
         }
     }
@@ -132,8 +152,8 @@ impl InferCtx {
         self.terms.get(&name.sym()).copied()
     }
 
-    pub fn get_var(&self, name: Ident) -> Option<Symbol> {
-        self.vars.iter().find(|&&var| var == name.sym()).copied()
+    pub fn get_var(&self, var: TyVarId) -> Option<TyVarId> {
+        self.vars.iter().find(|&&_var| var == _var).copied()
     }
 
     pub fn get_ex_index(&self, ex: Existential) -> Option<usize> {
@@ -166,8 +186,8 @@ impl InferCtx {
     // }
 
     // Setters //
-    pub fn add_var(&mut self, name: Ident) {
-        assert!(self.vars.insert(name.sym()));
+    pub fn add_var(&mut self, var: TyVarId) {
+        assert!(self.vars.insert(var));
     }
 
     pub fn add_ex(&mut self, ex: Existential) {
@@ -264,7 +284,7 @@ impl InferCtx {
         &self.existentials
     }
 
-    pub fn vars(&self) -> &HashSet<Symbol> {
+    pub fn vars(&self) -> &HashSet<TyVarId> {
         &self.vars
     }
 }

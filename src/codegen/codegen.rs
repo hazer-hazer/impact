@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use inkwell::{
     basic_block::BasicBlock,
@@ -41,7 +41,7 @@ pub struct CodeGen<'ctx> {
     /// Name of current declaration, e.g. `a = 123`
     current_def: Option<(Ident, DefId)>,
 
-    sess: Session,
+    pub sess: Session,
     msg: MessageStorage,
 }
 

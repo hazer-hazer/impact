@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    cli::verbose,
+    cli::{verbose, verboseln},
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
@@ -22,7 +22,6 @@ use super::{
 };
 
 use super::Typecker;
-
 impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         match self.sess.def_table.get_def(item.def_id()).unwrap().kind() {
@@ -33,6 +32,7 @@ impl<'hir> Typecker<'hir> {
 
         let ty = match self.hir.item(item).kind() {
             ItemKind::TyAlias(_ty) => {
+                verboseln!("Synth ty alias {}", item.def_id());
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                 self.conv_ty_alias(item.def_id());
                 Ty::unit()
@@ -45,7 +45,11 @@ impl<'hir> Typecker<'hir> {
                 Ty::unit()
             },
             &ItemKind::Decl(Decl { value }) => {
+                verboseln!("Synth declaration {}", item.def_id());
+
                 let value_ty = self.synth_expr(value)?;
+
+                verbose!("Type declaration {} ", self.hir.item(item).name());
                 self.type_term(self.hir.item(item).name(), value_ty);
 
                 // Note: Actually, declaration type is a unit type, but we save it
@@ -76,7 +80,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
-        verbose!("Synth type of expression {}", expr_id);
+        verboseln!("Synth type of expression {}", expr_id);
 
         let expr_ty = match self.hir.expr(expr_id).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
@@ -183,19 +187,24 @@ impl<'hir> Typecker<'hir> {
 
         let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
             // FIXME: Should sub-pattern names existentials be defined outside this context?
+            verbose!("Add lambda param ex: ");
             let ex = self.add_fresh_common_ex();
-            self.type_term(name, ex.1);
+
+            // verbose!("Type parameter ex ");
+            // self.type_term(name, ex.1);
 
             assert!(exes.insert(name, ex).is_none());
             exes
         });
 
+        verbose!("Add lambda body ex: ");
         let body_ex = self.add_fresh_common_ex();
 
         self.under_new_ctx(|this| {
             // FIXME: Optimize fold moves of vec
             param_exes.iter().for_each(|(&name, &ex)| {
                 // FIXME: Should sub-pattern names existentials be defined outside this context?
+                verbose!("Type param ex ");
                 this.type_term(name, ex.1);
             });
 
@@ -214,7 +223,7 @@ impl<'hir> Typecker<'hir> {
                 param_ty
             };
 
-            verbose!("Param ty {}", param_ty);
+            verboseln!("Param ty {}", param_ty);
 
             this.tyctx_mut().type_node(lambda.param, param_ty);
 
@@ -222,19 +231,21 @@ impl<'hir> Typecker<'hir> {
                 param_exes
                     .iter()
                     .fold(Ty::func(param_ty, body_ty), |ty, (&name, &(ex, _))| {
-                        verbose!(
+                        verboseln!(
                             "Func type generation {ty}; push {name}: {ex} = {:?}",
                             this.get_solution(ex)
                         );
                         if let Some(_) = this.get_solution(ex) {
                             ty
                         } else {
-                            this.solve(ex, Ty::var(name));
-                            Ty::forall(name, ty)
+                            // FIXME: Check type variable resolution
+                            let ty_var = Ty::next_ty_var_id();
+                            this.solve(ex, Ty::var(ty_var));
+                            Ty::forall(ty_var, ty)
                         }
                     });
 
-            verbose!("Func ty {func_ty}");
+            verboseln!("Func ty {func_ty}");
 
             Ok(func_ty)
         })
@@ -274,22 +285,39 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_call(&mut self, call: &Call) -> TyResult<Ty> {
+        verbose!("Synth call lhs: ");
         let lhs_ty = self.synth_expr(call.lhs)?;
         let lhs_ty = self.apply_ctx_on(lhs_ty);
-        self._synth_call(lhs_ty, call.arg)
+        self._synth_call(
+            Spanned::new(self.hir.expr(call.lhs).span(), lhs_ty),
+            call.arg,
+        )
     }
 
-    fn _synth_call(&mut self, lhs_ty: Ty, arg: Expr) -> TyResult<Ty> {
-        verbose!("Synthesize call {} with arg {}", lhs_ty, arg);
+    fn _synth_call(&mut self, lhs_ty: Spanned<Ty>, arg: Expr) -> TyResult<Ty> {
+        verboseln!("Synthesize call {} with arg {}", lhs_ty, arg);
+
+        let span = lhs_ty.span();
+        let lhs_ty = lhs_ty.node();
 
         match lhs_ty.kind() {
             // FIXME: Or return Ok(lhs_ty)?
-            TyKind::Error => Ok(lhs_ty),
-            TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => todo!("Non-callable type"),
+            TyKind::Error => Ok(*lhs_ty),
+            TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => {
+                MessageBuilder::error()
+                    .text(format!("{} cannot be called", lhs_ty))
+                    .span(span)
+                    .label(span, format!("has type {} which cannot be called", lhs_ty))
+                    .emit(self);
+
+                Err(TypeckErr::Reported)
+            },
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
+                    verbose!("Add existential lhs synth call param ex: ");
                     let param_ex = this.add_fresh_common_ex();
+                    verbose!("Add existential lhs synth call body ex: ");
                     let body_ex = this.add_fresh_common_ex();
                     let func_ty = Ty::func(param_ex.1, body_ex.1);
                     this.solve(ex, func_ty);
@@ -316,9 +344,14 @@ impl<'hir> Typecker<'hir> {
                 Ok(body)
             },
             &TyKind::Forall(alpha, ty) => {
+                verbose!("Add forall alpha ex: ");
                 let alpha_ex = self.add_fresh_common_ex();
-                let substituted_ty = self.substitute(ty, Subst::Name(alpha), alpha_ex.1);
-                self._synth_call(substituted_ty, arg)
+                let substituted_ty = self.substitute(ty, Subst::Var(alpha), alpha_ex.1);
+                let body_ty = self._synth_call(Spanned::new(span, substituted_ty), arg);
+
+                self.global_ctx.bind_ty_var(alpha, alpha_ex.1);
+
+                body_ty
             },
         }
     }

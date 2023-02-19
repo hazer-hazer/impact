@@ -15,6 +15,7 @@ use crate::{
 };
 
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
+declare_idx!(TyVarId, u32, "{}", Color::Cyan);
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ExistentialKind {
@@ -83,8 +84,6 @@ impl std::fmt::Display for Existential {
         write!(f, "{}{}", self.kind(), self.id())
     }
 }
-
-declare_idx!(TypeVarId, usize, "{}", Color::Green);
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum IntKind {
@@ -233,6 +232,10 @@ impl Ty {
         Self::intern(TyS::new(kind))
     }
 
+    pub fn next_ty_var_id() -> TyVarId {
+        *TY_INTERNER.write().unwrap().ty_var_id.inc()
+    }
+
     pub fn unit() -> Ty {
         Self::new(TyKind::Unit)
     }
@@ -241,8 +244,8 @@ impl Ty {
         Self::new(TyKind::Error)
     }
 
-    pub fn var(ident: Ident) -> Ty {
-        Self::new(TyKind::Var(ident))
+    pub fn var(id: TyVarId) -> Ty {
+        Self::new(TyKind::Var(id))
     }
 
     pub fn prim(prim: PrimTy) -> Ty {
@@ -253,8 +256,8 @@ impl Ty {
         Self::new(TyKind::Func(param, ret))
     }
 
-    pub fn forall(alpha: Ident, body: Ty) -> Ty {
-        Self::new(TyKind::Forall(alpha, body))
+    pub fn forall(var: TyVarId, body: Ty) -> Ty {
+        Self::new(TyKind::Forall(var, body))
     }
 
     pub fn existential(ex: Existential) -> Ty {
@@ -363,10 +366,10 @@ pub enum TyKind {
 
     Unit,
     Prim(PrimTy),
-    Var(Ident),
+    Var(TyVarId),
     Existential(Existential),
     Func(Ty, Ty),
-    Forall(Ident, Ty),
+    Forall(TyVarId, Ty),
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -406,15 +409,23 @@ impl std::fmt::Display for TyS {
     }
 }
 
-static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| Default::default());
+static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| RwLock::new(TyInterner::new()));
 
-#[derive(Default)]
 pub struct TyInterner {
     map: HashMap<u64, TyId>,
     types: Vec<&'static TyS>,
+    ty_var_id: TyVarId,
 }
 
 impl TyInterner {
+    pub fn new() -> Self {
+        Self {
+            map: Default::default(),
+            types: Default::default(),
+            ty_var_id: TyVarId(0),
+        }
+    }
+
     fn hash(ty: &TyS) -> u64 {
         let mut state = DefaultHasher::new();
         ty.hash(&mut state);
@@ -448,22 +459,22 @@ impl TyInterner {
 #[derive(Clone, Copy, Debug)]
 pub enum Subst {
     Existential(Existential),
-    Name(Ident),
+    Var(TyVarId),
 }
 
 impl std::fmt::Display for Subst {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Subst::Existential(ex) => ex.fmt(f),
-            Subst::Name(name) => name.fmt(f),
+            Subst::Var(var) => var.fmt(f),
         }
     }
 }
 
-impl PartialEq<Ident> for Subst {
-    fn eq(&self, other: &Ident) -> bool {
+impl PartialEq<TyVarId> for Subst {
+    fn eq(&self, other: &TyVarId) -> bool {
         match (self, other) {
-            (Self::Name(name), other) => name.sym() == other.sym(),
+            (Self::Var(var), other) => var == other,
             _ => false,
         }
     }
@@ -489,27 +500,27 @@ mod tests {
 
     const SOME_SOURCE_ID: SourceId = SourceId::new(123);
 
-    #[test]
-    fn same_ident_subst_eq() {
-        let name = Ident::synthetic("lolkek".intern());
-        assert_eq!(Subst::Name(name), name);
-    }
+    // #[test]
+    // fn same_ident_subst_eq() {
+    //     let name = Ident::synthetic("lolkek".intern());
+    //     assert_eq!(Subst::Var(name), name);
+    // }
 
-    #[test]
-    fn diff_idents_subst_eq() {
-        assert_eq!(
-            Subst::Name(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
-            Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "a".intern())
-        )
-    }
+    // #[test]
+    // fn diff_idents_subst_eq() {
+    //     assert_eq!(
+    //         Subst::Var(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
+    //         Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "a".intern())
+    //     )
+    // }
 
-    #[test]
-    fn diff_idents_subst_ne() {
-        assert_ne!(
-            Subst::Name(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
-            Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "b".intern())
-        )
-    }
+    // #[test]
+    // fn diff_idents_subst_ne() {
+    //     assert_ne!(
+    //         Subst::Var(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
+    //         Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "b".intern())
+    //     )
+    // }
 
     // #[test]
     // fn same_ex_subst_eq() {

@@ -7,6 +7,6 @@ type () = builtin
 (-) = builtin
 
 main () =
-    123 + 123
+    id a = a
 
-    ()
+    id ()

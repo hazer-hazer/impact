@@ -28,7 +28,7 @@ mod typeck;
 
 fn main() {
     let config = ConfigBuilder::new()
-        .compilation_depth(StageName::Unset)
+        .compilation_depth(StageName::Typeck)
         .pp_stages(PPStages::All)
         .verbose_messages(true)
         .parser_debug(true)

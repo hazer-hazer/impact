@@ -5,11 +5,11 @@ use crate::ast::NodeId;
 use super::{builtin::Builtin, def::DefId};
 
 // #[derive(Debug, Clone, Copy)]
-// pub struct LocalId(NodeId);
+// pub struct NodeId(NodeId);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ResKind<LocalId> {
-    Local(LocalId),
+pub enum ResKind {
+    Local(NodeId),
     Def(DefId), // Definition, e.g. imported function
     MakeBuiltin,
     Builtin(Builtin),
@@ -21,24 +21,18 @@ pub enum ResKind<LocalId> {
  * Created for each name in source code after items are defined.
  */
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Res<LocalId>
-where
-    LocalId: Copy,
-{
-    kind: ResKind<LocalId>,
+pub struct Res {
+    kind: ResKind,
 }
 
-impl<LocalId> Res<LocalId>
-where
-    LocalId: Copy,
-{
+impl Res {
     pub fn def(def_id: DefId) -> Self {
         Self {
             kind: ResKind::Def(def_id),
         }
     }
 
-    pub fn local(id: LocalId) -> Self {
+    pub fn local(id: NodeId) -> Self {
         Self {
             kind: ResKind::Local(id),
         }
@@ -69,14 +63,14 @@ where
         }
     }
 
-    pub fn kind(&self) -> &ResKind<LocalId> {
+    pub fn kind(&self) -> &ResKind {
         &self.kind
     }
 }
 
-impl<LocalId> Display for Res<LocalId>
+impl Display for Res
 where
-    LocalId: Display + Copy,
+    NodeId: Display + Copy,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
@@ -102,19 +96,19 @@ impl NamePath {
 
 #[derive(Default)]
 pub struct Resolutions {
-    resolutions: HashMap<NamePath, Res<NodeId>>,
+    resolutions: HashMap<NamePath, Res>,
 }
 
 impl Resolutions {
-    pub fn set(&mut self, path: NamePath, res: Res<NodeId>) {
+    pub fn set(&mut self, path: NamePath, res: Res) {
         assert!(self.resolutions.insert(path, res).is_none());
     }
 
-    pub fn get(&self, path: NamePath) -> Option<Res<NodeId>> {
+    pub fn get(&self, path: NamePath) -> Option<Res> {
         self.resolutions.get(&path).copied()
     }
 
-    pub fn get_resolutions(&self) -> &HashMap<NamePath, Res<NodeId>> {
+    pub fn get_resolutions(&self) -> &HashMap<NamePath, Res> {
         &self.resolutions
     }
 }

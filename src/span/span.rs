@@ -1,7 +1,6 @@
 use once_cell::sync::Lazy;
 
 use crate::{
-    cli::verbose,
     parser::{
         lexer::LexerCharCheck,
         token::{Token, TokenKind},
