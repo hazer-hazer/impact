@@ -1,5 +1,5 @@
 use crate::{
-    cli::verboseln,
+    cli::verbose,
     interface::interface::InterruptionReason,
     session::{Session, StageOutput, StageResult},
 };
@@ -16,9 +16,9 @@ pub trait MessageEmitter {
 
         if cfg!(feature = "verbose_debug") {
             if messages.is_empty() {
-                verboseln!("Got no messages");
+                verbose!("Got no messages");
             } else {
-                verboseln!(
+                verbose!(
                     "Printing messages as are\n{}",
                     messages
                         .iter()

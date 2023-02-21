@@ -1,5 +1,5 @@
 use crate::{
-    cli::verboseln,
+    cli::verbose,
     hir::{
         self,
         item::{ItemId, TyAlias},
@@ -26,7 +26,7 @@ use self::{
     tyctx::TyCtx,
 };
 
-mod builtin;
+pub mod builtin;
 mod check;
 pub mod ctx;
 mod synth;
@@ -158,7 +158,7 @@ impl<'hir> Typecker<'hir> {
 
     fn exit_ctx(&mut self) {
         // assert!(self.ctx().unsolved().is_empty());
-        verboseln!("< [EXIT CTX {}]", self.ctx_depth());
+        verbose!("< [EXIT CTX {}]", self.ctx_depth());
 
         let depth = self.ctx_depth();
 
@@ -169,7 +169,7 @@ impl<'hir> Typecker<'hir> {
     fn enter_try_mode(&mut self) -> (bool, usize) {
         let restore = (self.try_mode, self.ctx_depth());
 
-        verboseln!("?> [ENTER TRY CTX {}]", self.ctx_depth() + 1);
+        verbose!("?> [ENTER TRY CTX {}]", self.ctx_depth() + 1);
 
         self.enter_ctx(InferCtx::default());
         self.try_mode = true;
@@ -193,7 +193,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn under_ctx<T>(&mut self, ctx: InferCtx, mut f: impl FnMut(&mut Self) -> T) -> T {
-        verboseln!("> [ENTER CTX {}]", self.ctx_depth() + 1);
+        verbose!("> [ENTER CTX {}]", self.ctx_depth() + 1);
 
         self.enter_ctx(ctx);
         let res = f(self);
@@ -295,31 +295,31 @@ impl<'hir> Typecker<'hir> {
         if let &TyKind::Existential(sol_ex) = sol.kind() {
             assert_ne!(sol_ex, ex, "Tried to solve ex with itself {} / {}", ex, sol);
         }
-        verboseln!("Solve {} as {}", ex, sol);
+        verbose!("Solve {} as {}", ex, sol);
         self._ascend_ctx_mut(|ctx| ctx.solve(ex, sol))
             .map_or_else(|| self.global_ctx.solve(ex, sol), |(ty, _)| Some(ty))
             .unwrap()
     }
 
     fn add_func_param_sol(&mut self, ex: Existential, sol: Ty) -> Ty {
-        verboseln!("Add {} func param solution {}", ex, sol);
+        verbose!("Add {} func param solution {}", ex, sol);
         self._ascend_ctx_mut(|ctx| ctx.add_func_param_sol(ex, sol))
             .map_or_else(|| todo!("Global ctx func param exes"), |(ty, _)| Some(ty))
             .unwrap()
     }
 
     fn type_term(&mut self, name: Ident, ty: Ty) {
-        verboseln!("Type term {}: {}", name, ty);
+        verbose!("Type term {}: {}", name, ty);
         self.ctx().type_term(name, ty)
     }
 
     fn add_ex(&mut self, ex: Existential) {
-        verboseln!("Add ex {}", ex);
+        verbose!("Add ex {}", ex);
         self.ctx().add_ex(ex);
     }
 
     fn add_var(&mut self, var: TyVarId) -> Ty {
-        verboseln!("Add var {}", var);
+        verbose!("Add var {}", var);
         self.ctx().add_var(var);
         Ty::var(var)
     }
@@ -340,7 +340,7 @@ impl<'hir> Typecker<'hir> {
     fn apply_ctx_on(&self, ty: Ty) -> Ty {
         let res = self._apply_ctx_on(ty);
         if ty != res {
-            verboseln!("[APPLY CTX] {} => {}", ty, res);
+            verbose!("[APPLY CTX] {} => {}", ty, res);
         }
         res
     }
@@ -426,7 +426,7 @@ impl<'hir> Typecker<'hir> {
     /// Solves number (int or float) existentials
     ///  to defaults in current context (without ascending)
     pub fn default_number_exes(&mut self) {
-        verboseln!("Default number existentials");
+        verbose!("Default number existentials");
 
         let default_int = Ty::default_int();
         let default_float = Ty::default_float();
@@ -435,7 +435,7 @@ impl<'hir> Typecker<'hir> {
             if let Some(_) = self.get_solution(ex) {
                 return;
             }
-            verboseln!("Default int ex {}", ex);
+            verbose!("Default int ex {}", ex);
             self.solve(ex, default_int);
         });
 
@@ -443,14 +443,14 @@ impl<'hir> Typecker<'hir> {
             if let Some(_) = self.get_solution(ex) {
                 return;
             }
-            verboseln!("Default float ex {}", ex);
+            verbose!("Default float ex {}", ex);
             self.solve(ex, default_float);
         });
     }
 
     // Substitution //
     pub fn substitute(&mut self, ty: Ty, subst: Subst, with: Ty) -> Ty {
-        verboseln!("Substitute {} in {} with {}", subst, ty, with);
+        verbose!("Substitute {} in {} with {}", subst, ty, with);
 
         match ty.kind() {
             TyKind::Error | TyKind::Unit | TyKind::Prim(_) => ty,
@@ -646,26 +646,40 @@ impl<'hir> Typecker<'hir> {
             .collect::<Vec<_>>()
             .join(", ");
 
+        // let ty_bindings =
+        //     self.tyctx()
+        //         .ty_bindings()
+        //         .iter()
+        //         .fold(String::new(), |s, (expr, bindings)| {
+        //             format!(
+        //                 "{}{}: {{{}}}\n",
+        //                 s,
+        //                 expr,
+        //                 bindings
+        //                     .iter_enumerated_flat()
+        //                     .map(|(var, ty)| format!(
+        //                         "{}: [{}]",
+        //                         var,
+        //                         ty.iter()
+        //                             .map(|ty| ty.to_string())
+        //                             .collect::<Vec<_>>()
+        //                             .join(", ")
+        //                     ))
+        //                     .collect::<Vec<_>>()
+        //                     .join(", ")
+        //             )
+        //         });
+
         let ty_bindings = self
-            .global_ctx
+            .tyctx()
             .ty_bindings()
-            .iter_enumerated_flat()
-            .map(|(var, bindings)| {
-                format!(
-                    "{}: [{}]",
-                    var,
-                    bindings
-                        .iter()
-                        .map(|ty| format!("{}", self.global_ctx.apply_on(*ty)))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
+            .iter()
+            .fold(String::new(), |s, ((expr, var), ty)| {
+                format!("{}{}: {{{}: {}}}\n", s, expr, var, ty)
+            });
 
         format!(
-            "[CTX]\nvars: {}\nterms:\n{}\nsolved:\n{}\nunsolved: {}\nglobal solved:\n{}\nglobal existentials: {}\nType bindings: {}",
+            "[CTX]\nvars: {}\nterms:\n{}\nsolved:\n{}\nunsolved: {}\nglobal solved:\n{}\nglobal existentials: {}\nType bindings:\n{}",
             vars, terms, solved, unsolved, global_solved, global_exes, ty_bindings
         )
     }

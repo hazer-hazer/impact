@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell::{
+    attributes::{Attribute, AttributeLoc},
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
@@ -11,7 +12,7 @@ use inkwell::{
 };
 
 use crate::{
-    hir::{HirId, Res, HIR},
+    hir::{expr::Expr, HirId, Res, HIR},
     message::message::{MessageBuilder, MessageHolder, MessageStorage},
     resolve::def::DefId,
     session::{Session, Stage, StageOutput},
@@ -22,7 +23,7 @@ use crate::{
     },
 };
 
-use super::nodes::NodeCodeGen;
+use super::nodes::{CodeGenResult, NodeCodeGen};
 
 pub struct CodeGen<'ctx> {
     pub hir: &'ctx HIR,
@@ -38,8 +39,8 @@ pub struct CodeGen<'ctx> {
     res_values: HashMap<Res, BasicValueEnum<'ctx>>,
 
     // States //
-    /// Name of current declaration, e.g. `a = 123`
-    current_def: Option<(Ident, DefId)>,
+    /// Name of current declaration, e.g. `a = 123` + Its DefId + HirId of value expression
+    current_def: Option<(Ident, DefId, Expr)>,
 
     pub sess: Session,
     msg: MessageStorage,
@@ -80,9 +81,13 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.get_insert_block().unwrap()
     }
 
+    pub(super) fn current_function(&self) -> FunctionValue<'ctx> {
+        self.current_block().get_parent().unwrap()
+    }
+
     pub(super) fn under_def<T>(
         &mut self,
-        def: (Ident, DefId),
+        def: (Ident, DefId, Expr),
         mut f: impl FnMut(&mut Self) -> T,
     ) -> T {
         self.current_def = Some(def);
@@ -92,6 +97,14 @@ impl<'ctx> CodeGen<'ctx> {
         self.current_def = None;
 
         res
+    }
+
+    pub(super) fn is_decl_value(&self, expr: Expr) -> bool {
+        if let Some((_, _, value)) = self.current_def {
+            value == expr
+        } else {
+            false
+        }
     }
 
     // Definitions //
@@ -199,16 +212,26 @@ impl<'ctx> CodeGen<'ctx> {
         unit.const_zero().into()
     }
 
-    pub(super) fn get_lambda_name(&self) -> Symbol {
+    pub(super) fn get_lambda_name(&self, expr: Expr) -> Symbol {
         self.current_def
-            .map_or("lambda".intern(), |(name, _)| name.sym())
+            .map(|(name, _, expr_)| {
+                if expr == expr_ {
+                    Some(name.sym())
+                } else {
+                    None
+                }
+            })
+            .map_or("lambda".intern(), |name| name.unwrap())
     }
 
     pub(super) fn function(
-        &self,
+        &mut self,
         name: &str,
         ty: Ty,
-    ) -> (FunctionValue<'ctx>, BasicValueEnum<'ctx>) {
+        mut body: impl FnMut(&mut Self, &FunctionValue<'ctx>) -> CodeGenResult<'ctx>,
+    ) -> CodeGenResult<'ctx> {
+        let caller_block = self.current_block();
+
         let raw_ty = self
             .conv_func_ty(ty.as_func())
             .get_element_type()
@@ -227,7 +250,22 @@ impl<'ctx> CodeGen<'ctx> {
         let basic_block = self.ctx.append_basic_block(func, "entry");
         self.builder.position_at_end(basic_block);
 
-        (func, func_ptr)
+        let ret_val = body(self, &func)?.unwrap();
+
+        self.build_return(ret_val);
+        self.builder.position_at_end(caller_block);
+
+        Ok(Some(func_ptr))
+    }
+
+    fn always_inline_cur_func(&mut self) {
+        let cur_func = self.current_function();
+
+        let always_inline = Attribute::get_named_enum_kind_id("alwaysinline");
+        assert_ne!(always_inline, 0);
+
+        let attr = self.ctx.create_enum_attribute(always_inline, 1);
+        cur_func.add_attribute(AttributeLoc::Function, attr);
     }
 
     // Building //
@@ -245,7 +283,7 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
-    fn build_main(&mut self) {
+    fn build_main(&mut self) -> CodeGenResult<'ctx, ()> {
         // main function //
         // FIXME: There might be better place for this logic
 
@@ -253,7 +291,7 @@ impl<'ctx> CodeGen<'ctx> {
             Ok(ok) => ok,
             Err(err) => {
                 err.emit(self);
-                return;
+                return Err(());
             },
         };
 
@@ -267,7 +305,7 @@ impl<'ctx> CodeGen<'ctx> {
                 .text(format!("'main' function has invalid type"))
                 .label(span, format!("Must have type {}", expected_main_func_ty))
                 .emit(self);
-            return;
+            return Err(());
         }
 
         let i32_ty = self.ctx.i32_type();
@@ -279,18 +317,26 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.builder.position_at_end(basic_block);
 
-        self.hir.root().items.iter().for_each(|&item| {
-            self.hir.item(item).codegen(self);
-        });
+        self.hir
+            .root()
+            .items
+            .iter()
+            .try_for_each::<_, CodeGenResult<'ctx, ()>>(|&item| {
+                self.hir.item(item).codegen(self)?;
+                Ok(())
+            })?;
 
         let success_ret = i32_ty.const_int(0, true);
         self.build_return(success_ret.into());
+
+        Ok(())
     }
 }
 
 impl<'ctx> Stage<Module<'ctx>> for CodeGen<'ctx> {
     fn run(mut self) -> StageOutput<Module<'ctx>> {
-        self.build_main();
+        // FIXME: Rewrite stages to error propagation model
+        let _ = self.build_main();
         StageOutput::new(self.sess, self.module, self.msg)
     }
 }

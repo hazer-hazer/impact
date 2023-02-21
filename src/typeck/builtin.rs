@@ -4,7 +4,7 @@ use crate::resolve::builtin::Builtin;
 
 use super::ty::{IntKind, PrimTy, Ty};
 
-pub(super) fn builtins() -> HashMap<Builtin, Ty> {
+pub fn builtins() -> HashMap<Builtin, Ty> {
     let mut ty_vars = HashMap::new();
 
     macro_rules! ty {

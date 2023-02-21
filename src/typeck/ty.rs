@@ -11,7 +11,6 @@ use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, Idx},
     hir::{self, expr::Lit},
-    span::span::Ident,
 };
 
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
@@ -491,12 +490,7 @@ impl PartialEq<Existential> for Subst {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        session::SourceId,
-        span::span::{Ident, Internable, Span},
-    };
-
-    use super::Subst;
+    use crate::session::SourceId;
 
     const SOME_SOURCE_ID: SourceId = SourceId::new(123);
 

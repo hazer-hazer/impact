@@ -6,7 +6,7 @@ use crate::{
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
-    cli::verboseln,
+    cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{builtin::DeclareBuiltin, def::Namespace},
     session::{Session, SourceId, Stage, StageOutput},
@@ -52,17 +52,17 @@ impl<'ast> DefCollector<'ast> {
     }
 
     fn enter_def_module(&mut self, def_id: DefId) {
-        verboseln!("Enter def module {}", def_id);
+        verbose!("Enter def module {}", def_id);
         self.current_module = self.sess.def_table.add_module(def_id, self.current_module);
     }
 
     fn enter_block_module(&mut self, node_id: NodeId) {
-        verboseln!("Enter block module {}", node_id);
+        verbose!("Enter block module {}", node_id);
         self.current_module = self.sess.def_table.add_block(node_id, self.current_module)
     }
 
     fn exit_module(&mut self) {
-        verboseln!("Exit module");
+        verbose!("Exit module");
         self.current_module = self
             .sess
             .def_table
@@ -83,7 +83,7 @@ impl<'ast> DefCollector<'ast> {
         let def_id = self.sess.def_table.define(node_id, kind, ident);
         let old_def = self.module().define(kind.namespace(), ident.sym(), def_id);
 
-        verboseln!("Define {} {} {} - {}", node_id, kind, ident, def_id);
+        verbose!("Define {} {} {} - {}", node_id, kind, ident, def_id);
 
         if let Some(old_def) = old_def {
             let old_def = self.sess.def_table.get_def(old_def).unwrap();

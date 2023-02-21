@@ -9,7 +9,7 @@ use crate::{
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST,
     },
-    cli::verboseln,
+    cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::def::DefKind,
     session::{Session, Stage, StageOutput},
@@ -64,7 +64,7 @@ impl<'ast> NameResolver<'ast> {
     }
 
     fn define_var(&mut self, node_id: NodeId, ident: &Ident) {
-        verboseln!("Define var {} {}", node_id, ident);
+        verbose!("Define var {} {}", node_id, ident);
 
         let old_local = self.scope_mut().locals.insert(ident.sym(), node_id);
 
@@ -92,18 +92,18 @@ impl<'ast> NameResolver<'ast> {
     }
 
     fn enter_module_scope(&mut self, module_id: ModuleId) {
-        verboseln!("Enter module scope {}", module_id);
+        verbose!("Enter module scope {}", module_id);
 
         self.scopes.push(Scope::new(ScopeKind::Module(module_id)));
     }
 
     fn enter_func_scope(&mut self) {
-        verboseln!("Enter func scope");
+        verbose!("Enter func scope");
         self.scopes.push(Scope::new(ScopeKind::Func));
     }
 
     fn exit_scope(&mut self) {
-        verboseln!("Exit scope");
+        verbose!("Exit scope");
         self.scopes.pop();
     }
 
@@ -269,7 +269,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     }
 
     fn visit_pat(&mut self, pat: &'ast Pat) {
-        verboseln!("Visit pat {}", pat.id());
+        verbose!("Visit pat {}", pat.id());
         match pat.kind() {
             PatKind::Unit => {},
             PatKind::Ident(ident) => self.define_var(pat.id(), ident.as_ref().unwrap()),

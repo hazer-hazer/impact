@@ -4,7 +4,7 @@ use inkwell::context::Context;
 
 use crate::{
     ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, MappedAst, NodeId},
-    cli::verboseln,
+    cli::verbose,
     codegen::codegen::CodeGen,
     config::config::{Config, StageName},
     hir::visitor::HirVisitor,
@@ -66,14 +66,14 @@ impl<'ast> Interface {
         let mut sess = Session::new(self.config.clone());
 
         // Debug info //
-        verboseln!("== Identifiers format ==");
-        verboseln!("NodeId: {}", NodeId::new(0));
-        verboseln!("DefId: {}", DefId::new(0));
-        verboseln!("ModuleId::Block: {}", ModuleId::Block(NodeId::new(0)));
-        verboseln!("ModuleId::Module: {}", ModuleId::Module(DefId::new(0)));
+        verbose!("== Identifiers format ==");
+        verbose!("NodeId: {}", NodeId::new(0));
+        verbose!("DefId: {}", DefId::new(0));
+        verbose!("ModuleId::Block: {}", ModuleId::Block(NodeId::new(0)));
+        verbose!("ModuleId::Module: {}", ModuleId::Module(DefId::new(0)));
 
         // Lexing //
-        verboseln!("=== Lexing ===");
+        verbose!("=== Lexing ===");
         let stage = StageName::Lexer;
 
         let source_id = sess.source_map.add_source(source);
@@ -103,7 +103,7 @@ impl<'ast> Interface {
         let sess = self.should_stop(sess, stage)?;
 
         // Parsing //
-        verboseln!("=== Parsing ===");
+        verbose!("=== Parsing ===");
         let stage = StageName::Parser;
 
         let mut parse_result = Parser::new(sess, tokens).run();
@@ -126,7 +126,7 @@ impl<'ast> Interface {
         let sess = self.should_stop(sess, stage)?;
 
         // AST Validation //
-        verboseln!("=== AST Validation ===");
+        verbose!("=== AST Validation ===");
         let stage = StageName::AstValidation;
 
         let (_, sess) = AstValidator::new(sess, &ast).run_and_emit(true)?;
@@ -134,7 +134,7 @@ impl<'ast> Interface {
         let sess = self.should_stop(sess, stage)?;
 
         // Def collection //
-        verboseln!("=== Definition collection ===");
+        verbose!("=== Definition collection ===");
         let stage = StageName::DefCollect;
 
         let (_, mut sess) = DefCollector::new(sess, &ast).run_and_emit(true)?;
@@ -153,7 +153,7 @@ impl<'ast> Interface {
         let sess = self.should_stop(sess, stage)?;
 
         // Name resolution //
-        verboseln!("=== Name resolution ===");
+        verbose!("=== Name resolution ===");
         let stage = StageName::NameRes;
 
         let mut name_res_result = NameResolver::new(sess, &ast).run();
@@ -181,7 +181,7 @@ impl<'ast> Interface {
         let sess = self.should_stop(sess, stage)?;
 
         // Lowering //
-        verboseln!("=== Lowering ===");
+        verbose!("=== Lowering ===");
         let stage = StageName::Lower;
 
         let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
@@ -196,7 +196,7 @@ impl<'ast> Interface {
         let sess = self.should_stop(sess, stage)?;
 
         // Typeck //
-        verboseln!("=== Type checking ===");
+        verbose!("=== Type checking ===");
         let stage = StageName::Typeck;
         let mut typeck_result = Typecker::new(sess, &hir).run();
 
@@ -215,10 +215,8 @@ impl<'ast> Interface {
 
         let sess = self.should_stop(sess, stage)?;
 
-        return Ok(sess);
-
         // Codegen //
-        verboseln!("=== Codegen ===");
+        verbose!("=== Codegen ===");
         let stage = StageName::Codegen;
 
         let ctx = Context::create();

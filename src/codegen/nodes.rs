@@ -10,9 +10,9 @@ use crate::{
     resolve::def::DefKind,
 };
 
-use super::codegen::CodeGen;
+use super::{builtin::builtin, codegen::CodeGen};
 
-type CodeGenResult<'g, T = Option<BasicValueEnum<'g>>> = Result<T, ()>;
+pub type CodeGenResult<'g, T = Option<BasicValueEnum<'g>>> = Result<T, ()>;
 
 pub trait NodeCodeGen<'g> {
     fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g>;
@@ -48,21 +48,15 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
                 Lit::String(sym) => g.string_value(sym.as_str()),
             },
             &ExprKind::Path(PathExpr(path)) => g.hir.path(path).codegen(g)?.unwrap(),
-            ExprKind::Block(_) => todo!(),
+            &ExprKind::Block(block) => g.hir.block(block).codegen(g)?.unwrap(),
             &ExprKind::Lambda(Lambda { param, body }) => {
-                let caller_block = g.current_block();
-                let name = g.get_lambda_name();
+                let name = g.get_lambda_name(self.id());
+                let ty = g.tyctx().tyof(self.id());
 
-                let (func, func_val) = g.function(name.as_str(), g.tyctx().tyof(self.id()));
-
-                g.bind_res_value(Res::Node(param), func.get_nth_param(0).unwrap());
-
-                let ret_val = g.hir.expr(body).codegen(g)?.unwrap();
-
-                g.build_return(ret_val);
-                g.builder().position_at_end(caller_block);
-
-                func_val
+                return g.function(name.as_str(), ty, |g, func| {
+                    g.bind_res_value(Res::Node(param), func.get_nth_param(0).unwrap());
+                    g.hir.expr(body).codegen(g)
+                });
             },
             &ExprKind::Call(Call { lhs, arg }) => {
                 let func = g.hir.expr(lhs).codegen(g)?.unwrap().into_pointer_value();
@@ -85,9 +79,10 @@ impl<'g> NodeCodeGen<'g> for BlockNode {
     fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
         assert!(!self.stmts().is_empty() || self.expr().is_some());
 
-        self.stmts().iter().for_each(|&stmt| {
-            g.hir.stmt(stmt).codegen(g);
-        });
+        self.stmts().iter().try_for_each(|&stmt| {
+            g.hir.stmt(stmt).codegen(g)?;
+            Ok(())
+        })?;
 
         if let Some(&expr) = self.expr() {
             g.hir.expr(expr).codegen(g)
@@ -99,21 +94,28 @@ impl<'g> NodeCodeGen<'g> for BlockNode {
 
 impl<'g> NodeCodeGen<'g> for ItemNode {
     fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
-        match g.sess.def_table.get_def(self.def_id()).unwrap().kind() {
-            DefKind::DeclareBuiltin => return Ok(None),
-            DefKind::Builtin(_) => todo!(),
-            _ => {},
-        }
-
         match self.kind() {
             &ItemKind::Decl(Decl { value }) => {
-                g.under_def((self.name(), self.def_id()), |g| -> CodeGenResult<'g, ()> {
-                    let val = g.hir.expr(value).codegen(g)?.unwrap();
+                g.under_def(
+                    (self.name(), self.def_id(), value),
+                    |g| -> CodeGenResult<'g, ()> {
+                        let val = match g.sess.def_table.get_def(self.def_id()).unwrap().kind() {
+                            DefKind::DeclareBuiltin => Ok(None),
+                            &DefKind::Builtin(bt) => builtin(g, bt),
+                            DefKind::Func | DefKind::Var => {
+                                Ok(Some(g.hir.expr(value).codegen(g)?.unwrap()))
+                            },
 
-                    g.bind_res_value(Res::Node(HirId::new_owner(self.def_id())), val);
+                            _ => unreachable!(),
+                        }?;
 
-                    Ok(())
-                })?;
+                        if let Some(val) = val {
+                            g.bind_res_value(Res::Node(HirId::new_owner(self.def_id())), val);
+                        }
+
+                        Ok(())
+                    },
+                )?;
             },
             ItemKind::Mod(_) | ItemKind::TyAlias(_) => {},
         }

@@ -978,7 +978,7 @@ impl Parser {
             return None;
         }
 
-        // verbose!("Enter {} {}", kind, name);
+        //
 
         let id = self.parse_entries.len();
 
@@ -1054,7 +1054,7 @@ impl Parser {
         while let Some(id) = cur_id {
             let pe = self.parse_entries.get(id).unwrap();
 
-            // verbose!("Exit {} {}", pe.kind, pe.name);
+            //
 
             cur_id = pe.parent;
 

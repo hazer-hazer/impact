@@ -7,7 +7,7 @@ use crate::{
         ty::{Ty, TyKind, TyPath},
         NodeId, NodeMap, Path, PathSeg, WithNodeId, AST, N, PR, ROOT_NODE_ID,
     },
-    cli::verboseln,
+    cli::verbose,
     hir::{
         self,
         item::{Decl, ItemId, ItemNode, Mod, TyAlias},
@@ -105,7 +105,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn _with_owner(&mut self, def_id: DefId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
-        verboseln!("With owner {}", def_id);
+        verbose!("With owner {}", def_id);
 
         let owner_id = OwnerId::new(def_id);
 
@@ -152,7 +152,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_node_id(&mut self, id: NodeId) -> HirId {
-        verboseln!("Lower node id {}", id);
+        verbose!("Lower node id {}", id);
         if let Some(hir_id) = self.node_id_hir_id.get_flat(id) {
             *hir_id
         } else {
@@ -251,7 +251,7 @@ impl<'ast> Lower<'ast> {
 
     // Patterns //
     fn lower_pat(&mut self, pat: &Pat) -> hir::pat::Pat {
-        verboseln!("lower pat {}", pat.id());
+        verbose!("lower pat {}", pat.id());
         let id = self.lower_node_id(pat.id());
 
         let kind = match pat.kind() {

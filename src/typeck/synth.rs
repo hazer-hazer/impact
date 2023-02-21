@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    cli::{verbose, verboseln},
+    cli::verbose,
     hir::{
         self,
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
@@ -32,7 +32,7 @@ impl<'hir> Typecker<'hir> {
 
         let ty = match self.hir.item(item).kind() {
             ItemKind::TyAlias(_ty) => {
-                verboseln!("Synth ty alias {}", item.def_id());
+                verbose!("Synth ty alias {}", item.def_id());
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                 self.conv_ty_alias(item.def_id());
                 Ty::unit()
@@ -45,11 +45,10 @@ impl<'hir> Typecker<'hir> {
                 Ty::unit()
             },
             &ItemKind::Decl(Decl { value }) => {
-                verboseln!("Synth declaration {}", item.def_id());
+                verbose!("Synth declaration {}", item.def_id());
 
                 let value_ty = self.synth_expr(value)?;
 
-                verbose!("Type declaration {} ", self.hir.item(item).name());
                 self.type_term(self.hir.item(item).name(), value_ty);
 
                 // Note: Actually, declaration type is a unit type, but we save it
@@ -80,14 +79,14 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
-        verboseln!("Synth type of expression {}", expr_id);
+        verbose!("Synth type of expression {}", expr_id);
 
         let expr_ty = match self.hir.expr(expr_id).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
             ExprKind::Lambda(lambda) => self.synth_lambda_generic(&lambda),
-            ExprKind::Call(call) => self.synth_call(&call),
+            ExprKind::Call(call) => self.synth_call(&call, expr_id),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
         }?;
@@ -187,24 +186,22 @@ impl<'hir> Typecker<'hir> {
 
         let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
             // FIXME: Should sub-pattern names existentials be defined outside this context?
-            verbose!("Add lambda param ex: ");
+
             let ex = self.add_fresh_common_ex();
 
-            // verbose!("Type parameter ex ");
+            //
             // self.type_term(name, ex.1);
 
             assert!(exes.insert(name, ex).is_none());
             exes
         });
 
-        verbose!("Add lambda body ex: ");
         let body_ex = self.add_fresh_common_ex();
 
         self.under_new_ctx(|this| {
             // FIXME: Optimize fold moves of vec
             param_exes.iter().for_each(|(&name, &ex)| {
                 // FIXME: Should sub-pattern names existentials be defined outside this context?
-                verbose!("Type param ex ");
                 this.type_term(name, ex.1);
             });
 
@@ -223,7 +220,7 @@ impl<'hir> Typecker<'hir> {
                 param_ty
             };
 
-            verboseln!("Param ty {}", param_ty);
+            verbose!("Param ty {}", param_ty);
 
             this.tyctx_mut().type_node(lambda.param, param_ty);
 
@@ -231,7 +228,7 @@ impl<'hir> Typecker<'hir> {
                 param_exes
                     .iter()
                     .fold(Ty::func(param_ty, body_ty), |ty, (&name, &(ex, _))| {
-                        verboseln!(
+                        verbose!(
                             "Func type generation {ty}; push {name}: {ex} = {:?}",
                             this.get_solution(ex)
                         );
@@ -245,7 +242,7 @@ impl<'hir> Typecker<'hir> {
                         }
                     });
 
-            verboseln!("Func ty {func_ty}");
+            verbose!("Func ty {func_ty}");
 
             Ok(func_ty)
         })
@@ -284,18 +281,18 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    fn synth_call(&mut self, call: &Call) -> TyResult<Ty> {
-        verbose!("Synth call lhs: ");
+    fn synth_call(&mut self, call: &Call, expr_id: Expr) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(call.lhs)?;
         let lhs_ty = self.apply_ctx_on(lhs_ty);
         self._synth_call(
             Spanned::new(self.hir.expr(call.lhs).span(), lhs_ty),
             call.arg,
+            expr_id,
         )
     }
 
-    fn _synth_call(&mut self, lhs_ty: Spanned<Ty>, arg: Expr) -> TyResult<Ty> {
-        verboseln!("Synthesize call {} with arg {}", lhs_ty, arg);
+    fn _synth_call(&mut self, lhs_ty: Spanned<Ty>, arg: Expr, call_expr: Expr) -> TyResult<Ty> {
+        verbose!("Synthesize call {} with arg {}", lhs_ty, arg);
 
         let span = lhs_ty.span();
         let lhs_ty = lhs_ty.node();
@@ -315,9 +312,8 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
-                    verbose!("Add existential lhs synth call param ex: ");
                     let param_ex = this.add_fresh_common_ex();
-                    verbose!("Add existential lhs synth call body ex: ");
+
                     let body_ex = this.add_fresh_common_ex();
                     let func_ty = Ty::func(param_ex.1, body_ex.1);
                     this.solve(ex, func_ty);
@@ -344,12 +340,11 @@ impl<'hir> Typecker<'hir> {
                 Ok(body)
             },
             &TyKind::Forall(alpha, ty) => {
-                verbose!("Add forall alpha ex: ");
                 let alpha_ex = self.add_fresh_common_ex();
                 let substituted_ty = self.substitute(ty, Subst::Var(alpha), alpha_ex.1);
-                let body_ty = self._synth_call(Spanned::new(span, substituted_ty), arg);
+                let body_ty = self._synth_call(Spanned::new(span, substituted_ty), arg, call_expr);
 
-                self.global_ctx.bind_ty_var(alpha, alpha_ex.1);
+                self.tyctx_mut().bind_ty_var(call_expr, alpha, alpha_ex.1);
 
                 body_ty
             },

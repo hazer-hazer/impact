@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::{
-    cli::verboseln,
+    cli::verbose,
     dt::idx::IndexVec,
     span::span::{Ident, Symbol},
 };
@@ -14,8 +14,6 @@ pub struct GlobalCtx {
 
     // FIXME: This might be absolutely wrong
     existentials: IndexVec<ExistentialId, Option<(usize, usize)>>,
-
-    ty_bindings: IndexVec<TyVarId, Option<Vec<Ty>>>,
 }
 
 impl GlobalCtx {
@@ -25,10 +23,10 @@ impl GlobalCtx {
             .enumerate()
             .for_each(|(index, &ex)| {
                 if let Some(sol) = ctx.get_solution(ex) {
-                    verboseln!("Add ex to global ctx {} = {}", ex, sol);
+                    verbose!("Add ex to global ctx {} = {}", ex, sol);
                     assert!(self.solved.insert(ex.id(), sol).is_none());
                 } else {
-                    verboseln!("Add ex to global ctx {}", ex);
+                    verbose!("Add ex to global ctx {}", ex);
                     assert!(self.existentials.insert(ex.id(), (depth, index)).is_none())
                 }
             });
@@ -48,11 +46,6 @@ impl GlobalCtx {
 
     pub fn solved(&self) -> &IndexVec<ExistentialId, Option<Ty>> {
         &self.solved
-    }
-
-    pub fn bind_ty_var(&mut self, var: TyVarId, ty: Ty) {
-        verboseln!("Bind type variable {} = {}", var, ty);
-        self.ty_bindings.upsert_default(var).push(ty);
     }
 
     // FIXME: Copypaste
@@ -100,16 +93,12 @@ impl GlobalCtx {
             })
             .collect()
     }
-
-    pub fn ty_bindings(&self) -> &IndexVec<TyVarId, Option<Vec<Ty>>> {
-        &self.ty_bindings
-    }
 }
 
 #[derive(Default, Clone, Debug)]
 pub struct InferCtx {
     /// Existentials defined in current context
-    existentials: HashSet<Existential>,
+    existentials: Vec<Existential>,
 
     /// Existentials solved in current context. Leak to global context.
     // Note: I end up with storing `solved` and unsolved existentials separately due to `try` logic.
@@ -119,7 +108,7 @@ pub struct InferCtx {
     func_param_solutions: IndexVec<ExistentialId, Option<Vec<Ty>>>,
 
     /// Type variables defined in current context. Do not leak to global context
-    vars: HashSet<TyVarId>,
+    vars: Vec<TyVarId>,
 
     /// Typed terms. Do not leak to global context
     terms: HashMap<Symbol, Ty>,
@@ -128,14 +117,14 @@ pub struct InferCtx {
 impl InferCtx {
     pub fn new_with_var(var: TyVarId) -> Self {
         Self {
-            vars: HashSet::from([var]),
+            vars: Vec::from([var]),
             ..Default::default()
         }
     }
 
     pub fn new_with_ex(ex: Existential) -> Self {
         Self {
-            existentials: HashSet::from([ex]),
+            existentials: Vec::from([ex]),
             ..Default::default()
         }
     }
@@ -187,11 +176,13 @@ impl InferCtx {
 
     // Setters //
     pub fn add_var(&mut self, var: TyVarId) {
-        assert!(self.vars.insert(var));
+        assert!(!self.vars.contains(&var));
+        self.vars.push(var);
     }
 
     pub fn add_ex(&mut self, ex: Existential) {
-        assert!(self.existentials.insert(ex));
+        assert!(!self.has_ex(ex));
+        self.existentials.push(ex);
     }
 
     pub fn type_term(&mut self, name: Ident, ty: Ty) {
@@ -280,11 +271,11 @@ impl InferCtx {
         &self.terms
     }
 
-    pub fn existentials(&self) -> &HashSet<Existential> {
+    pub fn existentials(&self) -> &Vec<Existential> {
         &self.existentials
     }
 
-    pub fn vars(&self) -> &HashSet<TyVarId> {
+    pub fn vars(&self) -> &Vec<TyVarId> {
         &self.vars
     }
 }
