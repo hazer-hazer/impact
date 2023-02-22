@@ -101,7 +101,7 @@ impl<'g> NodeCodeGen<'g> for ItemNode {
                     |g| -> CodeGenResult<'g, ()> {
                         let val = match g.sess.def_table.get_def(self.def_id()).unwrap().kind() {
                             DefKind::DeclareBuiltin => Ok(None),
-                            &DefKind::Builtin(bt) => builtin(g, bt),
+                            // &DefKind::Builtin(bt) => builtin(g, bt),
                             DefKind::Func | DefKind::Var => {
                                 Ok(Some(g.hir.expr(value).codegen(g)?.unwrap()))
                             },

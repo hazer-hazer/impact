@@ -17,6 +17,7 @@ regex = "1"
 lazy_static = "1.4.0"
 convert_case = "0.6.0"
 similar = "2.2.1"
+clap = { version = "4.1.6", features = ["derive"] }
 
 [features]
 verbose_debug = []

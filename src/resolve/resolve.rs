@@ -151,10 +151,6 @@ impl<'ast> NameResolver<'ast> {
                 // Yeah, crutches
                 return Res::declare_builtin();
             },
-            &DefKind::Builtin(bt) => {
-                assert_eq!(def.kind().namespace(), target_ns);
-                return Res::builtin(bt);
-            },
         }
     }
 
@@ -232,17 +228,6 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
     fn visit_item(&mut self, item: &'ast Item) {
-        if self.sess.def_table.is_builtin(item.id()) {
-            match item.kind() {
-                ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
-                ItemKind::Decl(name, params, body) => {
-                    self.visit_decl_item(name, params, body, item.id())
-                },
-                ItemKind::Mod(_, _) => unreachable!(),
-            }
-            return;
-        }
-
         match item.kind() {
             ItemKind::Mod(name, items) => {
                 let module_id =

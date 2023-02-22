@@ -24,9 +24,15 @@ use super::{
 use super::Typecker;
 impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
+        let hir_id = HirId::new_owner(item.def_id());
         match self.sess.def_table.get_def(item.def_id()).unwrap().kind() {
-            &DefKind::Builtin(bt) => return Ok(self.tyctx().builtin_ty(bt)),
-            DefKind::DeclareBuiltin => return Ok(Ty::unit()),
+            DefKind::DeclareBuiltin => {
+                self.tyctx_mut().type_node(
+                    hir_id,
+                    Ty::func(Ty::prim(PrimTy::String), Ty::var(Ty::next_ty_var_id())),
+                );
+                return Ok(Ty::unit());
+            },
             _ => {},
         }
 
@@ -57,8 +63,7 @@ impl<'hir> Typecker<'hir> {
             },
         };
 
-        self.tyctx_mut()
-            .type_node(HirId::new_owner(item.def_id()), ty);
+        self.tyctx_mut().type_node(hir_id, ty);
 
         TyResult::Ok(ty)
     }

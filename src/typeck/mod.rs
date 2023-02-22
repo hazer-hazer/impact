@@ -523,11 +523,10 @@ impl<'hir> Typecker<'hir> {
                         Ty::error()
                     },
 
+                    DefKind::DeclareBuiltin => todo!(),
+
                     // Definitions from value namespace
-                    DefKind::Builtin(_)
-                    | DefKind::DeclareBuiltin
-                    | DefKind::Func
-                    | DefKind::Var => unreachable!(),
+                    DefKind::Func | DefKind::Var => unreachable!(),
                 }
             },
             &Res::Builtin(bt) if bt.is_ty() => self.tyctx().builtin_ty(bt),

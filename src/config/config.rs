@@ -1,8 +1,10 @@
 use std::fmt::Display;
 
+use clap::Parser;
+
 use crate::interface::interface::InterruptionReason;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Parser)]
 pub enum StageName {
     Lexer,
     Parser,
@@ -51,7 +53,7 @@ impl Display for StageName {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Parser)]
 pub enum PPStages {
     None,
     Some(Vec<StageName>),

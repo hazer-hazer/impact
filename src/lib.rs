@@ -14,3 +14,4 @@ pub mod resolve;
 pub mod session;
 pub mod span;
 pub mod typeck;
+pub mod thir;

@@ -23,7 +23,6 @@ pub enum DefKind {
     Var,
 
     DeclareBuiltin,
-    Builtin(Builtin),
 }
 
 impl DefKind {
@@ -44,7 +43,6 @@ impl DefKind {
             DefKind::Root => Namespace::Type,
             DefKind::Var => Namespace::Value,
             DefKind::DeclareBuiltin => Namespace::Value,
-            DefKind::Builtin(bi) => bi.ns(),
         }
     }
 }
@@ -61,7 +59,6 @@ impl Display for DefKind {
                 DefKind::Var => "var",
                 DefKind::Root => "[ROOT]",
                 DefKind::DeclareBuiltin => "[`builtin`]",
-                DefKind::Builtin(bt) => return write!(f, "[built-in `{}`]", bt.name()),
             }
         )
     }
@@ -364,13 +361,6 @@ impl DefTable {
         if node_id != DUMMY_NODE_ID {
             assert!(self.node_id_def_id.insert(node_id, def_id).is_none());
             assert!(self.def_id_node_id.insert(def_id, node_id).is_none());
-        }
-
-        match kind {
-            DefKind::Builtin(builtin) => {
-                self.add_builtin(builtin, node_id, def_id);
-            },
-            _ => {},
         }
 
         def_id

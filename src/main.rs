@@ -25,6 +25,7 @@ mod resolve;
 mod session;
 mod span;
 mod typeck;
+mod thir;
 
 fn main() {
     let config = ConfigBuilder::new()
