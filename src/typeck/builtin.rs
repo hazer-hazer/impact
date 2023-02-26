@@ -6,7 +6,7 @@ use super::ty::{IntKind, PrimTy, Ty};
 
 #[deprecated]
 pub fn builtins() -> HashMap<Builtin, Ty> {
-    let mut ty_vars = HashMap::new();
+    // let mut ty_vars = HashMap::new();
 
     macro_rules! ty {
         ($var: ident) => {
@@ -41,16 +41,16 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         }};
     }
 
-    let builtins = HashMap::from([
-        // Values //
-        (Builtin::UnitValue, ty!(())),
-        // Operators //
-        (Builtin::Add, ty!(forall a. a -> a -> a)),
-        (Builtin::Minus, ty!(forall a. a -> a -> a)),
-        // Types //
-        (Builtin::UnitTy, ty!(())),
-        (Builtin::I32, Ty::prim(PrimTy::Int(IntKind::I32))),
-    ]);
+    // let builtins = HashMap::from([
+    //     // Values //
+    //     (Builtin::UnitValue, ty!(())),
+    //     // Operators //
+    //     (Builtin::Add, ty!(forall a. a -> a -> a)),
+    //     (Builtin::Minus, ty!(forall a. a -> a -> a)),
+    //     // Types //
+    //     (Builtin::UnitTy, ty!(())),
+    //     (Builtin::I32, Ty::prim(PrimTy::Int(IntKind::I32))),
+    // ]);
 
-    builtins
+    todo!()
 }

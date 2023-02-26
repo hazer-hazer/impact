@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::{
     cli::verbose,
-    dt::idx::IndexVec,
     hir::{expr::Expr, HirId},
     resolve::builtin::Builtin,
 };
@@ -13,9 +12,6 @@ use super::{
 };
 
 pub struct TyCtx {
-    /// Just a quick-access map
-    builtins: HashMap<Builtin, Ty>,
-
     /// Types associated to DefId's (meaning for each item is different!)
     /// and types of HIR expressions.
     /// - Type alias: `[Type alias DefId] -> [Its type]`
@@ -28,7 +24,6 @@ pub struct TyCtx {
 impl TyCtx {
     pub fn new() -> Self {
         Self {
-            builtins: builtins(),
             typed: Default::default(),
             ty_bindings: Default::default(),
         }
@@ -47,13 +42,6 @@ impl TyCtx {
     pub fn tyof(&self, id: HirId) -> Ty {
         self.node_type(id)
             .expect(&format!("Type of node {} expected", id))
-    }
-
-    pub fn builtin_ty(&self, builtin: Builtin) -> Ty {
-        self.builtins
-            .get(&builtin)
-            .copied()
-            .expect(&format!("No type for {} builtin :(", builtin))
     }
 
     pub fn bind_ty_var(&mut self, expr: Expr, var: TyVarId, ty: Ty) {

@@ -267,10 +267,6 @@ impl<'a, D> AstLikePP<'a, D> {
 
         let node_id = match res.kind() {
             ResKind::Local(node_id) => Some(*node_id),
-            &ResKind::Builtin(bt) => self
-                .sess
-                .def_table
-                .get_node_id(self.sess.def_table.builtin_def_id(bt).unwrap()),
             ResKind::Def(def_id) => {
                 Some(self.sess.def_table.get_node_id(*def_id).expect(&format!(
                     "Name resolution to def {} by name {}",
@@ -278,7 +274,7 @@ impl<'a, D> AstLikePP<'a, D> {
                     path.to_string()
                 )))
             },
-            ResKind::MakeBuiltin => {
+            ResKind::DeclareBuiltin => {
                 self.string("[`builtin`]".fg_color(BUILTIN_COLOR));
                 return;
             },
@@ -292,5 +288,7 @@ impl<'a, D> AstLikePP<'a, D> {
             // Highlight as error
             self.string(format!("[ERR:{}]", path).fg_color(color));
         };
+
+        self.node_id(path);
     }
 }

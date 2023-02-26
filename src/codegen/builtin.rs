@@ -1,12 +1,6 @@
-use inkwell::{
-    attributes::{Attribute, AttributeLoc},
-    values::BasicValue,
-};
+use inkwell::values::BasicValue;
 
-use crate::{
-    resolve::{builtin::Builtin, res::Res},
-    typeck::{self, ty::Ty},
-};
+use crate::{resolve::builtin::Builtin, typeck::ty::Ty};
 
 use super::{codegen::CodeGen, nodes::CodeGenResult};
 
@@ -16,7 +10,7 @@ pub fn builtin<'ctx>(g: &mut CodeGen<'ctx>, bt: Builtin) -> CodeGenResult<'ctx> 
 
     match bt {
         // Operator functions //
-        Builtin::Add => g.function(
+        Builtin::AddInt => g.function(
             bt.name(),
             Ty::func(Ty::default_int(), Ty::default_int()),
             |g, func| {
@@ -29,7 +23,7 @@ pub fn builtin<'ctx>(g: &mut CodeGen<'ctx>, bt: Builtin) -> CodeGenResult<'ctx> 
             },
         ),
 
-        Builtin::Minus => todo!(),
+        Builtin::SubInt => todo!(),
 
         // Values //
         Builtin::UnitValue => return Ok(Some(g.unit_value())),

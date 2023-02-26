@@ -412,10 +412,6 @@ impl DefTable {
         assert!(self.node_id_builtin.insert(node_id, builtin).is_none());
     }
 
-    pub fn builtin_def_id(&self, builtin: Builtin) -> Option<DefId> {
-        self.builtins.get(&builtin).copied()
-    }
-
     pub fn is_builtin(&self, node_id: NodeId) -> bool {
         self.node_id_builtin.has(node_id)
     }

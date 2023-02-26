@@ -11,7 +11,7 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefMap, ROOT_DEF_ID},
     },
-    span::span::{Ident, Span, WithSpan},
+    span::span::{Ident, Span, Symbol, WithSpan},
 };
 
 use self::{
@@ -92,9 +92,15 @@ pub trait WithHirId {
     fn id(&self) -> HirId;
 }
 
+#[derive(Debug)]
+pub struct ErrorNode {
+    pub id: HirId,
+    pub span: Span,
+}
+
 // HIR Node is any Node in HIR with HirId
 macro_rules! hir_nodes {
-    // identified by HirId --- other
+    // identified by HirId / other
     ($($name: ident $ty: tt,)* / $($other_name: ident $other_ty: tt,)*) => {
         #[derive(Debug)]
         pub enum Node {
@@ -107,6 +113,13 @@ macro_rules! hir_nodes {
         }
 
         impl Node {
+            pub fn name(&self) -> &str {
+                match self {
+                    $(Self::$ty(_) => stringify!($name),)*
+                    $(Self::$other_ty(_) => stringify!($other_name),)*
+                }
+            }
+
             $(
                 pub fn $name(&self) -> &$ty {
                     match self {
@@ -131,7 +144,7 @@ macro_rules! hir_nodes {
                 pub fn $name(&self, $name: HirId) -> &$ty {
                     match self.node($name) {
                         Node::$ty(node) => node,
-                        _ => panic!(),
+                        n @ _ => panic!("Expected {} HIR node, got {}", stringify!($name), n.name()),
                     }
                 }
             )*
@@ -149,6 +162,7 @@ hir_nodes!(
     /
     item ItemNode,
     root Mod,
+    error ErrorNode,
 );
 
 /// Do not confuse with `Node`, this is just kind of list of names.
@@ -162,6 +176,7 @@ pub enum NodeKind {
     Path,
     Item,
     Root,
+    Error,
 }
 
 impl Display for NodeKind {
@@ -175,6 +190,7 @@ impl Display for NodeKind {
             NodeKind::Path => "path",
             NodeKind::Item => "item",
             NodeKind::Root => "root",
+            NodeKind::Error => "[ERROR]",
         }
         .fmt(f)
     }
@@ -206,7 +222,8 @@ impl_with_node_kind!(
     TyNode: NodeKind::Ty,
     PathNode: NodeKind::Path,
     ItemNode: NodeKind::Item,
-    Mod: NodeKind::Root
+    Mod: NodeKind::Root,
+    ErrorNode: NodeKind::Error
 );
 
 impl Node {
@@ -228,6 +245,7 @@ impl Node {
             Node::PathNode(path) => path.id(),
             Node::ItemNode(item) => HirId::new_owner(item.def_id()),
             Node::Mod(_root) => HirId::new_owner(ROOT_DEF_ID),
+            Node::ErrorNode(error) => error.id,
         }
     }
 
@@ -241,6 +259,7 @@ impl Node {
             Node::PathNode(_) => NodeKind::Path,
             Node::ItemNode(_) => NodeKind::Item,
             Node::Mod(_) => NodeKind::Root,
+            Node::ErrorNode(_) => NodeKind::Error,
         }
     }
 }
@@ -309,6 +328,16 @@ impl HIR {
         }
     }
 
+    pub fn string_lit_value(&self, expr: Expr) -> Option<Symbol> {
+        match self.expr(expr).kind() {
+            ExprKind::Lit(lit) => match lit {
+                &expr::Lit::String(val) => Some(val),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn node(&self, id: HirId) -> &Node {
         self.owners
             .get_unwrap(id.owner.inner())
@@ -330,6 +359,7 @@ impl HIR {
             | ExprKind::Path(_)
             | ExprKind::Lambda(_)
             | ExprKind::Call(_)
+            | ExprKind::BuiltinExpr(_)
             | ExprKind::Ty(_) => expr.span(),
             &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
         }
@@ -388,7 +418,7 @@ impl Display for PathSeg {
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Res {
     Node(HirId),
-    MakeBuiltin,
+    DeclareBuiltin,
     Builtin(Builtin),
     Error,
 }
@@ -397,7 +427,7 @@ impl Display for Res {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Res::Node(hir_id) => hir_id.fmt(f),
-            Res::MakeBuiltin => write!(f, "[`builtin`]"),
+            Res::DeclareBuiltin => write!(f, "[`builtin`]"),
             Res::Builtin(bt) => write!(f, "[builtin {}]", bt),
             Res::Error => write!(f, "[ERROR]"),
         }

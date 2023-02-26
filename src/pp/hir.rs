@@ -1,10 +1,10 @@
 use crate::{
     hir::{
-        expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
+        expr::{Block, BuiltinExpr, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{Decl, ItemId, ItemKind, Mod, TyAlias, ROOT_ITEM_ID},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
-        ty::{Ty, TyKind},
+        ty::{BuiltinTy, Ty, TyKind},
         visitor::HirVisitor,
         Path, HIR,
     },
@@ -118,6 +118,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
+            ExprKind::BuiltinExpr(bt) => self.visit_builtin_expr(bt),
         }
         self.pp.ty_anno(expr_id);
     }
@@ -150,14 +151,20 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_ty(&ty_expr.ty, hir);
     }
 
+    fn visit_builtin_expr(&mut self, bt: &BuiltinExpr) {
+        self.pp.string(bt);
+    }
+
     // Types //
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
         let ty = hir.ty(*ty);
         self.pp.hir_id(ty);
 
-        match &ty.kind {
+        match &ty.kind() {
             TyKind::Path(path) => self.visit_ty_path(path, hir),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
+            TyKind::App(cons, arg) => self.visit_ty_app(cons, arg, hir),
+            TyKind::Builtin(bt) => self.visit_builtin_ty(bt, hir),
         }
     }
 
@@ -165,6 +172,16 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_ty(param_ty, hir);
         self.pp.punct(Punct::Arrow);
         self.visit_ty(return_ty, hir);
+    }
+
+    fn visit_ty_app(&mut self, cons: &Ty, arg: &Ty, hir: &HIR) {
+        self.visit_ty(cons, hir);
+        self.pp.sp();
+        self.visit_ty(arg, hir);
+    }
+
+    fn visit_builtin_ty(&mut self, bt: &BuiltinTy, _hir: &HIR) {
+        self.pp.string(bt);
     }
 
     // Patterns //

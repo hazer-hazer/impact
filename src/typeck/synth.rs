@@ -94,6 +94,7 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Call(call) => self.synth_call(&call, expr_id),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
+            ExprKind::BuiltinExpr(_) => todo!(),
         }?;
 
         let expr_ty = self.apply_ctx_on(expr_ty);

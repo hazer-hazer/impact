@@ -1,10 +1,10 @@
-type i32 = builtin
+type i32 = builtin "I32"
 
-() = builtin
-type () = builtin
+() = builtin "UnitValue"
+type () = builtin "UnitTy"
 
-(+) = builtin
-(-) = builtin
+(+) = builtin "AddInt"
+(-) = builtin "SubInt"
 
 main () =
     id a = a

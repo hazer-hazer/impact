@@ -179,6 +179,8 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             TyKind::Path(path) => self.visit_ty_path(path),
             TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
+            TyKind::App(cons, arg) => self.visit_ty_app(cons, arg),
+            TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
         }
         self.node_id(ty);
     }
@@ -193,6 +195,18 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         self.punct(Punct::LParen);
         walk_pr!(self, inner, visit_ty);
         self.punct(Punct::RParen);
+    }
+
+    fn visit_ty_app(&mut self, cons: &'ast PR<N<Ty>>, arg: &'ast PR<N<Ty>>) {
+        walk_pr!(self, cons, visit_ty);
+        self.sp();
+        walk_pr!(self, arg, visit_ty);
+    }
+
+    fn visit_ty_app_expr(&mut self, cons: &'ast PR<N<Ty>>, const_arg: &'ast PR<N<Expr>>) {
+        walk_pr!(self, cons, visit_ty);
+        self.sp();
+        walk_pr!(self, const_arg, visit_expr);
     }
 
     // Fragments //

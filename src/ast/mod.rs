@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     ast::visitor::walk_each_pr,
@@ -104,14 +104,21 @@ impl WithNodeId for AST {
     }
 }
 
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReservedNodeId {
+    DeclareBuiltin,
+}
+
 pub struct AstMetadata {
     last_node_index: NodeId,
+    reserved: HashMap<ReservedNodeId, NodeId>,
 }
 
 impl AstMetadata {
     pub fn new() -> Self {
         Self {
             last_node_index: ROOT_NODE_ID.next(),
+            reserved: Default::default(),
         }
     }
 
@@ -119,6 +126,12 @@ impl AstMetadata {
         let id = self.last_node_index;
         self.last_node_index.inc();
         id
+    }
+
+    pub fn reserve(&mut self, kind: ReservedNodeId) -> NodeId {
+        let node_id = self.next_node_id();
+        assert!(self.reserved.insert(kind, node_id).is_none());
+        node_id
     }
 }
 
@@ -523,6 +536,8 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             ty::TyKind::Path(path) => self.visit_ty_path(path),
             ty::TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
             ty::TyKind::Paren(inner) => self.visit_paren_ty(inner),
+            ty::TyKind::App(cons, arg) => self.visit_ty_app(cons, arg),
+            ty::TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
         }
     }
 

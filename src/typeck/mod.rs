@@ -98,39 +98,6 @@ impl<'hir> Typecker<'hir> {
         &mut self.sess.tyctx
     }
 
-    fn define_builtins(&mut self) {
-        Builtin::each(|bt| {
-            let def_id = self
-                .sess
-                .def_table
-                .builtin_def_id(bt)
-                .expect(&format!("Builtin {} is not defined in code", bt));
-
-            let ty = self.tyctx().builtin_ty(bt);
-
-            self.tyctx_mut().type_node(HirId::new_owner(def_id), ty);
-
-            // Get builtin definition real ident to have span
-            let def_name = self.sess.def_table.get_def(def_id).unwrap().name();
-
-            assert_eq!(def_name.sym(), bt.sym());
-
-            // Only value builtins are typed terms
-            match bt.ns() {
-                Namespace::Value => {
-                    self.type_term(def_name, ty);
-                },
-                _ => {},
-            }
-
-            // verbose!(
-            //     "Define builtin `{}` type `{}`",
-            //     def_name,
-            //     ty
-            // );
-        });
-    }
-
     // Errors //
     fn ty_illformed(&mut self, ty: Ty) -> TyResult<Ty> {
         panic!("Illformed type {}; Context:\n{}", ty, self.dump_ctx_stack());
@@ -489,17 +456,22 @@ impl<'hir> Typecker<'hir> {
         let ty = self.hir.ty(ty);
         // TODO: Allow recursive?
 
-        match ty.kind {
-            hir::ty::TyKind::Path(TyPath(path)) => self.conv_path(path),
-            hir::ty::TyKind::Func(param, body) => {
+        match ty.kind() {
+            &hir::ty::TyKind::Path(TyPath(path)) => self.conv_ty_path(path),
+            &hir::ty::TyKind::Func(param, body) => {
                 let param = self.conv(param);
                 let ret = self.conv(body);
                 Ty::func(param, ret)
             },
+            hir::ty::TyKind::App(cons, arg) => todo!(),
+            hir::ty::TyKind::Builtin(bt) => match bt {
+                hir::ty::BuiltinTy::Unit => Ty::unit(),
+                hir::ty::BuiltinTy::I32 => Ty::prim(PrimTy::Int(IntKind::I32)),
+            },
         }
     }
 
-    fn conv_path(&mut self, path: Path) -> Ty {
+    fn conv_ty_path(&mut self, path: Path) -> Ty {
         let path = self.hir.path(path);
         match path.res() {
             &Res::Node(hir_id) => {
@@ -529,7 +501,7 @@ impl<'hir> Typecker<'hir> {
                     DefKind::Func | DefKind::Var => unreachable!(),
                 }
             },
-            &Res::Builtin(bt) if bt.is_ty() => self.tyctx().builtin_ty(bt),
+            &Res::Builtin(bt) if bt.is_ty() => todo!(),
             _ => unreachable!(),
         }
     }
@@ -687,8 +659,6 @@ impl<'hir> Typecker<'hir> {
 impl<'hir> Stage<()> for Typecker<'hir> {
     fn run(mut self) -> StageOutput<()> {
         self.under_new_ctx(|this| {
-            this.define_builtins();
-
             this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);
 

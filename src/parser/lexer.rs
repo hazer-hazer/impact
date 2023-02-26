@@ -245,7 +245,7 @@ impl Lexer {
             self.advance();
         }
 
-        let (sym, len) = self.get_fragment_intern(start);
+        let (sym, _) = self.get_fragment_intern(start);
 
         if self.peek() != quote {
             self.add_error(format!("Expected closing quote {}", quote).as_str());
@@ -253,7 +253,7 @@ impl Lexer {
             self.advance();
         }
 
-        self.add_token(TokenKind::String(sym), len);
+        self.add_token(TokenKind::String(sym), self.pos - start + 1);
     }
 
     fn lex_num(&mut self) {

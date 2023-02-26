@@ -4,11 +4,14 @@
 use std::fs::read_to_string;
 
 use cli::color::Colorize;
-use config::config::ConfigBuilder;
-use config::config::{PPStages, StageName};
+
+
 use interface::interface::{Interface, InterruptionReason};
 
 use session::Source;
+
+use crate::cli::cli::CLI;
+use crate::cli::verbose;
 
 mod ast;
 mod cli;
@@ -24,17 +27,12 @@ mod pp;
 mod resolve;
 mod session;
 mod span;
-mod typeck;
 mod thir;
+mod typeck;
 
 fn main() {
-    let config = ConfigBuilder::new()
-        .compilation_depth(StageName::Codegen)
-        .pp_stages(PPStages::All)
-        .verbose_messages(true)
-        .parser_debug(true)
-        .pp_ast_ids(false)
-        .emit();
+    let config = CLI::new().config().clone();
+    verbose!("Config: {}", config);
 
     let interface = Interface::new(config);
 

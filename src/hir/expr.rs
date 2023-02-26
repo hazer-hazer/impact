@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::span::span::{Span, Symbol, WithSpan};
+use crate::{
+    resolve::builtin::Builtin,
+    span::span::{Span, Symbol, WithSpan},
+};
 
 use super::{
     pat::{Pat, PatNode},
@@ -157,6 +160,40 @@ pub struct Body {
 }
 
 #[derive(Debug)]
+pub enum BuiltinExpr {
+    AddInt,
+    SubInt,
+    Unit,
+}
+
+impl Display for BuiltinExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BuiltinExpr::AddInt => "AddInt",
+                BuiltinExpr::SubInt => "SubInt",
+                BuiltinExpr::Unit => "UnitValue",
+            }
+        )
+    }
+}
+
+impl TryFrom<Builtin> for BuiltinExpr {
+    type Error = ();
+
+    fn try_from(value: Builtin) -> Result<Self, Self::Error> {
+        match value {
+            Builtin::AddInt => Ok(Self::AddInt),
+            Builtin::SubInt => Ok(Self::SubInt),
+            Builtin::UnitValue => Ok(Self::Unit),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum ExprKind {
     Lit(Lit),
     Path(PathExpr),
@@ -165,6 +202,7 @@ pub enum ExprKind {
     Call(Call),
     Let(Block),
     Ty(TyExpr),
+    BuiltinExpr(BuiltinExpr),
 }
 
 #[derive(Debug)]

@@ -898,6 +898,41 @@ impl Parser {
         let pe = self.enter_entity(ParseEntryKind::Opt, "type");
 
         let lo = self.span();
+        let lhs = self.parse_primary_ty();
+
+        if let Some(mut lhs) = lhs {
+            loop {
+                if let Some(arg) = self.parse_primary_ty() {
+                    lhs = Ok(Box::new(Ty::new(
+                        self.next_node_id(),
+                        TyKind::App(lhs, arg),
+                        self.close_span(lo),
+                    )));
+                } else if let Some(const_arg) = self.parse_primary() {
+                    lhs = Ok(Box::new(Ty::new(
+                        self.next_node_id(),
+                        TyKind::AppExpr(lhs, const_arg),
+                        self.close_span(lo),
+                    )));
+                } else {
+                    break;
+                }
+            }
+
+            self.exit_parsed_entity(pe);
+
+            Some(lhs)
+        } else {
+            self.exit_parsed_entity(pe);
+
+            lhs
+        }
+    }
+
+    fn parse_primary_ty(&mut self) -> Option<PR<N<Ty>>> {
+        let pe = self.enter_entity(ParseEntryKind::Opt, "primary type");
+
+        let lo = self.span();
 
         let kind = match self.peek() {
             TokenKind::Punct(Punct::LParen) => {

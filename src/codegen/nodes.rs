@@ -10,7 +10,7 @@ use crate::{
     resolve::def::DefKind,
 };
 
-use super::{builtin::builtin, codegen::CodeGen};
+use super::codegen::CodeGen;
 
 pub type CodeGenResult<'g, T = Option<BasicValueEnum<'g>>> = Result<T, ()>;
 
@@ -71,6 +71,7 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
             },
             ExprKind::Let(_) => todo!(),
             ExprKind::Ty(_) => todo!(),
+            ExprKind::BuiltinExpr(_) => todo!(),
         }))
     }
 }

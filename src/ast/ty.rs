@@ -2,9 +2,11 @@ use std::fmt::Display;
 
 use crate::span::span::{Span, WithSpan};
 
-use super::{pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, N, PR};
+use super::{
+    expr::Expr, pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, N, PR,
+};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Ty {
     id: NodeId,
     kind: TyKind,
@@ -48,11 +50,15 @@ impl NodeKindStr for Ty {
 #[derive(Debug, Clone)]
 pub struct TyPath(pub PR<Path>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum TyKind {
     Path(TyPath),
     Func(PR<N<Ty>>, PR<N<Ty>>),
     Paren(PR<N<Ty>>),
+    App(PR<N<Ty>>, PR<N<Ty>>),
+
+    // Now only used for builtins but may be used for const parameters
+    AppExpr(PR<N<Ty>>, PR<N<Expr>>),
 }
 
 impl Display for TyKind {
@@ -63,6 +69,10 @@ impl Display for TyKind {
                 write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
             },
             TyKind::Paren(inner) => write!(f, "{}", pr_display(inner)),
+            TyKind::App(cons, arg) => write!(f, "{} {}", pr_display(cons), pr_display(arg)),
+            TyKind::AppExpr(cons, const_arg) => {
+                write!(f, "{} {}", pr_display(cons), pr_display(const_arg))
+            },
         }
     }
 }
@@ -75,6 +85,9 @@ impl NodeKindStr for TyKind {
 
             // I just thought this format would look funny 😐
             TyKind::Paren(inner) => format!("{{{}}}", pr_node_kind_str(inner)),
+            TyKind::AppExpr(cons, _) | TyKind::App(cons, _) => {
+                format!("{} type constructor", pr_node_kind_str(cons))
+            },
         }
     }
 }

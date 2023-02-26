@@ -24,7 +24,7 @@ enum ConfigOptionKind {
 
 impl ConfigOptionKind {
     fn stop_at(stage_name: &str) -> Self {
-        Self::StopAt(StageName::from_str(stage_name))
+        Self::StopAt(StageName::try_from(stage_name).unwrap())
     }
 
     fn pp_stages(pp_stages: PPStages) -> Self {
@@ -65,14 +65,19 @@ impl Comment {
                     PPStages::Some(
                         self.args
                             .iter()
-                            .map(|stage| StageName::from_str(stage))
-                            .collect::<Vec<_>>(),
+                            .map(|stage| StageName::try_from(stage.as_str()))
+                            .collect::<Result<Vec<_>, _>>()
+                            .unwrap(),
                     )
                 } else {
                     match self.args[0].as_str() {
                         "all" => PPStages::All,
                         "none" => PPStages::None,
-                        _ => PPStages::Some(vec![StageName::from_str(self.args[0].as_str())]),
+                        _ => {
+                            PPStages::Some(
+                                vec![StageName::try_from(self.args[0].as_str()).unwrap()],
+                            )
+                        },
                     }
                 })
             },

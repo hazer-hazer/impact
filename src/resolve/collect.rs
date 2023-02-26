@@ -1,8 +1,7 @@
 use crate::{
     ast::{
-        expr::{Block, Expr, ExprKind, PathExpr},
+        expr::Block,
         item::{Item, ItemKind},
-        ty::{Ty, TyKind, TyPath},
         visitor::{walk_each_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
@@ -13,10 +12,7 @@ use crate::{
     span::span::{Ident, Internable},
 };
 
-use super::{
-    builtin::Builtin,
-    def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID},
-};
+use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};
 
 pub struct DefCollector<'ast> {
     sess: Session,

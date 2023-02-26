@@ -4,9 +4,7 @@
 
 use crate::{
     ast::{AstMetadata, NodeId},
-    cli::{
-        color::{Color, Colorize},
-    },
+    cli::color::{Color, Colorize},
     config::config::Config,
     dt::idx::{declare_idx, Idx},
     interface::{interface::InterruptionReason, writer::Writer},
@@ -209,7 +207,7 @@ pub struct Session {
     config: Config,
     pub writer: Writer,
     pub source_map: SourceMap,
-    ast_metadata: AstMetadata,
+    pub ast_metadata: AstMetadata,
     pub def_table: DefTable,
     pub res: Resolutions,
     pub tyctx: TyCtx,

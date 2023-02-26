@@ -28,27 +28,16 @@ impl DeclareBuiltin {
 }
 
 macro_rules! builtin_table {
-    ($($ns: ident $variant: ident $name: expr;)*) => {
+    ($($ns: ident $name: ident;)*) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
         pub enum Builtin {
-            $($variant),*
+            $($name),*
         }
 
         impl Builtin {
-            pub fn from_name(ns: Namespace, name: &str) -> Self {
-                match (ns, name) {
-                    $((Namespace::$ns, $name) => Self::$variant,)*
-                    _ => panic!("Cannot declare builtin `{}` as {}", name, ns),
-                }
-            }
-
-            pub fn from_sym(ns: Namespace, sym: Symbol) -> Self {
-                Self::from_name(ns, sym.as_str())
-            }
-
             pub fn name(&self) -> &str {
                 match self {
-                    $(Self::$variant => $name,)*
+                    $(Self::$name => stringify!($name),)*
                 }
             }
 
@@ -58,7 +47,7 @@ macro_rules! builtin_table {
 
             fn ns_of(builtin: Builtin) -> Namespace {
                 match builtin {
-                    $(Self::$variant => Namespace::$ns,)*
+                    $(Self::$name => Namespace::$ns,)*
                 }
             }
 
@@ -75,7 +64,18 @@ macro_rules! builtin_table {
             }
 
             pub fn each(mut f: impl FnMut(Builtin)) {
-                $(f(Self::$variant));*
+                $(f(Self::$name));*
+            }
+        }
+
+        impl TryFrom<&str> for Builtin {
+            type Error = ();
+
+            fn try_from(value: &str) -> Result<Self, Self::Error> {
+                match value {
+                    $($name => Ok(Self::$name),)*
+                    _ => Err(()),
+                }
             }
         }
     };
@@ -89,11 +89,11 @@ impl Display for Builtin {
 
 builtin_table! {
     // Operators //
-    Value Add "+";
-    Value Minus "-";
-    Value UnitValue "()";
+    Value AddInt;
+    Value SubInt;
+    Value UnitValue;
 
     // Primitive //
-    Type UnitTy "()";
-    Type I32 "i32";
+    Type UnitTy;
+    Type I32;
 }

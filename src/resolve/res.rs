@@ -11,8 +11,7 @@ use super::{builtin::Builtin, def::DefId};
 pub enum ResKind {
     Local(NodeId),
     Def(DefId), // Definition, e.g. imported function
-    MakeBuiltin,
-    Builtin(Builtin),
+    DeclareBuiltin,
     Error,
 }
 
@@ -40,13 +39,7 @@ impl Res {
 
     pub fn declare_builtin() -> Self {
         Self {
-            kind: ResKind::MakeBuiltin,
-        }
-    }
-
-    pub fn builtin(builtin: Builtin) -> Self {
-        Self {
-            kind: ResKind::Builtin(builtin),
+            kind: ResKind::DeclareBuiltin,
         }
     }
 
@@ -76,8 +69,7 @@ where
         match self.kind {
             ResKind::Def(def_id) => write!(f, "{}", def_id),
             ResKind::Local(node_id) => write!(f, "{}", node_id),
-            ResKind::MakeBuiltin => write!(f, "[`builtin`]"),
-            ResKind::Builtin(bt) => write!(f, "[builtin {}]", bt),
+            ResKind::DeclareBuiltin => write!(f, "[`builtin`]"),
             ResKind::Error => write!(f, "[ERROR]"),
         }
     }
@@ -94,7 +86,7 @@ impl NamePath {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Resolutions {
     resolutions: HashMap<NamePath, Res>,
 }

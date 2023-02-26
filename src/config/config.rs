@@ -1,10 +1,15 @@
 use std::fmt::Display;
 
-use clap::Parser;
+
+use clap::builder::TypedValueParser;
+
+
+
+use clap::ValueEnum;
 
 use crate::interface::interface::InterruptionReason;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Parser)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum StageName {
     Lexer,
     Parser,
@@ -14,21 +19,27 @@ pub enum StageName {
     Lower,
     Typeck,
     Codegen,
+    #[value(skip)]
     Unset,
+    #[value(alias = "all")]
+    Any,
 }
 
-impl StageName {
-    pub fn from_str(name: &str) -> Self {
-        match name {
-            "lexer" => Self::Lexer,
-            "parser" => Self::Parser,
-            "ast_validation" => Self::AstValidation,
-            "def_collect" => Self::DefCollect,
-            "nameres" => Self::NameRes,
-            "lower" => Self::Lower,
-            "typeck" => Self::Typeck,
-            "codegen" => Self::Codegen,
-            _ => panic!("Invalid stage name `{}`", name),
+impl TryFrom<&str> for StageName {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "lexer" => Ok(Self::Lexer),
+            "parser" => Ok(Self::Parser),
+            "ast_validation" => Ok(Self::AstValidation),
+            "def_collect" => Ok(Self::DefCollect),
+            "nameres" => Ok(Self::NameRes),
+            "lower" => Ok(Self::Lower),
+            "typeck" => Ok(Self::Typeck),
+            "codegen" => Ok(Self::Codegen),
+            "*" => Ok(Self::Any),
+            _ => Err(()),
         }
     }
 }
@@ -47,18 +58,30 @@ impl Display for StageName {
                 StageName::Lower => "lowering",
                 StageName::Typeck => "type checking",
                 StageName::Codegen => "codegen",
+                StageName::Any => "*",
                 StageName::Unset => "[unknown]",
             }
         )
     }
 }
 
-#[derive(Clone, Debug, Parser)]
+#[derive(Clone, Debug)]
 pub enum PPStages {
     None,
     Some(Vec<StageName>),
     All,
 }
+
+// impl From<ArgMatches> for PPStages {
+//     fn from(value: ArgMatches) -> Self {
+//         match value.get_many("pp-stages") {
+//             Some(stages) => {
+
+//             },
+//             None => Self::None,
+//         }
+//     }
+// }
 
 impl Display for PPStages {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

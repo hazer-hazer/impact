@@ -5,20 +5,23 @@ use crate::{
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
-        NodeId, NodeMap, Path, PathSeg, WithNodeId, AST, N, PR, ROOT_NODE_ID,
+        NodeId, NodeMap, Path, PathSeg, ReservedNodeId, WithNodeId, AST, N, PR, ROOT_NODE_ID,
     },
     cli::verbose,
+    dt::idx::Idx,
     hir::{
         self,
+        expr::BuiltinExpr,
         item::{Decl, ItemId, ItemNode, Mod, TyAlias},
+        ty::BuiltinTy,
         HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
         OWNER_SELF_CHILD_ID,
     },
-    message::message::MessageStorage,
+    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::{
-        builtin::DeclareBuiltin,
-        def::DefId,
+        builtin::{Builtin, DeclareBuiltin},
+        def::{DefId, Namespace},
         res::{self, NamePath},
     },
     session::{Session, Stage, StageOutput},
@@ -77,6 +80,12 @@ pub struct Lower<'ast> {
     msg: MessageStorage,
 }
 
+impl<'ast> MessageHolder for Lower<'ast> {
+    fn save(&mut self, msg: Message) {
+        self.msg.add_message(msg)
+    }
+}
+
 #[derive(Debug)]
 enum LoweredOwner {
     Root(Mod),
@@ -104,7 +113,12 @@ impl<'ast> Lower<'ast> {
         }
     }
 
-    fn _with_owner(&mut self, def_id: DefId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
+    fn _with_owner(
+        &mut self,
+        node_id: NodeId,
+        def_id: DefId,
+        f: impl FnOnce(&mut Self) -> LoweredOwner,
+    ) -> OwnerId {
         verbose!("With owner {}", def_id);
 
         let owner_id = OwnerId::new(def_id);
@@ -131,13 +145,15 @@ impl<'ast> Lower<'ast> {
 
         let owner = self.owner_stack.pop().unwrap().owner;
         self.hir.add_owner(def_id, owner);
+        self.node_id_hir_id
+            .insert(node_id, HirId::new_owner(def_id));
 
         owner_id
     }
 
     fn with_owner(&mut self, owner: NodeId, f: impl FnOnce(&mut Self) -> LoweredOwner) -> OwnerId {
         let def_id = self.sess.def_table.get_def_id(owner).unwrap();
-        self._with_owner(def_id, f)
+        self._with_owner(owner, def_id, f)
     }
 
     fn add_node(&mut self, node: Node) -> HirId {
@@ -149,6 +165,15 @@ impl<'ast> Lower<'ast> {
             .nodes
             .insert(hir_id.child_id(), node);
         hir_id
+    }
+
+    fn get_current_owner_node(&self, id: HirId) -> &Node {
+        self.owner_stack
+            .last()
+            .unwrap()
+            .owner
+            .nodes
+            .get_unwrap(id.child_id())
     }
 
     fn lower_node_id(&mut self, id: NodeId) -> HirId {
@@ -351,10 +376,63 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_call_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Call(hir::expr::Call {
-            lhs: lower_pr!(self, &call.lhs, lower_expr),
-            arg: lower_pr!(self, &call.arg, lower_expr),
-        })
+        let lhs = lower_pr!(self, &call.lhs, lower_expr);
+        let arg = lower_pr!(self, &call.arg, lower_expr);
+
+        match self.get_current_owner_node(lhs).expr().kind() {
+            hir::expr::ExprKind::Path(path) => {
+                if let Ok(bt) = self.lower_builtin_call(path.0, arg) {
+                    if let Ok(bt_expr) = BuiltinExpr::try_from(bt) {
+                        return hir::expr::ExprKind::BuiltinExpr(bt_expr);
+                    } else {
+                        MessageBuilder::error()
+                            .text(format!("{} builtin cannot be used as value", bt))
+                            .span(call.arg.span())
+                            .emit_single_label(self);
+                    }
+                }
+            },
+            _ => {},
+        }
+
+        hir::expr::ExprKind::Call(hir::expr::Call { lhs, arg })
+    }
+
+    fn lower_builtin_call(&mut self, path: hir::Path, arg: hir::expr::Expr) -> Result<Builtin, ()> {
+        let path = self.get_current_owner_node(path).path();
+        let arg_span = self.get_current_owner_node(arg).expr().span();
+        match path.res() {
+            Res::DeclareBuiltin => {
+                let name = match self.get_current_owner_node(arg).expr().kind() {
+                    hir::expr::ExprKind::Lit(lit) => match lit {
+                        hir::expr::Lit::String(name) => Some(name),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                if let Some(name) = name {
+                    if let Ok(bt) = Builtin::try_from(name.as_str()) {
+                        Ok(bt)
+                    } else {
+                        MessageBuilder::error()
+                            .text(format!("Unknown builtin `{}`", name))
+                            .span(arg_span)
+                            .emit_single_label(self);
+                        Err(())
+                    }
+                } else {
+                    MessageBuilder::error()
+                        .text(
+                            "`builtin` expects string literal (builtin name) as argument"
+                                .to_string(),
+                        )
+                        .span(arg_span)
+                        .emit_single_label(self);
+                    Err(())
+                }
+            },
+            _ => Err(()),
+        }
     }
 
     fn lower_let_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
@@ -371,14 +449,23 @@ impl<'ast> Lower<'ast> {
     // Types //
     fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
         let kind = match ty.kind() {
-            TyKind::Path(path) => self.lower_ty_path(path),
-            TyKind::Func(param_ty, return_ty) => self.lower_func_ty(param_ty, return_ty),
+            TyKind::Path(path) => Ok(self.lower_ty_path(path)),
+            TyKind::Func(param_ty, return_ty) => Ok(self.lower_func_ty(param_ty, return_ty)),
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
+            TyKind::App(cons, arg) => Ok(self.lower_ty_app(cons, arg)),
+            TyKind::AppExpr(cons, const_arg) => self.lower_ty_app_expr(cons, const_arg),
         };
 
         let id = self.lower_node_id(ty.id());
 
-        self.add_node(Node::TyNode(hir::ty::TyNode::new(id, kind, ty.span())))
+        if let Ok(kind) = kind {
+            self.add_node(Node::TyNode(hir::ty::TyNode::new(id, kind, ty.span())))
+        } else {
+            self.add_node(Node::ErrorNode(hir::ErrorNode {
+                id,
+                span: ty.span(),
+            }))
+        }
     }
 
     fn lower_ty_path(&mut self, path: &TyPath) -> hir::ty::TyKind {
@@ -390,6 +477,54 @@ impl<'ast> Lower<'ast> {
             lower_pr!(self, param_ty, lower_ty),
             lower_pr!(self, return_ty, lower_ty),
         )
+    }
+
+    fn lower_ty_app(&mut self, cons: &PR<N<Ty>>, arg: &PR<N<Ty>>) -> hir::ty::TyKind {
+        hir::ty::TyKind::App(
+            lower_pr!(self, cons, lower_ty),
+            lower_pr!(self, arg, lower_ty),
+        )
+    }
+
+    fn lower_ty_app_expr(
+        &mut self,
+        cons: &PR<N<Ty>>,
+        const_arg: &PR<N<Expr>>,
+    ) -> Result<hir::ty::TyKind, ()> {
+        let cons = lower_pr!(self, cons, lower_ty);
+        let arg = lower_pr!(self, const_arg, lower_expr);
+        let cons_node = self.get_current_owner_node(cons).ty();
+        let cons_span = cons_node.span();
+
+        let arg_span = self.get_current_owner_node(arg).expr().span();
+
+        let path_cons = match cons_node.kind() {
+            hir::ty::TyKind::Path(path) => Some(path.0),
+            _ => None,
+        };
+
+        if let Some(path_cons) = path_cons {
+            let bt = self.lower_builtin_call(path_cons, arg);
+            if let Ok(bt) = bt {
+                if let Ok(bt_ty) = BuiltinTy::try_from(bt) {
+                    return Ok(hir::ty::TyKind::Builtin(bt_ty));
+                } else {
+                    MessageBuilder::error()
+                        .span(arg_span)
+                        .text(format!("`{}` builtin cannot be used as type", bt))
+                        .emit_single_label(self);
+                }
+            }
+        }
+
+        MessageBuilder::error()
+            .span(cons_span.to(arg_span))
+            .text(
+                "Type constructors with const parameters can only be used with builtin for now"
+                    .to_string(),
+            )
+            .emit_single_label(self);
+        Err(())
     }
 
     // Fragments //
@@ -405,8 +540,7 @@ impl<'ast> Lower<'ast> {
                     .get_expect(node_id, &format!("Local variable resolution {}", res)),
             ),
             &res::ResKind::Def(def_id) => Res::Node(HirId::new_owner(def_id)),
-            &res::ResKind::MakeBuiltin => Res::MakeBuiltin,
-            &res::ResKind::Builtin(bt) => Res::Builtin(bt),
+            &res::ResKind::DeclareBuiltin => Res::DeclareBuiltin,
             res::ResKind::Error => Res::Error,
         }
     }
@@ -463,10 +597,11 @@ impl<'ast> Lower<'ast> {
         &mut self,
         span: Span,
         name: Ident,
+        node_id: NodeId,
         def_id: DefId,
         kind: hir::item::ItemKind,
     ) -> ItemId {
-        let owner_id = self._with_owner(def_id, |_this| {
+        let owner_id = self._with_owner(node_id, def_id, |_this| {
             LoweredOwner::Item(ItemNode::new(name, def_id, kind, span))
         });
         ItemId::new(owner_id)
@@ -525,9 +660,15 @@ impl<'ast> Lower<'ast> {
             hir::expr::Lit::String(DeclareBuiltin::sym()),
         );
         let value = self.expr_lambda(Span::new_error(), param, body);
+        let node_id = self
+            .sess
+            .ast_metadata
+            .reserve(ReservedNodeId::DeclareBuiltin);
+
         self.item(
             Span::new_error(),
             DeclareBuiltin::ident(),
+            node_id,
             self.sess.def_table.builtin_func().def_id(),
             hir::item::ItemKind::Decl(Decl { value }),
         )
