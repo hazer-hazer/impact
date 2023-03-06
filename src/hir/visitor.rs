@@ -1,12 +1,12 @@
-use crate::span::span::Ident;
+use crate::{resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
-    expr::{Block, BuiltinExpr, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{Decl, ItemId, ItemKind, Mod, TyAlias},
+    expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
+    item::{ItemId, ItemKind, Mod, TyAlias},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
-    ty::{BuiltinTy, Ty, TyKind, TyPath},
-    Path, HIR,
+    ty::{Ty, TyKind, TyPath},
+    BodyId, Path, HIR,
 };
 
 macro_rules! walk_each {
@@ -46,7 +46,8 @@ pub trait HirVisitor {
         match item.kind() {
             ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
-            ItemKind::Decl(decl) => self.visit_decl_item(item.name(), decl, id, hir),
+            ItemKind::Var(value) => self.visit_var_item(item.name(), value, id, hir),
+            ItemKind::Func(body) => self.visit_func_item(item.name(), body, id, hir),
         }
     }
 
@@ -60,9 +61,20 @@ pub trait HirVisitor {
         walk_each!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_decl_item(&mut self, name: Ident, decl: &Decl, _id: ItemId, hir: &HIR) {
+    fn visit_var_item(&mut self, name: Ident, value: &Expr, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
-        self.visit_expr(&decl.value, hir);
+        self.visit_expr(&value, hir);
+    }
+
+    fn visit_func_item(&mut self, name: Ident, body: &BodyId, _id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        self.visit_body(body, hir);
+    }
+
+    fn visit_body(&mut self, &body: &BodyId, hir: &HIR) {
+        let body = hir.body(body);
+        self.visit_pat(&body.param, hir);
+        self.visit_expr(&body.value, hir);
     }
 
     // Patterns //
@@ -111,8 +123,7 @@ pub trait HirVisitor {
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
-        self.visit_pat(&lambda.param, hir);
-        self.visit_expr(&lambda.body, hir);
+        self.visit_body(&lambda.body, hir);
     }
 
     fn visit_let_expr(&mut self, block: &Block, hir: &HIR) {
@@ -124,7 +135,7 @@ pub trait HirVisitor {
         self.visit_ty(&ty_expr.ty, hir);
     }
 
-    fn visit_builtin_expr(&mut self, _bt: &BuiltinExpr) {}
+    fn visit_builtin_expr(&mut self, _bt: &Builtin) {}
 
     // Types //
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
@@ -151,7 +162,7 @@ pub trait HirVisitor {
         self.visit_ty(arg, hir);
     }
 
-    fn visit_builtin_ty(&mut self, _bt: &BuiltinTy, _hir: &HIR) {}
+    fn visit_builtin_ty(&mut self, _bt: &Builtin, _hir: &HIR) {}
 
     // Fragments //
     fn visit_ident(&mut self, _: &Ident, _hir: &HIR) {}

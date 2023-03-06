@@ -10,7 +10,7 @@ use crate::{
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
         builtin::Builtin,
-        def::{DefId, DefKind, Namespace},
+        def::{DefId, DefKind},
     },
     session::{Session, Stage, StageOutput},
     span::span::{Ident, WithSpan},
@@ -385,7 +385,7 @@ impl<'hir> Typecker<'hir> {
     /// Substitute all occurrences of universally quantified type inside it body
     pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
         match ty.kind() {
-            &TyKind::Forall(alpha, body) => self.substitute(ty, Subst::Var(alpha), body),
+            &TyKind::Forall(alpha, body) => ty.substitute(Subst::Var(alpha), body),
             _ => unreachable!(),
         }
     }
@@ -415,42 +415,6 @@ impl<'hir> Typecker<'hir> {
         });
     }
 
-    // Substitution //
-    pub fn substitute(&mut self, ty: Ty, subst: Subst, with: Ty) -> Ty {
-        verbose!("Substitute {} in {} with {}", subst, ty, with);
-
-        match ty.kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Prim(_) => ty,
-            &TyKind::Var(ident) => {
-                if subst == ident {
-                    with
-                } else {
-                    ty
-                }
-            },
-            &TyKind::Existential(ex) => {
-                if subst == ex {
-                    with
-                } else {
-                    ty
-                }
-            },
-            &TyKind::Func(param_ty, return_ty) => {
-                let param = self.substitute(param_ty, subst, with);
-                let ret = self.substitute(return_ty, subst, with);
-                Ty::func(param, ret)
-            },
-            &TyKind::Forall(ident, body) => {
-                if subst == ident {
-                    Ty::forall(ident, with)
-                } else {
-                    let subst = self.substitute(body, subst, with);
-                    Ty::forall(ident, subst)
-                }
-            },
-        }
-    }
-
     // Conversion //
     fn conv(&mut self, ty: hir::ty::Ty) -> Ty {
         let ty = self.hir.ty(ty);
@@ -463,10 +427,11 @@ impl<'hir> Typecker<'hir> {
                 let ret = self.conv(body);
                 Ty::func(param, ret)
             },
-            hir::ty::TyKind::App(cons, arg) => todo!(),
+            hir::ty::TyKind::App(_cons, _arg) => todo!(),
             hir::ty::TyKind::Builtin(bt) => match bt {
-                hir::ty::BuiltinTy::Unit => Ty::unit(),
-                hir::ty::BuiltinTy::I32 => Ty::prim(PrimTy::Int(IntKind::I32)),
+                Builtin::UnitTy => Ty::unit(),
+                Builtin::I32 => Ty::prim(PrimTy::Int(IntKind::I32)),
+                _ => unreachable!(),
             },
         }
     }
@@ -474,11 +439,8 @@ impl<'hir> Typecker<'hir> {
     fn conv_ty_path(&mut self, path: Path) -> Ty {
         let path = self.hir.path(path);
         match path.res() {
-            &Res::Node(hir_id) => {
-                let def_id = hir_id.as_owner().unwrap().into();
-
-                let def = self.sess.def_table.get_def(def_id).unwrap();
-                match def.kind() {
+            &Res::Def(def_kind, def_id) => {
+                match def_kind {
                     DefKind::TyAlias => {
                         // Path conversion is done linearly, i.e. we get type alias from HIR and convert its type, caching it
                         // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
@@ -489,7 +451,7 @@ impl<'hir> Typecker<'hir> {
                     DefKind::Root | DefKind::Mod => {
                         MessageBuilder::error()
                             .span(path.span())
-                            .text(format!("{} item used as type", def.kind()))
+                            .text(format!("{} item used as type", def_kind))
                             .emit_single_label(self);
 
                         Ty::error()
@@ -498,7 +460,7 @@ impl<'hir> Typecker<'hir> {
                     DefKind::DeclareBuiltin => todo!(),
 
                     // Definitions from value namespace
-                    DefKind::Func | DefKind::Var => unreachable!(),
+                    DefKind::Func | DefKind::Value => unreachable!(),
                 }
             },
             &Res::Builtin(bt) if bt.is_ty() => todo!(),
@@ -675,6 +637,8 @@ impl<'hir> Stage<()> for Typecker<'hir> {
         });
 
         outln!(self.sess.writer, "Type ctx:\n {}", self.dump_ctx_stack());
+
+        self.sess.tyctx.apply_ctx_on_typed_nodes(&self.global_ctx);
 
         StageOutput::new(self.sess, (), self.msg)
     }

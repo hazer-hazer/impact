@@ -73,7 +73,7 @@ macro_rules! builtin_table {
 
             fn try_from(value: &str) -> Result<Self, Self::Error> {
                 match value {
-                    $($name => Ok(Self::$name),)*
+                    $(stringify!($name) => Ok(Self::$name),)*
                     _ => Err(()),
                 }
             }
@@ -91,6 +91,8 @@ builtin_table! {
     // Operators //
     Value AddInt;
     Value SubInt;
+
+    // Values //
     Value UnitValue;
 
     // Primitive //

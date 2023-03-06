@@ -8,7 +8,10 @@ use std::{
 };
 
 use crate::{
-    cli::color::{Color, Colorize},
+    cli::{
+        color::{Color, Colorize},
+        verbose,
+    },
     dt::idx::{declare_idx, Idx},
     hir::{self, expr::Lit},
 };
@@ -99,6 +102,23 @@ pub enum IntKind {
     Int,
 }
 
+impl IntKind {
+    pub fn bytes(&self) -> u8 {
+        match self {
+            IntKind::U8 | IntKind::I8 => 8,
+            IntKind::U16 | IntKind::I16 => 16,
+            IntKind::U32 | IntKind::I32 => 32,
+            IntKind::I64 | IntKind::U64 => 64,
+            // FIXME: Okay?
+            IntKind::Uint | IntKind::Int => (std::mem::size_of::<*const u8>() * 8) as u8,
+        }
+    }
+
+    pub fn bits(&self) -> u8 {
+        self.bytes() * 8
+    }
+}
+
 impl TryFrom<hir::expr::IntKind> for IntKind {
     type Error = ();
 
@@ -155,6 +175,15 @@ impl std::fmt::Display for IntKind {
 pub enum FloatKind {
     F32,
     F64,
+}
+
+impl FloatKind {
+    pub fn bytes(&self) -> u8 {
+        match self {
+            FloatKind::F32 => 4,
+            FloatKind::F64 => 8,
+        }
+    }
 }
 
 impl TryFrom<hir::expr::FloatKind> for FloatKind {
@@ -307,6 +336,41 @@ impl Ty {
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
             &TyKind::Func(param, body) => param.is_instantiated() && body.is_instantiated(),
+        }
+    }
+
+    pub fn substitute(&self, subst: Subst, with: Ty) -> Ty {
+        verbose!("Substitute {} in {} with {}", subst, self, with);
+
+        match self.kind() {
+            TyKind::Error | TyKind::Unit | TyKind::Prim(_) => *self,
+            &TyKind::Var(ident) => {
+                if subst == ident {
+                    with
+                } else {
+                    *self
+                }
+            },
+            &TyKind::Existential(ex) => {
+                if subst == ex {
+                    with
+                } else {
+                    *self
+                }
+            },
+            &TyKind::Func(param_ty, return_ty) => {
+                let param = param_ty.substitute(subst, with);
+                let ret = return_ty.substitute(subst, with);
+                Ty::func(param, ret)
+            },
+            &TyKind::Forall(ident, body) => {
+                if subst == ident {
+                    Ty::forall(ident, with)
+                } else {
+                    let subst = body.substitute(subst, with);
+                    Ty::forall(ident, subst)
+                }
+            },
         }
     }
 

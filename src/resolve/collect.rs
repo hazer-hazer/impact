@@ -12,7 +12,7 @@ use crate::{
     span::span::{Ident, Internable},
 };
 
-use super::def::{DefId, DefKind, Module, ModuleId, ROOT_DEF_ID};
+use super::def::{DefId, DefKind, Module, ModuleId, ModuleKind, ROOT_DEF_ID};
 
 pub struct DefCollector<'ast> {
     sess: Session,
@@ -146,14 +146,15 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
     fn visit_item(&mut self, item: &'ast Item) {
-        // Do not collect variables, they are defined and resolved in NameResolver.
-        // Note: Builtins are collected anyway
-        match item.kind() {
-            ItemKind::Decl(name, params, body) if params.is_empty() => {
-                self.visit_decl_item(name, params, body, item.id());
-                return;
-            },
-            _ => {},
+        // Do not collect locals, they are defined and resolved in NameResolver.
+        if let ModuleKind::Block(_) = self.module().kind() {
+            match item.kind() {
+                ItemKind::Decl(name, params, body) if params.is_empty() => {
+                    self.visit_decl_item(name, params, body, item.id());
+                    return;
+                },
+                _ => {},
+            }
         }
 
         let def_id = self.define(

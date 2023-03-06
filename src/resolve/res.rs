@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::ast::NodeId;
 
-use super::{builtin::Builtin, def::DefId};
+use super::{def::DefId};
 
 // #[derive(Debug, Clone, Copy)]
 // pub struct NodeId(NodeId);

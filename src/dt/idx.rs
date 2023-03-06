@@ -13,6 +13,16 @@ impl<I: Idx, T> Default for IndexVec<I, T> {
     }
 }
 
+impl<I: Idx + From<usize>, T> FromIterator<T> for IndexVec<I, T> {
+    fn from_iter<V: IntoIterator<Item = T>>(iter: V) -> Self {
+        let mut index_vec = IndexVec::<I, T>::default();
+        for v in iter {
+            index_vec.push(v);
+        }
+        index_vec
+    }
+}
+
 impl<I: Idx, T> FromIterator<(I, Option<T>)> for IndexVec<I, Option<T>> {
     fn from_iter<V: IntoIterator<Item = (I, Option<T>)>>(iter: V) -> Self {
         let mut index_vec = IndexVec::<I, Option<T>>::default();
@@ -356,6 +366,12 @@ macro_rules! declare_idx {
 
     (wrapper $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
         declare_idx!(@inner $name, $inner_ty, $format, $color);
+
+        impl From<$name> for $inner_ty {
+            fn from(value: $name) -> $inner_ty {
+                value.0
+            }
+        }
     };
 
     (new_type $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {

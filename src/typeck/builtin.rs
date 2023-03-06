@@ -1,20 +1,23 @@
 use std::collections::HashMap;
 
-use crate::resolve::builtin::Builtin;
+use crate::{resolve::builtin::Builtin, typeck::ty::TyVarId};
 
 use super::ty::{IntKind, PrimTy, Ty};
 
-#[deprecated]
 pub fn builtins() -> HashMap<Builtin, Ty> {
-    // let mut ty_vars = HashMap::new();
+    let _ty_vars = HashMap::<&str, TyVarId>::new();
 
     macro_rules! ty {
-        ($var: ident) => {
-            Ty::var(ty_vars.get(stringify!($var)).copied().unwrap())
-        };
-
         (()) => {
             Ty::unit()
+        };
+
+        (i32) => {
+            Ty::prim(PrimTy::Int(IntKind::I32))
+        };
+
+        ($var: ident) => {
+            Ty::var(ty_vars.get(stringify!($var)).copied().unwrap())
         };
 
         // ($tyctx: expr$($param: tt)* -> $body: expr) => {{
@@ -41,16 +44,16 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         }};
     }
 
-    // let builtins = HashMap::from([
-    //     // Values //
-    //     (Builtin::UnitValue, ty!(())),
-    //     // Operators //
-    //     (Builtin::Add, ty!(forall a. a -> a -> a)),
-    //     (Builtin::Minus, ty!(forall a. a -> a -> a)),
-    //     // Types //
-    //     (Builtin::UnitTy, ty!(())),
-    //     (Builtin::I32, Ty::prim(PrimTy::Int(IntKind::I32))),
-    // ]);
+    let builtins = HashMap::from([
+        // Values //
+        (Builtin::UnitValue, ty!(())),
+        // Operators //
+        (Builtin::AddInt, ty!(i32 -> i32 -> i32)),
+        (Builtin::SubInt, ty!(i32 -> i32 -> i32)),
+        // Types //
+        (Builtin::UnitTy, ty!(())),
+        (Builtin::I32, Ty::prim(PrimTy::Int(IntKind::I32))),
+    ]);
 
-    todo!()
+    builtins
 }

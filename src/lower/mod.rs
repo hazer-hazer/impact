@@ -11,17 +11,15 @@ use crate::{
     dt::idx::Idx,
     hir::{
         self,
-        expr::BuiltinExpr,
-        item::{Decl, ItemId, ItemNode, Mod, TyAlias},
-        ty::BuiltinTy,
-        HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
+        item::{ItemId, ItemNode, Mod, TyAlias},
+        Body, BodyId, HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
         OWNER_SELF_CHILD_ID,
     },
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::{
         builtin::{Builtin, DeclareBuiltin},
-        def::{DefId, Namespace},
+        def::DefId,
         res::{self, NamePath},
     },
     session::{Session, Stage, StageOutput},
@@ -164,7 +162,24 @@ impl<'ast> Lower<'ast> {
             .owner
             .nodes
             .insert(hir_id.child_id(), node);
+
+        assert_eq!(self.owner_stack.last().unwrap().owner_id, hir_id.owner());
+
         hir_id
+    }
+
+    fn add_body(&mut self, body: Body) -> BodyId {
+        let hir_id = self.next_hir_id();
+        self.owner_stack
+            .last_mut()
+            .unwrap()
+            .owner
+            .bodies
+            .insert(hir_id.child_id(), body);
+
+        assert_eq!(self.owner_stack.last().unwrap().owner_id, hir_id.owner());
+
+        BodyId::new(hir_id)
     }
 
     fn get_current_owner_node(&self, id: HirId) -> &Node {
@@ -256,9 +271,7 @@ impl<'ast> Lower<'ast> {
         body: &PR<N<Expr>>,
     ) -> hir::item::ItemKind {
         if ast_params.is_empty() {
-            hir::item::ItemKind::Decl(Decl {
-                value: lower_pr!(self, body, lower_expr),
-            })
+            hir::item::ItemKind::Var(lower_pr!(self, body, lower_expr))
         } else {
             let params = ast_params
                 .iter()
@@ -266,11 +279,12 @@ impl<'ast> Lower<'ast> {
                 .collect::<Vec<_>>();
 
             let mut value = lower_pr!(self, body, lower_expr);
-            for (index, &param) in params.iter().enumerate().rev() {
+            for (index, &param) in params[1..].iter().enumerate().rev() {
                 let span = ast_params[index].span().to(body.span());
-                value = self.expr_lambda(span, param, value);
+                let body = self.body(param, value);
+                value = self.expr_lambda(span, body);
             }
-            hir::item::ItemKind::Decl(Decl { value })
+            hir::item::ItemKind::Func(self.body(params[0], value))
         }
     }
 
@@ -369,9 +383,10 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_lambda_expr(&mut self, lambda: &Lambda) -> hir::expr::ExprKind {
+        let param = lower_pr!(self, &lambda.param, lower_pat);
+        let body = lower_pr!(self, &lambda.body, lower_expr);
         hir::expr::ExprKind::Lambda(hir::expr::Lambda {
-            param: lower_pr!(self, &lambda.param, lower_pat),
-            body: lower_pr!(self, &lambda.body, lower_expr),
+            body: self.body(param, body),
         })
     }
 
@@ -382,8 +397,8 @@ impl<'ast> Lower<'ast> {
         match self.get_current_owner_node(lhs).expr().kind() {
             hir::expr::ExprKind::Path(path) => {
                 if let Ok(bt) = self.lower_builtin_call(path.0, arg) {
-                    if let Ok(bt_expr) = BuiltinExpr::try_from(bt) {
-                        return hir::expr::ExprKind::BuiltinExpr(bt_expr);
+                    if bt.is_value() {
+                        return hir::expr::ExprKind::BuiltinExpr(bt);
                     } else {
                         MessageBuilder::error()
                             .text(format!("{} builtin cannot be used as value", bt))
@@ -506,12 +521,12 @@ impl<'ast> Lower<'ast> {
         if let Some(path_cons) = path_cons {
             let bt = self.lower_builtin_call(path_cons, arg);
             if let Ok(bt) = bt {
-                if let Ok(bt_ty) = BuiltinTy::try_from(bt) {
-                    return Ok(hir::ty::TyKind::Builtin(bt_ty));
+                if bt.is_ty() {
+                    return Ok(hir::ty::TyKind::Builtin(bt));
                 } else {
                     MessageBuilder::error()
                         .span(arg_span)
-                        .text(format!("`{}` builtin cannot be used as type", bt))
+                        .text(format!("{} builtin cannot be used as type", bt))
                         .emit_single_label(self);
                 }
             }
@@ -534,12 +549,14 @@ impl<'ast> Lower<'ast> {
 
     fn lower_res(&mut self, res: res::Res) -> Res {
         match res.kind() {
-            &res::ResKind::Local(node_id) => Res::Node(
+            &res::ResKind::Local(node_id) => Res::Local(
                 *self
                     .node_id_hir_id
-                    .get_expect(node_id, &format!("Local variable resolution {}", res)),
+                    .get_expect(node_id, &format!("Local ciable resolution {}", res)),
             ),
-            &res::ResKind::Def(def_id) => Res::Node(HirId::new_owner(def_id)),
+            &res::ResKind::Def(def_id) => {
+                Res::Def(self.sess.def_table.get_def(def_id).unwrap().kind, def_id)
+            },
             &res::ResKind::DeclareBuiltin => Res::DeclareBuiltin,
             res::ResKind::Error => Res::Error,
         }
@@ -641,16 +658,15 @@ impl<'ast> Lower<'ast> {
         self.expr(span, hir::expr::ExprKind::Path(hir::expr::PathExpr(path)))
     }
 
-    fn expr_lambda(
-        &mut self,
-        span: Span,
-        param: hir::pat::Pat,
-        body: hir::expr::Expr,
-    ) -> hir::expr::Expr {
+    fn expr_lambda(&mut self, span: Span, body: hir::BodyId) -> hir::expr::Expr {
         self.expr(
             span,
-            hir::expr::ExprKind::Lambda(hir::expr::Lambda { param, body }),
+            hir::expr::ExprKind::Lambda(hir::expr::Lambda { body }),
         )
+    }
+
+    fn body(&mut self, param: hir::pat::Pat, value: hir::expr::Expr) -> BodyId {
+        self.add_body(Body::new(param, value))
     }
 
     fn builtin_func(&mut self) -> ItemId {
@@ -659,7 +675,8 @@ impl<'ast> Lower<'ast> {
             Span::new_error(),
             hir::expr::Lit::String(DeclareBuiltin::sym()),
         );
-        let value = self.expr_lambda(Span::new_error(), param, body);
+        let body = self.body(param, body);
+        let _value = self.expr_lambda(Span::new_error(), body);
         let node_id = self
             .sess
             .ast_metadata
@@ -670,7 +687,7 @@ impl<'ast> Lower<'ast> {
             DeclareBuiltin::ident(),
             node_id,
             self.sess.def_table.builtin_func().def_id(),
-            hir::item::ItemKind::Decl(Decl { value }),
+            hir::item::ItemKind::Func(body),
         )
     }
 }

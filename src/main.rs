@@ -1,10 +1,8 @@
-#![allow(dead_code)]
 #![deny(unconditional_recursion)]
-
-use std::fs::read_to_string;
+#![allow(dead_code)]
 
 use cli::color::Colorize;
-
+use std::fs::read_to_string;
 
 use interface::interface::{Interface, InterruptionReason};
 
@@ -22,6 +20,7 @@ mod hir;
 mod interface;
 mod lower;
 mod message;
+mod mir;
 mod parser;
 mod pp;
 mod resolve;

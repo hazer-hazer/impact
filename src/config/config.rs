@@ -1,13 +1,7 @@
-use std::fmt::Display;
-
-
-use clap::builder::TypedValueParser;
-
-
-
-use clap::ValueEnum;
-
 use crate::interface::interface::InterruptionReason;
+use clap::builder::TypedValueParser;
+use clap::ValueEnum;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum StageName {

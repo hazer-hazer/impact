@@ -14,13 +14,13 @@ use crate::{
 
 use super::builtin::{Builtin, DeclareBuiltin};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DefKind {
     Root,
     TyAlias,
     Mod,
     Func,
-    Var,
+    Value,
 
     DeclareBuiltin,
 }
@@ -30,7 +30,7 @@ impl DefKind {
         match kind {
             ItemKind::Type(_, _) => DefKind::TyAlias,
             ItemKind::Mod(_, _) => DefKind::Mod,
-            ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Var,
+            ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Value,
             ItemKind::Decl(_, _, _) => DefKind::Func,
         }
     }
@@ -41,7 +41,7 @@ impl DefKind {
             DefKind::Mod => Namespace::Type,
             DefKind::Func => Namespace::Value,
             DefKind::Root => Namespace::Type,
-            DefKind::Var => Namespace::Value,
+            DefKind::Value => Namespace::Value,
             DefKind::DeclareBuiltin => Namespace::Value,
         }
     }
@@ -56,7 +56,7 @@ impl Display for DefKind {
                 DefKind::TyAlias => "type alias",
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
-                DefKind::Var => "var",
+                DefKind::Value => "var",
                 DefKind::Root => "[ROOT]",
                 DefKind::DeclareBuiltin => "[`builtin`]",
             }

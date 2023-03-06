@@ -2,11 +2,11 @@ use crate::{
     cli::color::Color,
     cli::color::Colorize,
     dt::idx::{declare_idx, Idx},
-    resolve::def::{DefId},
+    resolve::def::DefId,
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{expr::Expr, ty::Ty, HirId, OwnerId, ROOT_OWNER_ID};
+use super::{expr::Expr, ty::Ty, BodyId, HirId, OwnerId, ROOT_OWNER_ID};
 
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 pub const ROOT_ITEM_ID: ItemId = ItemId(ROOT_OWNER_ID);
@@ -32,22 +32,28 @@ pub struct Mod {
 }
 
 #[derive(Debug)]
-pub struct Decl {
-    pub value: Expr,
+pub struct Var {
+    value: Expr,
+}
+
+#[derive(Debug)]
+pub struct Func {
+    body: BodyId,
 }
 
 #[derive(Debug)]
 pub enum ItemKind {
     TyAlias(TyAlias),
     Mod(Mod),
-    Decl(Decl),
+    Var(Expr),
+    Func(BodyId),
 }
 
 #[derive(Debug)]
 pub struct ItemNode {
     name: Ident,
     owner_id: OwnerId,
-    kind: ItemKind,
+    pub kind: ItemKind,
     span: Span,
 }
 
@@ -85,39 +91,12 @@ impl WithSpan for ItemNode {
 }
 
 macro_rules! specific_item_nodes {
-    ($($name: ident $method_name: ident $ty: tt),*) => {
-        // $(
-        //     #[derive(Debug)]
-        //     pub struct $name {
-        //         name: Ident,
-        //         owner_id: OwnerId,
-        //         kind: $ty,
-        //         span: Span
-        //     }
-
-        // )*
-
-        // $(
-        //     impl $name {
-        //         pub fn name(&self) -> Ident {
-        //             self.name
-        //         }
-
-        //         pub fn def_id(&self) -> DefId {
-        //             self.owner_id.into()
-        //         }
-
-        //         pub fn owner_id(&self) -> OwnerId {
-        //             self.owner_id
-        //         }
-        //     }
-        // )*
-
+    ($($variant: ident $method_name: ident $($ty: ty),+);*) => {
         $(
             impl ItemNode {
-                pub fn $method_name(&self) -> &$ty {
+                pub fn $method_name(&self) -> &($($ty),+) {
                     match self.kind() {
-                        ItemKind::$ty(inner) => inner,
+                        ItemKind::$variant(inner) => inner,
                         _ => unreachable!()
                     }
                 }
@@ -127,7 +106,8 @@ macro_rules! specific_item_nodes {
 }
 
 specific_item_nodes!(
-    TyAliasNode ty_alias TyAlias,
-    ModNode mod_ Mod,
-    DeclNode decl Decl
+    TyAlias ty_alias TyAlias;
+    Mod mod_ Mod;
+    Var var Expr;
+    Func func BodyId
 );

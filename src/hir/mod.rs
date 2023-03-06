@@ -9,14 +9,14 @@ use crate::{
     dt::idx::{declare_idx, Idx, IndexVec},
     resolve::{
         builtin::Builtin,
-        def::{DefId, DefMap, ROOT_DEF_ID},
+        def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
     },
     span::span::{Ident, Span, Symbol, WithSpan},
 };
 
 use self::{
-    expr::{Block, BlockNode, Expr, ExprKind, ExprNode},
-    item::{ItemId, ItemNode, Mod},
+    expr::{Block, BlockNode, Expr, ExprKind, ExprNode, Lambda},
+    item::{ItemId, ItemKind, ItemNode, Mod},
     pat::{Pat, PatNode},
     stmt::StmtNode,
     ty::TyNode,
@@ -345,6 +345,45 @@ impl HIR {
             .get_unwrap(id.id)
     }
 
+    pub fn body(&self, id: BodyId) -> &Body {
+        self.owners
+            .get_unwrap(id.0.owner.inner())
+            .bodies
+            .get_unwrap(id.0.id)
+    }
+
+    pub fn body_value(&self, id: BodyId) -> Expr {
+        self.body(id).value
+    }
+
+    pub fn owner_body(&self, owner_id: OwnerId) -> Option<BodyId> {
+        match self.node(HirId::new_owner(owner_id.into())) {
+            Node::ExprNode(ExprNode {
+                kind: ExprKind::Lambda(Lambda { body, .. }),
+                ..
+            }) => Some(*body),
+            Node::ItemNode(ItemNode {
+                kind: ItemKind::Func(body),
+                ..
+            }) => Some(*body),
+            _ => None,
+        }
+    }
+
+    pub fn body_owner_kind(&self, owner_id: OwnerId) -> BodyOwnerKind {
+        match self.node(HirId::new_owner(owner_id.into())) {
+            Node::ExprNode(ExprNode {
+                kind: ExprKind::Lambda(Lambda { .. }),
+                ..
+            }) => BodyOwnerKind::Lambda,
+            Node::ItemNode(ItemNode {
+                kind: ItemKind::Func(_),
+                ..
+            }) => BodyOwnerKind::Func,
+            _ => panic!(),
+        }
+    }
+
     pub fn pat_names(&self, pat: Pat) -> Option<Vec<Ident>> {
         match self.pat(pat).kind() {
             pat::PatKind::Unit => None,
@@ -392,9 +431,22 @@ impl HIR {
     // }
 }
 
+#[derive(Clone, Copy)]
+pub enum BodyOwnerKind {
+    Func,
+    Lambda,
+}
+
 #[derive(Debug)]
 pub struct Body {
-    value: Expr,
+    pub param: Pat,
+    pub value: Expr,
+}
+
+impl Body {
+    pub fn new(param: Pat, value: Expr) -> Self {
+        Self { param, value }
+    }
 }
 
 #[derive(Debug)]
@@ -417,7 +469,8 @@ impl Display for PathSeg {
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Res {
-    Node(HirId),
+    Def(DefKind, DefId),
+    Local(HirId),
     DeclareBuiltin,
     Builtin(Builtin),
     Error,
@@ -426,7 +479,8 @@ pub enum Res {
 impl Display for Res {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Res::Node(hir_id) => hir_id.fmt(f),
+            Res::Def(kind, id) => write!(f, "{} def {}", kind, id),
+            Res::Local(hir_id) => write!(f, "local {}", hir_id),
             Res::DeclareBuiltin => write!(f, "[`builtin`]"),
             Res::Builtin(bt) => write!(f, "[builtin {}]", bt),
             Res::Error => write!(f, "[ERROR]"),

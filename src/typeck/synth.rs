@@ -4,11 +4,11 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{Decl, ItemId, ItemKind, Mod},
+        expr::{Block, Call, Expr, ExprKind, Lit, TyExpr},
+        item::{ItemId, ItemKind, Mod},
         pat::Pat,
         stmt::{Stmt, StmtKind},
-        HirId, Path,
+        Body, BodyId, HirId, Path,
     },
     message::message::MessageBuilder,
     resolve::def::DefKind,
@@ -40,8 +40,7 @@ impl<'hir> Typecker<'hir> {
             ItemKind::TyAlias(_ty) => {
                 verbose!("Synth ty alias {}", item.def_id());
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
-                self.conv_ty_alias(item.def_id());
-                Ty::unit()
+                return Ok(self.conv_ty_alias(item.def_id()));
             },
             ItemKind::Mod(Mod { items }) => {
                 // FIXME: How not to clone?
@@ -50,22 +49,23 @@ impl<'hir> Typecker<'hir> {
                 }
                 Ty::unit()
             },
-            &ItemKind::Decl(Decl { value }) => {
-                verbose!("Synth declaration {}", item.def_id());
-
+            // Note: Actually, declaration type is a unit type, but we save it
+            // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
+            &ItemKind::Var(value) => {
                 let value_ty = self.synth_expr(value)?;
-
                 self.type_term(self.hir.item(item).name(), value_ty);
-
-                // Note: Actually, declaration type is a unit type, but we save it
-                // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
+                value_ty
+            },
+            &ItemKind::Func(body) => {
+                let value_ty = self.synth_body(body)?;
+                self.type_term(self.hir.item(item).name(), value_ty);
                 value_ty
             },
         };
 
         self.tyctx_mut().type_node(hir_id, ty);
 
-        TyResult::Ok(ty)
+        TyResult::Ok(Ty::unit())
     }
 
     fn synth_stmt(&mut self, stmt: Stmt) -> TyResult<Ty> {
@@ -90,11 +90,14 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
-            ExprKind::Lambda(lambda) => self.synth_lambda_generic(&lambda),
+            ExprKind::Lambda(lambda) => self.synth_body(lambda.body),
             ExprKind::Call(call) => self.synth_call(&call, expr_id),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
-            ExprKind::BuiltinExpr(_) => todo!(),
+            &ExprKind::BuiltinExpr(bt) => {
+                assert!(bt.is_value());
+                Ok(self.tyctx().builtin(bt))
+            },
         }?;
 
         let expr_ty = self.apply_ctx_on(expr_ty);
@@ -182,13 +185,14 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn synth_lambda_generic(&mut self, lambda: &Lambda) -> TyResult<Ty> {
+    fn synth_body(&mut self, body_id: BodyId) -> TyResult<Ty> {
+        let &Body { param, value: _body } = self.hir.body(body_id);
         // FIXME: Rewrite when `match` added
 
         // Get parameter type from pattern if possible, e.g. `()` is of type `()`.
-        let early_param_ty = self.get_early_pat_type(lambda.param);
+        let early_param_ty = self.get_early_pat_type(param);
 
-        let param_names = self.get_pat_names(lambda.param);
+        let param_names = self.get_pat_names(param);
 
         let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
             // FIXME: Should sub-pattern names existentials be defined outside this context?
@@ -211,24 +215,21 @@ impl<'hir> Typecker<'hir> {
                 this.type_term(name, ex.1);
             });
 
-            let body_ty = this.check_discard_err(lambda.body, body_ex.1);
+            let body_ty = this.check_discard_err(self.hir.body_value(body_id), body_ex.1);
 
             // Apply context to function parameter to get its type.
-            let param_ty = this.get_typed_pat(lambda.param);
+            let param_ty = this.get_typed_pat(param);
 
             // If we know of which type function parameter is -- check inferred one against it
             let param_ty = if let Some(early) = early_param_ty {
-                this.check_ty_discard_err(
-                    Spanned::new(this.hir.pat(lambda.param).span(), param_ty),
-                    early,
-                )
+                this.check_ty_discard_err(Spanned::new(this.hir.pat(param).span(), param_ty), early)
             } else {
                 param_ty
             };
 
             verbose!("Param ty {}", param_ty);
 
-            this.tyctx_mut().type_node(lambda.param, param_ty);
+            this.tyctx_mut().type_node(param, param_ty);
 
             let func_ty =
                 param_exes
@@ -254,38 +255,38 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    fn synth_lambda_ex(&mut self, lambda: &Lambda) -> TyResult<Ty> {
-        // FIXME: Rewrite when `match` added
+    // fn synth_lambda_ex(&mut self, lambda: &Lambda) -> TyResult<Ty> {
+    //     // FIXME: Rewrite when `match` added
 
-        let param_names = self.get_pat_names(lambda.param);
+    //     let param_names = self.get_pat_names(lambda.param);
 
-        let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
-            // FIXME: Should sub-pattern names existentials be defined outside this context?
-            let ex = self.add_fresh_common_ex();
-            self.type_term(name, ex.1);
+    //     let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
+    //         // FIXME: Should sub-pattern names existentials be defined outside this context?
+    //         let ex = self.add_fresh_common_ex();
+    //         self.type_term(name, ex.1);
 
-            assert!(exes.insert(name, ex).is_none());
-            exes
-        });
+    //         assert!(exes.insert(name, ex).is_none());
+    //         exes
+    //     });
 
-        let body_ex = self.add_fresh_common_ex();
+    //     let body_ex = self.add_fresh_common_ex();
 
-        self.under_new_ctx(|this| {
-            // FIXME: Optimize fold moves of vec
-            param_exes.iter().for_each(|(&name, &ex)| {
-                // FIXME: Should sub-pattern names existentials be defined outside this context?
-                this.type_term(name, ex.1);
-            });
+    //     self.under_new_ctx(|this| {
+    //         // FIXME: Optimize fold moves of vec
+    //         param_exes.iter().for_each(|(&name, &ex)| {
+    //             // FIXME: Should sub-pattern names existentials be defined outside this context?
+    //             this.type_term(name, ex.1);
+    //         });
 
-            let body_ty = this.check(lambda.body, body_ex.1)?;
+    //         let body_ty = this.check(self.hir.body_value(lambda.body), body_ex.1)?;
 
-            let param_ty = this.get_typed_pat(lambda.param);
+    //         let param_ty = this.get_typed_pat(lambda.param);
 
-            this.tyctx_mut().type_node(lambda.param, param_ty);
+    //         this.tyctx_mut().type_node(lambda.param, param_ty);
 
-            Ok(Ty::func(param_ty, body_ty))
-        })
-    }
+    //         Ok(Ty::func(param_ty, body_ty))
+    //     })
+    // }
 
     fn synth_call(&mut self, call: &Call, expr_id: Expr) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(call.lhs)?;
@@ -347,7 +348,7 @@ impl<'hir> Typecker<'hir> {
             },
             &TyKind::Forall(alpha, ty) => {
                 let alpha_ex = self.add_fresh_common_ex();
-                let substituted_ty = self.substitute(ty, Subst::Var(alpha), alpha_ex.1);
+                let substituted_ty = ty.substitute(Subst::Var(alpha), alpha_ex.1);
                 let body_ty = self._synth_call(Spanned::new(span, substituted_ty), arg, call_expr);
 
                 self.tyctx_mut().bind_ty_var(call_expr, alpha, alpha_ex.1);

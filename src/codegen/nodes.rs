@@ -1,13 +1,10 @@
 use inkwell::values::{BasicValueEnum, CallableValue};
 
-use crate::{
-    hir::{
-        expr::{BlockNode, Call, ExprKind, ExprNode, Lambda, Lit, PathExpr},
-        item::{Decl, ItemKind, ItemNode},
-        stmt::{StmtKind, StmtNode},
-        HirId, PathNode, Res,
-    },
-    resolve::def::DefKind,
+use crate::hir::{
+    expr::{BlockNode, Call, ExprKind, ExprNode, Lambda, Lit, PathExpr},
+    item::ItemNode,
+    stmt::{StmtKind, StmtNode},
+    PathNode,
 };
 
 use super::codegen::CodeGen;
@@ -49,14 +46,15 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
             },
             &ExprKind::Path(PathExpr(path)) => g.hir.path(path).codegen(g)?.unwrap(),
             &ExprKind::Block(block) => g.hir.block(block).codegen(g)?.unwrap(),
-            &ExprKind::Lambda(Lambda { param, body }) => {
-                let name = g.get_lambda_name(self.id());
-                let ty = g.tyctx().tyof(self.id());
+            &ExprKind::Lambda(Lambda { body: _ }) => {
+                todo!()
+                // let name = g.get_lambda_name(self.id());
+                // let ty = g.tyctx().tyof(self.id());
 
-                return g.function(name.as_str(), ty, |g, func| {
-                    g.bind_res_value(Res::Node(param), func.get_nth_param(0).unwrap());
-                    g.hir.expr(body).codegen(g)
-                });
+                // return g.function(name.as_str(), ty, |g, func| {
+                //     g.bind_res_value(Res::Node(param), func.get_nth_param(0).unwrap());
+                //     g.hir.expr(body).codegen(g)
+                // });
             },
             &ExprKind::Call(Call { lhs, arg }) => {
                 let func = g.hir.expr(lhs).codegen(g)?.unwrap().into_pointer_value();
@@ -95,31 +93,31 @@ impl<'g> NodeCodeGen<'g> for BlockNode {
 
 impl<'g> NodeCodeGen<'g> for ItemNode {
     fn codegen(&self, g: &mut CodeGen<'g>) -> CodeGenResult<'g> {
-        match self.kind() {
-            &ItemKind::Decl(Decl { value }) => {
-                g.under_def(
-                    (self.name(), self.def_id(), value),
-                    |g| -> CodeGenResult<'g, ()> {
-                        let val = match g.sess.def_table.get_def(self.def_id()).unwrap().kind() {
-                            DefKind::DeclareBuiltin => Ok(None),
-                            // &DefKind::Builtin(bt) => builtin(g, bt),
-                            DefKind::Func | DefKind::Var => {
-                                Ok(Some(g.hir.expr(value).codegen(g)?.unwrap()))
-                            },
+        // match self.kind() {
+        //     &ItemKind::Decl(Decl { value }) => {
+        //         g.under_def(
+        //             (self.name(), self.def_id(), value),
+        //             |g| -> CodeGenResult<'g, ()> {
+        //                 let val = match g.sess.def_table.get_def(self.def_id()).unwrap().kind() {
+        //                     DefKind::DeclareBuiltin => Ok(None),
+        //                     // &DefKind::Builtin(bt) => builtin(g, bt),
+        //                     DefKind::Func | DefKind::Var => {
+        //                         Ok(Some(g.hir.expr(value).codegen(g)?.unwrap()))
+        //                     },
 
-                            _ => unreachable!(),
-                        }?;
+        //                     _ => unreachable!(),
+        //                 }?;
 
-                        if let Some(val) = val {
-                            g.bind_res_value(Res::Node(HirId::new_owner(self.def_id())), val);
-                        }
+        //                 if let Some(val) = val {
+        //                     g.bind_res_value(Res::Node(HirId::new_owner(self.def_id())), val);
+        //                 }
 
-                        Ok(())
-                    },
-                )?;
-            },
-            ItemKind::Mod(_) | ItemKind::TyAlias(_) => {},
-        }
+        //                 Ok(())
+        //             },
+        //         )?;
+        //     },
+        //     ItemKind::Mod(_) | ItemKind::TyAlias(_) => {},
+        // }
 
         Ok(Some(g.unit_value()))
     }

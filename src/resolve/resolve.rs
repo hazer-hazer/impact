@@ -17,27 +17,30 @@ use crate::{
 };
 
 use super::{
-    def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
+    def::{DefId, ModuleId, Namespace, ROOT_DEF_ID},
     res::{NamePath, Res},
 };
 
 #[derive(Debug)]
 enum ScopeKind {
-    Func,
-    Module(ModuleId),
+    Block(NodeId, HashMap<Symbol, NodeId>),
+    Def(DefId),
 }
 
 #[derive(Debug)]
 struct Scope {
     kind: ScopeKind,
-    locals: HashMap<Symbol, NodeId>,
 }
 
 impl Scope {
     pub fn new(kind: ScopeKind) -> Self {
-        Self {
-            kind,
-            locals: Default::default(),
+        Self { kind }
+    }
+
+    pub fn add_local(&mut self, name: Symbol, node_id: NodeId) -> Option<NodeId> {
+        match &mut self.kind {
+            ScopeKind::Block(_, locals) => locals.insert(name, node_id),
+            _ => panic!("Cannot add local to non-block scope"),
         }
     }
 }
@@ -66,7 +69,7 @@ impl<'ast> NameResolver<'ast> {
     fn define_var(&mut self, node_id: NodeId, ident: &Ident) {
         verbose!("Define var {} {}", node_id, ident);
 
-        let old_local = self.scope_mut().locals.insert(ident.sym(), node_id);
+        let old_local = self.scope_mut().add_local(ident.sym(), node_id);
 
         if let Some(old_local) = old_local {
             MessageBuilder::error()
@@ -82,7 +85,7 @@ impl<'ast> NameResolver<'ast> {
                 .label(ident.span(), "Redefined here".to_string())
                 .emit(self);
         } else {
-            self.sess.def_table.define(node_id, DefKind::Var, ident);
+            self.sess.def_table.define(node_id, DefKind::Value, ident);
             self.locals_spans.insert(node_id, ident.span());
         }
     }
@@ -91,15 +94,17 @@ impl<'ast> NameResolver<'ast> {
         self.scopes.last_mut().unwrap()
     }
 
-    fn enter_module_scope(&mut self, module_id: ModuleId) {
-        verbose!("Enter module scope {}", module_id);
+    fn enter_def_scope(&mut self, def_id: DefId) {
+        verbose!("Enter module scope {}", def_id);
 
-        self.scopes.push(Scope::new(ScopeKind::Module(module_id)));
+        self.scopes.push(Scope::new(ScopeKind::Def(def_id)));
     }
 
-    fn enter_func_scope(&mut self) {
-        verbose!("Enter func scope");
-        self.scopes.push(Scope::new(ScopeKind::Func));
+    fn enter_block_scope(&mut self, node_id: NodeId) {
+        verbose!("Enter block scope {}", node_id);
+
+        self.scopes
+            .push(Scope::new(ScopeKind::Block(node_id, Default::default())))
     }
 
     fn exit_scope(&mut self) {
@@ -110,19 +115,19 @@ impl<'ast> NameResolver<'ast> {
     fn resolve_local(&mut self, name: &Ident) -> Option<Res> {
         let mut scope_id = self.scopes.len() - 1;
         loop {
-            let local = &self.scopes[scope_id].locals.get(&name.sym());
-            if let Some(&local) = local {
-                return Some(Res::local(local));
-            }
-
-            match &self.scopes[scope_id].kind {
-                ScopeKind::Func => {},
-                &ScopeKind::Module(module_id) => {
-                    // AGENDA: Check def kind
+            match &self.scope_mut().kind {
+                ScopeKind::Block(_, locals) => {
+                    let local = &locals.get(&name.sym());
+                    if let Some(&local) = local {
+                        return Some(Res::local(local));
+                    }
+                },
+                &ScopeKind::Def(mod_def_id) => {
+                    // TODO: Check def kind
                     if let Some(def_id) = self
                         .sess
                         .def_table
-                        .get_module(module_id)
+                        .get_module(ModuleId::Module(mod_def_id))
                         .get_from_ns(Namespace::Value, name)
                     {
                         return Some(self.def_res(Namespace::Value, def_id));
@@ -142,7 +147,7 @@ impl<'ast> NameResolver<'ast> {
         let def = self.sess.def_table.get_def(def_id).unwrap();
 
         match def.kind() {
-            DefKind::Root | DefKind::TyAlias | DefKind::Mod | DefKind::Func | DefKind::Var => {
+            DefKind::Root | DefKind::TyAlias | DefKind::Mod | DefKind::Func | DefKind::Value => {
                 assert_eq!(def.kind().namespace(), target_ns);
                 return Res::def(def_id);
             },
@@ -230,21 +235,16 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
             ItemKind::Mod(name, items) => {
-                let module_id =
-                    ModuleId::Module(self.sess.def_table.get_def_id(item.id()).unwrap());
+                let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
+                let module_id = ModuleId::Module(def_id);
                 self.nearest_mod_item = module_id;
-                self.enter_module_scope(module_id);
+                self.enter_def_scope(def_id);
                 self.visit_mod_item(name, items, item.id());
                 self.exit_scope();
             },
             ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
             ItemKind::Decl(name, params, body) => {
-                // FIXME: Why func scope for values too?
-                self.enter_func_scope();
-
                 self.visit_decl_item(name, params, body, item.id());
-
-                self.exit_scope();
 
                 if params.is_empty() {
                     self.define_var(item.id(), name.as_ref().unwrap());
@@ -262,7 +262,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     }
 
     fn visit_block(&mut self, block: &'ast Block) {
-        self.enter_module_scope(ModuleId::Block(block.id()));
+        self.enter_block_scope(block.id());
         walk_each_pr!(self, block.stmts(), visit_stmt);
         self.exit_scope();
     }
@@ -288,7 +288,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
 
 impl<'ast> Stage<()> for NameResolver<'ast> {
     fn run(mut self) -> StageOutput<()> {
-        self.enter_module_scope(ROOT_MODULE_ID);
+        self.enter_def_scope(ROOT_DEF_ID);
         self.visit_ast(self.ast);
         StageOutput::new(self.sess, (), self.msg)
     }

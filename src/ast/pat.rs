@@ -7,6 +7,8 @@ use super::{pr_display, NodeId, WithNodeId, PR};
 #[derive(Debug)]
 pub enum PatKind {
     // TODO: Lit
+
+    // TODO: Replace Unit variant with Path pattern which refers to builtin type `()`
     Unit,
     Ident(PR<Ident>),
 }

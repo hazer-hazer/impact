@@ -1,6 +1,8 @@
 use crate::{
     cli::verbose,
-    hir::expr::{Expr, ExprKind, Lambda},
+    hir::{
+        expr::{Expr, ExprKind, Lambda},
+    },
     message::message::MessageBuilder,
     span::span::{Spanned, WithSpan},
     typeck::{ty::Subst, TypeckErr},
@@ -74,13 +76,13 @@ impl<'hir> Typecker<'hir> {
                 }
             },
 
-            (&ExprKind::Lambda(Lambda { body, param }), &TyKind::Func(param_ty, body_ty)) => {
-                let param_name = self.hir.pat_names(param).unwrap();
+            (&ExprKind::Lambda(Lambda { body, .. }), &TyKind::Func(param_ty, body_ty)) => {
+                let param_name = self.hir.pat_names(self.hir.body(body).param).unwrap();
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];
 
                 self.under_ctx(InferCtx::new_with_term(param_name, param_ty), |this| {
-                    this._check(body, body_ty)
+                    this._check(self.hir.body(body).value, body_ty)
                 })
             },
 
@@ -230,7 +232,7 @@ impl<'hir> Typecker<'hir> {
                 verbose!("forall {}. {} subtype of (?)", alpha, body);
                 let ex = self.fresh_ex(ExistentialKind::Common);
                 let ex_ty = Ty::existential(ex);
-                let with_substituted_alpha = self.substitute(body, Subst::Var(alpha), ex_ty);
+                let with_substituted_alpha = body.substitute(Subst::Var(alpha), ex_ty);
 
                 self.under_ctx(InferCtx::new_with_ex(ex), |this| {
                     this._subtype(with_substituted_alpha, r_ty)
@@ -386,7 +388,7 @@ impl<'hir> Typecker<'hir> {
 
                 this.under_ctx(InferCtx::new_with_ex(alpha_ex), |this| {
                     let alpha_ex_ty = Ty::existential(alpha_ex);
-                    let body_ty = this.substitute(body, Subst::Var(alpha), alpha_ex_ty);
+                    let body_ty = body.substitute(Subst::Var(alpha), alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)
                 })
             }),
