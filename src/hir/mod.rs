@@ -417,6 +417,20 @@ impl HIR {
         )
     }
 
+    pub fn return_ty_span(&self, def_id: DefId) -> Span {
+        self.pat(self.body(self.owner_body(def_id.into()).unwrap()).param)
+            .span()
+            .point_after_hi()
+        // match self.node(HirId::new_owner(def_id)) {
+        //     Node::ExprNode(expr) => match expr.kind() {
+        //         ExprKind::Lambda(Lambda { body }) => todo!(),
+        //         _ => panic!(),
+        //     },
+        //     Node::ItemNode(item) => todo!(),
+        //     _ => panic!(),
+        // }
+    }
+
     // // Debug //
     // pub fn dump(&self) -> String {
     //     let dump_owner = |owner: &Owner| -> String {

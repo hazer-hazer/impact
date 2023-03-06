@@ -4,7 +4,7 @@ use crate::{
     cli::color::Color,
     cli::color::Colorize,
     dt::idx::{declare_idx, IndexVec},
-    hir::{BodyId, BodyOwnerKind, HirId, OwnerId},
+    hir::{BodyId, HirId, OwnerId},
     resolve::builtin::Builtin,
     span::span::{Ident, Span, Symbol, WithSpan},
     typeck::ty::{FloatKind, IntKind, Ty},
@@ -84,11 +84,17 @@ impl Expr {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum PatKind {
     Unit,
-    Ident(Ident, LocalVar),
+    Ident {
+        name: Ident,
+        var: LocalVar,
+        ty: Ty,
+    },
 }
 
+#[derive(Clone, Copy)]
 pub struct Pat {
     pub ty: Ty,
     pub kind: PatKind,

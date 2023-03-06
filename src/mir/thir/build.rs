@@ -121,7 +121,11 @@ impl<'ctx> ThirBuilder<'ctx> {
 
         let kind = match pat.kind() {
             hir::pat::PatKind::Unit => PatKind::Unit,
-            &hir::pat::PatKind::Ident(ident) => PatKind::Ident(ident, LocalVar(pat.id())),
+            &hir::pat::PatKind::Ident(ident) => PatKind::Ident {
+                name: ident,
+                var: LocalVar::new(pat.id()),
+                ty: self.tyctx.tyof(pat.id()),
+            },
         };
 
         Pat {

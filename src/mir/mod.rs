@@ -1,20 +1,30 @@
+mod block;
 mod build;
+mod expr;
+mod local;
 mod scalar;
-
-use std::iter::Map;
+mod stmt;
+mod thir;
 
 use crate::{
     cli::color::Color,
     cli::color::Colorize,
     dt::idx::{declare_idx, IndexVec},
+    span::span::Span,
 };
 
 use self::scalar::Scalar;
+
+pub use crate::typeck::ty::Ty;
 
 declare_idx!(Local, u32, "_{}", Color::White);
 declare_idx!(BB, u32, "bb{}", Color::White);
 
 impl Local {
+    pub fn lvalue(&self) -> LValue {
+        LValue::new(*self)
+    }
+
     pub fn return_local() -> Local {
         Local::new(0)
     }
@@ -50,6 +60,10 @@ impl LValue {
         Self { local }
     }
 
+    pub fn operand(&self) -> Operand {
+        Operand::LValue(*self)
+    }
+
     pub fn return_lvalue() -> Self {
         Self {
             local: Local::return_local(),
@@ -62,10 +76,22 @@ pub enum Const {
     Scalar(Scalar),
 }
 
+impl Const {
+    pub fn operand(&self) -> Operand {
+        Operand::Const(*self)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum Operand {
     LValue(LValue),
     Const(Const),
+}
+
+impl Operand {
+    pub fn rvalue(&self) -> RValue {
+        RValue::Operand(*self)
+    }
 }
 
 /// Only builtin infix operators, all overloaded are function calls
@@ -120,7 +146,16 @@ pub struct BasicBlock {
     terminator: Terminator,
 }
 
-pub struct LocalInfo {}
+pub struct LocalInfo {
+    ty: Ty,
+    span: Span,
+}
+
+impl LocalInfo {
+    pub fn new(ty: Ty, span: Span) -> Self {
+        Self { ty, span }
+    }
+}
 
 pub struct Body {
     basic_blocks: IndexVec<BB, BasicBlock>,
@@ -174,7 +209,7 @@ impl BodyBuilder {
         self.basic_blocks.get_mut(bb).unwrap().terminate(terminator);
     }
 
-    pub fn local(&mut self, local_info: LocalInfo) -> Local {
+    pub fn push_local(&mut self, local_info: LocalInfo) -> Local {
         self.locals.push(local_info)
     }
 

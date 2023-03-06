@@ -26,7 +26,6 @@ mod pp;
 mod resolve;
 mod session;
 mod span;
-mod thir;
 mod typeck;
 
 fn main() {

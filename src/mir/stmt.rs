@@ -1,0 +1,29 @@
+use super::{
+    build::{unpack, MirBuilder},
+    thir::{ExprId, ExprKind},
+    BBWith, LValue, RValue, StmtKind, BB,
+};
+
+impl<'ctx> MirBuilder<'ctx> {
+    pub(super) fn push_assign(&mut self, mut bb: BB, lvalue: LValue, rvalue: RValue) {
+        self.builder
+            .push_stmt(bb, super::Stmt::new(StmtKind::Assign(lvalue, rvalue)));
+    }
+
+    pub(super) fn expr_stmt(&mut self, mut bb: BB, expr_id: ExprId) -> BBWith<()> {
+        let expr = self.thir.expr(expr_id);
+        match &expr.kind {
+            ExprKind::Lit(_)
+            | ExprKind::LocalRef(_)
+            | ExprKind::Block(_)
+            | ExprKind::Call { .. }
+            | ExprKind::Lambda { .. }
+            | ExprKind::Ty(_, _)
+            | ExprKind::Builtin(_) => {
+                let _temp = unpack!(bb = self.as_temp(bb, expr_id));
+            },
+        }
+
+        bb.unit()
+    }
+}

@@ -401,6 +401,10 @@ impl Ty {
             _ => panic!(),
         }
     }
+
+    pub fn return_ty(&self) -> Ty {
+        self.as_func().1
+    }
 }
 
 impl std::fmt::Debug for Ty {
