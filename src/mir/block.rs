@@ -3,7 +3,7 @@ use crate::mir::build::unpack;
 use super::{
     build::MirBuilder,
     thir::{BlockId, Stmt},
-    BBWith, LValue, RValue, BB,
+    BBWith, LValue, BB,
 };
 
 impl<'ctx> MirBuilder<'ctx> {
@@ -25,6 +25,10 @@ impl<'ctx> MirBuilder<'ctx> {
         if let Some(expr) = expr {
             unpack!(bb = self.store_expr(bb, dest, expr));
         } else {
+            let dest_ty = self.builder.local_info(dest.local).ty;
+            if dest_ty.is_unit() {
+                self.push_assign_unit(bb, dest)
+            }
         }
 
         bb.unit()

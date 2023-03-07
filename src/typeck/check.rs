@@ -1,8 +1,6 @@
 use crate::{
     cli::verbose,
-    hir::{
-        expr::{Expr, ExprKind, Lambda},
-    },
+    hir::expr::{Expr, ExprKind, Lambda},
     message::message::MessageBuilder,
     span::span::{Spanned, WithSpan},
     typeck::{ty::Subst, TypeckErr},
@@ -76,7 +74,7 @@ impl<'hir> Typecker<'hir> {
                 }
             },
 
-            (&ExprKind::Lambda(Lambda { body, .. }), &TyKind::Func(param_ty, body_ty)) => {
+            (&ExprKind::Lambda(Lambda { body_id: body, .. }), &TyKind::Func(param_ty, body_ty)) => {
                 let param_name = self.hir.pat_names(self.hir.body(body).param).unwrap();
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];

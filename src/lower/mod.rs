@@ -19,11 +19,11 @@ use crate::{
     parser::token::{FloatKind, IntKind},
     resolve::{
         builtin::{Builtin, DeclareBuiltin},
-        def::DefId,
+        def::{DefId, DefKind},
         res::{self, NamePath},
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Kw, Span, WithSpan},
+    span::span::{Ident, Internable, Kw, Span, WithSpan},
 };
 
 macro_rules! lower_pr {
@@ -313,7 +313,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Path(path) => self.lower_path_expr(path),
             ExprKind::Block(block) => self.lower_block_expr(block),
             ExprKind::Infix(infix) => self.lower_infix_expr(infix),
-            ExprKind::Lambda(lambda) => self.lower_lambda_expr(lambda),
+            ExprKind::Lambda(lambda) => self.lower_lambda_expr(lambda, expr.id()),
             ExprKind::Call(call) => self.lower_call_expr(call),
             ExprKind::Let(block) => self.lower_let_expr(block),
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
@@ -382,11 +382,12 @@ impl<'ast> Lower<'ast> {
         })
     }
 
-    fn lower_lambda_expr(&mut self, lambda: &Lambda) -> hir::expr::ExprKind {
+    fn lower_lambda_expr(&mut self, lambda: &Lambda, node_id: NodeId) -> hir::expr::ExprKind {
         let param = lower_pr!(self, &lambda.param, lower_pat);
         let body = lower_pr!(self, &lambda.body, lower_expr);
         hir::expr::ExprKind::Lambda(hir::expr::Lambda {
-            body: self.body(param, body),
+            def_id: self.sess.def_table.get_def_id(node_id).unwrap(),
+            body_id: self.body(param, body),
         })
     }
 
@@ -659,9 +660,18 @@ impl<'ast> Lower<'ast> {
     }
 
     fn expr_lambda(&mut self, span: Span, body: hir::BodyId) -> hir::expr::Expr {
+        let node_id = self.sess.next_node_id();
+        let def_id = self.sess.def_table.define(
+            node_id,
+            DefKind::Lambda,
+            &Ident::synthetic("lambda".intern()),
+        );
         self.expr(
             span,
-            hir::expr::ExprKind::Lambda(hir::expr::Lambda { body }),
+            hir::expr::ExprKind::Lambda(hir::expr::Lambda {
+                def_id,
+                body_id: body,
+            }),
         )
     }
 

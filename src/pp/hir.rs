@@ -143,7 +143,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
-        let body = hir.body(lambda.body);
+        let body = hir.body(lambda.body_id);
         self.pp.punct(Punct::Backslash);
         self.visit_pat(&body.param, hir);
         self.pp.punct(Punct::Arrow);

@@ -272,8 +272,6 @@ pub trait Idx: Copy + Into<usize> {
 
     fn new(inner: Self::Inner) -> Self;
 
-    fn inner(&self) -> Self::Inner;
-
     fn as_usize(&self) -> usize;
 }
 
@@ -387,10 +385,6 @@ macro_rules! declare_idx {
             fn as_usize(&self) -> usize {
                 usize::from(*self)
             }
-
-            fn inner(&self) -> $inner_ty {
-                self.0
-            }
         }
     };
 
@@ -401,6 +395,10 @@ macro_rules! declare_idx {
         impl $name {
             pub const fn new(value: $inner_ty) -> Self {
                 Self(value)
+            }
+
+            pub fn inner(&self) -> $inner_ty {
+                self.0
             }
         }
 

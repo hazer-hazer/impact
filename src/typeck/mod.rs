@@ -460,7 +460,7 @@ impl<'hir> Typecker<'hir> {
                     DefKind::DeclareBuiltin => todo!(),
 
                     // Definitions from value namespace
-                    DefKind::Func | DefKind::Value => unreachable!(),
+                    DefKind::Lambda | DefKind::Func | DefKind::Value => unreachable!(),
                 }
             },
             &Res::Builtin(bt) if bt.is_ty() => todo!(),

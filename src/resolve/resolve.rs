@@ -147,7 +147,12 @@ impl<'ast> NameResolver<'ast> {
         let def = self.sess.def_table.get_def(def_id).unwrap();
 
         match def.kind() {
-            DefKind::Root | DefKind::TyAlias | DefKind::Mod | DefKind::Func | DefKind::Value => {
+            DefKind::Lambda
+            | DefKind::Root
+            | DefKind::TyAlias
+            | DefKind::Mod
+            | DefKind::Func
+            | DefKind::Value => {
                 assert_eq!(def.kind().namespace(), target_ns);
                 return Res::def(def_id);
             },

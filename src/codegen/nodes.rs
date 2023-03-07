@@ -46,7 +46,7 @@ impl<'g> NodeCodeGen<'g> for ExprNode {
             },
             &ExprKind::Path(PathExpr(path)) => g.hir.path(path).codegen(g)?.unwrap(),
             &ExprKind::Block(block) => g.hir.block(block).codegen(g)?.unwrap(),
-            &ExprKind::Lambda(Lambda { body: _ }) => {
+            &ExprKind::Lambda(Lambda { .. }) => {
                 todo!()
                 // let name = g.get_lambda_name(self.id());
                 // let ty = g.tyctx().tyof(self.id());

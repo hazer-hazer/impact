@@ -359,7 +359,7 @@ impl HIR {
     pub fn owner_body(&self, owner_id: OwnerId) -> Option<BodyId> {
         match self.node(HirId::new_owner(owner_id.into())) {
             Node::ExprNode(ExprNode {
-                kind: ExprKind::Lambda(Lambda { body, .. }),
+                kind: ExprKind::Lambda(Lambda { body_id: body, .. }),
                 ..
             }) => Some(*body),
             Node::ItemNode(ItemNode {

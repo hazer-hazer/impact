@@ -5,9 +5,13 @@ use super::{
 };
 
 impl<'ctx> MirBuilder<'ctx> {
-    pub(super) fn push_assign(&mut self, mut bb: BB, lvalue: LValue, rvalue: RValue) {
+    pub(super) fn push_assign(&mut self, bb: BB, lvalue: LValue, rvalue: RValue) {
         self.builder
             .push_stmt(bb, super::Stmt::new(StmtKind::Assign(lvalue, rvalue)));
+    }
+
+    pub(super) fn push_assign_unit(&mut self, bb: BB, lvalue: LValue) {
+        self.push_assign(bb, lvalue, self.unit_const().operand().rvalue())
     }
 
     pub(super) fn expr_stmt(&mut self, mut bb: BB, expr_id: ExprId) -> BBWith<()> {

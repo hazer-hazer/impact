@@ -21,6 +21,7 @@ pub enum DefKind {
     Mod,
     Func,
     Value,
+    Lambda,
 
     DeclareBuiltin,
 }
@@ -43,6 +44,7 @@ impl DefKind {
             DefKind::Root => Namespace::Type,
             DefKind::Value => Namespace::Value,
             DefKind::DeclareBuiltin => Namespace::Value,
+            DefKind::Lambda => Namespace::Value,
         }
     }
 }
@@ -57,6 +59,7 @@ impl Display for DefKind {
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
                 DefKind::Value => "var",
+                DefKind::Lambda => "lambda",
                 DefKind::Root => "[ROOT]",
                 DefKind::DeclareBuiltin => "[`builtin`]",
             }
@@ -351,7 +354,7 @@ impl DefTable {
     }
 
     // TODO: Add accessibility modifiers?
-    pub(super) fn define(&mut self, node_id: NodeId, kind: DefKind, name: &Ident) -> DefId {
+    pub fn define(&mut self, node_id: NodeId, kind: DefKind, name: &Ident) -> DefId {
         let def_id = DefId(self.defs.len() as u32);
         self.defs.push(Def::new(def_id, kind, *name));
 

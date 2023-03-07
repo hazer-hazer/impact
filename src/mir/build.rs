@@ -1,15 +1,17 @@
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{
     dt::idx::Idx,
-    hir::{BodyOwnerKind, HirId, OwnerId, HIR},
+    hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
+    message::message::MessageStorage,
     mir::thir::PatKind,
+    session::{Session, Stage, StageOutput},
     typeck::tyctx::TyCtx,
 };
 
 use super::{
     thir::{build::ThirBuilder, ExprId, LocalVar, ParamId, Pat, THIR},
-    Body, BodyBuilder, LValue, Local, LocalInfo, START_BB,
+    Body, BodyBuilder, LValue, Local, LocalInfo, MIR, START_BB,
 };
 
 macro_rules! unpack {
@@ -60,7 +62,7 @@ impl<'ctx> MirBuilder<'ctx> {
             self.tyctx
                 .tyof(HirId::new_owner(self.thir.body_owner().into()))
                 .return_ty(),
-            // AGENDA
+            self.hir.return_ty_span(self.thir.body_owner().into()),
         );
 
         // Note: Only one param for now
@@ -71,5 +73,58 @@ impl<'ctx> MirBuilder<'ctx> {
         self.store_expr(START_BB, LValue::return_lvalue(), self.thir_entry_expr);
 
         self.builder.emit()
+    }
+}
+
+struct BuildFullMir<'ctx> {
+    hir: &'ctx HIR,
+
+    mir: MIR,
+
+    msg: MessageStorage,
+    sess: Session,
+}
+
+impl<'ctx> BuildFullMir<'ctx> {
+    fn new(sess: Session, hir: &'ctx HIR) -> Self {
+        Self {
+            sess,
+            hir,
+            mir: Default::default(),
+            msg: Default::default(),
+        }
+    }
+}
+
+impl<'ctx> BuildFullMir<'ctx> {
+    fn build(&mut self, body_id: BodyId, body_owner: OwnerId) {
+        match self.mir.bodies.entry(body_id) {
+            Entry::Occupied(_) => {},
+            Entry::Vacant(entry) => {
+                let body = MirBuilder::build(body_owner, self.hir, &self.sess.tyctx);
+                entry.insert(body);
+            },
+        }
+    }
+}
+
+impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
+    fn visit_func_item(
+        &mut self,
+        name: crate::span::span::Ident,
+        body: &hir::BodyId,
+        id: hir::item::ItemId,
+        hir: &HIR,
+    ) {
+        self.build(*body, id.into());
+    }
+
+    fn visit_lambda(&mut self, lambda: &hir::expr::Lambda, hir: &HIR) {}
+}
+
+impl<'ctx> Stage<MIR> for BuildFullMir<'ctx> {
+    fn run(mut self) -> StageOutput<MIR> {
+        self.visit_hir(self.hir);
+        StageOutput::new(self.sess, self.mir, self.msg)
     }
 }

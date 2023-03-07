@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    resolve::{builtin::Builtin},
+    resolve::{builtin::Builtin, def::DefId},
     span::span::{Span, Symbol, WithSpan},
 };
 
@@ -127,7 +127,8 @@ pub struct PathExpr(pub Path);
 
 #[derive(Debug)]
 pub struct Lambda {
-    pub body: BodyId,
+    pub def_id: DefId,
+    pub body_id: BodyId,
 }
 
 #[derive(Debug)]

@@ -39,6 +39,7 @@
     "Typecker",
     "Uninit",
     "unsubstituted",
+    "Upvars",
     "Uvar"
   ],
   "rust-analyzer.trace.extension": true

@@ -13,10 +13,7 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    resolve::{
-        def::{DefTable},
-        res::Resolutions,
-    },
+    resolve::{def::DefTable, res::Resolutions},
     span::span::{Span, SpanPos},
     typeck::tyctx::TyCtx,
 };

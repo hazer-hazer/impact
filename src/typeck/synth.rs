@@ -90,7 +90,7 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
-            ExprKind::Lambda(lambda) => self.synth_body(lambda.body),
+            ExprKind::Lambda(lambda) => self.synth_body(lambda.body_id),
             ExprKind::Call(call) => self.synth_call(&call, expr_id),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
@@ -186,7 +186,10 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_body(&mut self, body_id: BodyId) -> TyResult<Ty> {
-        let &Body { param, value: _body } = self.hir.body(body_id);
+        let &Body {
+            param,
+            value: _body,
+        } = self.hir.body(body_id);
         // FIXME: Rewrite when `match` added
 
         // Get parameter type from pattern if possible, e.g. `()` is of type `()`.

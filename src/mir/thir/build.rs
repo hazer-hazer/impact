@@ -64,14 +64,19 @@ impl<'ctx> ThirBuilder<'ctx> {
                     DefKind::TyAlias => todo!(),
                     DefKind::Func => todo!(),
                     DefKind::Value => todo!(),
+                    DefKind::Lambda => todo!(),
                     DefKind::DeclareBuiltin | DefKind::Root | DefKind::Mod => unreachable!(),
                 },
                 &hir::Res::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
                 hir::Res::Builtin(_) | hir::Res::DeclareBuiltin | hir::Res::Error => unreachable!(),
             },
             &hir::expr::ExprKind::Block(block) => ExprKind::Block(self.block(block)),
-            &hir::expr::ExprKind::Lambda(hir::expr::Lambda { body }) => {
-                ExprKind::Lambda { body_id: body }
+            &hir::expr::ExprKind::Lambda(hir::expr::Lambda {
+                body_id: body,
+                def_id,
+            }) => ExprKind::Lambda {
+                body_id: body,
+                def_id,
             },
             &hir::expr::ExprKind::Call(hir::expr::Call { lhs, arg }) => ExprKind::Call {
                 func_ty: self.tyctx.instantiated_func_ty(lhs).unwrap_or(Ty::error()),

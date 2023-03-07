@@ -123,7 +123,7 @@ pub trait HirVisitor {
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
-        self.visit_body(&lambda.body, hir);
+        self.visit_body(&lambda.body_id, hir);
     }
 
     fn visit_let_expr(&mut self, block: &Block, hir: &HIR) {

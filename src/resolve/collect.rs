@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        expr::Block,
+        expr::{Block, Expr, ExprKind},
         item::{Item, ItemKind},
-        visitor::{walk_each_pr, AstVisitor},
+        visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
     cli::verbose,
@@ -181,6 +181,27 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
         self.enter_block_module(block.id());
         walk_each_pr!(self, block.stmts(), visit_stmt);
         self.exit_module();
+    }
+
+    fn visit_expr(&mut self, expr: &'ast Expr) {
+        match expr.kind() {
+            ExprKind::Lit(lit) => self.visit_lit_expr(lit),
+            ExprKind::Paren(inner) => walk_pr!(self, inner, visit_expr),
+            ExprKind::Path(path) => self.visit_path_expr(path),
+            ExprKind::Block(block) => self.visit_block_expr(block),
+            ExprKind::Infix(infix) => self.visit_infix_expr(infix),
+            ExprKind::Call(call) => self.visit_app_expr(call),
+            ExprKind::Let(block) => self.visit_let_expr(block),
+            ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
+            ExprKind::Lambda(lambda) => {
+                self.define(
+                    expr.id(),
+                    DefKind::Lambda,
+                    &Ident::synthetic("lambda".intern()),
+                );
+                self.visit_lambda_expr(lambda);
+            },
+        }
     }
 }
 

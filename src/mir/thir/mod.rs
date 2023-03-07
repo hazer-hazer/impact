@@ -5,7 +5,7 @@ use crate::{
     cli::color::Colorize,
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
-    resolve::builtin::Builtin,
+    resolve::{builtin::Builtin, def::DefId},
     span::span::{Ident, Span, Symbol, WithSpan},
     typeck::ty::{FloatKind, IntKind, Ty},
 };
@@ -51,6 +51,7 @@ pub enum ExprKind {
         arg: ExprId,
     },
     Lambda {
+        def_id: DefId,
         body_id: BodyId,
     },
     Ty(ExprId, Ty),
@@ -87,11 +88,7 @@ impl Expr {
 #[derive(Clone, Copy)]
 pub enum PatKind {
     Unit,
-    Ident {
-        name: Ident,
-        var: LocalVar,
-        ty: Ty,
-    },
+    Ident { name: Ident, var: LocalVar, ty: Ty },
 }
 
 #[derive(Clone, Copy)]

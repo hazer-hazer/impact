@@ -6,10 +6,17 @@ mod scalar;
 mod stmt;
 mod thir;
 
+use std::{
+    collections::{HashMap, HashSet},
+    default,
+};
+
 use crate::{
     cli::color::Color,
     cli::color::Colorize,
     dt::idx::{declare_idx, IndexVec},
+    hir::BodyId,
+    resolve::def::DefId,
     span::span::Span,
 };
 
@@ -72,11 +79,32 @@ impl LValue {
 }
 
 #[derive(Clone, Copy)]
-pub enum Const {
+pub enum ConstKind {
     Scalar(Scalar),
+    ZeroSized,
+}
+
+#[derive(Clone, Copy)]
+pub struct Const {
+    ty: Ty,
+    kind: ConstKind,
 }
 
 impl Const {
+    pub fn scalar(ty: Ty, scalar: Scalar) -> Self {
+        Self {
+            ty,
+            kind: ConstKind::Scalar(scalar),
+        }
+    }
+
+    pub fn zero_sized(ty: Ty) -> Self {
+        Self {
+            ty,
+            kind: ConstKind::ZeroSized,
+        }
+    }
+
     pub fn operand(&self) -> Operand {
         Operand::Const(*self)
     }
@@ -105,6 +133,9 @@ pub enum InfixOp {
 pub enum RValue {
     Operand(Operand),
     Infix(Operand, InfixOp, Operand),
+
+    // TODO: Upvars
+    Closure(DefId),
 
     // TODO: Maybe move to terminator only when doing algebraic effects.
     Call {
@@ -160,6 +191,7 @@ impl LocalInfo {
 pub struct Body {
     basic_blocks: IndexVec<BB, BasicBlock>,
     locals: IndexVec<Local, LocalInfo>,
+    referenced_bodies: HashSet<BodyId>,
 }
 
 #[derive(Default)]
@@ -190,6 +222,7 @@ impl BasicBlockBuilder {
 struct BodyBuilder {
     basic_blocks: IndexVec<BB, BasicBlockBuilder>,
     locals: IndexVec<Local, LocalInfo>,
+    referenced_bodies: HashSet<BodyId>,
 }
 
 impl BodyBuilder {
@@ -213,6 +246,14 @@ impl BodyBuilder {
         self.locals.push(local_info)
     }
 
+    pub fn local_info(&mut self, local: Local) -> &LocalInfo {
+        self.locals.get(local).unwrap()
+    }
+
+    pub fn references_body(&mut self, body_id: BodyId) {
+        self.referenced_bodies.insert(body_id);
+    }
+
     pub fn emit(self) -> Body {
         // TODO: Check that emitted blocks vec is decent?
         Body {
@@ -222,6 +263,12 @@ impl BodyBuilder {
                 .map(|bb| bb.emit())
                 .collect::<IndexVec<_, _>>(),
             locals: self.locals,
+            referenced_bodies: self.referenced_bodies,
         }
     }
+}
+
+#[derive(Default)]
+pub struct MIR {
+    pub bodies: HashMap<BodyId, Body>,
 }

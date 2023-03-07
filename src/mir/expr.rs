@@ -1,13 +1,37 @@
-use crate::mir::thir::Expr;
+use crate::{
+    mir::thir::Expr,
+    typeck::ty::{FloatKind, IntKind, PrimTy},
+};
 
 use super::{
     build::{unpack, MirBuilder},
     scalar::Scalar,
     thir::{ExprCategory, ExprId, ExprKind, Lit, Pat, PatKind},
-    BBWith, Const, LValue, Local, LocalInfo, Operand, RValue, BB,
+    BBWith, Const, LValue, Local, Operand, RValue, Ty, BB,
 };
 
 impl<'ctx> MirBuilder<'ctx> {
+    // Constants (literals) //
+    pub(super) fn bool_const(&self, val: bool) -> Const {
+        Const::scalar(Ty::prim(PrimTy::Bool), Scalar::from(val))
+    }
+
+    pub(super) fn unit_const(&self) -> Const {
+        Const::zero_sized(Ty::unit())
+    }
+
+    pub(super) fn int_const(&self, val: u64, kind: IntKind) -> Const {
+        Const::scalar(Ty::prim(PrimTy::Int(kind)), Scalar::new(val, kind.bytes()))
+    }
+
+    pub(super) fn float_const(&self, val: f64, kind: FloatKind) -> Const {
+        Const::scalar(
+            Ty::prim(PrimTy::Float(kind)),
+            Scalar::new(val.to_bits(), kind.bytes()),
+        )
+    }
+
+    // Expressions as categories //
     pub(super) fn as_operand(&mut self, mut bb: BB, expr_id: ExprId) -> BBWith<Operand> {
         let expr = self.thir.expr(expr_id);
         match expr.categorize() {
@@ -22,9 +46,9 @@ impl<'ctx> MirBuilder<'ctx> {
     pub(super) fn as_const(&mut self, _bb: BB, expr: ExprId) -> Const {
         match &self.thir.expr(expr).kind {
             ExprKind::Lit(lit) => match lit {
-                &Lit::Bool(val) => Const::Scalar(Scalar::from(val)),
-                &Lit::Int(val, kind) => Const::Scalar(Scalar::new(val, kind.bytes())),
-                Lit::Float(val, kind) => Const::Scalar(Scalar::new(val.to_bits(), kind.bytes())),
+                &Lit::Bool(val) => self.bool_const(val),
+                &Lit::Int(val, kind) => self.int_const(val, kind),
+                &Lit::Float(val, kind) => self.float_const(val, kind),
                 Lit::String(_) => todo!(),
             },
             _ => panic!(),
@@ -49,6 +73,7 @@ impl<'ctx> MirBuilder<'ctx> {
 
     pub(super) fn as_rvalue(&mut self, mut bb: BB, expr_id: ExprId) -> BBWith<RValue> {
         let expr = self.thir.expr(expr_id);
+        let expr_span = expr.span;
         match &expr.kind {
             ExprKind::Lit(_) => bb.with(self.as_const(bb, expr_id).operand().rvalue()),
             ExprKind::Ty(_, _) | ExprKind::Block(_) | ExprKind::LocalRef(_) => {
@@ -65,7 +90,7 @@ impl<'ctx> MirBuilder<'ctx> {
                 let lhs = unpack!(bb = self.as_operand(bb, lhs));
                 let arg = unpack!(bb = self.as_operand(bb, arg));
 
-                let dest = self.temp_lvalue(func_ty.return_ty(), expr.span);
+                let dest = self.temp_lvalue(func_ty.return_ty(), expr_span);
 
                 let target = self.builder.begin_bb();
 
@@ -74,7 +99,10 @@ impl<'ctx> MirBuilder<'ctx> {
 
                 bb.with(dest.operand().rvalue())
             },
-            ExprKind::Lambda { body_id: _ } => todo!(),
+            &ExprKind::Lambda { body_id, def_id } => {
+                self.builder.references_body(body_id);
+                bb.with(RValue::Closure(def_id))
+            },
             ExprKind::Builtin(_) => todo!(),
         }
     }
@@ -87,6 +115,8 @@ impl<'ctx> MirBuilder<'ctx> {
 
         bb.with(temp.local)
     }
+
+    // Assigning expressions to ... //
 
     /// Assigns expression to lvalue
     pub(super) fn store_expr(&mut self, mut bb: BB, lvalue: LValue, expr_id: ExprId) -> BBWith<()> {
@@ -138,7 +168,12 @@ impl<'ctx> MirBuilder<'ctx> {
     ) -> BBWith<()> {
         match pat.kind {
             PatKind::Unit => todo!(),
-            PatKind::Ident { name, var, ty } => todo!(),
+            PatKind::Ident { var, .. } => {
+                let local = self.resolve_local_var(var);
+                let rvalue = unpack!(bb = self.as_rvalue(bb, expr_id));
+                self.push_assign(bb, local.lvalue(), rvalue);
+            },
         }
+        bb.unit()
     }
 }

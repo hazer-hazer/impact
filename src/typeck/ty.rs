@@ -405,6 +405,10 @@ impl Ty {
     pub fn return_ty(&self) -> Ty {
         self.as_func().1
     }
+
+    pub fn is_unit(&self) -> bool {
+        self.kind() == &TyKind::Unit
+    }
 }
 
 impl std::fmt::Debug for Ty {
