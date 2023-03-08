@@ -11,6 +11,7 @@ use crate::{
 pub mod ast;
 pub mod defs;
 pub mod hir;
+mod mir;
 
 #[derive(PartialEq)]
 pub enum AstPPMode {

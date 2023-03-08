@@ -9,6 +9,7 @@ mod thir;
 use std::{
     collections::{HashMap, HashSet},
     default,
+    fmt::Display,
 };
 
 use crate::{
@@ -59,7 +60,7 @@ impl BB {
 
 #[derive(Clone, Copy)]
 pub struct LValue {
-    local: Local,
+    pub local: Local,
 }
 
 impl LValue {
@@ -86,8 +87,8 @@ pub enum ConstKind {
 
 #[derive(Clone, Copy)]
 pub struct Const {
-    ty: Ty,
-    kind: ConstKind,
+    pub ty: Ty,
+    pub kind: ConstKind,
 }
 
 impl Const {
@@ -129,6 +130,19 @@ pub enum InfixOp {
     SubInt,
 }
 
+impl Display for InfixOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                InfixOp::AddInt => "+",
+                InfixOp::SubInt => "-",
+            }
+        )
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum RValue {
     Operand(Operand),
@@ -152,7 +166,7 @@ pub enum StmtKind {
 
 #[derive(Clone, Copy)]
 pub struct Stmt {
-    kind: StmtKind,
+    pub kind: StmtKind,
 }
 
 impl Stmt {
@@ -169,17 +183,17 @@ pub enum TerminatorKind {
 
 #[derive(Clone, Copy)]
 pub struct Terminator {
-    kind: TerminatorKind,
+    pub kind: TerminatorKind,
 }
 
 pub struct BasicBlock {
-    stmts: Vec<Stmt>,
-    terminator: Terminator,
+    pub stmts: Vec<Stmt>,
+    pub terminator: Terminator,
 }
 
 pub struct LocalInfo {
-    ty: Ty,
-    span: Span,
+    pub ty: Ty,
+    pub span: Span,
 }
 
 impl LocalInfo {
@@ -189,9 +203,9 @@ impl LocalInfo {
 }
 
 pub struct Body {
-    basic_blocks: IndexVec<BB, BasicBlock>,
-    locals: IndexVec<Local, LocalInfo>,
-    referenced_bodies: HashSet<BodyId>,
+    pub basic_blocks: IndexVec<BB, BasicBlock>,
+    pub locals: IndexVec<Local, LocalInfo>,
+    pub referenced_bodies: HashSet<BodyId>,
 }
 
 #[derive(Default)]
