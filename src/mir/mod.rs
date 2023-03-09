@@ -1,5 +1,5 @@
 mod block;
-mod build;
+pub mod build;
 mod expr;
 mod local;
 mod scalar;

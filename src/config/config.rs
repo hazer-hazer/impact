@@ -12,6 +12,7 @@ pub enum StageName {
     NameRes,
     Lower,
     Typeck,
+    MirConstruction,
     Codegen,
     #[value(skip)]
     Unset,
@@ -31,6 +32,7 @@ impl TryFrom<&str> for StageName {
             "nameres" => Ok(Self::NameRes),
             "lower" => Ok(Self::Lower),
             "typeck" => Ok(Self::Typeck),
+            "mir-constr" => Ok(Self::MirConstruction),
             "codegen" => Ok(Self::Codegen),
             "*" => Ok(Self::Any),
             _ => Err(()),
@@ -51,6 +53,7 @@ impl Display for StageName {
                 StageName::NameRes => "name resolution",
                 StageName::Lower => "lowering",
                 StageName::Typeck => "type checking",
+                StageName::MirConstruction => "mir construction",
                 StageName::Codegen => "codegen",
                 StageName::Any => "*",
                 StageName::Unset => "[unknown]",

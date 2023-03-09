@@ -1,17 +1,27 @@
 use crate::{
     hir::{visitor::HirVisitor, BodyId, BodyOwnerKind, OwnerId, HIR},
-    mir::{Body, Const, LValue, Operand, RValue, Stmt, StmtKind, Terminator, MIR},
+    mir::{
+        Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,
+        TerminatorKind, MIR,
+    },
+    session::Session,
 };
 
 use super::AstLikePP;
 
 pub struct MirPrinter<'ctx> {
-    pp: AstLikePP<'ctx>,
-    hir: &'ctx HIR,
+    pub pp: AstLikePP<'ctx>,
     mir: &'ctx MIR,
 }
 
 impl<'ctx> MirPrinter<'ctx> {
+    pub fn new(sess: &'ctx Session, mir: &'ctx MIR) -> Self {
+        Self {
+            pp: AstLikePP::new(&sess, super::AstPPMode::Normal),
+            mir,
+        }
+    }
+
     fn print_body(&mut self, body: &Body) {
         for (local, info) in body.locals.iter_enumerated() {
             // TODO: Print additional info such as span
@@ -39,6 +49,7 @@ impl<'ctx> MirPrinter<'ctx> {
                 self.print_rvalue(rvalue);
             },
         }
+        self.pp.nl();
     }
 
     fn print_lvalue(&mut self, lvalue: &LValue) {
@@ -73,11 +84,20 @@ impl<'ctx> MirPrinter<'ctx> {
     }
 
     fn print_const(&mut self, const_: &Const) {
-        todo!()
+        match &const_.kind {
+            ConstKind::Scalar(scalar) => self.pp.string(scalar),
+            // FIXME: ZeroSized formatting?
+            ConstKind::ZeroSized => self.pp.str("()"),
+        };
+        self.pp.string(format!(": {}", const_.ty));
     }
 
     fn print_terminator(&mut self, terminator: &Terminator) {
         self.pp.out_indent();
+        match &terminator.kind {
+            TerminatorKind::Goto(target) => self.pp.string(format!("goto {}", target)),
+            TerminatorKind::Return => self.pp.str("return"),
+        };
     }
 }
 

@@ -1,4 +1,4 @@
-use std::num::NonZeroU8;
+use std::{fmt::Display, num::NonZeroU8};
 
 #[derive(Clone, Copy)]
 pub struct Scalar {
@@ -14,6 +14,12 @@ impl Scalar {
             data,
             size: NonZeroU8::new(size).unwrap(),
         }
+    }
+}
+
+impl Display for Scalar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data)
     }
 }
 

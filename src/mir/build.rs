@@ -76,7 +76,7 @@ impl<'ctx> MirBuilder<'ctx> {
     }
 }
 
-struct BuildFullMir<'ctx> {
+pub struct BuildFullMir<'ctx> {
     hir: &'ctx HIR,
 
     mir: MIR,
@@ -86,7 +86,7 @@ struct BuildFullMir<'ctx> {
 }
 
 impl<'ctx> BuildFullMir<'ctx> {
-    fn new(sess: Session, hir: &'ctx HIR) -> Self {
+    pub fn new(sess: Session, hir: &'ctx HIR) -> Self {
         Self {
             sess,
             hir,

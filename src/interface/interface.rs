@@ -10,8 +10,9 @@ use crate::{
     hir::visitor::HirVisitor,
     interface::writer::outln,
     lower::Lower,
+    mir::build::BuildFullMir,
     parser::{lexer::Lexer, parser::Parser},
-    pp::{defs::DefPrinter, hir::HirPP, AstLikePP, AstPPMode},
+    pp::{defs::DefPrinter, hir::HirPP, mir::MirPrinter, AstLikePP, AstPPMode},
     resolve::{
         collect::DefCollector,
         def::{DefId, ModuleId},
@@ -214,6 +215,21 @@ impl<'ast> Interface {
         let (_, sess) = typeck_result.emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
+
+        // MIR Construction //
+        verbose!("=== MIR Construction ===");
+        let stage = StageName::MirConstruction;
+
+        let (mir, sess) = BuildFullMir::new(sess, &hir).run_and_emit(true)?;
+
+        let sess = self.should_stop(sess, stage)?;
+
+        if sess.config().check_pp_stage(stage) {
+            let mut pp = MirPrinter::new(&sess, &mir);
+            pp.visit_hir(&hir);
+            let mir = pp.pp.get_string();
+            outln!(sess.writer, "MIR\n{}", mir);
+        }
 
         // Codegen //
         verbose!("=== Codegen ===");
