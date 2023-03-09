@@ -189,26 +189,26 @@ pub enum ModuleKind {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModuleId {
     Block(NodeId),
-    Module(DefId),
+    Def(DefId),
 }
 
 impl ModuleId {
     pub fn as_module(&self) -> DefId {
         match self {
             ModuleId::Block(_) => panic!(),
-            &ModuleId::Module(def_id) => def_id,
+            &ModuleId::Def(def_id) => def_id,
         }
     }
 
     pub fn as_block(&self) -> NodeId {
         match self {
             &ModuleId::Block(node_id) => node_id,
-            ModuleId::Module(_) => panic!(),
+            ModuleId::Def(_) => panic!(),
         }
     }
 }
 
-pub const ROOT_MODULE_ID: ModuleId = ModuleId::Module(ROOT_DEF_ID);
+pub const ROOT_MODULE_ID: ModuleId = ModuleId::Def(ROOT_DEF_ID);
 
 impl Display for ModuleId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -217,7 +217,7 @@ impl Display for ModuleId {
             "module{}",
             match self {
                 ModuleId::Block(node_id) => format!("{}", node_id),
-                ModuleId::Module(def_id) => format!("{}", def_id),
+                ModuleId::Def(def_id) => format!("{}", def_id),
             }
         )
     }
@@ -307,7 +307,7 @@ impl DefTable {
             ModuleId::Block(id) => self
                 .blocks
                 .get_mut_expect(id, format!("No block found by {}", id).as_str()),
-            ModuleId::Module(def_id) => self
+            ModuleId::Def(def_id) => self
                 .modules
                 .get_mut_expect(def_id, format!("No module found by {}", def_id).as_str()),
         }
@@ -318,7 +318,7 @@ impl DefTable {
             ModuleId::Block(id) => self
                 .blocks
                 .get_expect(id, format!("No block found by {}", id).as_str()),
-            ModuleId::Module(def_id) => self
+            ModuleId::Def(def_id) => self
                 .modules
                 .get_expect(def_id, format!("No module found by {}", def_id).as_str()),
         }
@@ -334,7 +334,7 @@ impl DefTable {
         );
         assert!(self.modules.insert(ROOT_DEF_ID, Module::root()).is_none());
         assert_eq!(def_id, ROOT_DEF_ID);
-        ModuleId::Module(def_id)
+        ModuleId::Def(def_id)
     }
 
     pub(super) fn add_module(&mut self, def_id: DefId, parent: ModuleId) -> ModuleId {
@@ -342,7 +342,7 @@ impl DefTable {
             .modules
             .insert(def_id, Module::new(parent, ModuleKind::Def(def_id)))
             .is_none());
-        ModuleId::Module(def_id)
+        ModuleId::Def(def_id)
     }
 
     pub(super) fn add_block(&mut self, node_id: NodeId, parent: ModuleId) -> ModuleId {

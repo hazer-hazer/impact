@@ -71,7 +71,7 @@ impl<'ast> Interface {
         verbose!("NodeId: {}", NodeId::new(0));
         verbose!("DefId: {}", DefId::new(0));
         verbose!("ModuleId::Block: {}", ModuleId::Block(NodeId::new(0)));
-        verbose!("ModuleId::Module: {}", ModuleId::Module(DefId::new(0)));
+        verbose!("ModuleId::Module: {}", ModuleId::Def(DefId::new(0)));
 
         // Lexing //
         verbose!("=== Lexing ===");
@@ -222,7 +222,7 @@ impl<'ast> Interface {
 
         let (mir, sess) = BuildFullMir::new(sess, &hir).run_and_emit(true)?;
 
-        let sess = self.should_stop(sess, stage)?;
+        let mut sess = self.should_stop(sess, stage)?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = MirPrinter::new(&sess, &mir);

@@ -36,7 +36,7 @@ impl<'ast> DefCollector<'ast> {
             sess,
             ast,
             declare_builtin_func_mod: None,
-            current_module: ModuleId::Module(ROOT_DEF_ID),
+            current_module: ModuleId::Def(ROOT_DEF_ID),
             msg: Default::default(),
         }
     }
@@ -164,17 +164,19 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
                 .expect("Cannot define unnamed item. TODO: Synthesize unnamed item name"),
         );
 
+        self.enter_def_module(def_id);
+
         match item.kind() {
             ItemKind::Mod(name, items) => {
-                self.enter_def_module(def_id);
                 self.visit_mod_item(name, items, item.id());
-                self.exit_module();
             },
             ItemKind::Type(_, _) => {},
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
         }
+
+        self.exit_module();
     }
 
     fn visit_block(&mut self, block: &'ast Block) -> () {
@@ -197,7 +199,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
                 self.define(
                     expr.id(),
                     DefKind::Lambda,
-                    &Ident::synthetic("lambda".intern()),
+                    &Ident::synthetic(format!("lambda{}", expr.id()).intern()),
                 );
                 self.visit_lambda_expr(lambda);
             },

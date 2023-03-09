@@ -32,30 +32,29 @@ struct Args {
     /// PP Section
 
     /// Pretty-print compilation stages
-    #[arg(long)]
+    #[arg(long, help_heading = "Debug options")]
     pp_stages: Option<Vec<StageName>>,
 
-    #[arg(long, default_value_t = false)]
+    /// Print IDs in AST-like structures (AST, HIR, etc.)
+    #[arg(long, default_value_t = false, help_heading = "Debug options")]
     pp_ast_ids: bool,
 
-    /// Debug section
-
     /// Compile until specified stage
-    #[arg(long)]
+    #[arg(long, help_heading = "Debug options")]
     compilation_depth: Option<StageName>,
 
     // TODO: File with expected output
     /// Assert that compiler debug info equals to the given string
-    #[arg(long)]
+    #[arg(long, help_heading = "Debug options")]
     expected_output: Option<String>,
 
     // interruption_reason
     /// Emit verbose debug messages
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, help_heading = "Debug options")]
     verbose_messages: bool,
 
     /// Prints tree view of parser entries
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, help_heading = "Debug options")]
     parser_debug: bool,
 }
 

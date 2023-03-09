@@ -59,7 +59,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                     DefKind::Root | DefKind::Mod => {
                         self.nl();
                         self.indent();
-                        self.pp_mod(ModuleId::Module(def.def_id()));
+                        self.pp_mod(ModuleId::Def(def.def_id()));
                         self.dedent();
                     },
                     DefKind::Lambda
