@@ -51,7 +51,7 @@ impl<'hir> Typecker<'hir> {
             },
             // Note: Actually, declaration type is a unit type, but we save it
             // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
-            &ItemKind::Var(value) => {
+            &ItemKind::Value(value) => {
                 let value_ty = self.synth_expr(value)?;
                 self.type_term(self.hir.item(item).name(), value_ty);
                 value_ty

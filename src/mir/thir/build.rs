@@ -123,20 +123,21 @@ impl<'ctx> ThirBuilder<'ctx> {
         self.thir.add_block(Block { stmts, expr })
     }
 
-    fn pat(&mut self, pat_id: hir::pat::Pat) -> Pat {
-        let pat = self.hir.pat(pat_id);
+    fn pat(&mut self, pat: hir::pat::Pat) -> Pat {
+        let pat = self.hir.pat(pat);
+        let ty = self.tyctx.tyof(pat.id());
 
         let kind = match pat.kind() {
             hir::pat::PatKind::Unit => PatKind::Unit,
             &hir::pat::PatKind::Ident(ident) => PatKind::Ident {
                 name: ident,
-                var: LocalVar::new(pat_id),
-                ty: self.tyctx.tyof(pat_id),
+                var: LocalVar::new(pat.id()),
+                ty,
             },
         };
 
         Pat {
-            ty: self.tyctx.tyof(pat_id),
+            ty,
             kind,
             span: pat.span(),
         }

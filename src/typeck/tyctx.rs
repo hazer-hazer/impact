@@ -34,8 +34,7 @@ impl TyCtx {
     }
 
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
-        verbose!("Type node ");
-        // AGENDA
+        verbose!("Type node {} with {}", id, ty);
         assert!(
             self.typed.insert(id, ty).is_none(),
             "{} is already typed with {}",

@@ -461,6 +461,10 @@ impl Body {
     pub fn new(param: Pat, value: Expr) -> Self {
         Self { param, value }
     }
+
+    pub fn id(&self) -> BodyId {
+        BodyId(self.value)
+    }
 }
 
 #[derive(Debug)]

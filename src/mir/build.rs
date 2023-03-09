@@ -120,10 +120,15 @@ impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
         id: hir::item::ItemId,
         hir: &HIR,
     ) {
+        if id.def_id() == self.sess.def_table.builtin_func().def_id() {
+            return;
+        }
         self.build(*body, id.into());
     }
 
-    fn visit_lambda(&mut self, lambda: &hir::expr::Lambda, hir: &HIR) {}
+    fn visit_lambda(&mut self, lambda: &hir::expr::Lambda, hir: &HIR) {
+        self.build(lambda.body_id, lambda.def_id.into());
+    }
 }
 
 impl<'ctx> Stage<MIR> for BuildFullMir<'ctx> {

@@ -45,7 +45,7 @@ pub struct Func {
 pub enum ItemKind {
     TyAlias(TyAlias),
     Mod(Mod),
-    Var(Expr),
+    Value(Expr),
     Func(BodyId),
 }
 
@@ -108,6 +108,6 @@ macro_rules! specific_item_nodes {
 specific_item_nodes!(
     TyAlias ty_alias TyAlias;
     Mod mod_ Mod;
-    Var var Expr;
+    Value var Expr;
     Func func BodyId
 );

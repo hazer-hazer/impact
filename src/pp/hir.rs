@@ -76,7 +76,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         match item.kind() {
             ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
-            ItemKind::Var(value) => self.visit_var_item(item.name(), value, id, hir),
+            ItemKind::Value(value) => self.visit_var_item(item.name(), value, id, hir),
             ItemKind::Func(value) => self.visit_func_item(item.name(), value, id, hir),
         }
     }

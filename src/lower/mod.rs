@@ -168,20 +168,6 @@ impl<'ast> Lower<'ast> {
         hir_id
     }
 
-    fn add_body(&mut self, body: Body) -> BodyId {
-        let hir_id = self.next_hir_id();
-        self.owner_stack
-            .last_mut()
-            .unwrap()
-            .owner
-            .bodies
-            .insert(hir_id.child_id(), body);
-
-        assert_eq!(self.owner_stack.last().unwrap().owner_id, hir_id.owner());
-
-        BodyId::new(hir_id)
-    }
-
     fn get_current_owner_node(&self, id: HirId) -> &Node {
         self.owner_stack
             .last()
@@ -192,12 +178,14 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_node_id(&mut self, id: NodeId) -> HirId {
-        verbose!("Lower node id {}", id);
         if let Some(hir_id) = self.node_id_hir_id.get_flat(id) {
+            verbose!("Lower node id {} -> {}", id, hir_id);
             *hir_id
         } else {
             let hir_id = self.next_hir_id();
             self.node_id_hir_id.insert(id, hir_id);
+
+            verbose!("Lower node id {} -> {}", id, hir_id);
 
             hir_id
         }
@@ -266,12 +254,12 @@ impl<'ast> Lower<'ast> {
 
     fn lower_decl_item(
         &mut self,
-        _: &PR<Ident>,
+        _name: &PR<Ident>,
         ast_params: &Vec<PR<Pat>>,
         body: &PR<N<Expr>>,
     ) -> hir::item::ItemKind {
         if ast_params.is_empty() {
-            hir::item::ItemKind::Var(lower_pr!(self, body, lower_expr))
+            hir::item::ItemKind::Value(lower_pr!(self, body, lower_expr))
         } else {
             let params = ast_params
                 .iter()
@@ -676,7 +664,19 @@ impl<'ast> Lower<'ast> {
     }
 
     fn body(&mut self, param: hir::pat::Pat, value: hir::expr::Expr) -> BodyId {
-        self.add_body(Body::new(param, value))
+        let body = Body::new(param, value);
+        let id = body.id();
+
+        self.owner_stack
+            .last_mut()
+            .unwrap()
+            .owner
+            .bodies
+            .insert(id.inner().child_id(), body);
+
+        assert_eq!(self.owner_stack.last().unwrap().owner_id, id.inner().owner());
+
+        id
     }
 
     fn builtin_func(&mut self) -> ItemId {

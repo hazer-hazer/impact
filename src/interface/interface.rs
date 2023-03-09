@@ -7,7 +7,7 @@ use crate::{
     cli::verbose,
     codegen::codegen::CodeGen,
     config::config::{Config, StageName},
-    hir::visitor::HirVisitor,
+    hir::{visitor::HirVisitor, HirId, OwnerId, OwnerChildId},
     interface::writer::outln,
     lower::Lower,
     mir::build::BuildFullMir,
@@ -186,6 +186,8 @@ impl<'ast> Interface {
         let stage = StageName::Lower;
 
         let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
+
+        verbose!("#0:#1 node {:?}", hir.node(HirId::new(OwnerId::new(DefId::new(0)), OwnerChildId::new(1))));
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = HirPP::new(&sess, AstPPMode::Normal);
