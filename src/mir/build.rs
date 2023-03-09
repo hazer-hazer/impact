@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
     thir::{build::ThirBuilder, ExprId, LocalVar, ParamId, Pat, THIR},
-    Body, BodyBuilder, LValue, Local, LocalInfo, MIR, START_BB,
+    BBWith, Body, BodyBuilder, LValue, Local, LocalInfo, MIR, START_BB,
 };
 
 macro_rules! unpack {
@@ -43,7 +43,7 @@ impl<'ctx> MirBuilder<'ctx> {
     pub fn build(body_owner: OwnerId, hir: &'ctx HIR, tyctx: &'ctx TyCtx) -> Body {
         let (thir, thir_entry_expr) = ThirBuilder::new(hir, tyctx, body_owner).build_body_thir();
 
-        let this = Self {
+        let mut this = Self {
             thir_entry_expr,
             thir,
             builder: BodyBuilder::default(),
@@ -58,6 +58,8 @@ impl<'ctx> MirBuilder<'ctx> {
     }
 
     fn func(mut self) -> Body {
+        let bb = self.builder.begin_bb();
+
         self.push_return_local(
             self.tyctx
                 .tyof(HirId::new_owner(self.thir.body_owner().into()))
@@ -70,7 +72,9 @@ impl<'ctx> MirBuilder<'ctx> {
             self.declare_param_bindings(param);
         });
 
-        self.store_expr(START_BB, LValue::return_lvalue(), self.thir_entry_expr);
+        let bb = unpack!(self.store_expr(bb, LValue::return_lvalue(), self.thir_entry_expr));
+
+        self.builder.terminate_return(bb);
 
         self.builder.emit()
     }

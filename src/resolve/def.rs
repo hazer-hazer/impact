@@ -369,8 +369,8 @@ impl DefTable {
         def_id
     }
 
-    pub fn get_def(&self, def_id: DefId) -> Option<&Def> {
-        self.defs.get(def_id.as_usize())
+    pub fn get_def(&self, def_id: DefId) -> &Def {
+        self.defs.get(def_id.as_usize()).as_ref().unwrap()
     }
 
     pub fn get_def_id(&self, node_id: NodeId) -> Option<DefId> {
@@ -441,7 +441,7 @@ impl DefTable {
 
         match main {
             Some(def_id) => {
-                let def = self.get_def(def_id).unwrap();
+                let def = self.get_def(def_id);
                 match def.kind() {
                     DefKind::Func => {
                         self.main_func = Some(def_id);

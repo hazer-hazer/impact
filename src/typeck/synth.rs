@@ -18,14 +18,14 @@ use crate::{
 
 use super::{
     ty::{PrimTy, Ty, TyKind},
-    TyResult, TypeckErr,
+    TyResult, TypeckErr, Typed,
 };
 
 use super::Typecker;
 impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         let hir_id = HirId::new_owner(item.def_id());
-        match self.sess.def_table.get_def(item.def_id()).unwrap().kind() {
+        match self.sess.def_table.get_def(item.def_id()).kind() {
             DefKind::DeclareBuiltin => {
                 self.tyctx_mut().type_node(
                     hir_id,
@@ -295,21 +295,21 @@ impl<'hir> Typecker<'hir> {
         let lhs_ty = self.synth_expr(call.lhs)?;
         let lhs_ty = self.apply_ctx_on(lhs_ty);
         self._synth_call(
-            Spanned::new(self.hir.expr(call.lhs).span(), lhs_ty),
+            Spanned::new(self.hir.expr(call.lhs).span(), Typed::new(call.lhs, lhs_ty)),
             call.arg,
-            expr_id,
         )
     }
 
-    fn _synth_call(&mut self, lhs_ty: Spanned<Ty>, arg: Expr, call_expr: Expr) -> TyResult<Ty> {
-        verbose!("Synthesize call {} with arg {}", lhs_ty, arg);
+    fn _synth_call(&mut self, lhs: Spanned<Typed<Expr>>, arg: Expr) -> TyResult<Ty> {
+        verbose!("Synthesize call {} with arg {}", lhs, arg);
 
-        let span = lhs_ty.span();
-        let lhs_ty = lhs_ty.node();
+        let span = lhs.span();
+        let lhs_expr = *lhs.node().node();
+        let lhs_ty = lhs.node().ty();
 
         match lhs_ty.kind() {
             // FIXME: Or return Ok(lhs_ty)?
-            TyKind::Error => Ok(*lhs_ty),
+            TyKind::Error => Ok(lhs_ty),
             TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => {
                 MessageBuilder::error()
                     .text(format!("{} cannot be called", lhs_ty))
@@ -352,9 +352,12 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Forall(alpha, ty) => {
                 let alpha_ex = self.add_fresh_common_ex();
                 let substituted_ty = ty.substitute(Subst::Var(alpha), alpha_ex.1);
-                let body_ty = self._synth_call(Spanned::new(span, substituted_ty), arg, call_expr);
+                let body_ty = self._synth_call(
+                    Spanned::new(span, Typed::new(lhs_expr, substituted_ty)),
+                    arg,
+                );
 
-                self.tyctx_mut().bind_ty_var(call_expr, alpha, alpha_ex.1);
+                self.tyctx_mut().bind_ty_var(lhs_expr, alpha, alpha_ex.1);
 
                 body_ty
             },

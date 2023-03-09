@@ -64,6 +64,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Call { .. }
             | ExprKind::Lambda { .. }
             | ExprKind::Ty(_, _)
+            | ExprKind::Def(_, _)
             | ExprKind::Builtin(_) => {
                 let temp = unpack!(bb = self.as_temp(bb, expr_id));
                 bb.with(temp.lvalue())
@@ -97,6 +98,8 @@ impl<'ctx> MirBuilder<'ctx> {
                 // FIXME: Calls should be terminators?
                 self.push_assign(bb, dest, RValue::Call { lhs, arg, target });
 
+                self.builder.goto(bb, target);
+
                 bb.with(dest.operand().rvalue())
             },
             &ExprKind::Lambda { body_id, def_id } => {
@@ -104,6 +107,7 @@ impl<'ctx> MirBuilder<'ctx> {
                 bb.with(RValue::Closure(def_id))
             },
             ExprKind::Builtin(_) => todo!(),
+            &ExprKind::Def(def_id, ty) => bb.with(RValue::Def(def_id, ty)),
         }
     }
 
@@ -146,8 +150,15 @@ impl<'ctx> MirBuilder<'ctx> {
                 // FIXME: Calls should be terminators?
                 self.push_assign(bb, lvalue, RValue::Call { lhs, arg, target });
 
+                self.builder.goto(bb, target);
+
                 target.unit()
             },
+            &ExprKind::Def(def_id, ty) => {
+                self.push_assign(bb, lvalue, RValue::Def(def_id, ty));
+                bb.unit()
+            },
+
             ExprKind::Lambda { .. } | ExprKind::Ty(_, _) | ExprKind::Builtin(_) => {
                 assert!(!matches!(
                     expr.categorize(),

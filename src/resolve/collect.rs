@@ -72,7 +72,7 @@ impl<'ast> DefCollector<'ast> {
         verbose!("Define {} {} {} - {}", node_id, kind, ident, def_id);
 
         if let Some(old_def) = old_def {
-            let old_def = self.sess.def_table.get_def(old_def).unwrap();
+            let old_def = self.sess.def_table.get_def(old_def);
             MessageBuilder::error()
                 .span(ident.span())
                 .text(format!("Tried to redefine `{}`", ident.sym()))

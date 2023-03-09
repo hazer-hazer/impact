@@ -60,12 +60,14 @@ impl<'ctx> ThirBuilder<'ctx> {
                 ExprKind::Lit(lit)
             },
             hir::expr::ExprKind::Path(path) => match self.hir.path(path.0).res() {
-                hir::Res::Def(kind, _def_id) => match kind {
-                    DefKind::TyAlias => todo!(),
-                    DefKind::Func => todo!(),
-                    DefKind::Value => todo!(),
-                    DefKind::Lambda => todo!(),
-                    DefKind::DeclareBuiltin | DefKind::Root | DefKind::Mod => unreachable!(),
+                &hir::Res::Def(kind, def_id) => match kind {
+                    DefKind::Func | DefKind::Value => {
+                        ExprKind::Def(def_id, self.tyctx.tyof(expr_id))
+                    },
+                    DefKind::Lambda => unreachable!("Lambda cannot be resolved by path"),
+                    DefKind::TyAlias | DefKind::DeclareBuiltin | DefKind::Root | DefKind::Mod => {
+                        unreachable!("Expression path cannot point to such definition kinds")
+                    },
                 },
                 &hir::Res::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
                 hir::Res::Builtin(_) | hir::Res::DeclareBuiltin | hir::Res::Error => unreachable!(),
@@ -128,8 +130,8 @@ impl<'ctx> ThirBuilder<'ctx> {
             hir::pat::PatKind::Unit => PatKind::Unit,
             &hir::pat::PatKind::Ident(ident) => PatKind::Ident {
                 name: ident,
-                var: LocalVar::new(pat.id()),
-                ty: self.tyctx.tyof(pat.id()),
+                var: LocalVar::new(pat_id),
+                ty: self.tyctx.tyof(pat_id),
             },
         };
 

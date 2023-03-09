@@ -21,124 +21,16 @@ use super::{
     res::{NamePath, Res},
 };
 
-/// Resolution strategy is different for single-segment paths
-/// and multiple-segment paths.
-enum ResStrategy {
-    /// Try to find a local variable or ascend scopes looking for a name
-    Relative,
-
-    /// Relatively find definition of first segment then go by modules rest segments point to
-    Absolute,
-}
-
-struct SegInfo<'a> {
-    index: usize,
-    name: Ident,
-    span: Span,
-    is_target: bool,
-    prefix: (&'a str, Span),
-}
-
-enum SegResResult<'a> {
-    Ok(Res),
-    Err(MessageBuilder),
-    SearchMod(&'a Module),
-}
-
-trait ResolvePath {
-    fn resolve<'a>(
-        &self,
-        search_mod: &'a Module,
-        target_ns: Namespace,
-        f: impl FnMut(SegInfo, &Module) -> SegResResult<'a>,
-    ) -> Result<Res, MessageBuilder>;
-}
-
-impl ResolvePath for Path {
-    fn resolve<'a>(
-        &self,
-        mut search_mod: &'a Module,
-        target_ns: Namespace,
-        mut f: impl FnMut(SegInfo, &'a Module) -> SegResResult<'a>,
-    ) -> Result<Res, MessageBuilder> {
-        for (index, seg) in self.segments().iter().enumerate() {
-            let is_target = index == self.segments().len() - 1;
-            let name = *seg.expect_name();
-            let span = seg.span();
-            let prefix_str = &self.prefix_str(index);
-            let prefix_span = self.prefix_span(index);
-
-            let seg_info = SegInfo {
-                index,
-                name,
-                span,
-                is_target,
-                prefix: (prefix_str, prefix_span),
-            };
-
-            // Path prefix segments must be type identifiers
-            if !is_target && !seg.expect_name().is_ty() {
-                panic!("Must be check in ASTValidator");
-                // MessageBuilder::error()
-                //     .span(prefix_span)
-                //     .text(format!("Invalid path `{}`", path))
-                //     .label(
-                //         seg.span(),
-                //         format!("{} must be a type or module name", seg_name),
-                //     )
-                //     .emit(self);
-                // return Res::error();
-            }
-
-            let ns = if is_target {
-                target_ns
-            } else {
-                Namespace::Type
-            };
-
-            let def_id = match search_mod.get_from_ns(ns, &name) {
-                Some(def_id) => def_id,
-                None => {
-                    verbose!("Def {} not found in {:?}", name, search_mod);
-                    return Err(MessageBuilder::error()
-                        .span(prefix_span)
-                        .text(format!("Cannot find `{}` in {}", name, prefix_str))
-                        .label(span, format!("`{}` is not defined in {}", name, prefix_str)));
-                },
-            };
-
-            let seg_res = f(seg_info, search_mod);
-
-            match seg_res {
-                SegResResult::Ok(res) => return Ok(res),
-                SegResResult::Err(msg) => return Err(msg),
-                SegResResult::SearchMod(new_mod) => search_mod = new_mod,
-            }
-        }
-
-        unreachable!()
-    }
-}
-
 #[derive(Debug)]
-enum ScopeKind {
+enum Scope {
     Local(HashMap<Symbol, NodeId>),
     Module(ModuleId),
 }
 
-#[derive(Debug)]
-struct Scope {
-    kind: ScopeKind,
-}
-
 impl Scope {
-    pub fn new(kind: ScopeKind) -> Self {
-        Self { kind }
-    }
-
     pub fn add_local(&mut self, name: Symbol, node_id: NodeId) -> Option<NodeId> {
-        match &mut self.kind {
-            ScopeKind::Local(locals) => locals.insert(name, node_id),
+        match self {
+            Self::Local(locals) => locals.insert(name, node_id),
             _ => panic!("Cannot add local to non-local scope"),
         }
     }
@@ -168,8 +60,8 @@ impl<'ast> NameResolver<'ast> {
     fn define_var(&mut self, node_id: NodeId, ident: &Ident) {
         verbose!("Define var {} {}", node_id, ident);
 
-        match self.scope().kind {
-            ScopeKind::Module(module_id) => {
+        match self.scope() {
+            &Scope::Module(module_id) => {
                 // If we're not in block, then variable must defined as value in `DefCollector`
                 assert!(
                     self.sess
@@ -182,7 +74,7 @@ impl<'ast> NameResolver<'ast> {
                 );
                 return;
             },
-            ScopeKind::Local(_) => {},
+            Scope::Local(_) => {},
         }
 
         let old_local = self.scope_mut().add_local(ident.sym(), node_id);
@@ -215,7 +107,7 @@ impl<'ast> NameResolver<'ast> {
     }
 
     fn in_local_scope(&self) -> bool {
-        matches!(self.scope().kind, ScopeKind::Local(_))
+        matches!(self.scope(), Scope::Local(_))
     }
 
     fn enter_module_scope(&mut self, module_id: ModuleId) {
@@ -225,12 +117,11 @@ impl<'ast> NameResolver<'ast> {
             self.sess.def_table.get_module(module_id)
         );
 
-        self.scopes.push(Scope::new(ScopeKind::Module(module_id)));
+        self.scopes.push(Scope::Module(module_id));
     }
 
     fn enter_local_scope(&mut self) {
-        self.scopes
-            .push(Scope::new(ScopeKind::Local(Default::default())))
+        self.scopes.push(Scope::Local(Default::default()));
     }
 
     fn exit_scope(&mut self) {
@@ -238,39 +129,8 @@ impl<'ast> NameResolver<'ast> {
         self.scopes.pop();
     }
 
-    fn resolve_local(&mut self, name: &Ident) -> Option<Res> {
-        let mut scope_id = self.scopes.len() - 1;
-        loop {
-            match &self.scope_mut().kind {
-                ScopeKind::Local(locals) => {
-                    let local = &locals.get(&name.sym());
-                    if let Some(&local) = local {
-                        return Some(Res::local(local));
-                    }
-                },
-                &ScopeKind::Module(module_id) => {
-                    // TODO: Check def kind
-                    if let Some(def_id) = self
-                        .sess
-                        .def_table
-                        .get_module(module_id)
-                        .get_from_ns(Namespace::Value, name)
-                    {
-                        return Some(self.def_res(Namespace::Value, def_id));
-                    }
-                },
-            }
-
-            if scope_id == 0 {
-                break;
-            }
-            scope_id -= 1;
-        }
-        None
-    }
-
     fn def_res(&self, target_ns: Namespace, def_id: DefId) -> Res {
-        let def = self.sess.def_table.get_def(def_id).unwrap();
+        let def = self.sess.def_table.get_def(def_id);
 
         match def.kind() {
             DefKind::Lambda
@@ -290,15 +150,133 @@ impl<'ast> NameResolver<'ast> {
         }
     }
 
+    /// Try to find a local variable or ascend scopes looking for a name
+    fn resolve_relative(&mut self, target_ns: Namespace, name: &Ident) -> Res {
+        // TODO: When generics added, don't resolve local if segment has generics
+
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| {
+                match scope {
+                    Scope::Local(locals) if target_ns == Namespace::Value => {
+                        let local = &locals.get(&name.sym());
+                        if let Some(&local) = local {
+                            Some(Res::local(local))
+                        } else {
+                            None
+                        }
+                    },
+                    Scope::Local(_) => None,
+                    &Scope::Module(module_id) => {
+                        // TODO: Check def kind
+                        if let Some(def_id) = self
+                            .sess
+                            .def_table
+                            .get_module(module_id)
+                            .get_from_ns(target_ns, name)
+                        {
+                            Some(self.def_res(target_ns, def_id))
+                        } else {
+                            None
+                        }
+                    },
+                }
+            })
+            .unwrap_or_else(|| {
+                MessageBuilder::error()
+                    .span(name.span())
+                    .text(format!("`{}` is not defined in current scope", name))
+                    .emit_single_label(self);
+                Res::error()
+            })
+    }
+
+    fn resolve_module_relative(&mut self, name: &Ident, path: &Path) -> Option<ModuleId> {
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| {
+                match scope {
+                    Scope::Local(_) => None,
+                    &Scope::Module(module_id) => {
+                        // TODO: Check def kind
+                        if let Some(def_id) = self
+                            .sess
+                            .def_table
+                            .get_module(module_id)
+                            .get_from_ns(Namespace::Type, name)
+                        {
+                            Some(def_id)
+                        } else {
+                            None
+                        }
+                    },
+                }
+            })
+            .and_then(|def_id| {
+                // TODO: Alternatives
+                let def = self.sess.def_table.get_def(def_id);
+                match def.kind {
+                    DefKind::Mod => Some(ModuleId::Def(def_id)),
+                    DefKind::TyAlias => {
+                        MessageBuilder::error()
+                            .span(path.span())
+                            .text(format!("{} `{}` is not a module", def.kind, def.name))
+                            .emit_single_label(self);
+                        None
+                    },
+                    DefKind::Root
+                    | DefKind::Func
+                    | DefKind::Value
+                    | DefKind::Lambda
+                    | DefKind::DeclareBuiltin => unreachable!(),
+                }
+            })
+    }
+
+    /// Resolution strategy is different for single-segment paths
+    /// and multiple-segment paths.
     fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res {
-        let segments = path.segments();
+        if path.segments().len() == 1 {
+            // TODO: Assert that segment is lowercase for local variable?
+            self.resolve_relative(target_ns, path.segments()[0].expect_name())
+        } else {
+            self.resolve_path_absolute(target_ns, path)
+        }
+    }
 
-        let mut search_mod = self.sess.def_table.get_module(self.nearest_mod_item);
+    /// Relatively find definition of first segment then go by modules rest segments point to
+    fn resolve_path_absolute(&mut self, target_ns: Namespace, path: &Path) -> Res {
+        let search_mod =
+            self.resolve_module_relative(path.segments().first().unwrap().expect_name(), path);
 
-        for seg_index in 0..segments.len() {
-            let seg = &segments[seg_index];
-            let seg_name = seg.expect_name().sym();
-            let is_target = seg_index == segments.len() - 1;
+        let mut search_mod = if let Some(search_mod) = search_mod {
+            self.sess.def_table.get_module(search_mod)
+        } else {
+            return Res::error();
+        };
+
+        for (index, seg) in path.segments().iter().enumerate() {
+            let is_target = index == path.segments().len() - 1;
+            let name = *seg.expect_name();
+            let span = seg.span();
+            let prefix_str = &path.prefix_str(index);
+            let prefix_span = path.prefix_span(index);
+
+            // Path prefix segments must be type identifiers
+            if !is_target && !seg.expect_name().is_ty() {
+                panic!("Must be check in ASTValidator");
+                // MessageBuilder::error()
+                //     .span(prefix_span)
+                //     .text(format!("Invalid path `{}`", path))
+                //     .label(
+                //         seg.span(),
+                //         format!("{} must be a type or module name", seg_name),
+                //     )
+                //     .emit(self);
+                // return Res::error();
+            }
 
             let ns = if is_target {
                 target_ns
@@ -306,18 +284,14 @@ impl<'ast> NameResolver<'ast> {
                 Namespace::Type
             };
 
-            let def_id = match search_mod.get_from_ns(ns, seg.expect_name()) {
+            let def_id = match search_mod.get_from_ns(ns, &name) {
                 Some(def_id) => def_id,
                 None => {
-                    verbose!("Def {} not found in {:?}", seg_name, search_mod);
-                    let prefix = path.prefix_str(seg_index);
+                    verbose!("Def {} not found in {:?}", name, search_mod);
                     MessageBuilder::error()
-                        .span(path.prefix_span(seg_index))
-                        .text(format!("Cannot find `{}` in {}", seg_name, prefix))
-                        .label(
-                            seg.span(),
-                            format!("`{}` is not defined in {}", seg_name, prefix),
-                        )
+                        .span(prefix_span)
+                        .text(format!("Cannot find `{}` in {}", name, prefix_str))
+                        .label(span, format!("`{}` is not defined in {}", name, prefix_str))
                         .emit(self);
                     return Res::error();
                 },
@@ -331,42 +305,6 @@ impl<'ast> NameResolver<'ast> {
         }
 
         unreachable!()
-    }
-
-    fn resolve_path_relative(&mut self, target_ns: Namespace, path: &Path) -> Res {
-        assert!(path.segments().len() == 1);
-
-        // TODO: When generics added, don't resolve local if segment has generics
-        if self.in_local_scope() && target_ns == Namespace::Value {
-            // TODO: Assert that segment is lowercase for local variable?
-            if let Some(local) = self.resolve_local(path.segments()[0].expect_name()) {
-                return local;
-            }
-        }
-
-        path.resolve(
-            self.sess.def_table.get_module(self.nearest_mod_item),
-            target_ns,
-            |seg_info, search_mod| {
-                let SegInfo {
-                    index,
-                    name,
-                    span,
-                    is_target,
-                    prefix,
-                } = seg_info;
-
-                todo!()
-            },
-        )
-        .unwrap_or_else(|err| {
-            err.emit(self);
-            Res::error()
-        })
-    }
-
-    fn resolve_path_absolute(&mut self, target_ns: Namespace, path: &Path) -> Res {
-        todo!()
     }
 }
 

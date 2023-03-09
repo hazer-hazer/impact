@@ -44,6 +44,7 @@ pub enum ExprCategory {
 pub enum ExprKind {
     Lit(Lit),
     LocalRef(LocalVar),
+    Def(DefId, Ty),
     Block(BlockId),
     Call {
         func_ty: Ty,
@@ -75,6 +76,7 @@ impl Expr {
         match self.kind {
             ExprKind::Lit(_) => ExprCategory::Const,
             ExprKind::LocalRef(_) => ExprCategory::LValue,
+            ExprKind::Def(_, _) => ExprCategory::RValue,
             // FIXME: Ascription is an lvalue?
             ExprKind::Ty(_, _) => ExprCategory::LValue,
             ExprKind::Call { .. } | ExprKind::Lambda { .. } | ExprKind::Block(_) => {

@@ -1,7 +1,7 @@
 use super::{
     build::{unpack, MirBuilder},
     thir::{ExprId, ExprKind},
-    BBWith, LValue, RValue, StmtKind, BB,
+    BBWith, LValue, RValue, StmtKind, Terminator, TerminatorKind, BB,
 };
 
 impl<'ctx> MirBuilder<'ctx> {
@@ -19,6 +19,7 @@ impl<'ctx> MirBuilder<'ctx> {
         match &expr.kind {
             ExprKind::Lit(_)
             | ExprKind::LocalRef(_)
+            | ExprKind::Def(_, _)
             | ExprKind::Block(_)
             | ExprKind::Call { .. }
             | ExprKind::Lambda { .. }

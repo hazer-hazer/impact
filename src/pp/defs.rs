@@ -51,7 +51,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                 self.string(def_id);
                 self.punct(Punct::Colon);
 
-                let def = self.sess.def_table.get_def(*def_id).unwrap();
+                let def = self.sess.def_table.get_def(*def_id);
 
                 self.string(def.kind());
 

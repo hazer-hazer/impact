@@ -150,6 +150,7 @@ pub enum RValue {
 
     // TODO: Upvars
     Closure(DefId),
+    Def(DefId, Ty),
 
     // TODO: Maybe move to terminator only when doing algebraic effects.
     Call {
@@ -226,7 +227,9 @@ impl BasicBlockBuilder {
     fn emit(self) -> BasicBlock {
         BasicBlock {
             stmts: self.stmts,
-            terminator: self.terminator.unwrap(),
+            terminator: self
+                .terminator
+                .expect("Cannot create BasicBlock without terminator"),
         }
     }
 }
@@ -245,15 +248,41 @@ impl BodyBuilder {
     }
 
     pub fn end_bb(&mut self, bb: BB, terminator: Terminator) {
-        self.basic_blocks.get_mut(bb).unwrap().terminate(terminator);
+        self.bb_mut(bb).terminate(terminator);
+    }
+
+    fn bb(&self, bb: BB) -> &BasicBlockBuilder {
+        self.basic_blocks.get(bb).as_ref().unwrap()
+    }
+
+    fn bb_mut(&mut self, bb: BB) -> &mut BasicBlockBuilder {
+        self.basic_blocks.get_mut(bb).unwrap()
     }
 
     pub fn push_stmt(&mut self, bb: BB, stmt: Stmt) {
-        self.basic_blocks.get_mut(bb).unwrap().push_stmt(stmt);
+        self.bb_mut(bb).push_stmt(stmt);
     }
 
     pub fn terminate(&mut self, bb: BB, terminator: Terminator) {
-        self.basic_blocks.get_mut(bb).unwrap().terminate(terminator);
+        self.bb_mut(bb).terminate(terminator);
+    }
+
+    pub fn terminate_return(&mut self, bb: BB) {
+        self.terminate(
+            bb,
+            Terminator {
+                kind: TerminatorKind::Return,
+            },
+        )
+    }
+
+    pub fn goto(&mut self, bb: BB, goto: BB) {
+        self.terminate(
+            bb,
+            Terminator {
+                kind: TerminatorKind::Goto(goto),
+            },
+        )
     }
 
     pub fn push_local(&mut self, local_info: LocalInfo) -> Local {

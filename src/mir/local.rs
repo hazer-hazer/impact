@@ -33,7 +33,7 @@ impl<'ctx> MirBuilder<'ctx> {
 
     pub fn declare_bindings(&mut self, pat: &Pat) {
         match pat.kind {
-            PatKind::Unit => todo!(),
+            PatKind::Unit => {},
             PatKind::Ident { var, ty, .. } => {
                 let local = self.builder.push_local(LocalInfo::new(ty, pat.span));
                 self.bind_local_var(var.into(), local);

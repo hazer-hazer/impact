@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     cli::verbose,
     hir::{
@@ -50,6 +52,31 @@ impl TypeckErr {
             TypeckErr::Reported => {},
             TypeckErr::Check | TypeckErr::LateReport => panic!(),
         }
+    }
+}
+
+pub struct Typed<T>(T, Ty);
+
+impl<T> Typed<T> {
+    pub fn new(node: T, ty: Ty) -> Self {
+        Self(node, ty)
+    }
+
+    pub fn node(&self) -> &T {
+        &self.0
+    }
+
+    pub fn ty(&self) -> Ty {
+        self.1
+    }
+}
+
+impl<T> Display for Typed<T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.0, self.1)
     }
 }
 
@@ -470,7 +497,7 @@ impl<'hir> Typecker<'hir> {
 
     fn conv_ty_alias(&mut self, ty_alias_def_id: DefId) -> Ty {
         let hir_id = HirId::new_owner(ty_alias_def_id);
-        let def = self.sess.def_table.get_def(ty_alias_def_id).unwrap();
+        let def = self.sess.def_table.get_def(ty_alias_def_id);
         if let Some(def_ty) = self.tyctx().node_type(hir_id) {
             return def_ty;
         }

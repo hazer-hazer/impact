@@ -556,7 +556,7 @@ impl<'ast> Lower<'ast> {
                     .get_expect(node_id, &format!("Local ciable resolution {}", res)),
             ),
             &res::ResKind::Def(def_id) => {
-                Res::Def(self.sess.def_table.get_def(def_id).unwrap().kind, def_id)
+                Res::Def(self.sess.def_table.get_def(def_id).kind, def_id)
             },
             &res::ResKind::DeclareBuiltin => Res::DeclareBuiltin,
             res::ResKind::Error => Res::Error,

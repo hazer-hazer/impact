@@ -4,6 +4,7 @@ use crate::{
         Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,
         TerminatorKind, MIR,
     },
+    resolve::def::DefKind,
     session::Session,
 };
 
@@ -11,6 +12,7 @@ use super::AstLikePP;
 
 pub struct MirPrinter<'ctx> {
     pub pp: AstLikePP<'ctx>,
+    sess: &'ctx Session,
     mir: &'ctx MIR,
 }
 
@@ -18,6 +20,7 @@ impl<'ctx> MirPrinter<'ctx> {
     pub fn new(sess: &'ctx Session, mir: &'ctx MIR) -> Self {
         Self {
             pp: AstLikePP::new(&sess, super::AstPPMode::Normal),
+            sess,
             mir,
         }
     }
@@ -72,6 +75,14 @@ impl<'ctx> MirPrinter<'ctx> {
                 self.pp.sp();
                 self.print_operand(arg);
                 self.pp.string(format!(" -> {}", target));
+            },
+            &RValue::Def(def_id, ty) => {
+                let def = self.sess.def_table.get_def(def_id);
+                // match def.kind() {
+                //     DefKind::Func => todo!(),
+                //     DefKind::Value => todo!(),
+                // }
+                self.pp.string(format!("{}: {}", def.name(), ty));
             },
         }
     }
