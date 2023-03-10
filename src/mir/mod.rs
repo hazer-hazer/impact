@@ -156,7 +156,7 @@ pub enum RValue {
     Call {
         lhs: Operand,
         arg: Operand,
-        target: BB,
+        // target: BB,
     },
 }
 

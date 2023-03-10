@@ -38,7 +38,8 @@ pub enum Lit {
 pub enum ExprCategory {
     Const,
     LValue,
-    RValue,
+    StoreRValue,
+    AsRValue,
 }
 
 pub enum ExprKind {
@@ -76,12 +77,13 @@ impl Expr {
         match self.kind {
             ExprKind::Lit(_) => ExprCategory::Const,
             ExprKind::LocalRef(_) => ExprCategory::LValue,
-            ExprKind::Def(_, _) => ExprCategory::RValue,
-            // FIXME: Ascription is an lvalue?
-            ExprKind::Ty(_, _) => ExprCategory::LValue,
-            ExprKind::Call { .. } | ExprKind::Lambda { .. } | ExprKind::Block(_) => {
-                ExprCategory::RValue
-            },
+
+            ExprKind::Call { .. } | ExprKind::Block(_) => ExprCategory::StoreRValue,
+            ExprKind::Def(_, _) | ExprKind::Lambda { .. } => ExprCategory::AsRValue,
+
+            // FIXME: Ascription is an lvalue or category of inner expression?
+            ExprKind::Ty(_, _) => todo!(),
+
             ExprKind::Builtin(_) => todo!(),
         }
     }

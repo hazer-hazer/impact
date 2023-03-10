@@ -2,7 +2,9 @@ use clap::error::ErrorKind;
 use clap::{arg, command};
 use clap::{ArgMatches, Error, Parser};
 
-use crate::config::config::{Config, ConfigBuilder, PPStages, StageName};
+use crate::config::config::{Config, ConfigBuilder};
+
+use super::command::{Args, PPStages, StageName};
 
 impl TryFrom<ArgMatches> for PPStages {
     type Error = Error;
@@ -24,38 +26,6 @@ impl TryFrom<ArgMatches> for PPStages {
             Ok(Self::None)
         }
     }
-}
-
-#[derive(Parser, Debug)]
-#[command(author, version, about)]
-struct Args {
-    /// PP Section
-
-    /// Pretty-print compilation stages
-    #[arg(long, help_heading = "Debug options")]
-    pp_stages: Option<Vec<StageName>>,
-
-    /// Print IDs in AST-like structures (AST, HIR, etc.)
-    #[arg(long, default_value_t = false, help_heading = "Debug options")]
-    pp_ast_ids: bool,
-
-    /// Compile until specified stage
-    #[arg(long, help_heading = "Debug options")]
-    compilation_depth: Option<StageName>,
-
-    // TODO: File with expected output
-    /// Assert that compiler debug info equals to the given string
-    #[arg(long, help_heading = "Debug options")]
-    expected_output: Option<String>,
-
-    // interruption_reason
-    /// Emit verbose debug messages
-    #[arg(long, default_value_t = false, help_heading = "Debug options")]
-    verbose_messages: bool,
-
-    /// Prints tree view of parser entries
-    #[arg(long, default_value_t = false, help_heading = "Debug options")]
-    parser_debug: bool,
 }
 
 impl Into<Config> for Args {

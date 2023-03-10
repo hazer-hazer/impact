@@ -6,7 +6,7 @@ type () = builtin "UnitTy"
 (+) = builtin "AddInt"
 (-) = builtin "SubInt"
 
-main () =
-    id a = a
+foo () = 123: i32
 
-    id ()
+main () =
+    foo ()

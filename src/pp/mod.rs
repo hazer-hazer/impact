@@ -106,7 +106,12 @@ impl<'a, D> AstLikePP<'a, D> {
 
     pub fn ty(&mut self, id: HirId) -> &mut Self {
         if self.mode == AstPPMode::TyAnno {
-            self.string(self.sess.tyctx.pp_typed_node(id));
+            self.string(
+                self.sess
+                    .tyctx
+                    .pp_typed_node(id)
+                    .fg_color(Color::BrightBlue),
+            );
         }
         self
     }
@@ -149,13 +154,15 @@ impl<'a, D> AstLikePP<'a, D> {
         self
     }
 
-    fn indent(&mut self) {
+    fn indent(&mut self) -> &mut Self {
         self.indent_level += 1;
+        self
     }
 
-    fn dedent(&mut self) {
+    fn dedent(&mut self) -> &mut Self {
         assert_ne!(self.indent_level, 0);
         self.indent_level -= 1;
+        self
     }
 
     fn cur_indent(&self) -> String {

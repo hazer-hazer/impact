@@ -68,7 +68,10 @@ impl GlobalCtx {
         match ty.kind() {
             TyKind::Error | TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => ty,
             // FIXME: Can we panic on unwrap?
-            &TyKind::Existential(ex) => self.apply_on(self.get_solution(ex).unwrap()),
+            &TyKind::Existential(ex) => self.apply_on(
+                self.get_solution(ex)
+                    .expect(&format!("Unsolved existential {}", ex)),
+            ),
             &TyKind::Func(param, body) => Ty::func(self.apply_on(param), self.apply_on(body)),
             &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
         }

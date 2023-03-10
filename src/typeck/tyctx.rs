@@ -81,9 +81,8 @@ impl TyCtx {
 
     fn _instantiated_ty(&self, expr: Expr, ty: Ty) -> Result<Ty, String> {
         match ty.kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Prim(_) => {
-                Err(format!("{} is non-callable type", ty))
-            },
+            TyKind::Error => todo!(),
+            TyKind::Unit | TyKind::Prim(_) => Ok(ty),
             &TyKind::Var(var) => self.instantiated_ty_var(expr, var),
             // FIXME: Panic?
             TyKind::Existential(_) => panic!(),

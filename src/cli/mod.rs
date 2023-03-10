@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod color;
+pub mod command;
 
 macro_rules! verbose {
     ($($arg:tt)*) => {{

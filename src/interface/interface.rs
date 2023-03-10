@@ -4,10 +4,10 @@ use inkwell::context::Context;
 
 use crate::{
     ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, MappedAst, NodeId},
-    cli::verbose,
+    cli::{command::StageName, verbose},
     codegen::codegen::CodeGen,
-    config::config::{Config, StageName},
-    hir::{visitor::HirVisitor, HirId, OwnerId, OwnerChildId},
+    config::config::Config,
+    hir::{visitor::HirVisitor, HirId, OwnerChildId, OwnerId},
     interface::writer::outln,
     lower::Lower,
     mir::build::BuildFullMir,
@@ -187,7 +187,13 @@ impl<'ast> Interface {
 
         let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
-        verbose!("#0:#1 node {:?}", hir.node(HirId::new(OwnerId::new(DefId::new(0)), OwnerChildId::new(1))));
+        verbose!(
+            "#0:#1 node {:?}",
+            hir.node(HirId::new(
+                OwnerId::new(DefId::new(0)),
+                OwnerChildId::new(1)
+            ))
+        );
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = HirPP::new(&sess, AstPPMode::Normal);
@@ -222,16 +228,16 @@ impl<'ast> Interface {
         verbose!("=== MIR Construction ===");
         let stage = StageName::MirConstruction;
 
-        let (mir, sess) = BuildFullMir::new(sess, &hir).run_and_emit(true)?;
-
-        let mut sess = self.should_stop(sess, stage)?;
+        let (mir, mut sess) = BuildFullMir::new(sess, &hir).run_and_emit(true)?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = MirPrinter::new(&sess, &mir);
             pp.visit_hir(&hir);
             let mir = pp.pp.get_string();
-            outln!(sess.writer, "MIR\n{}", mir);
+            outln!(sess.writer, "== MIR ==\n{}", mir);
         }
+
+        let sess = self.should_stop(sess, stage)?;
 
         // Codegen //
         verbose!("=== Codegen ===");
@@ -247,6 +253,11 @@ impl<'ast> Interface {
 
     fn should_stop<'a>(&self, sess: Session, stage: StageName) -> UnitInterruptResult<'a> {
         if self.config.compilation_depth() <= stage {
+            verbose!(
+                "Should stop on {} as {} is configured",
+                stage,
+                self.config.compilation_depth()
+            );
             Err((InterruptionReason::ConfiguredStop, sess))
         } else {
             Ok(sess)

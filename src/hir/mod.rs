@@ -52,6 +52,13 @@ impl HirId {
         Self { owner, id }
     }
 
+    pub fn synth(owner: u32, id: u32) -> Self {
+        Self {
+            owner: OwnerId::new(DefId::new(owner)),
+            id: OwnerChildId(id),
+        }
+    }
+
     pub fn new_owner(def_id: DefId) -> Self {
         Self {
             owner: OwnerId(def_id),
@@ -83,6 +90,12 @@ impl HirId {
 impl Display for HirId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}:{}]", self.owner, self.id)
+    }
+}
+
+impl WithHirId for HirId {
+    fn id(&self) -> HirId {
+        *self
     }
 }
 

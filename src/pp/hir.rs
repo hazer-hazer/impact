@@ -61,12 +61,12 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_stmt(&mut self, stmt: &Stmt, hir: &HIR) {
         let stmt = hir.stmt(*stmt);
-        self.pp.hir_id(stmt);
 
         match stmt.kind() {
             StmtKind::Expr(expr) => self.visit_expr_stmt(&expr, hir),
             StmtKind::Item(item) => self.visit_item_stmt(&item, hir),
         }
+        self.pp.hir_id(stmt);
     }
 
     // Items //
@@ -109,6 +109,8 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.string(name.original_string());
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
+        self.pp.sp();
+        self.visit_pat(&hir.body(*body).param, hir);
         self.pp.str(" = ");
         self.visit_body(body, hir);
     }
@@ -123,8 +125,6 @@ impl<'a> HirVisitor for HirPP<'a> {
         let expr_id = *expr_id;
         let expr = hir.expr(expr_id);
 
-        self.pp.hir_id(expr);
-
         match &expr.kind() {
             ExprKind::Lit(lit) => self.visit_lit_expr(lit, hir),
             ExprKind::Path(path) => self.visit_path_expr(path, hir),
@@ -136,6 +136,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::BuiltinExpr(bt) => self.visit_builtin_expr(bt),
         }
         self.pp.ty_anno(expr_id);
+        self.pp.hir_id(expr);
     }
 
     fn visit_lit_expr(&mut self, lit: &Lit, _hir: &HIR) {
@@ -174,7 +175,6 @@ impl<'a> HirVisitor for HirPP<'a> {
     // Types //
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
         let ty = hir.ty(*ty);
-        self.pp.hir_id(ty);
 
         match &ty.kind() {
             TyKind::Path(path) => self.visit_ty_path(path, hir),
@@ -182,6 +182,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             TyKind::App(cons, arg) => self.visit_ty_app(cons, arg, hir),
             TyKind::Builtin(bt) => self.visit_builtin_ty(bt, hir),
         }
+        self.pp.hir_id(ty);
     }
 
     fn visit_func_ty(&mut self, param_ty: &Ty, return_ty: &Ty, hir: &HIR) {
@@ -224,15 +225,14 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_path(&mut self, path: &Path, hir: &HIR) {
         let path = hir.path(*path);
-        self.pp.hir_id(path);
 
         // TODO: Operator name in parentheses
         self.pp.string(path);
+        self.pp.hir_id(path);
     }
 
     fn visit_block(&mut self, block: &Block, hir: &HIR) {
         let block = hir.block(*block);
-        self.pp.hir_id(block);
 
         self.pp.nl();
         walk_block!(self, block.stmts(), visit_stmt, hir);
@@ -240,5 +240,6 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.out_indent();
         block.expr().map(|expr| self.visit_expr(&expr, hir));
         self.pp.dedent();
+        self.pp.hir_id(block);
     }
 }

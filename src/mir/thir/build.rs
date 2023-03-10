@@ -81,9 +81,9 @@ impl<'ctx> ThirBuilder<'ctx> {
                 def_id,
             },
             &hir::expr::ExprKind::Call(hir::expr::Call { lhs, arg }) => ExprKind::Call {
-                func_ty: self.tyctx.instantiated_func_ty(lhs).unwrap_or(Ty::error()),
                 lhs: self.expr(lhs),
                 arg: self.expr(arg),
+                func_ty: self.tyctx.instantiated_func_ty(lhs).unwrap(),
             },
             &hir::expr::ExprKind::Let(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Ty(hir::expr::TyExpr { expr, ty: _ }) => {

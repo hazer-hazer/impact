@@ -36,7 +36,7 @@ impl<'ctx> MirBuilder<'ctx> {
         let expr = self.thir.expr(expr_id);
         match expr.categorize() {
             ExprCategory::Const => bb.with(self.as_const(bb, expr_id).operand()),
-            ExprCategory::LValue | ExprCategory::RValue => {
+            ExprCategory::LValue | ExprCategory::AsRValue | ExprCategory::StoreRValue => {
                 let operand = unpack!(bb = self.as_temp(bb, expr_id));
                 bb.with(operand.lvalue().operand())
             },
@@ -77,10 +77,14 @@ impl<'ctx> MirBuilder<'ctx> {
         let expr_span = expr.span;
         match &expr.kind {
             ExprKind::Lit(_) => bb.with(self.as_const(bb, expr_id).operand().rvalue()),
-            ExprKind::Ty(_, _) | ExprKind::Block(_) | ExprKind::LocalRef(_) => {
+
+            // FIXME: We need to gen cast from ascription?
+            &ExprKind::Ty(expr_id, _) => self.as_rvalue(bb, expr_id),
+
+            ExprKind::Block(_) | ExprKind::LocalRef(_) => {
                 assert!(!matches!(
                     expr.categorize(),
-                    ExprCategory::RValue | ExprCategory::Const
+                    ExprCategory::AsRValue | ExprCategory::Const
                 ));
 
                 let operand = unpack!(bb = self.as_operand(bb, expr_id));
@@ -93,12 +97,12 @@ impl<'ctx> MirBuilder<'ctx> {
 
                 let dest = self.temp_lvalue(func_ty.return_ty(), expr_span);
 
-                let target = self.builder.begin_bb();
+                // let target = self.builder.begin_bb();
 
                 // FIXME: Calls should be terminators?
-                self.push_assign(bb, dest, RValue::Call { lhs, arg, target });
+                self.push_assign(bb, dest, RValue::Call { lhs, arg });
 
-                self.builder.goto(bb, target);
+                // self.builder.goto(bb, target);
 
                 bb.with(dest.operand().rvalue())
             },
@@ -106,8 +110,9 @@ impl<'ctx> MirBuilder<'ctx> {
                 self.builder.references_body(body_id);
                 bb.with(RValue::Closure(def_id))
             },
-            ExprKind::Builtin(_) => todo!(),
             &ExprKind::Def(def_id, ty) => bb.with(RValue::Def(def_id, ty)),
+
+            ExprKind::Builtin(_) => todo!(),
         }
     }
 
@@ -126,7 +131,9 @@ impl<'ctx> MirBuilder<'ctx> {
     pub(super) fn store_expr(&mut self, mut bb: BB, lvalue: LValue, expr_id: ExprId) -> BBWith<()> {
         let expr = self.thir.expr(expr_id);
         match &expr.kind {
-            ExprKind::Lit(_) => todo!(),
+            // FIXME
+            &ExprKind::Ty(expr_id, _) => self.store_expr(bb, lvalue, expr_id),
+
             ExprKind::LocalRef(_) => {
                 assert_eq!(expr.categorize(), ExprCategory::LValue);
 
@@ -145,24 +152,24 @@ impl<'ctx> MirBuilder<'ctx> {
                 let lhs = unpack!(bb = self.as_operand(bb, lhs));
                 let arg = unpack!(bb = self.as_operand(bb, arg));
 
-                let target = self.builder.begin_bb();
+                // let target = self.builder.begin_bb();
 
                 // FIXME: Calls should be terminators?
-                self.push_assign(bb, lvalue, RValue::Call { lhs, arg, target });
+                self.push_assign(bb, lvalue, RValue::Call { lhs, arg });
 
-                self.builder.goto(bb, target);
+                // self.builder.goto(bb, target);
+                // target.unit()
 
-                target.unit()
-            },
-            &ExprKind::Def(def_id, ty) => {
-                self.push_assign(bb, lvalue, RValue::Def(def_id, ty));
                 bb.unit()
             },
 
-            ExprKind::Lambda { .. } | ExprKind::Ty(_, _) | ExprKind::Builtin(_) => {
+            ExprKind::Lit(_)
+            | ExprKind::Def(_, _)
+            | ExprKind::Lambda { .. }
+            | ExprKind::Builtin(_) => {
                 assert!(!matches!(
                     expr.categorize(),
-                    ExprCategory::RValue | ExprCategory::LValue
+                    ExprCategory::StoreRValue | ExprCategory::LValue
                 ));
                 let rvalue = unpack!(bb = self.as_rvalue(bb, expr_id));
                 self.push_assign(bb, lvalue, rvalue);

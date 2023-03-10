@@ -6,8 +6,8 @@ use std::{
 };
 
 use impact::{
-    cli::color::{Color, Colorize},
-    config::config::{Config, ConfigBuilder, PPStages, StageName},
+    cli::{color::{Color, Colorize}, command::{PPStages, StageName}},
+    config::config::{Config, ConfigBuilder},
     interface::interface::{Interface, InterruptionReason},
     session::Source,
 };
