@@ -8,7 +8,6 @@ use crate::{
         NodeId, NodeMap, Path, PathSeg, ReservedNodeId, WithNodeId, AST, N, PR, ROOT_NODE_ID,
     },
     cli::verbose,
-    dt::idx::Idx,
     hir::{
         self,
         item::{ItemId, ItemNode, Mod, TyAlias},

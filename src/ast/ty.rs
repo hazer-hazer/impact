@@ -1,9 +1,17 @@
 use std::fmt::Display;
 
-use crate::span::span::{Span, WithSpan};
+use crate::span::span::{ Span, WithSpan };
 
 use super::{
-    expr::Expr, pr_display, pr_node_kind_str, NodeId, NodeKindStr, Path, WithNodeId, N, PR,
+    expr::Expr,
+    pr_display,
+    pr_node_kind_str,
+    NodeId,
+    NodeKindStr,
+    Path,
+    WithNodeId,
+    N,
+    PR,
 };
 
 #[derive(Debug)]
@@ -67,12 +75,12 @@ impl Display for TyKind {
             TyKind::Path(path) => write!(f, "{}", pr_display(&path.0)),
             TyKind::Func(param_ty, return_ty) => {
                 write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
-            },
+            }
             TyKind::Paren(inner) => write!(f, "{}", pr_display(inner)),
             TyKind::App(cons, arg) => write!(f, "{} {}", pr_display(cons), pr_display(arg)),
             TyKind::AppExpr(cons, const_arg) => {
                 write!(f, "{} {}", pr_display(cons), pr_display(const_arg))
-            },
+            }
         }
     }
 }
@@ -87,7 +95,7 @@ impl NodeKindStr for TyKind {
             TyKind::Paren(inner) => format!("{{{}}}", pr_node_kind_str(inner)),
             TyKind::AppExpr(cons, _) | TyKind::App(cons, _) => {
                 format!("{} type constructor", pr_node_kind_str(cons))
-            },
+            }
         }
     }
 }

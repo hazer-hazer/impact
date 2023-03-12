@@ -1,7 +1,7 @@
 use super::{
     build::{unpack, MirBuilder},
     thir::{ExprId, ExprKind},
-    BBWith, LValue, RValue, StmtKind, Terminator, TerminatorKind, BB,
+    BBWith, LValue, RValue, StmtKind, BB,
 };
 
 impl<'ctx> MirBuilder<'ctx> {

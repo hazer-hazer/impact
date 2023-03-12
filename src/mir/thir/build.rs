@@ -2,7 +2,7 @@ use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
     resolve::def::DefKind,
     span::span::WithSpan,
-    typeck::{ty::Ty, tyctx::TyCtx},
+    typeck::{tyctx::TyCtx},
 };
 
 use super::{

@@ -7,7 +7,7 @@ use crate::{
     cli::{command::StageName, verbose},
     codegen::codegen::CodeGen,
     config::config::Config,
-    hir::{visitor::HirVisitor, HirId, OwnerChildId, OwnerId},
+    hir::{visitor::HirVisitor},
     interface::writer::outln,
     lower::Lower,
     mir::build::BuildFullMir,
@@ -187,14 +187,6 @@ impl<'ast> Interface {
 
         let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
 
-        verbose!(
-            "#0:#1 node {:?}",
-            hir.node(HirId::new(
-                OwnerId::new(DefId::new(0)),
-                OwnerChildId::new(1)
-            ))
-        );
-
         if sess.config().check_pp_stage(stage) {
             let mut pp = HirPP::new(&sess, AstPPMode::Normal);
             pp.visit_hir(&hir);
@@ -243,8 +235,7 @@ impl<'ast> Interface {
         verbose!("=== Codegen ===");
         let stage = StageName::Codegen;
 
-        let ctx = Context::create();
-        let (_module, sess) = CodeGen::new(sess, &hir, &ctx).run_and_emit(true)?;
+        let (_module, sess) = CodeGen::new(sess, &mir).run_and_emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
 

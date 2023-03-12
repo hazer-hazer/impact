@@ -8,7 +8,6 @@ mod thir;
 
 use std::{
     collections::{HashMap, HashSet},
-    default,
     fmt::Display,
 };
 

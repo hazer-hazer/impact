@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    def::{DefId, Module, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
+    def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
     res::{NamePath, Res},
 };
 

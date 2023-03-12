@@ -1,6 +1,6 @@
 use std::env;
 
-use clap::CommandFactory;
+use clap::{CommandFactory, Error};
 use clap_complete::{generate_to, Shell};
 
 include!("src/cli/command.rs");

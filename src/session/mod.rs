@@ -2,6 +2,8 @@
  * Session is a compilation context passed through all stages of compilation.
  */
 
+use inkwell::context::Context;
+
 use crate::{
     ast::{AstMetadata, NodeId},
     cli::color::{Color, Colorize},
@@ -15,7 +17,7 @@ use crate::{
     },
     resolve::{def::DefTable, res::Resolutions},
     span::span::{Span, SpanPos},
-    typeck::tyctx::TyCtx,
+    typeck::tyctx::TyCtx, hir::HIR,
 };
 
 declare_idx!(SourceId, u32, "source[{}]", Color::White);
@@ -211,7 +213,8 @@ pub struct Session {
     pub def_table: DefTable,
     pub res: Resolutions,
     pub tyctx: TyCtx,
-    // pub hir: HIR,
+    pub hir: HIR,
+    pub llvm_ctx: Context,
 }
 
 impl Session {
@@ -224,6 +227,8 @@ impl Session {
             def_table: Default::default(),
             res: Resolutions::default(),
             tyctx: TyCtx::new(),
+            hir: HIR::new(),
+            llvm_ctx: Context::create(),
         }
     }
 
@@ -244,6 +249,15 @@ impl Session {
 pub struct WithSession<'a, T> {
     sess: &'a Session,
     val: &'a T,
+}
+
+pub trait SessionHolder {
+    fn sess(&self) -> &Session;
+    fn sess_mut(&mut self) -> &mut Session;
+
+    fn hir(&self) -> &HIR {
+        &self.sess().hir
+    }
 }
 
 pub struct StageOutput<T> {

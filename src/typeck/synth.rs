@@ -291,7 +291,7 @@ impl<'hir> Typecker<'hir> {
     //     })
     // }
 
-    fn synth_call(&mut self, call: &Call, expr_id: Expr) -> TyResult<Ty> {
+    fn synth_call(&mut self, call: &Call, _expr_id: Expr) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(call.lhs)?;
         let lhs_ty = self.apply_ctx_on(lhs_ty);
         self._synth_call(

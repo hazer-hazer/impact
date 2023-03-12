@@ -1,5 +1,5 @@
 use clap::error::ErrorKind;
-use clap::{arg, command};
+
 use clap::{ArgMatches, Error, Parser};
 
 use crate::config::config::{Config, ConfigBuilder};

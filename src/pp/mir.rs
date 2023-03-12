@@ -4,14 +4,12 @@ use crate::{
         item::ItemId,
         pat::{Pat, PatKind},
         visitor::HirVisitor,
-        BodyId, BodyOwnerKind, OwnerId, WithHirId, HIR,
+        BodyId, WithHirId, HIR,
     },
     mir::{
         Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,
         TerminatorKind, MIR,
     },
-    parser::token::Punct,
-    resolve::def::DefKind,
     session::Session,
     span::span::Ident,
 };

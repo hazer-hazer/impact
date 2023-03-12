@@ -1,7 +1,7 @@
 use crate::{
     cli::color::Color,
     cli::color::Colorize,
-    dt::idx::{declare_idx, Idx},
+    dt::idx::{declare_idx},
     resolve::def::DefId,
     span::span::{Ident, Span, WithSpan},
 };

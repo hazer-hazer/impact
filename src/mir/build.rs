@@ -4,14 +4,13 @@ use crate::{
     dt::idx::Idx,
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
     message::message::MessageStorage,
-    mir::thir::PatKind,
     session::{Session, Stage, StageOutput},
     typeck::tyctx::TyCtx,
 };
 
 use super::{
-    thir::{build::ThirBuilder, ExprId, LocalVar, ParamId, Pat, THIR},
-    BBWith, Body, BodyBuilder, LValue, Local, LocalInfo, MIR, START_BB,
+    thir::{build::ThirBuilder, ExprId, LocalVar, ParamId, THIR},
+    BBWith, Body, BodyBuilder, LValue, Local, MIR,
 };
 
 macro_rules! unpack {
@@ -43,7 +42,7 @@ impl<'ctx> MirBuilder<'ctx> {
     pub fn build(body_owner: OwnerId, hir: &'ctx HIR, tyctx: &'ctx TyCtx) -> Body {
         let (thir, thir_entry_expr) = ThirBuilder::new(hir, tyctx, body_owner).build_body_thir();
 
-        let mut this = Self {
+        let this = Self {
             thir_entry_expr,
             thir,
             builder: BodyBuilder::default(),
@@ -115,10 +114,10 @@ impl<'ctx> BuildFullMir<'ctx> {
 impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
     fn visit_func_item(
         &mut self,
-        name: crate::span::span::Ident,
+        _name: crate::span::span::Ident,
         body: &hir::BodyId,
         id: hir::item::ItemId,
-        hir: &HIR,
+        _hir: &HIR,
     ) {
         if id.def_id() == self.sess.def_table.builtin_func().def_id() {
             return;
@@ -126,7 +125,7 @@ impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
         self.build(*body, id.into());
     }
 
-    fn visit_lambda(&mut self, lambda: &hir::expr::Lambda, hir: &HIR) {
+    fn visit_lambda(&mut self, lambda: &hir::expr::Lambda, _hir: &HIR) {
         self.build(lambda.body_id, lambda.def_id.into());
     }
 }
