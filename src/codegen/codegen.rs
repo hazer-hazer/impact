@@ -1,22 +1,12 @@
-
-
-use inkwell::{
-    builder::Builder,
-    context::Context,
-    module::{Module},
-};
+use inkwell::{builder::Builder, context::Context, module::Module};
 
 use crate::{
     message::message::{MessageHolder, MessageStorage},
-    session::{Session, Stage, StageOutput}, mir::MIR,
+    mir::MIR,
+    session::{Session, Stage, StageOutput},
 };
 
-pub struct CodeGenCtx<'ctx> {
-    sess: &'ctx Session,
-    llvm_ctx: &'ctx Context,
-    module: Module<'ctx>,
-    builder: Builder<'ctx>,
-}
+use super::ctx::CodeGenCtx;
 
 pub struct CodeGen<'ctx> {
     mir: &'ctx MIR,
@@ -41,7 +31,13 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     fn codegen_main(&mut self) -> CodeGenCtx<'ctx> {
-        let ctx = CodeGenCtx { sess: &self.sess, llvm_ctx: &llvm_ctx, module: llvm_ctx.create_module("kek"), builder: llvm_ctx.create_builder() };
+        let llvm_ctx = &self.sess.llvm_ctx;
+        let ctx = CodeGenCtx {
+            sess: &self.sess,
+            llvm_ctx,
+            module: llvm_ctx.create_module("kek"),
+            builder: llvm_ctx.create_builder(),
+        };
 
         ctx
     }
@@ -49,7 +45,7 @@ impl<'ctx> CodeGen<'ctx> {
 
 impl<'ctx> Stage<Module<'ctx>> for CodeGen<'ctx> {
     fn run(mut self) -> StageOutput<Module<'ctx>> {
-        let CodeGenCtx {  module, .. } = self.codegen_main();
+        let CodeGenCtx { module, .. } = self.codegen_main();
         // FIXME: Rewrite stages to error propagation model
         StageOutput::new(self.sess, module, self.msg)
     }
