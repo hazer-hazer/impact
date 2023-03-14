@@ -2,7 +2,7 @@ mod block;
 pub mod build;
 mod expr;
 mod local;
-mod scalar;
+pub mod scalar;
 mod stmt;
 mod thir;
 
@@ -208,6 +208,14 @@ pub struct Body {
     pub referenced_bodies: HashSet<BodyId>,
 }
 
+impl Body {
+    pub fn bb(&self, bb: BB) -> &BasicBlock {
+        self.basic_blocks.get(bb).unwrap()
+    }
+
+    // pub fn local_name(&self, local: Local) ->
+}
+
 #[derive(Default)]
 pub struct BasicBlockBuilder {
     stmts: Vec<Stmt>,
@@ -313,4 +321,10 @@ impl BodyBuilder {
 #[derive(Default)]
 pub struct MIR {
     pub bodies: HashMap<BodyId, Body>,
+}
+
+impl MIR {
+    pub fn expect(&self, body_id: BodyId) -> &Body {
+        self.bodies.get(&body_id).unwrap()
+    }
 }

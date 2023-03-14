@@ -9,6 +9,7 @@ use crate::{
     cli::color::{Color, Colorize},
     config::config::Config,
     dt::idx::{declare_idx, Idx},
+    hir::HIR,
     interface::{interface::InterruptionReason, writer::Writer},
     message::{
         message::{Message, MessageStorage},
@@ -17,7 +18,7 @@ use crate::{
     },
     resolve::{def::DefTable, res::Resolutions},
     span::span::{Span, SpanPos},
-    typeck::tyctx::TyCtx, hir::HIR,
+    typeck::tyctx::TyCtx,
 };
 
 declare_idx!(SourceId, u32, "source[{}]", Color::White);
@@ -214,7 +215,6 @@ pub struct Session {
     pub res: Resolutions,
     pub tyctx: TyCtx,
     pub hir: HIR,
-    pub llvm_ctx: Context,
 }
 
 impl Session {
@@ -228,7 +228,6 @@ impl Session {
             res: Resolutions::default(),
             tyctx: TyCtx::new(),
             hir: HIR::new(),
-            llvm_ctx: Context::create(),
         }
     }
 

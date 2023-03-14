@@ -7,7 +7,7 @@ use crate::{
     cli::{command::StageName, verbose},
     codegen::codegen::CodeGen,
     config::config::Config,
-    hir::{visitor::HirVisitor},
+    hir::visitor::HirVisitor,
     interface::writer::outln,
     lower::Lower,
     mir::build::BuildFullMir,
@@ -235,7 +235,8 @@ impl<'ast> Interface {
         verbose!("=== Codegen ===");
         let stage = StageName::Codegen;
 
-        let (_module, sess) = CodeGen::new(sess, &mir).run_and_emit(true)?;
+        let llvm_ctx = Context::create();
+        let (_module, sess) = CodeGen::new(sess, &mir, &llvm_ctx).run_and_emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
 

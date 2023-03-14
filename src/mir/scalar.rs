@@ -2,10 +2,10 @@ use std::{fmt::Display, num::NonZeroU8};
 
 #[derive(Clone, Copy)]
 pub struct Scalar {
-    data: u64,
+    pub data: u64,
 
     /// Size in bytes
-    size: NonZeroU8,
+    pub size: NonZeroU8,
 }
 
 impl Scalar {
