@@ -4,7 +4,7 @@ use crate::{
         item::ItemId,
         pat::{Pat, PatKind},
         visitor::HirVisitor,
-        BodyId, WithHirId, HIR,
+        BodyId, BodyOwner, WithHirId, HIR,
     },
     mir::{
         Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,
@@ -134,12 +134,12 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         }
 
         self.pp.str("func").sp().string(name.original_string()).sp();
-        self.visit_body(body, hir);
+        self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
         self.pp.string(format!("[lambda{}]", lambda.def_id)).sp();
-        self.visit_body(&lambda.body_id, hir);
+        self.visit_body(&lambda.body_id, BodyOwner::lambda(lambda.def_id), hir);
     }
 
     // Note: Only used for parameters
@@ -154,7 +154,7 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         };
     }
 
-    fn visit_body(&mut self, body: &BodyId, hir: &HIR) {
+    fn visit_body(&mut self, body: &BodyId, owner: BodyOwner, hir: &HIR) {
         self.visit_pat(&hir.body(*body).param, hir);
         self.pp.sp();
 

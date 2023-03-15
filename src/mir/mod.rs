@@ -120,6 +120,13 @@ impl Operand {
     pub fn rvalue(&self) -> RValue {
         RValue::Operand(*self)
     }
+
+    pub fn as_lvalue(&self) -> &LValue {
+        match self {
+            Operand::LValue(lvalue) => lvalue,
+            _ => panic!(),
+        }
+    }
 }
 
 /// Only builtin infix operators, all overloaded are function calls
@@ -204,6 +211,7 @@ impl LocalInfo {
 
 pub struct Body {
     pub basic_blocks: IndexVec<BB, BasicBlock>,
+    pub args: usize,
     pub locals: IndexVec<Local, LocalInfo>,
     pub referenced_bodies: HashSet<BodyId>,
 }
@@ -211,6 +219,10 @@ pub struct Body {
 impl Body {
     pub fn bb(&self, bb: BB) -> &BasicBlock {
         self.basic_blocks.get(bb).unwrap()
+    }
+
+    pub fn params(&self) -> impl Iterator<Item = (Local, &LocalInfo)> {
+        self.locals.iter_enumerated().take(self.args)
     }
 
     // pub fn local_name(&self, local: Local) ->
@@ -246,6 +258,7 @@ impl BasicBlockBuilder {
 struct BodyBuilder {
     basic_blocks: IndexVec<BB, BasicBlockBuilder>,
     locals: IndexVec<Local, LocalInfo>,
+    args: usize,
     referenced_bodies: HashSet<BodyId>,
 }
 
@@ -292,8 +305,11 @@ impl BodyBuilder {
         )
     }
 
-    pub fn push_local(&mut self, local_info: LocalInfo) -> Local {
-        self.locals.push(local_info)
+    pub fn push_local(&mut self, is_param: bool, info: LocalInfo) -> Local {
+        if is_param {
+            self.args += 1;
+        }
+        self.locals.push(info)
     }
 
     pub fn local_info(&mut self, local: Local) -> &LocalInfo {
@@ -313,6 +329,7 @@ impl BodyBuilder {
                 .map(|bb| bb.emit())
                 .collect::<IndexVec<_, _>>(),
             locals: self.locals,
+            args: self.args,
             referenced_bodies: self.referenced_bodies,
         }
     }

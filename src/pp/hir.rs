@@ -6,10 +6,10 @@ use crate::{
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
-        BodyId, Path, HIR,
+        BodyId, BodyOwner, Path, HIR,
     },
     parser::token::Punct,
-    resolve::builtin::Builtin,
+    resolve::{builtin::Builtin, def::DefId},
     session::Session,
     span::span::{Ident, Kw},
 };
@@ -112,10 +112,10 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.sp();
         self.visit_pat(&hir.body(*body).param, hir);
         self.pp.str(" = ");
-        self.visit_body(body, hir);
+        self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_body(&mut self, &body: &BodyId, hir: &HIR) {
+    fn visit_body(&mut self, &body: &BodyId, owner: BodyOwner, hir: &HIR) {
         let body = hir.body(body);
         self.visit_expr(&body.value, hir);
     }

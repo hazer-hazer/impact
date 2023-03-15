@@ -16,7 +16,7 @@ impl<'ctx> MirBuilder<'ctx> {
             match stmt {
                 &Stmt::Expr(expr_id) => unpack!(bb = self.expr_stmt(bb, expr_id)),
                 &Stmt::Local(pat, init) => {
-                    self.declare_bindings(&pat);
+                    self.declare_bindings(&pat, false);
                     unpack!(bb = self.store_expr_in_pat(bb, &pat, init));
                 },
             }

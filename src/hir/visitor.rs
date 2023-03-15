@@ -1,4 +1,7 @@
-use crate::{resolve::builtin::Builtin, span::span::Ident};
+use crate::{
+    resolve::{builtin::Builtin, def::DefId},
+    span::span::Ident,
+};
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
@@ -6,7 +9,7 @@ use super::{
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
-    BodyId, Path, HIR,
+    BodyId, BodyOwner, Path, HIR,
 };
 
 macro_rules! walk_each {
@@ -66,12 +69,12 @@ pub trait HirVisitor {
         self.visit_expr(&value, hir);
     }
 
-    fn visit_func_item(&mut self, name: Ident, body: &BodyId, _id: ItemId, hir: &HIR) {
+    fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
-        self.visit_body(body, hir);
+        self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_body(&mut self, &body: &BodyId, hir: &HIR) {
+    fn visit_body(&mut self, &body: &BodyId, owner: BodyOwner, hir: &HIR) {
         let body = hir.body(body);
         self.visit_pat(&body.param, hir);
         self.visit_expr(&body.value, hir);
@@ -123,7 +126,7 @@ pub trait HirVisitor {
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
-        self.visit_body(&lambda.body_id, hir);
+        self.visit_body(&lambda.body_id, BodyOwner::lambda(lambda.def_id), hir);
     }
 
     fn visit_let_expr(&mut self, block: &Block, hir: &HIR) {

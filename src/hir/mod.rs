@@ -341,6 +341,10 @@ impl HIR {
         }
     }
 
+    pub fn item_name(&self, item_id: ItemId) -> Ident {
+        self.item(item_id).name()
+    }
+
     pub fn string_lit_value(&self, expr: Expr) -> Option<Symbol> {
         match self.expr(expr).kind() {
             ExprKind::Lit(lit) => match lit {
@@ -462,6 +466,27 @@ impl HIR {
 pub enum BodyOwnerKind {
     Func,
     Lambda,
+}
+
+pub struct BodyOwner {
+    pub def_id: DefId,
+    pub kind: BodyOwnerKind,
+}
+
+impl BodyOwner {
+    pub fn func(def_id: DefId) -> Self {
+        Self {
+            def_id,
+            kind: BodyOwnerKind::Func,
+        }
+    }
+
+    pub fn lambda(def_id: DefId) -> Self {
+        Self {
+            def_id,
+            kind: BodyOwnerKind::Lambda,
+        }
+    }
 }
 
 #[derive(Debug)]

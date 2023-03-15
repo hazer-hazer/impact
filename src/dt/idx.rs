@@ -60,6 +60,13 @@ impl<I: Idx, T> IndexVec<I, T> {
         }
     }
 
+    pub fn keys(&self) -> impl Iterator<Item = I>
+    where
+        I: From<usize>,
+    {
+        (0..self.len()).map(|i| I::from(i))
+    }
+
     #[inline]
     pub fn iter(&self) -> slice::Iter<'_, T> {
         self.vec.iter()
@@ -176,6 +183,14 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
     #[inline]
     pub fn get_unwrap(&self, i: I) -> &T {
         self.get(i).unwrap().as_ref().unwrap()
+    }
+
+    #[inline]
+    pub fn get_copied_unwrap(&self, i: I) -> T
+    where
+        T: Copy,
+    {
+        self.get(i).copied().unwrap().unwrap()
     }
 
     #[inline]

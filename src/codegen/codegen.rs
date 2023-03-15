@@ -1,8 +1,10 @@
-use inkwell::{builder::Builder, context::Context, module::Module};
+use inkwell::{builder::Builder, context::Context, module::Module, values::FunctionValue};
 
 use crate::{
+    hir::HIR,
     message::message::{MessageHolder, MessageStorage},
     mir::MIR,
+    resolve::def::{DefId, DefMap},
     session::{Session, Stage, StageOutput},
 };
 
