@@ -27,6 +27,7 @@ mod resolve;
 mod session;
 mod span;
 mod typeck;
+mod utils;
 
 fn main() {
     let config = CLI::new().config().clone();

@@ -1,49 +1,61 @@
-use inkwell::{builder::Builder, context::Context, module::Module, values::FunctionValue};
+use inkwell::context::Context;
 
 use crate::{
     hir::HIR,
     message::message::{MessageHolder, MessageStorage},
     mir::MIR,
-    resolve::def::{DefId, DefMap},
     session::{Session, Stage, StageOutput},
 };
 
-pub struct CodeGen<'ctx> {
-    mir: &'ctx MIR,
+use super::{body::BodyCodeGen, ctx::CodeGenCtx, func::FunctionsCodeGen};
 
-    llvm_ctx: &'ctx Context,
-    module: Module<'ctx>,
-    builder: Builder<'ctx>,
+pub struct CodeGen<'ink, 'ctx> {
+    mir: &'ctx MIR,
+    hir: &'ctx HIR,
+
+    llvm_ctx: &'ink Context,
 
     sess: Session,
     msg: MessageStorage,
 }
 
-impl<'ctx> MessageHolder for CodeGen<'ctx> {
+impl<'ink, 'ctx> MessageHolder for CodeGen<'ink, 'ctx> {
     fn save(&mut self, msg: crate::message::message::Message) {
         self.msg.add_message(msg)
     }
 }
 
-impl<'ctx> CodeGen<'ctx> {
-    pub fn new(sess: Session, mir: &'ctx MIR, llvm_ctx: &'ctx Context) -> Self {
+impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
+    pub fn new(sess: Session, mir: &'ctx MIR, hir: &'ctx HIR, llvm_ctx: &'ink Context) -> Self {
         Self {
             sess,
             mir,
+            hir,
             llvm_ctx,
-            module: llvm_ctx.create_module("kek"),
-            builder: llvm_ctx.create_builder(),
             msg: MessageStorage::default(),
         }
     }
 
-    fn codegen_main(&mut self) {}
+    fn codegen(&mut self) {
+        let ctx = CodeGenCtx {
+            sess: &self.sess,
+            mir: self.mir,
+            hir: self.hir,
+            llvm_ctx: self.llvm_ctx,
+        };
+
+        let function_map = FunctionsCodeGen::new(ctx).gen_functions();
+
+        for (def_id, _func) in function_map.iter_enumerated_flat() {
+            BodyCodeGen::new(ctx, def_id, &function_map).gen_body();
+        }
+    }
 }
 
-impl<'ctx> Stage<Module<'ctx>> for CodeGen<'ctx> {
-    fn run(mut self) -> StageOutput<Module<'ctx>> {
-        self.codegen_main();
+impl<'ink, 'ctx> Stage<()> for CodeGen<'ink, 'ctx> {
+    fn run(mut self) -> StageOutput<()> {
+        self.codegen();
         // FIXME: Rewrite stages to error propagation model
-        StageOutput::new(self.sess, self.module, self.msg)
+        StageOutput::new(self.sess, (), self.msg)
     }
 }

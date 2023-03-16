@@ -14,6 +14,7 @@ use crate::{
     },
     dt::idx::{declare_idx, Idx},
     hir::{self, expr::Lit},
+    utils::macros::match_expected,
 };
 
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
@@ -114,8 +115,8 @@ impl IntKind {
         }
     }
 
-    pub fn bits(&self) -> u8 {
-        self.bytes() * 8
+    pub fn bits(&self) -> u32 {
+        self.bytes() as u32 * 8
     }
 }
 
@@ -213,38 +214,6 @@ impl std::fmt::Display for FloatKind {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub enum PrimTy {
-    Bool,
-    Int(IntKind),
-    Float(FloatKind),
-    String,
-}
-
-impl TryFrom<Lit> for PrimTy {
-    type Error = ();
-
-    fn try_from(kind: Lit) -> Result<Self, Self::Error> {
-        match kind {
-            Lit::Bool(_) => Ok(Self::Bool),
-            Lit::Int(_, kind) => IntKind::try_from(kind).map(|kind| PrimTy::Int(kind)),
-            Lit::Float(_, kind) => FloatKind::try_from(kind).map(|kind| PrimTy::Float(kind)),
-            Lit::String(_) => Ok(Self::String),
-        }
-    }
-}
-
-impl std::fmt::Display for PrimTy {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PrimTy::Bool => write!(f, "bool"),
-            PrimTy::String => write!(f, "string"),
-            PrimTy::Int(kind) => write!(f, "{}", kind),
-            PrimTy::Float(kind) => write!(f, "{}", kind),
-        }
-    }
-}
-
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
@@ -276,8 +245,20 @@ impl Ty {
         Self::new(TyKind::Var(id))
     }
 
-    pub fn prim(prim: PrimTy) -> Ty {
-        Self::new(TyKind::Prim(prim))
+    pub fn bool() -> Ty {
+        Self::new(TyKind::Bool)
+    }
+
+    pub fn int(kind: IntKind) -> Ty {
+        Self::new(TyKind::Int(kind))
+    }
+
+    pub fn float(kind: FloatKind) -> Ty {
+        Self::new(TyKind::Float(kind))
+    }
+
+    pub fn string() -> Ty {
+        Self::new(TyKind::String)
     }
 
     pub fn func(param: Ty, ret: Ty) -> Ty {
@@ -293,11 +274,11 @@ impl Ty {
     }
 
     pub fn default_int() -> Ty {
-        Self::prim(PrimTy::Int(DEFAULT_INT_KIND))
+        Self::int(DEFAULT_INT_KIND)
     }
 
     pub fn default_float() -> Ty {
-        Self::prim(PrimTy::Float(DEFAULT_FLOAT_KIND))
+        Self::float(DEFAULT_FLOAT_KIND)
     }
 
     pub fn tys(&self) -> &TyS {
@@ -319,7 +300,11 @@ impl Ty {
         match self.kind() {
             TyKind::Error
             | TyKind::Unit
-            | TyKind::Prim(_)
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::String
             | TyKind::Var(_)
             | TyKind::Existential(_) => true,
             TyKind::Func(param, body) => param.is_mono() && body.is_mono(),
@@ -330,8 +315,7 @@ impl Ty {
     pub fn is_instantiated(&self) -> bool {
         match self.kind() {
             TyKind::Error => todo!(),
-            TyKind::Unit
-            | TyKind::Prim(PrimTy::Bool | PrimTy::Float(_) | PrimTy::Int(_) | PrimTy::String) => {
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
                 true
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
@@ -343,7 +327,12 @@ impl Ty {
         verbose!("Substitute {} in {} with {}", subst, self, with);
 
         match self.kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Prim(_) => *self,
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::String => *self,
             &TyKind::Var(ident) => {
                 if subst == ident {
                     with
@@ -375,31 +364,16 @@ impl Ty {
     }
 
     // Strict getters //
-    pub fn as_int_kind(&self) -> IntKind {
-        match self.kind() {
-            TyKind::Prim(prim) => match prim {
-                &PrimTy::Int(kind) => kind,
-                _ => panic!(),
-            },
-            _ => panic!(),
-        }
+    pub fn as_int(&self) -> IntKind {
+        match_expected!(self.kind(), &TyKind::Int(kind) => kind)
     }
 
     pub fn as_float_kind(&self) -> FloatKind {
-        match self.kind() {
-            TyKind::Prim(prim) => match prim {
-                &PrimTy::Float(kind) => kind,
-                _ => panic!(),
-            },
-            _ => panic!(),
-        }
+        match_expected!(self.kind(), &TyKind::Float(kind) => kind)
     }
 
     pub fn as_func(&self) -> (Ty, Ty) {
-        match self.kind() {
-            &TyKind::Func(param, body) => (param, body),
-            _ => panic!(),
-        }
+        match_expected!(self.kind(), &TyKind::Func(param, body) => (param, body))
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -419,15 +393,7 @@ impl std::fmt::Debug for Ty {
 
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.kind() {
-            TyKind::Error => write!(f, "[ERROR]"),
-            TyKind::Unit => write!(f, "()"),
-            TyKind::Prim(lit) => write!(f, "{}", lit),
-            TyKind::Var(name) => write!(f, "{}", name),
-            TyKind::Existential(ex) => write!(f, "{}", ex),
-            &TyKind::Func(param, body) => write!(f, "({} -> {})", param, body),
-            &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
-        }
+        write!(f, "{}", self.0)
     }
 }
 
@@ -436,10 +402,16 @@ pub enum TyKind {
     Error,
 
     Unit,
-    Prim(PrimTy),
+    Bool,
+    Int(IntKind),
+    Float(FloatKind),
+
+    String,
+
+    Func(Ty, Ty),
+
     Var(TyVarId),
     Existential(Existential),
-    Func(Ty, Ty),
     Forall(TyVarId, Ty),
 }
 
@@ -451,10 +423,6 @@ pub struct TyS {
 impl TyS {
     pub fn new(kind: TyKind) -> Self {
         Self { kind }
-    }
-
-    pub fn lit(lit_ty: PrimTy) -> Self {
-        Self::new(TyKind::Prim(lit_ty))
     }
 
     pub fn error() -> Self {
@@ -471,11 +439,14 @@ impl std::fmt::Display for TyS {
         match self.kind() {
             TyKind::Error => write!(f, "[ERROR]"),
             TyKind::Unit => write!(f, "()"),
-            TyKind::Prim(lit) => write!(f, "{}", lit),
-            TyKind::Var(ident) => write!(f, "{}", ident),
+            TyKind::Bool => write!(f, "bool"),
+            TyKind::Int(kind) => write!(f, "{}", kind),
+            TyKind::Float(kind) => write!(f, "{}", kind),
+            TyKind::String => write!(f, "{}", "string"),
+            &TyKind::Func(param, body) => write!(f, "({} -> {})", param, body),
+            TyKind::Var(name) => write!(f, "{}", name),
             TyKind::Existential(ex) => write!(f, "{}", ex),
-            TyKind::Func(param_ty, return_ty) => write!(f, "{} -> {}", param_ty, return_ty),
-            TyKind::Forall(ident, ty) => write!(f, "∀{}. {}", ident, ty),
+            &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
         }
     }
 }

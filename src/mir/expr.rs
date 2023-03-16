@@ -1,6 +1,6 @@
 use crate::{
     mir::thir::Expr,
-    typeck::ty::{FloatKind, IntKind, PrimTy},
+    typeck::ty::{FloatKind, IntKind},
 };
 
 use super::{
@@ -13,7 +13,7 @@ use super::{
 impl<'ctx> MirBuilder<'ctx> {
     // Constants (literals) //
     pub(super) fn bool_const(&self, val: bool) -> Const {
-        Const::scalar(Ty::prim(PrimTy::Bool), Scalar::from(val))
+        Const::scalar(Ty::bool(), Scalar::from(val))
     }
 
     pub(super) fn unit_const(&self) -> Const {
@@ -21,14 +21,11 @@ impl<'ctx> MirBuilder<'ctx> {
     }
 
     pub(super) fn int_const(&self, val: u64, kind: IntKind) -> Const {
-        Const::scalar(Ty::prim(PrimTy::Int(kind)), Scalar::new(val, kind.bytes()))
+        Const::scalar(Ty::int(kind), Scalar::new(val, kind.bytes()))
     }
 
     pub(super) fn float_const(&self, val: f64, kind: FloatKind) -> Const {
-        Const::scalar(
-            Ty::prim(PrimTy::Float(kind)),
-            Scalar::new(val.to_bits(), kind.bytes()),
-        )
+        Const::scalar(Ty::float(kind), Scalar::new(val.to_bits(), kind.bytes()))
     }
 
     // Expressions as categories //

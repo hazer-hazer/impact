@@ -21,10 +21,7 @@ use crate::{
 
 use self::{
     ctx::{GlobalCtx, InferCtx},
-    ty::{
-        Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, PrimTy, Ty, TyKind,
-        TyVarId,
-    },
+    ty::{Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, Ty, TyKind, TyVarId},
     tyctx::TyCtx,
 };
 
@@ -341,7 +338,13 @@ impl<'hir> Typecker<'hir> {
 
     fn _apply_ctx_on(&self, ty: Ty) -> Ty {
         match ty.kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Var(_) | TyKind::Prim(_) => ty,
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Var(_)
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::String => ty,
 
             &TyKind::Existential(ex) => self
                 .get_solution(ex)
@@ -362,7 +365,12 @@ impl<'hir> Typecker<'hir> {
 
     pub fn ty_occurs_in(&mut self, ty: Ty, name: Subst) -> bool {
         match ty.kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Prim(_) => false,
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::String => false,
             &TyKind::Var(name_) if name == name_ => true,
             TyKind::Var(_) => false,
             &TyKind::Existential(ex) if name == ex => {
@@ -381,7 +389,9 @@ impl<'hir> Typecker<'hir> {
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
         match ty.kind() {
             TyKind::Error => Ok(ty),
-            TyKind::Unit | TyKind::Prim(_) => Ok(ty),
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
+                Ok(ty)
+            },
             &TyKind::Var(_ident) => {
                 // FIXME
                 Ok(ty)
@@ -457,7 +467,7 @@ impl<'hir> Typecker<'hir> {
             hir::ty::TyKind::App(_cons, _arg) => todo!(),
             hir::ty::TyKind::Builtin(bt) => match bt {
                 Builtin::UnitTy => Ty::unit(),
-                Builtin::I32 => Ty::prim(PrimTy::Int(IntKind::I32)),
+                Builtin::I32 => Ty::int(IntKind::I32),
                 _ => unreachable!(),
             },
         }
@@ -508,33 +518,18 @@ impl<'hir> Typecker<'hir> {
         ty
     }
 
-    fn conv_int_kind(&mut self, kind: hir::expr::IntKind) -> Ty {
-        match kind {
-            hir::expr::IntKind::Unknown => return self.add_fresh_ex(ExistentialKind::Int).1,
-            _ => {},
-        }
-
-        Ty::prim(PrimTy::Int(match kind {
-            hir::expr::IntKind::U8 => IntKind::U8,
-            hir::expr::IntKind::U16 => IntKind::U16,
-            hir::expr::IntKind::U32 => IntKind::U32,
-            hir::expr::IntKind::U64 => IntKind::U64,
-            hir::expr::IntKind::Uint => IntKind::Uint,
-            hir::expr::IntKind::I8 => IntKind::I8,
-            hir::expr::IntKind::I16 => IntKind::I16,
-            hir::expr::IntKind::I32 => IntKind::I32,
-            hir::expr::IntKind::I64 => IntKind::I64,
-            hir::expr::IntKind::Int => IntKind::Int,
-            hir::expr::IntKind::Unknown => unreachable!(),
-        }))
+    fn conv_int(&mut self, kind: hir::expr::IntKind) -> Ty {
+        IntKind::try_from(kind).map_or_else(
+            |_| self.add_fresh_ex(ExistentialKind::Int).1,
+            |kind| Ty::int(kind),
+        )
     }
 
-    fn conv_float_kind(&mut self, kind: hir::expr::FloatKind) -> Ty {
-        match kind {
-            hir::expr::FloatKind::Unknown => self.add_fresh_ex(ExistentialKind::Float).1,
-            hir::expr::FloatKind::F32 => Ty::prim(PrimTy::Float(FloatKind::F32)),
-            hir::expr::FloatKind::F64 => Ty::prim(PrimTy::Float(FloatKind::F64)),
-        }
+    fn conv_float(&mut self, kind: hir::expr::FloatKind) -> Ty {
+        FloatKind::try_from(kind).map_or_else(
+            |_| self.add_fresh_ex(ExistentialKind::Float).1,
+            |kind| Ty::float(kind),
+        )
     }
 
     // Debug //

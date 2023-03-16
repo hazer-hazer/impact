@@ -1,4 +1,4 @@
-use inkwell::values::FunctionValue;
+use inkwell::{module::Module, values::FunctionValue};
 
 use crate::{
     hir::{item::ItemId, visitor::HirVisitor, BodyId, BodyOwner, HIR},
@@ -7,6 +7,7 @@ use crate::{
 
 use super::ctx::CodeGenCtx;
 
+#[derive(Default)]
 pub struct FunctionMap<'ink>(DefMap<FunctionValue<'ink>>);
 
 impl<'ink> FunctionMap<'ink> {
@@ -17,20 +18,25 @@ impl<'ink> FunctionMap<'ink> {
     fn insert(&mut self, def_id: DefId, value: FunctionValue<'ink>) {
         assert!(self.0.insert(def_id, value).is_none());
     }
+
+    pub fn iter_enumerated_flat(&self) -> impl Iterator<Item = (DefId, &FunctionValue<'ink>)> + '_ {
+        self.0.iter_enumerated_flat()
+    }
 }
 
 pub struct FunctionsCodeGen<'ink, 'ctx> {
     ctx: CodeGenCtx<'ink, 'ctx>,
+    llvm_module: Module<'ink>,
 
     function_map: FunctionMap<'ink>,
 }
 
 impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
-    fn visit_body(&mut self, &body: &BodyId, owner: BodyOwner, hir: &HIR) {
+    fn visit_body(&mut self, &_body: &BodyId, owner: BodyOwner, _hir: &HIR) {
         let def_id = owner.def_id;
         let func_ty = self.ctx.func_ty(def_id);
 
-        let func_value = self.ctx.llvm_module.add_function(
+        let func_value = self.llvm_module.add_function(
             self.ctx
                 .hir
                 .item_name(ItemId::new(def_id.into()))
@@ -45,6 +51,14 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 }
 
 impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
+    pub fn new(ctx: CodeGenCtx<'ink, 'ctx>) -> Self {
+        Self {
+            ctx,
+            llvm_module: ctx.llvm_ctx.create_module("kek"),
+            function_map: Default::default(),
+        }
+    }
+
     pub fn gen_functions(mut self) -> FunctionMap<'ink> {
         self.visit_hir(self.ctx.hir);
         self.function_map

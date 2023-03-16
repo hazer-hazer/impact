@@ -1,8 +1,6 @@
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
-    context::Context,
-    types::BasicTypeEnum,
     values::{BasicValueEnum, CallableValue, FunctionValue, PointerValue},
 };
 
@@ -10,17 +8,16 @@ use crate::{
     dt::idx::IndexVec,
     hir::BodyId,
     mir::{
-        scalar::Scalar, Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator,
-        TerminatorKind, Ty, BB, MIR, START_BB,
+        Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator, TerminatorKind,
+        BB, START_BB,
     },
-    resolve::def::{DefId, DefMap},
-    session::Session,
-    typeck::ty::{FloatKind, PrimTy, TyKind},
+    resolve::def::DefId,
+    typeck::ty::{FloatKind, TyKind},
 };
 
-use super::{codegen::CodeGen, ctx::CodeGenCtx, func::FunctionMap};
+use super::{ctx::CodeGenCtx, func::FunctionMap};
 
-pub struct BodyCodeGen<'ink, 'ctx> {
+pub struct BodyCodeGen<'ink, 'ctx, 'a> {
     ctx: CodeGenCtx<'ink, 'ctx>,
 
     // Body context //
@@ -31,14 +28,14 @@ pub struct BodyCodeGen<'ink, 'ctx> {
     builder: Builder<'ink>,
     /// Mapping locals to alloca pointers. Created as a decent IndexVec for optimization reasons and avoiding IndexVec<_, Option<_>>.
     locals_pointers: IndexVec<Local, PointerValue<'ink>>,
-    function_map: &'ink FunctionMap<'ink>,
+    function_map: &'a FunctionMap<'ink>,
 }
 
-impl<'ink, 'ctx> BodyCodeGen<'ink, 'ctx> {
+impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     pub fn new(
         ctx: CodeGenCtx<'ink, 'ctx>,
         func_def_id: DefId,
-        function_map: &'ink FunctionMap<'ink>,
+        function_map: &'a FunctionMap<'ink>,
     ) -> Self {
         let func = function_map.expect(func_def_id);
         let body_id = ctx.hir.owner_body(func_def_id.into()).unwrap();
@@ -105,7 +102,7 @@ impl<'ink, 'ctx> BodyCodeGen<'ink, 'ctx> {
             alloca_builder.build_store(param_ptr, func_param);
         });
 
-        let ll_bb = self.gen_bb(START_BB);
+        let _ll_bb = self.gen_bb(START_BB);
     }
 
     fn gen_bb(&mut self, bb: BB) -> BasicBlock<'ink> {
@@ -150,7 +147,11 @@ impl<'ink, 'ctx> BodyCodeGen<'ink, 'ctx> {
 
     // To-value converters //
     fn unit_value(&mut self) -> BasicValueEnum<'ink> {
-        self.ctx.llvm_ctx.struct_type(&[], false).into()
+        self.ctx
+            .llvm_ctx
+            .struct_type(&[], false)
+            .const_zero()
+            .into()
     }
 
     fn rvalue_to_value(&mut self, rvalue: &RValue) -> BasicValueEnum<'ink> {
@@ -198,41 +199,50 @@ impl<'ink, 'ctx> BodyCodeGen<'ink, 'ctx> {
     fn const_to_value(&mut self, const_: &Const) -> BasicValueEnum<'ink> {
         match const_.kind {
             ConstKind::Scalar(scalar) => match const_.ty.kind() {
-                TyKind::Prim(prim) => match prim {
-                    PrimTy::Bool => self
+                TyKind::Bool => self
+                    .ctx
+                    .llvm_ctx
+                    .bool_type()
+                    .const_int(scalar.data, false)
+                    .into(),
+                TyKind::Int(kind) => self
+                    .ctx
+                    .llvm_ctx
+                    .custom_width_int_type(kind.bits())
+                    .const_int(scalar.data, false)
+                    .into(),
+
+                TyKind::Float(kind) => match kind {
+                    FloatKind::F32 => self
                         .ctx
                         .llvm_ctx
-                        .bool_type()
-                        .const_int(scalar.data, false)
+                        .f32_type()
+                        .const_float(scalar.data as f64)
                         .into(),
-                    PrimTy::Int(kind) => self
+                    FloatKind::F64 => self
                         .ctx
                         .llvm_ctx
-                        .custom_width_int_type(kind.bits() as u32)
-                        .const_int(scalar.data, false)
+                        .f64_type()
+                        .const_float(scalar.data as f64)
                         .into(),
-                    PrimTy::Float(kind) => match kind {
-                        FloatKind::F32 => self
-                            .ctx
-                            .llvm_ctx
-                            .f32_type()
-                            .const_float(scalar.data as f64)
-                            .into(),
-                        FloatKind::F64 => self
-                            .ctx
-                            .llvm_ctx
-                            .f64_type()
-                            .const_float(scalar.data as f64)
-                            .into(),
-                    },
-                    PrimTy::String => todo!(),
                 },
+                TyKind::String => todo!(),
                 TyKind::Func(_, _) | TyKind::Unit => todo!(),
                 TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
                     unreachable!()
                 },
             },
-            ConstKind::ZeroSized => self.ctx.conv_basic_ty(const_.ty).const_zero(),
+            ConstKind::ZeroSized => match const_.ty.kind() {
+                TyKind::Unit => self.unit_value(),
+                TyKind::Bool => todo!(),
+                TyKind::Int(_) => todo!(),
+                TyKind::Float(_) => todo!(),
+                TyKind::String => todo!(),
+                TyKind::Func(_, _) => todo!(),
+                TyKind::Error | TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => {
+                    unreachable!()
+                },
+            },
         }
     }
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{resolve::builtin::Builtin, typeck::ty::TyVarId};
 
-use super::ty::{IntKind, PrimTy, Ty};
+use super::ty::{IntKind, Ty};
 
 pub fn builtins() -> HashMap<Builtin, Ty> {
     let _ty_vars = HashMap::<&str, TyVarId>::new();
@@ -13,7 +13,7 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         };
 
         (i32) => {
-            Ty::prim(PrimTy::Int(IntKind::I32))
+            Ty::int(IntKind::I32)
         };
 
         ($var: ident) => {
@@ -52,7 +52,7 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         (Builtin::SubInt, ty!(i32 -> i32 -> i32)),
         // Types //
         (Builtin::UnitTy, ty!(())),
-        (Builtin::I32, Ty::prim(PrimTy::Int(IntKind::I32))),
+        (Builtin::I32, ty!(i32)),
     ]);
 
     builtins

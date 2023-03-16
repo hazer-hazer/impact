@@ -1,5 +1,5 @@
 use crate::{
-    resolve::{builtin::Builtin, def::DefId},
+    resolve::{builtin::Builtin},
     span::span::Ident,
 };
 
@@ -74,7 +74,7 @@ pub trait HirVisitor {
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_body(&mut self, &body: &BodyId, owner: BodyOwner, hir: &HIR) {
+    fn visit_body(&mut self, &body: &BodyId, _owner: BodyOwner, hir: &HIR) {
         let body = hir.body(body);
         self.visit_pat(&body.param, hir);
         self.visit_expr(&body.value, hir);

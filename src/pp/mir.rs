@@ -154,7 +154,7 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         };
     }
 
-    fn visit_body(&mut self, body: &BodyId, owner: BodyOwner, hir: &HIR) {
+    fn visit_body(&mut self, body: &BodyId, _owner: BodyOwner, hir: &HIR) {
         self.visit_pat(&hir.body(*body).param, hir);
         self.pp.sp();
 

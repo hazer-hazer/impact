@@ -1,18 +1,17 @@
 use inkwell::{
     context::Context,
-    module::Module,
-    types::{AnyTypeEnum, BasicTypeEnum, FunctionType},
+    types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType},
 };
 
 use crate::{
-    hir::{item::ItemId, HirId, HIR},
+    hir::{HirId, HIR},
     mir::{Ty, MIR},
     resolve::def::DefId,
     session::Session,
-    span::span::Symbol,
-    typeck::ty::{FloatKind, PrimTy, TyKind},
+    typeck::ty::{FloatKind, TyKind},
 };
 
+#[derive(Clone, Copy)]
 pub struct CodeGenCtx<'ink, 'ctx> {
     pub sess: &'ctx Session,
     pub mir: &'ctx MIR,
@@ -20,31 +19,27 @@ pub struct CodeGenCtx<'ink, 'ctx> {
 
     // LLVM Context //
     pub llvm_ctx: &'ink Context,
-    pub llvm_module: &'ink Module<'ink>,
 }
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     pub fn conv_ty(&self, ty: Ty) -> AnyTypeEnum<'ink> {
         match ty.kind() {
             TyKind::Unit => self.llvm_ctx.i8_type().into(),
-            TyKind::Prim(prim) => match prim {
-                PrimTy::Bool => self.llvm_ctx.bool_type().into(),
-                PrimTy::Int(kind) => self
-                    .llvm_ctx
-                    .custom_width_int_type(kind.bits().into())
-                    .into(),
-                PrimTy::Float(kind) => match kind {
-                    FloatKind::F32 => self.llvm_ctx.f32_type().into(),
-                    FloatKind::F64 => self.llvm_ctx.f64_type().into(),
-                },
-                PrimTy::String => todo!(),
+            TyKind::Bool => self.llvm_ctx.bool_type().into(),
+            TyKind::Int(kind) => self
+                .llvm_ctx
+                .custom_width_int_type(kind.bits().into())
+                .into(),
+            TyKind::Float(kind) => match kind {
+                FloatKind::F32 => self.llvm_ctx.f32_type().into(),
+                FloatKind::F64 => self.llvm_ctx.f64_type().into(),
             },
-            TyKind::Func(param, body) => todo!(),
-            TyKind::Func(_, _)
-            | TyKind::Existential(_)
-            | TyKind::Forall(_, _)
-            | TyKind::Error
-            | TyKind::Var(_) => {
+            TyKind::String => todo!(),
+            &TyKind::Func(param, body) => self
+                .conv_basic_ty(body)
+                .fn_type(&[self.conv_basic_ty(param).into()], false)
+                .into(),
+            TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
                 unreachable!()
             },
         }

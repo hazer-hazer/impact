@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     cli::verbose,
+    dt::idx::IndexVec,
     hir::{expr::Expr, HirId},
     resolve::builtin::Builtin,
 };
@@ -11,6 +12,18 @@ use super::{
     ctx::GlobalCtx,
     ty::{Subst, Ty, TyKind, TyVarId},
 };
+
+pub trait TyBindings {
+    fn substitution_for(&self, var: TyVarId) -> Option<Ty>;
+}
+
+pub struct ExprTyBindings(IndexVec<TyVarId, Option<Ty>>);
+
+impl TyBindings for ExprTyBindings {
+    fn substitution_for(&self, var: TyVarId) -> Option<Ty> {
+        self.0.get_flat(var).copied()
+    }
+}
 
 pub struct TyCtx {
     builtins: HashMap<Builtin, Ty>,
@@ -64,26 +77,17 @@ impl TyCtx {
             .expect(&format!("Type of node {} expected", id))
     }
 
-    pub fn instantiated_ty(&self, expr: Expr) -> Result<Ty, String> {
+    pub fn instantiated_expr_ty(&self, expr: Expr) -> Result<Ty, String> {
         self._instantiated_ty(expr, self.tyof(expr))
-    }
-
-    fn instantiated_ty_var(&self, expr: Expr, var: TyVarId) -> Result<Ty, String> {
-        match self.ty_bindings.get(&(expr, var)) {
-            Some(&ty) => {
-                assert!(ty.is_mono());
-                Ok(ty)
-            },
-            // TODO: Type variable name is a number, add namings!
-            None => Err(format!("Cannot infer exact type of type variable {}", var)),
-        }
     }
 
     fn _instantiated_ty(&self, expr: Expr, ty: Ty) -> Result<Ty, String> {
         match ty.kind() {
             TyKind::Error => todo!(),
-            TyKind::Unit | TyKind::Prim(_) => Ok(ty),
-            &TyKind::Var(var) => self.instantiated_ty_var(expr, var),
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
+                Ok(ty)
+            },
+            &TyKind::Var(var) => self.instantiated_expr_ty_var(expr, var),
             // FIXME: Panic?
             TyKind::Existential(_) => panic!(),
             &TyKind::Func(param, body) => Ok(Ty::func(
@@ -91,14 +95,28 @@ impl TyCtx {
                 self._instantiated_ty(expr, body)?,
             )),
             &TyKind::Forall(alpha, body) => {
-                let alpha_ty = self.instantiated_ty_var(expr, alpha)?;
+                let alpha_ty = self.instantiated_expr_ty_var(expr, alpha)?;
                 Ok(body.substitute(Subst::Var(alpha), alpha_ty))
             },
         }
     }
 
+    fn instantiated_expr_ty_var(&self, expr: Expr, var: TyVarId) -> Result<Ty, String> {
+        match self.ty_bindings.get(&(expr, var)) {
+            Some(&ty) => {
+                assert!(ty.is_mono());
+                Ok(ty)
+            },
+            // TODO: Type variable name is a number, add namings!
+            None => Err(format!(
+                "Cannot infer exact type of type variable {:?}",
+                var
+            )),
+        }
+    }
+
     pub fn instantiated_func_ty(&self, expr: Expr) -> Result<Ty, String> {
-        let ty = self.instantiated_ty(expr)?;
+        let ty = self.instantiated_expr_ty(expr)?;
         match ty.kind() {
             // FIXME: Allow error???
             // TyKind::Error => todo!(),

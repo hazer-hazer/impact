@@ -66,7 +66,13 @@ impl GlobalCtx {
 
     pub fn apply_on(&self, ty: Ty) -> Ty {
         match ty.kind() {
-            TyKind::Error | TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => ty,
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::String
+            | TyKind::Var(_) => ty,
             // FIXME: Can we panic on unwrap?
             &TyKind::Existential(ex) => self.apply_on(
                 self.get_solution(ex)

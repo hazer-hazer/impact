@@ -1,6 +1,9 @@
 use crate::{
     cli::verbose,
-    hir::expr::{Expr, ExprKind, Lambda},
+    hir::{
+        self,
+        expr::{Expr, ExprKind, Lambda, Lit},
+    },
     message::message::MessageBuilder,
     span::span::{Spanned, WithSpan},
     typeck::{ty::Subst, TypeckErr},
@@ -8,7 +11,7 @@ use crate::{
 
 use super::{
     ctx::InferCtx,
-    ty::{Existential, ExistentialKind, PrimTy, Ty, TyKind},
+    ty::{Existential, ExistentialKind, FloatKind, IntKind, Ty, TyKind},
     TyResult,
 };
 
@@ -59,18 +62,39 @@ impl<'hir> Typecker<'hir> {
         let expr = self.hir.expr(expr_id);
 
         match (expr.kind(), ty.kind()) {
-            (&ExprKind::Lit(lit), &TyKind::Prim(prim)) => {
-                if let Ok(lit_prim) = PrimTy::try_from(lit) {
-                    if lit_prim == prim {
-                        Ok(ty)
-                    } else {
-                        // Unequal literals (not existentials as we not failed
-                        //  to construct PrimTy of Lit without context)
-                        Err(TypeckErr::LateReport)
-                    }
-                } else {
-                    // Infer literal ty
-                    self.expr_subtype(expr_id, ty)
+            (&ExprKind::Lit(lit), check) => {
+                match (lit, check) {
+                    (Lit::Bool(_), TyKind::Bool) | (Lit::String(_), TyKind::String) => Ok(ty),
+                    (Lit::Int(_, ast_kind), &TyKind::Int(kind)) => IntKind::try_from(ast_kind)
+                        .map_or_else(
+                            |_| self.expr_subtype(expr_id, ty),
+                            |kind_| {
+                                if kind == kind_ {
+                                    Ok(ty)
+                                } else {
+                                    Err(TypeckErr::LateReport)
+                                }
+                            },
+                        ),
+
+                    (Lit::Float(_, ast_kind), &TyKind::Float(kind)) => {
+                        FloatKind::try_from(ast_kind).map_or_else(
+                            |_| self.expr_subtype(expr_id, ty),
+                            |kind_| {
+                                if kind == kind_ {
+                                    Ok(ty)
+                                } else {
+                                    Err(TypeckErr::LateReport)
+                                }
+                            },
+                        )
+                    },
+
+                    (Lit::String(_), TyKind::String) => Ok(ty),
+
+                    // Unequal literals (not existentials as we not failed
+                    //  to construct PrimTy of Lit without context)
+                    _ => Err(TypeckErr::LateReport),
                 }
             },
 
@@ -185,8 +209,10 @@ impl<'hir> Typecker<'hir> {
             (TyKind::Error, _) | (_, TyKind::Error) => Err(TypeckErr::LateReport),
 
             (TyKind::Unit, TyKind::Unit) => Ok(r_ty),
-
-            (&TyKind::Prim(prim), &TyKind::Prim(prim_)) if prim == prim_ => Ok(r_ty),
+            (TyKind::Bool, TyKind::Bool) => Ok(r_ty),
+            (TyKind::Int(kind), TyKind::Int(kind_)) if kind == kind_ => Ok(r_ty),
+            (TyKind::Float(kind), TyKind::Float(kind_)) if kind == kind_ => Ok(r_ty),
+            (TyKind::String, TyKind::String) => Ok(r_ty),
 
             (TyKind::Var(var), TyKind::Var(var_)) if var == var_ => Ok(r_ty),
 
@@ -195,7 +221,7 @@ impl<'hir> Typecker<'hir> {
             },
 
             // Int existentials //
-            (&TyKind::Existential(int_ex), TyKind::Prim(PrimTy::Int(_))) if int_ex.is_int() => {
+            (&TyKind::Existential(int_ex), TyKind::Int(_)) if int_ex.is_int() => {
                 Ok(self.solve(int_ex, r_ty))
             },
 
@@ -207,9 +233,7 @@ impl<'hir> Typecker<'hir> {
             (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
 
             // Float existentials //
-            (&TyKind::Existential(float_ex), TyKind::Prim(PrimTy::Float(_)))
-                if float_ex.is_float() =>
-            {
+            (&TyKind::Existential(float_ex), TyKind::Float(_)) if float_ex.is_float() => {
                 Ok(self.solve(float_ex, r_ty))
             },
 
@@ -319,7 +343,10 @@ impl<'hir> Typecker<'hir> {
         match r_ty.kind() {
             TyKind::Error
             | TyKind::Unit
-            | TyKind::Prim(_)
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::String
             | TyKind::Var(_)
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
@@ -361,7 +388,10 @@ impl<'hir> Typecker<'hir> {
         match l_ty.kind() {
             TyKind::Error
             | TyKind::Unit
-            | TyKind::Prim(_)
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::String
             | TyKind::Var(_)
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")

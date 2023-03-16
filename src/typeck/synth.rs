@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    ty::{PrimTy, Ty, TyKind},
+    ty::{Ty, TyKind},
     TyResult, TypeckErr, Typed,
 };
 
@@ -29,7 +29,7 @@ impl<'hir> Typecker<'hir> {
             DefKind::DeclareBuiltin => {
                 self.tyctx_mut().type_node(
                     hir_id,
-                    Ty::func(Ty::prim(PrimTy::String), Ty::var(Ty::next_ty_var_id())),
+                    Ty::func(Ty::string(), Ty::var(Ty::next_ty_var_id())),
                 );
                 return Ok(Ty::unit());
             },
@@ -108,15 +108,13 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_lit(&mut self, lit: &Lit) -> TyResult<Ty> {
-        let prim = match lit {
-            Lit::Bool(_) => PrimTy::Bool,
-            Lit::String(_) => PrimTy::String,
+        Ok(match lit {
+            Lit::Bool(_) => Ty::bool(),
+            Lit::String(_) => Ty::string(),
 
-            &Lit::Int(_, kind) => return Ok(self.conv_int_kind(kind)),
-            &Lit::Float(_, kind) => return Ok(self.conv_float_kind(kind)),
-        };
-
-        Ok(Ty::prim(prim))
+            &Lit::Int(_, kind) => self.conv_int(kind),
+            &Lit::Float(_, kind) => self.conv_float(kind),
+        })
     }
 
     fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
@@ -310,15 +308,6 @@ impl<'hir> Typecker<'hir> {
         match lhs_ty.kind() {
             // FIXME: Or return Ok(lhs_ty)?
             TyKind::Error => Ok(lhs_ty),
-            TyKind::Unit | TyKind::Prim(_) | TyKind::Var(_) => {
-                MessageBuilder::error()
-                    .text(format!("{} cannot be called", lhs_ty))
-                    .span(span)
-                    .label(span, format!("has type {} which cannot be called", lhs_ty))
-                    .emit(self);
-
-                Err(TypeckErr::Reported)
-            },
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
@@ -360,6 +349,16 @@ impl<'hir> Typecker<'hir> {
                 self.tyctx_mut().bind_ty_var(lhs_expr, alpha, alpha_ex.1);
 
                 body_ty
+            },
+            // FIXME: Type variable can be a callee?
+            _ => {
+                MessageBuilder::error()
+                    .text(format!("{} cannot be called", lhs_ty))
+                    .span(span)
+                    .label(span, format!("has type {} which cannot be called", lhs_ty))
+                    .emit(self);
+
+                Err(TypeckErr::Reported)
             },
         }
     }

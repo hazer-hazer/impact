@@ -2,7 +2,7 @@ use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
     resolve::def::DefKind,
     span::span::WithSpan,
-    typeck::{tyctx::TyCtx},
+    typeck::tyctx::TyCtx,
 };
 
 use super::{
@@ -49,9 +49,7 @@ impl<'ctx> ThirBuilder<'ctx> {
             hir::expr::ExprKind::Lit(lit) => {
                 let lit = match *lit {
                     hir::expr::Lit::Bool(val) => Lit::Bool(val),
-                    hir::expr::Lit::Int(val, _) => {
-                        Lit::Int(val, self.tyctx.tyof(expr_id).as_int_kind())
-                    },
+                    hir::expr::Lit::Int(val, _) => Lit::Int(val, self.tyctx.tyof(expr_id).as_int()),
                     hir::expr::Lit::Float(val, _) => {
                         Lit::Float(val, self.tyctx.tyof(expr_id).as_float_kind())
                     },
