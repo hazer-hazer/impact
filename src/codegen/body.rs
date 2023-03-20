@@ -22,6 +22,7 @@ pub struct BodyCodeGen<'ink, 'ctx, 'a> {
 
     // Body context //
     func_def_id: DefId,
+    callee_expr: Expr,
     body_id: BodyId,
     body: &'ctx Body,
     func: FunctionValue<'ink>,

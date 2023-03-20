@@ -46,9 +46,10 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
 
         let function_map = FunctionsCodeGen::new(ctx).gen_functions();
 
-        for (def_id, _func) in function_map.iter_enumerated_flat() {
-            BodyCodeGen::new(ctx, def_id, &function_map).gen_body();
-        }
+        // TODO
+        // for (def_id, _func) in function_map.iter_enumerated_flat() {
+        //     BodyCodeGen::new(ctx, def_id, &function_map).gen_body();
+        // }
     }
 }
 

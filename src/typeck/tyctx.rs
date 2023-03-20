@@ -1,4 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{
+        hash_map::{DefaultHasher, Entry},
+        HashMap, HashSet,
+    },
+    hash::{Hash, Hasher},
+};
 
 use crate::{
     cli::verbose,
@@ -16,7 +22,7 @@ use super::{
     ty::{Subst, Ty, TyKind, TyVarId},
 };
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq, Hash)]
 pub struct TyBindings(IndexVec<TyVarId, Option<Ty>>);
 
 impl TyBindings {
@@ -31,6 +37,11 @@ impl TyBindings {
     pub fn iter(&self) -> impl Iterator<Item = (TyVarId, &Ty)> + '_ {
         self.0.iter_enumerated_flat()
     }
+}
+
+pub enum InstantiatedTy<T = Ty, E = ()> {
+    Mono(T),
+    Poly(Vec<Result<(T, Expr), E>>),
 }
 
 pub struct TyCtx {
@@ -71,6 +82,7 @@ impl TyCtx {
     pub fn apply_ctx_on_typed_nodes(&mut self, ctx: &GlobalCtx) {
         self.typed.iter_mut().for_each(|(_, ty)| {
             *ty = ctx.apply_on(*ty);
+            assert!(ty.is_solved());
         });
     }
 
@@ -88,11 +100,15 @@ impl TyCtx {
             .expect(&format!("Type of node {} expected", id))
     }
 
-    pub fn instantiated_expr_ty(&self, expr: Expr) -> Result<Ty, String> {
+    fn get_binding(&self, expr: Expr, var: TyVarId) -> Option<Ty> {
+        self.expr_ty_bindings.get(&expr)?.substitution_for(var)
+    }
+
+    pub fn instantiated_expr_ty(&self, expr: Expr) -> Result<Ty, ()> {
         self._instantiated_ty(expr, self.tyof(expr))
     }
 
-    fn _instantiated_ty(&self, expr: Expr, ty: Ty) -> Result<Ty, String> {
+    fn _instantiated_ty(&self, expr: Expr, ty: Ty) -> Result<Ty, ()> {
         match ty.kind() {
             TyKind::Error => todo!(),
             TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
@@ -113,31 +129,29 @@ impl TyCtx {
         }
     }
 
-    fn get_binding(&self, expr: Expr, var: TyVarId) -> Option<Ty> {
-        self.expr_ty_bindings.get(&expr)?.substitution_for(var)
-    }
-
-    fn instantiated_expr_ty_var(&self, expr: Expr, var: TyVarId) -> Result<Ty, String> {
+    fn instantiated_expr_ty_var(&self, expr: Expr, var: TyVarId) -> Result<Ty, ()> {
         match self.get_binding(expr, var) {
             Some(ty) => {
                 assert!(ty.is_mono());
                 Ok(ty)
             },
             // TODO: Type variable name is a number, add namings!
-            None => Err(format!(
-                "Cannot infer exact type of type variable {:?}",
-                var
-            )),
+            None => Err(()),
         }
     }
 
-    pub fn instantiated_func_ty(&self, expr: Expr) -> Result<Ty, String> {
-        let ty = self.instantiated_expr_ty(expr)?;
-        match ty.kind() {
-            // FIXME: Allow error???
-            // TyKind::Error => todo!(),
-            TyKind::Func(..) | TyKind::FuncDef(..) => Ok(ty),
-            _ => Err(format!("{} is non-callable type", ty)),
+    pub fn instantiated_ty(&self, def_id: DefId) -> InstantiatedTy {
+        let ty = self.tyof(HirId::new_owner(def_id));
+        if ty.is_instantiated() {
+            InstantiatedTy::Mono(ty)
+        } else {
+            InstantiatedTy::Poly(
+                self.def_ty_bindings
+                    .get_unwrap(def_id)
+                    .iter()
+                    .map(|&expr| self.instantiated_expr_ty(expr).map(|ty| (ty, expr)))
+                    .collect(),
+            )
         }
     }
 
@@ -177,22 +191,18 @@ impl TyCtx {
     /// We have `Expr -> (TyVarId -> Ty)[]` and `DefId -> set Expr` mapping.
     /// The result must be a list of expressions with unique substitutions of definition type variables.
     pub fn unique_def_bound_usages(&self, def_id: DefId) -> Vec<Expr> {
-        let mut set = HashMap::<(TyVarId, Ty), Expr>::new();
-        let _a = self
-            .def_ty_bindings
-            .get_unwrap(def_id)
-            .iter()
-            .for_each(|expr| {
-                self.expr_ty_bindings
-                    .get(expr)
-                    .unwrap()
-                    .iter()
-                    .for_each(|(var, ty)| {
-                        set.insert((var, *ty), *expr);
-                    });
-            });
-
-        set.values().copied().collect()
+        let mut unique_bindings = HashSet::<u64>::new();
+        self.def_ty_bindings.get_unwrap(def_id).iter().fold(
+            Vec::<Expr>::new(),
+            |mut exprs, expr| {
+                let mut s = DefaultHasher::new();
+                self.expr_ty_bindings.get(expr).unwrap().hash(&mut s);
+                if unique_bindings.insert(s.finish()) {
+                    exprs.push(*expr);
+                }
+                exprs
+            },
+        )
     }
 
     // Debug //

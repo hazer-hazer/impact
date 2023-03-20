@@ -12,7 +12,7 @@ use crate::{
         color::{Color, Colorize},
         verbose,
     },
-    dt::idx::{declare_idx, Idx},
+    dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
     utils::macros::match_expected,
@@ -217,10 +217,16 @@ impl std::fmt::Display for FloatKind {
 
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 
+pub type TyMap<T> = IndexVec<TyId, Option<T>>;
+
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Ty(TyId);
 
 impl Ty {
+    pub fn id(&self) -> TyId {
+        self.0
+    }
+
     // Interning and constructors //
     pub fn intern(tys: TyS) -> Self {
         Self(TY_INTERNER.write().unwrap().intern(tys))
@@ -328,6 +334,22 @@ impl Ty {
             &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
                 param.is_instantiated() && body.is_instantiated()
             },
+        }
+    }
+
+    pub fn is_solved(&self) -> bool {
+        match self.kind() {
+            TyKind::Error => todo!(),
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
+                true
+            },
+            TyKind::FuncDef(_, param, body) | TyKind::Func(param, body) => {
+                param.is_solved() && body.is_solved()
+            },
+            // TODO: Check that var is bound in ty_bindings?
+            TyKind::Var(_) => true,
+            TyKind::Existential(_) => false,
+            TyKind::Forall(_, ty) => ty.is_solved(),
         }
     }
 

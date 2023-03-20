@@ -4,11 +4,14 @@ use inkwell::{
 };
 
 use crate::{
-    hir::{HirId, HIR},
+    hir::{expr::Expr, HirId, HIR},
     mir::{Ty, MIR},
     resolve::def::DefId,
     session::Session,
-    typeck::ty::{FloatKind, TyKind},
+    typeck::{
+        ty::{FloatKind, TyKind},
+        tyctx::InstantiatedTy,
+    },
 };
 
 #[derive(Clone, Copy)]
@@ -49,13 +52,23 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         self.conv_ty(ty).try_into().unwrap()
     }
 
-    pub fn func_ty(&self, def_id: DefId) -> FunctionType<'ink> {
-        let ty = self
-            .sess
-            .tyctx
-            .instantiated_func_ty(HirId::new_owner(def_id))
-            .unwrap();
+    pub fn func_ty(&self, def_id: DefId) -> InstantiatedTy<(Ty, FunctionType<'ink>)> {
+        let inst_ty = self.sess.tyctx.instantiated_ty(def_id);
 
-        self.conv_ty(ty).into_function_type()
+        match inst_ty {
+            InstantiatedTy::Mono(mono) => {
+                InstantiatedTy::Mono((mono, self.conv_ty(mono).into_function_type()))
+            },
+            InstantiatedTy::Poly(poly) => InstantiatedTy::Poly(
+                poly.iter()
+                    .map(|res| {
+                        res.map(|(ty, expr)| ((ty, self.conv_ty(ty).into_function_type()), expr))
+                    })
+                    .collect(),
+            ),
+        }
+
+        // .map(|res| res.map(|ty| self.conv_ty(ty).into_function_type()))
+        // .collect()
     }
 }

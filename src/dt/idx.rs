@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IndexVec<I: Idx, T> {
     vec: Vec<T>,
     _i: PhantomData<I>,
@@ -137,14 +137,18 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
         self[i].replace(v)
     }
 
+    pub fn upsert(&mut self, i: I, vacant: impl Fn() -> T) -> &mut T {
+        if !self.has(i) {
+            self.insert(i, vacant());
+        }
+        self.get_mut_unwrap(i)
+    }
+
     pub fn upsert_default(&mut self, i: I) -> &mut T
     where
         T: Default,
     {
-        if !self.has(i) {
-            self.insert(i, Default::default());
-        }
-        self.get_mut_unwrap(i)
+        self.upsert(i, || T::default())
     }
 
     #[inline]
