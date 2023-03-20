@@ -13,7 +13,8 @@ use crate::{
         verbose,
     },
     dt::idx::{declare_idx, Idx},
-    hir::{self, expr::Lit},
+    hir::{self},
+    resolve::def::DefId,
     utils::macros::match_expected,
 };
 
@@ -88,7 +89,7 @@ impl std::fmt::Display for Existential {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum IntKind {
     U8,
     U16,
@@ -172,7 +173,7 @@ impl std::fmt::Display for IntKind {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum FloatKind {
     F32,
     F64,
@@ -261,8 +262,12 @@ impl Ty {
         Self::new(TyKind::String)
     }
 
-    pub fn func(param: Ty, ret: Ty) -> Ty {
-        Self::new(TyKind::Func(param, ret))
+    pub fn func(def_id: Option<DefId>, param: Ty, body: Ty) -> Ty {
+        Self::new(if let Some(def_id) = def_id {
+            TyKind::FuncDef(def_id, param, body)
+        } else {
+            TyKind::Func(param, body)
+        })
     }
 
     pub fn forall(var: TyVarId, body: Ty) -> Ty {
@@ -300,14 +305,15 @@ impl Ty {
         match self.kind() {
             TyKind::Error
             | TyKind::Unit
-            | TyKind::Unit
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
             | TyKind::String
             | TyKind::Var(_)
             | TyKind::Existential(_) => true,
-            TyKind::Func(param, body) => param.is_mono() && body.is_mono(),
+            TyKind::FuncDef(_, param, body) | TyKind::Func(param, body) => {
+                param.is_mono() && body.is_mono()
+            },
             TyKind::Forall(_, _) => false,
         }
     }
@@ -319,7 +325,46 @@ impl Ty {
                 true
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
-            &TyKind::Func(param, body) => param.is_instantiated() && body.is_instantiated(),
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+                param.is_instantiated() && body.is_instantiated()
+            },
+        }
+    }
+
+    pub fn as_mono(&self) -> Option<MonoTy> {
+        let kind = match self.kind() {
+            TyKind::Error => Some(MonoTyKind::Error),
+            TyKind::Unit => Some(MonoTyKind::Unit),
+            TyKind::Bool => Some(MonoTyKind::Bool),
+            &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
+            &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
+            TyKind::String => Some(MonoTyKind::String),
+            TyKind::Func(param, body) | TyKind::FuncDef(_, param, body) => {
+                let param = param.as_mono()?;
+                let body = body.as_mono()?;
+                Some(MonoTyKind::Func(Box::new(param), Box::new(body)))
+            },
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
+        }?;
+
+        Some(MonoTy { kind, ty: *self })
+    }
+
+    pub fn mono(&self) -> MonoTy {
+        self.as_mono()
+            .expect(&format!("{} expected to be a mono type", self))
+    }
+
+    pub fn mono_checked(self) -> Self {
+        assert!(self.is_mono());
+        self
+    }
+
+    pub fn func_def_id(&self) -> Option<DefId> {
+        if let &TyKind::FuncDef(def_id, ..) = self.kind() {
+            Some(def_id)
+        } else {
+            None
         }
     }
 
@@ -347,10 +392,10 @@ impl Ty {
                     *self
                 }
             },
-            &TyKind::Func(param_ty, return_ty) => {
-                let param = param_ty.substitute(subst, with);
-                let ret = return_ty.substitute(subst, with);
-                Ty::func(param, ret)
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+                let param = param.substitute(subst, with);
+                let body = body.substitute(subst, with);
+                Ty::func(self.func_def_id(), param, body)
             },
             &TyKind::Forall(ident, body) => {
                 if subst == ident {
@@ -372,8 +417,8 @@ impl Ty {
         match_expected!(self.kind(), &TyKind::Float(kind) => kind)
     }
 
-    pub fn as_func(&self) -> (Ty, Ty) {
-        match_expected!(self.kind(), &TyKind::Func(param, body) => (param, body))
+    pub fn as_func(&self) -> (DefId, Ty, Ty) {
+        match_expected!(self.kind(), &TyKind::FuncDef(def_id, param, body) => (def_id, param, body))
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -397,6 +442,8 @@ impl std::fmt::Display for Ty {
     }
 }
 
+pub type FuncTy = (Ty, Ty);
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
     Error,
@@ -407,6 +454,9 @@ pub enum TyKind {
     Float(FloatKind),
 
     String,
+
+    /// Type of function or lambda
+    FuncDef(DefId, Ty, Ty),
 
     Func(Ty, Ty),
 
@@ -444,6 +494,7 @@ impl std::fmt::Display for TyS {
             TyKind::Float(kind) => write!(f, "{}", kind),
             TyKind::String => write!(f, "{}", "string"),
             &TyKind::Func(param, body) => write!(f, "({} -> {})", param, body),
+            &TyKind::FuncDef(def_id, param, body) => write!(f, "({} -> {}){}", param, body, def_id),
             TyKind::Var(name) => write!(f, "{}", name),
             TyKind::Existential(ex) => write!(f, "{}", ex),
             &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
@@ -529,6 +580,23 @@ impl PartialEq<Existential> for Subst {
             _ => false,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MonoTyKind {
+    Error,
+    Unit,
+    Bool,
+    Int(IntKind),
+    Float(FloatKind),
+    String,
+    Func(Box<MonoTy>, Box<MonoTy>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MonoTy {
+    pub kind: MonoTyKind,
+    pub ty: Ty,
 }
 
 #[cfg(test)]

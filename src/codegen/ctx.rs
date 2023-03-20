@@ -35,7 +35,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                 FloatKind::F64 => self.llvm_ctx.f64_type().into(),
             },
             TyKind::String => todo!(),
-            &TyKind::Func(param, body) => self
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => self
                 .conv_basic_ty(body)
                 .fn_type(&[self.conv_basic_ty(param).into()], false)
                 .into(),

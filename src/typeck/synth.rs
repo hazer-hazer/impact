@@ -11,7 +11,7 @@ use crate::{
         Body, BodyId, HirId, Path,
     },
     message::message::MessageBuilder,
-    resolve::def::DefKind,
+    resolve::def::{DefId, DefKind},
     span::span::{Ident, Spanned, WithSpan},
     typeck::ty::Subst,
 };
@@ -29,7 +29,11 @@ impl<'hir> Typecker<'hir> {
             DefKind::DeclareBuiltin => {
                 self.tyctx_mut().type_node(
                     hir_id,
-                    Ty::func(Ty::string(), Ty::var(Ty::next_ty_var_id())),
+                    Ty::func(
+                        Some(item.def_id()),
+                        Ty::string(),
+                        Ty::var(Ty::next_ty_var_id()),
+                    ),
                 );
                 return Ok(Ty::unit());
             },
@@ -57,7 +61,7 @@ impl<'hir> Typecker<'hir> {
                 value_ty
             },
             &ItemKind::Func(body) => {
-                let value_ty = self.synth_body(body)?;
+                let value_ty = self.synth_body(item.def_id(), body)?;
                 self.type_term(self.hir.item(item).name(), value_ty);
                 value_ty
             },
@@ -90,7 +94,7 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             ExprKind::Path(path) => self.synth_path(path.0),
             &ExprKind::Block(block) => self.synth_block(block),
-            ExprKind::Lambda(lambda) => self.synth_body(lambda.body_id),
+            ExprKind::Lambda(lambda) => self.synth_body(lambda.def_id, lambda.body_id),
             ExprKind::Call(call) => self.synth_call(&call, expr_id),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
@@ -183,7 +187,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn synth_body(&mut self, body_id: BodyId) -> TyResult<Ty> {
+    fn synth_body(&mut self, owner_def_id: DefId, body_id: BodyId) -> TyResult<Ty> {
         let &Body {
             param,
             value: _body,
@@ -218,7 +222,7 @@ impl<'hir> Typecker<'hir> {
 
             let body_ty = this.check_discard_err(self.hir.body_value(body_id), body_ex.1);
 
-            // Apply context to function parameter to get its type.
+            // Apply context to function parameter to get its "known" type.
             let param_ty = this.get_typed_pat(param);
 
             // If we know of which type function parameter is -- check inferred one against it
@@ -232,23 +236,23 @@ impl<'hir> Typecker<'hir> {
 
             this.tyctx_mut().type_node(param, param_ty);
 
-            let func_ty =
-                param_exes
-                    .iter()
-                    .fold(Ty::func(param_ty, body_ty), |ty, (&name, &(ex, _))| {
-                        verbose!(
-                            "Func type generation {ty}; push {name}: {ex} = {:?}",
-                            this.get_solution(ex)
-                        );
-                        if let Some(_) = this.get_solution(ex) {
-                            ty
-                        } else {
-                            // FIXME: Check type variable resolution
-                            let ty_var = Ty::next_ty_var_id();
-                            this.solve(ex, Ty::var(ty_var));
-                            Ty::forall(ty_var, ty)
-                        }
-                    });
+            let func_ty = param_exes.iter().fold(
+                Ty::func(Some(owner_def_id), param_ty, body_ty),
+                |ty, (&name, &(ex, _))| {
+                    verbose!(
+                        "Func type generation {ty}; push {name}: {ex} = {:?}",
+                        this.get_solution(ex)
+                    );
+                    if let Some(_) = this.get_solution(ex) {
+                        ty
+                    } else {
+                        // FIXME: Check type variable resolution
+                        let ty_var = Ty::next_ty_var_id();
+                        this.solve(ex, Ty::var(ty_var).mono());
+                        Ty::forall(ty_var, ty)
+                    }
+                },
+            );
 
             verbose!("Func ty {func_ty}");
 
@@ -314,8 +318,8 @@ impl<'hir> Typecker<'hir> {
                     let param_ex = this.add_fresh_common_ex();
 
                     let body_ex = this.add_fresh_common_ex();
-                    let func_ty = Ty::func(param_ex.1, body_ex.1);
-                    this.solve(ex, func_ty);
+                    let func_ty = Ty::func(None, param_ex.1, body_ex.1);
+                    this.solve(ex, func_ty.mono());
 
                     // TODO: Can we infer param type from application as below in Func?
                     this.check(arg, param_ex.1)?;
@@ -323,8 +327,8 @@ impl<'hir> Typecker<'hir> {
                     Ok(body_ex.1)
                 })
             },
-            &TyKind::Func(param, body) => {
-                // TODO: Let arguments go first
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+                // TODO?: Let arguments go first
                 // if let Some(param_ex) = param.as_ex() {
                 //     todo!();
                 //     let arg = self.synth_expr(arg)?;
@@ -346,7 +350,10 @@ impl<'hir> Typecker<'hir> {
                     arg,
                 );
 
-                self.tyctx_mut().bind_ty_var(lhs_expr, alpha, alpha_ex.1);
+                let func_def_id = self.deep_func_def_id(ty);
+
+                self.tyctx_mut()
+                    .bind_ty_var(func_def_id, lhs_expr, alpha, alpha_ex.1);
 
                 body_ty
             },

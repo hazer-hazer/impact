@@ -21,7 +21,10 @@ use crate::{
 
 use self::{
     ctx::{GlobalCtx, InferCtx},
-    ty::{Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, Ty, TyKind, TyVarId},
+    ty::{
+        Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, MonoTy, Ty, TyKind,
+        TyVarId,
+    },
     tyctx::TyCtx,
 };
 
@@ -282,7 +285,8 @@ impl<'hir> Typecker<'hir> {
         self.add_fresh_ex(ExistentialKind::Common)
     }
 
-    fn solve(&mut self, ex: Existential, sol: Ty) -> Ty {
+    fn solve(&mut self, ex: Existential, sol: MonoTy) -> Ty {
+        let sol = sol.ty;
         if let &TyKind::Existential(sol_ex) = sol.kind() {
             assert_ne!(sol_ex, ex, "Tried to solve ex with itself {} / {}", ex, sol);
         }
@@ -292,7 +296,8 @@ impl<'hir> Typecker<'hir> {
             .unwrap()
     }
 
-    fn add_func_param_sol(&mut self, ex: Existential, sol: Ty) -> Ty {
+    fn add_func_param_sol(&mut self, ex: Existential, sol: MonoTy) -> Ty {
+        let sol = sol.ty;
         verbose!("Add {} func param solution {}", ex, sol);
         self._ascend_ctx_mut(|ctx| ctx.add_func_param_sol(ex, sol))
             .map_or_else(|| todo!("Global ctx func param exes"), |(ty, _)| Some(ty))
@@ -350,10 +355,10 @@ impl<'hir> Typecker<'hir> {
                 .get_solution(ex)
                 .map_or(ty, |ty| self._apply_ctx_on(ty)),
 
-            &TyKind::Func(param_ty, return_ty) => {
-                let param = self._apply_ctx_on(param_ty);
-                let ret = self._apply_ctx_on(return_ty);
-                Ty::func(param, ret)
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+                let param = self._apply_ctx_on(param);
+                let body = self._apply_ctx_on(body);
+                Ty::func(ty.func_def_id(), param, body)
             },
 
             &TyKind::Forall(ident, body) => {
@@ -378,8 +383,8 @@ impl<'hir> Typecker<'hir> {
                 true
             },
             TyKind::Existential(_) => false,
-            &TyKind::Func(param, ret) => {
-                self.ty_occurs_in(param, name) || self.ty_occurs_in(ret, name)
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+                self.ty_occurs_in(param, name) || self.ty_occurs_in(body, name)
             },
             &TyKind::Forall(alpha, _) if name == alpha => true,
             &TyKind::Forall(_, body) => self.ty_occurs_in(body, name),
@@ -408,9 +413,9 @@ impl<'hir> Typecker<'hir> {
                     self.ty_illformed(ty)
                 }
             },
-            &TyKind::Func(param_ty, return_ty) => {
-                self.ty_wf(param_ty)?;
-                self.ty_wf(return_ty)
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+                self.ty_wf(param)?;
+                self.ty_wf(body)
             },
             &TyKind::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
                 // let open_forall = this.open_forall(body, alpha);
@@ -440,7 +445,7 @@ impl<'hir> Typecker<'hir> {
                 return;
             }
             verbose!("Default int ex {}", ex);
-            self.solve(ex, default_int);
+            self.solve(ex, default_int.mono());
         });
 
         self.ctx().float_exes().iter().for_each(|&ex| {
@@ -448,8 +453,13 @@ impl<'hir> Typecker<'hir> {
                 return;
             }
             verbose!("Default float ex {}", ex);
-            self.solve(ex, default_float);
+            self.solve(ex, default_float.mono());
         });
+    }
+
+    /// Gets function type DefId applying context to substitute existentials.
+    pub fn deep_func_def_id(&self, ty: Ty) -> Option<DefId> {
+        self.apply_ctx_on(ty).func_def_id()
     }
 
     // Conversion //
@@ -461,8 +471,8 @@ impl<'hir> Typecker<'hir> {
             &hir::ty::TyKind::Path(TyPath(path)) => self.conv_ty_path(path),
             &hir::ty::TyKind::Func(param, body) => {
                 let param = self.conv(param);
-                let ret = self.conv(body);
-                Ty::func(param, ret)
+                let body = self.conv(body);
+                Ty::func(None, param, body)
             },
             hir::ty::TyKind::App(_cons, _arg) => todo!(),
             hir::ty::TyKind::Builtin(bt) => match bt {
@@ -625,17 +635,20 @@ impl<'hir> Typecker<'hir> {
         //             )
         //         });
 
-        let ty_bindings = self
-            .tyctx()
-            .ty_bindings()
-            .iter()
-            .fold(String::new(), |s, ((expr, var), ty)| {
-                format!("{}{}: {{{}: {}}}\n", s, expr, var, ty)
-            });
+        let expr_ty_bindings =
+            self.tyctx()
+                .expr_ty_bindings()
+                .iter()
+                .fold(String::new(), |s, (expr, bindings)| {
+                    let bs = bindings.iter().fold(String::new(), |s, (var, ty)| {
+                        format!("{}  {}: {}\n", s, var, ty)
+                    });
+                    format!("{}{}\n{}", s, expr, bs)
+                });
 
         format!(
             "[CTX]\nvars: {}\nterms:\n{}\nsolved:\n{}\nunsolved: {}\nglobal solved:\n{}\nglobal existentials: {}\nType bindings:\n{}",
-            vars, terms, solved, unsolved, global_solved, global_exes, ty_bindings
+            vars, terms, solved, unsolved, global_solved, global_exes, expr_ty_bindings
         )
     }
 }

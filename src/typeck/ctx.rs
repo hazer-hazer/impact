@@ -17,6 +17,12 @@ pub struct GlobalCtx {
 }
 
 impl GlobalCtx {
+    /**
+     * Add context, mostly after popping it from stack.
+     * When we exit context, all existentials need to be saved
+     * because we need them to get a solution for solved types
+     * having either successfully inferred type or a typeck error.
+     */
     pub fn add(&mut self, depth: usize, ctx: InferCtx) {
         ctx.existentials()
             .iter()
@@ -64,6 +70,10 @@ impl GlobalCtx {
         }
     }
 
+    /**
+     * Applies global context on the type.
+     * If returned type contains unsolved existentials -- we failed to infer its type.
+     */
     pub fn apply_on(&self, ty: Ty) -> Ty {
         match ty.kind() {
             TyKind::Error
@@ -78,7 +88,9 @@ impl GlobalCtx {
                 self.get_solution(ex)
                     .expect(&format!("Unsolved existential {}", ex)),
             ),
-            &TyKind::Func(param, body) => Ty::func(self.apply_on(param), self.apply_on(body)),
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+                Ty::func(ty.func_def_id(), self.apply_on(param), self.apply_on(body))
+            },
             &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
         }
     }
@@ -104,6 +116,10 @@ impl GlobalCtx {
     }
 }
 
+/**
+ * InferCtx is a common abstraction similar to algorithmic context
+ * from CAEBTC.
+ */
 #[derive(Default, Clone, Debug)]
 pub struct InferCtx {
     /// Existentials defined in current context
@@ -114,16 +130,20 @@ pub struct InferCtx {
     //  We need to enter new "try to"-context under which we do not violate upper context.
     solved: IndexVec<ExistentialId, Option<Ty>>,
 
+    // FIXME: Unused?
     func_param_solutions: IndexVec<ExistentialId, Option<Vec<Ty>>>,
 
-    /// Type variables defined in current context. Do not leak to global context
+    /// Type variables defined in current context. Do not leak to global context.
+    /// Actually only used for well-formedness.
     vars: Vec<TyVarId>,
 
     /// Typed terms. Do not leak to global context
+    /// FIXME: Possibly get rid of this. Could be replaced with `HirId -> Ty` bindings globally.
     terms: HashMap<Symbol, Ty>,
 }
 
 impl InferCtx {
+    // Constructors //
     pub fn new_with_var(var: TyVarId) -> Self {
         Self {
             vars: Vec::from([var]),
@@ -158,11 +178,13 @@ impl InferCtx {
         self.existentials.iter().position(|&ex_| ex == ex_)
     }
 
+    /// Checks if existential is declared in this context.
+    /// Solutions of existentials do not count.
     pub fn has_ex(&self, ex: Existential) -> bool {
         self.existentials.contains(&ex)
     }
 
-    /// Seems to be a strange function, but useful in `ascend_ctx` checks
+    /// Seems to be a strange function, but useful in `ascend_ctx` checks.
     pub fn get_ex(&self, ex: Existential) -> Option<Existential> {
         if self.has_ex(ex) {
             Some(ex)
@@ -203,7 +225,7 @@ impl InferCtx {
         )
     }
 
-    /// Returns solution if existential is in context
+    /// Returns solution if existential is in context.
     pub fn solve(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
         if self.has_ex(ex) {
             assert!(

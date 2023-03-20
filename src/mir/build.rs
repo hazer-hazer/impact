@@ -1,7 +1,6 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{
-    dt::idx::Idx,
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
     message::message::MessageStorage,
     session::{Session, Stage, StageOutput},

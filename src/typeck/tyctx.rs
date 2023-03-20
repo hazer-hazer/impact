@@ -1,10 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
     hir::{expr::Expr, HirId},
-    resolve::builtin::Builtin,
+    resolve::{
+        builtin::Builtin,
+        def::{DefId, DefMap},
+    },
 };
 
 use super::{
@@ -13,15 +16,20 @@ use super::{
     ty::{Subst, Ty, TyKind, TyVarId},
 };
 
-pub trait TyBindings {
-    fn substitution_for(&self, var: TyVarId) -> Option<Ty>;
-}
+#[derive(Debug, Default, PartialEq)]
+pub struct TyBindings(IndexVec<TyVarId, Option<Ty>>);
 
-pub struct ExprTyBindings(IndexVec<TyVarId, Option<Ty>>);
-
-impl TyBindings for ExprTyBindings {
+impl TyBindings {
     fn substitution_for(&self, var: TyVarId) -> Option<Ty> {
         self.0.get_flat(var).copied()
+    }
+
+    fn bind(&mut self, var: TyVarId, ty: Ty) -> Option<Ty> {
+        self.0.insert(var, ty)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (TyVarId, &Ty)> + '_ {
+        self.0.iter_enumerated_flat()
     }
 }
 
@@ -34,7 +42,9 @@ pub struct TyCtx {
     /// - Declaration: `[Declaration DefId] -> [Type of assigned value]`
     typed: HashMap<HirId, Ty>,
 
-    ty_bindings: HashMap<(Expr, TyVarId), Ty>,
+    expr_ty_bindings: HashMap<Expr, TyBindings>,
+
+    def_ty_bindings: DefMap<HashSet<Expr>>,
 }
 
 impl TyCtx {
@@ -42,7 +52,8 @@ impl TyCtx {
         Self {
             builtins: builtins(),
             typed: Default::default(),
-            ty_bindings: Default::default(),
+            expr_ty_bindings: Default::default(),
+            def_ty_bindings: Default::default(),
         }
     }
 
@@ -90,7 +101,8 @@ impl TyCtx {
             &TyKind::Var(var) => self.instantiated_expr_ty_var(expr, var),
             // FIXME: Panic?
             TyKind::Existential(_) => panic!(),
-            &TyKind::Func(param, body) => Ok(Ty::func(
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => Ok(Ty::func(
+                ty.func_def_id(),
                 self._instantiated_ty(expr, param)?,
                 self._instantiated_ty(expr, body)?,
             )),
@@ -101,9 +113,13 @@ impl TyCtx {
         }
     }
 
+    fn get_binding(&self, expr: Expr, var: TyVarId) -> Option<Ty> {
+        self.expr_ty_bindings.get(&expr)?.substitution_for(var)
+    }
+
     fn instantiated_expr_ty_var(&self, expr: Expr, var: TyVarId) -> Result<Ty, String> {
-        match self.ty_bindings.get(&(expr, var)) {
-            Some(&ty) => {
+        match self.get_binding(expr, var) {
+            Some(ty) => {
                 assert!(ty.is_mono());
                 Ok(ty)
             },
@@ -120,12 +136,12 @@ impl TyCtx {
         match ty.kind() {
             // FIXME: Allow error???
             // TyKind::Error => todo!(),
-            TyKind::Func(_, _) => Ok(ty),
+            TyKind::Func(..) | TyKind::FuncDef(..) => Ok(ty),
             _ => Err(format!("{} is non-callable type", ty)),
         }
     }
 
-    pub fn bind_ty_var(&mut self, expr: Expr, var: TyVarId, ty: Ty) {
+    pub fn bind_ty_var(&mut self, def_id: Option<DefId>, expr: Expr, var: TyVarId, ty: Ty) {
         verbose!("Bind type variable {} = {}", var, ty);
         assert!(
             ty.is_mono(),
@@ -134,16 +150,49 @@ impl TyCtx {
             var
         );
         assert!(
-            self.ty_bindings.insert((expr, var), ty).is_none(),
+            self.expr_ty_bindings
+                .entry(expr)
+                .or_default()
+                .bind(var, ty)
+                .is_none(),
             "Tried to rebind type variable {} in expression {} to {}",
             var,
             expr,
             ty
         );
+
+        if let Some(def_id) = def_id {
+            assert!(self.def_ty_bindings.upsert_default(def_id).insert(expr));
+        }
     }
 
-    pub fn ty_bindings(&self) -> &HashMap<(Expr, TyVarId), Ty> {
-        &self.ty_bindings
+    pub fn expr_ty_bindings(&self) -> &HashMap<Expr, TyBindings> {
+        &self.expr_ty_bindings
+    }
+
+    /// Get list of expressions with unique types bound in definition.
+    /// I.e., having function `id :: forall x. x` and two calls `id 1` and `id 2`,
+    /// we'll get list with expression id of one of this calls, because `x` is bound only to some int.
+    /// Then, we can get substitutions for this definitions from `expr_ty_bindings`.
+    /// We have `Expr -> (TyVarId -> Ty)[]` and `DefId -> set Expr` mapping.
+    /// The result must be a list of expressions with unique substitutions of definition type variables.
+    pub fn unique_def_bound_usages(&self, def_id: DefId) -> Vec<Expr> {
+        let mut set = HashMap::<(TyVarId, Ty), Expr>::new();
+        let _a = self
+            .def_ty_bindings
+            .get_unwrap(def_id)
+            .iter()
+            .for_each(|expr| {
+                self.expr_ty_bindings
+                    .get(expr)
+                    .unwrap()
+                    .iter()
+                    .for_each(|(var, ty)| {
+                        set.insert((var, *ty), *expr);
+                    });
+            });
+
+        set.values().copied().collect()
     }
 
     // Debug //

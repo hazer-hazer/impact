@@ -227,7 +227,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                         .into(),
                 },
                 TyKind::String => todo!(),
-                TyKind::Func(_, _) | TyKind::Unit => todo!(),
+                TyKind::Func(..) | TyKind::FuncDef(..) | TyKind::Unit => todo!(),
                 TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
                     unreachable!()
                 },
@@ -238,7 +238,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 TyKind::Int(_) => todo!(),
                 TyKind::Float(_) => todo!(),
                 TyKind::String => todo!(),
-                TyKind::Func(_, _) => todo!(),
+                TyKind::FuncDef(..) => todo!(),
+                TyKind::Func(..) => todo!(),
                 TyKind::Error | TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => {
                     unreachable!()
                 },

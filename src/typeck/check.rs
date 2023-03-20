@@ -1,9 +1,6 @@
 use crate::{
     cli::verbose,
-    hir::{
-        self,
-        expr::{Expr, ExprKind, Lambda, Lit},
-    },
+    hir::expr::{Expr, ExprKind, Lambda, Lit},
     message::message::MessageBuilder,
     span::span::{Spanned, WithSpan},
     typeck::{ty::Subst, TypeckErr},
@@ -18,6 +15,9 @@ use super::{
 use super::Typecker;
 
 impl<'hir> Typecker<'hir> {
+    /**
+     * Checks if expression is of type `ty` assuming that returned error is reported.
+     */
     pub fn check_discard_err(&mut self, expr_id: Expr, ty: Ty) -> Ty {
         match self.check(expr_id, ty) {
             Ok(ok) => ok,
@@ -28,6 +28,10 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    /**
+     * Checks if expression is of type `ty`.
+     * Reports `Type mismatch` error.
+     */
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
@@ -58,6 +62,9 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    /**
+     * Type check logic starts here.
+     */
     fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
 
@@ -90,15 +97,16 @@ impl<'hir> Typecker<'hir> {
                         )
                     },
 
-                    (Lit::String(_), TyKind::String) => Ok(ty),
-
                     // Unequal literals (not existentials as we not failed
                     //  to construct PrimTy of Lit without context)
                     _ => Err(TypeckErr::LateReport),
                 }
             },
 
-            (&ExprKind::Lambda(Lambda { body_id: body, .. }), &TyKind::Func(param_ty, body_ty)) => {
+            (
+                &ExprKind::Lambda(Lambda { body_id: body, .. }),
+                &TyKind::FuncDef(_, param_ty, body_ty),
+            ) => {
                 let param_name = self.hir.pat_names(self.hir.body(body).param).unwrap();
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];
@@ -119,6 +127,9 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    /**
+     * Checks if `l_ty` is a subtype of `r_ty` assuming that returned error is reported.
+     */
     pub fn check_ty_discard_err(&mut self, l_ty: Spanned<Ty>, ty: Ty) -> Ty {
         match self.check_ty(l_ty, ty) {
             Ok(ok) => ok,
@@ -129,6 +140,10 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    /**
+     * Checks if `l_ty` is a subtype of `r_ty`.
+     * Reports `Type mismatch` error.
+     */
     pub fn check_ty(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
         match self.subtype(l_ty, r_ty) {
             Ok(ok) => Ok(ok),
@@ -148,6 +163,9 @@ impl<'hir> Typecker<'hir> {
     }
 
     // Subtyping //
+    /**
+     * Checks if expression's type is a subtype of `ty`.
+     */
     fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         verbose!("Subtype expr {} / {}", expr_id, ty);
 
@@ -162,14 +180,20 @@ impl<'hir> Typecker<'hir> {
         self.subtype(Spanned::new(span, l), r)
     }
 
-    fn subtype(&mut self, check_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
-        match self._subtype(*check_ty.node(), r_ty) {
+    /**
+     * Checks if `l_ty` is a subtype of `r_ty`.
+     *
+     * If we've got an error and `l_ty` is an existential, it is solved as an error.
+     * This logic might be invalid and should be verified.
+     */
+    fn subtype(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
+        match self._subtype(*l_ty.node(), r_ty) {
             Ok(ty) => {
-                verbose!("[+] {} is a subtype of {}", check_ty.node(), ty);
+                verbose!("[+] {} is a subtype of {}", l_ty.node(), ty);
                 Ok(self.apply_ctx_on(ty))
             },
             Err(err) => {
-                verbose!("[-] {} is NOT a subtype of {}", check_ty.node(), r_ty);
+                verbose!("[-] {} is NOT a subtype of {}", l_ty.node(), r_ty);
 
                 // let span = check_ty.span();
                 // let l_ty = *check_ty.node();
@@ -181,9 +205,9 @@ impl<'hir> Typecker<'hir> {
                 //     .emit(self);
 
                 // TODO: Check this logic
-                match check_ty.node().kind() {
+                match l_ty.node().kind() {
                     &TyKind::Existential(ex) => {
-                        self.solve(ex, Ty::error());
+                        self.solve(ex, Ty::error().mono());
                     },
                     _ => {},
                 }
@@ -194,6 +218,9 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    /**
+     * Subtype logic starts here.
+     */
     fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         verbose!(
             "Subtype {} <: {}",
@@ -222,25 +249,28 @@ impl<'hir> Typecker<'hir> {
 
             // Int existentials //
             (&TyKind::Existential(int_ex), TyKind::Int(_)) if int_ex.is_int() => {
-                Ok(self.solve(int_ex, r_ty))
+                Ok(self.solve(int_ex, r_ty.mono()))
             },
 
             (&TyKind::Existential(int_ex), &TyKind::Existential(ex)) if int_ex.is_int() => {
                 // FIXME: This is a test logic
-                Ok(self.solve(ex, Ty::default_int()))
+                Ok(self.solve(ex, Ty::default_int().mono()))
             },
 
             (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
 
             // Float existentials //
             (&TyKind::Existential(float_ex), TyKind::Float(_)) if float_ex.is_float() => {
-                Ok(self.solve(float_ex, r_ty))
+                Ok(self.solve(float_ex, r_ty.mono()))
             },
 
             (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr::LateReport),
 
             //
-            (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2)) => {
+            (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2))
+            | (&TyKind::FuncDef(_, param1, body1), &TyKind::Func(param2, body2))
+            | (&TyKind::Func(param1, body1), &TyKind::FuncDef(_, param2, body2))
+            | (&TyKind::FuncDef(_, param1, body1), &TyKind::FuncDef(_, param2, body2)) => {
                 // self.under_new_ctx(|this| {
                 // Enter Θ
                 self._subtype(param1, param2)?;
@@ -286,6 +316,10 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    /**
+     * This function is a attempt to generalize logic of left and right instantiations.
+     * It should be rewritten carefully and used.
+     */
     #[deprecated]
     fn try_instantiate_common(&mut self, ex: Existential, ty: Ty) -> TyResult<Ty> {
         // Inst(L|R)Reach
@@ -307,7 +341,7 @@ impl<'hir> Typecker<'hir> {
 
                     verbose!("Instantiate L|R Reach {} = {}", ty_ex, ex_ty);
 
-                    self.solve(ty_ex, ex_ty);
+                    self.solve(ty_ex, ex_ty.mono());
                     return Ok(self.apply_ctx_on(ex_ty));
                 }
             },
@@ -315,29 +349,32 @@ impl<'hir> Typecker<'hir> {
         }
 
         // Inst(L|R)Solve
-        if ty.is_mono() {
+        if let Some(mono) = ty.as_mono() {
             verbose!("Instantiate L|R Solve {} = {}", ex, ty);
             // FIXME: check WF?
-            self.solve(ex, ty);
+            self.solve(ex, mono);
             return Ok(self.apply_ctx_on(ty));
         }
 
         Err(TypeckErr::Check)
     }
 
+    /**
+     * InstantiateL
+     */
     fn instantiate_l(&mut self, ex: Existential, r_ty: Ty) -> TyResult<Ty> {
         verbose!("Instantiate Left {} / {}", ex, r_ty);
 
         if let &TyKind::Existential(beta_ex) = r_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
                 verbose!("InstLReach: ");
-                return Ok(self.solve(beta_ex, Ty::existential(ex)));
+                return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
             }
         }
 
-        if r_ty.is_mono() {
+        if let Some(mono) = r_ty.as_mono() {
             verbose!("InstLSolve: ");
-            return Ok(self.solve(ex, r_ty));
+            return Ok(self.solve(ex, mono));
         }
 
         match r_ty.kind() {
@@ -351,13 +388,13 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            &TyKind::Func(param, body) => self.try_to(|this| {
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => self.try_to(|this| {
                 let range_ex = this.add_fresh_common_ex();
                 let domain_ex = this.add_fresh_common_ex();
 
-                let func_ty = Ty::func(domain_ex.1, range_ex.1);
+                let func_ty = Ty::func(r_ty.func_def_id(), domain_ex.1, range_ex.1);
 
-                this.solve(ex, func_ty);
+                this.solve(ex, func_ty.mono());
 
                 this.instantiate_r(param, domain_ex.0)?;
 
@@ -372,17 +409,20 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    /**
+     * InstantiateR
+     */
     fn instantiate_r(&mut self, l_ty: Ty, ex: Existential) -> TyResult<Ty> {
         verbose!("Instantiate Right {} / {}", ex, l_ty);
 
         if let &TyKind::Existential(beta_ex) = l_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
-                return Ok(self.solve(beta_ex, Ty::existential(ex)));
+                return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
             }
         }
 
-        if l_ty.is_mono() {
-            return Ok(self.solve(ex, l_ty));
+        if let Some(mono) = l_ty.as_mono() {
+            return Ok(self.solve(ex, mono));
         }
 
         match l_ty.kind() {
@@ -396,13 +436,13 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            &TyKind::Func(param, body) => self.try_to(|this| {
+            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => self.try_to(|this| {
                 let domain_ex = this.add_fresh_common_ex();
                 let range_ex = this.add_fresh_common_ex();
 
-                let func_ty = Ty::func(domain_ex.1, range_ex.1);
+                let func_ty = Ty::func(l_ty.func_def_id(), domain_ex.1, range_ex.1);
 
-                this.solve(ex, func_ty);
+                this.solve(ex, func_ty.mono());
 
                 this.instantiate_l(domain_ex.0, param)?;
 

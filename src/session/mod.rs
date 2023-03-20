@@ -2,8 +2,6 @@
  * Session is a compilation context passed through all stages of compilation.
  */
 
-
-
 use crate::{
     ast::{AstMetadata, NodeId},
     cli::color::{Color, Colorize},
@@ -16,8 +14,11 @@ use crate::{
         term_emitter::TermEmitter,
         MessageEmitter,
     },
-    resolve::{def::DefTable, res::Resolutions},
-    span::span::{Span, SpanPos},
+    resolve::{
+        def::{DefKind, DefTable, DefId},
+        res::Resolutions,
+    },
+    span::span::{Ident, Internable, Span, SpanPos},
     typeck::tyctx::TyCtx,
 };
 
@@ -242,6 +243,16 @@ impl Session {
     // IDs Synthesis //
     pub fn next_node_id(&mut self) -> NodeId {
         self.ast_metadata.next_node_id()
+    }
+
+    pub fn synth_anon_lambda(&mut self) -> (NodeId, DefId) {
+        let node_id = self.next_node_id();
+        let def_id = self.def_table.define(
+            node_id,
+            DefKind::Lambda,
+            &Ident::synthetic(format!("lambda{}", node_id).intern()),
+        );
+        (node_id, def_id)
     }
 }
 

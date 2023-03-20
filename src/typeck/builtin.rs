@@ -20,18 +20,16 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
             Ty::var(ty_vars.get(stringify!($var)).copied().unwrap())
         };
 
-        // ($tyctx: expr$($param: tt)* -> $body: expr) => {{
-        //     let param = ty!($tyctx$($param)*);
-        //     let body = ty!($tyctx$($body)*);
-        //     $tyctx.func(param, body)
-        // }};
-
         (($($prior: tt)+):expr) => {
             ty!($($prior)+)
         };
 
+        // ([$def_id: expr] $param: tt -> $($body: tt)+) => {{
+        //     Ty::func(Some($def_id), ty!($param), ty!($($body)+))
+        // }};
+
         ($param: tt -> $($body: tt)+) => {{
-            Ty::func(ty!($param), ty!($($body)+))
+            Ty::func(None, ty!($param), ty!($($body)+))
         }};
 
         (forall $alpha: ident. $($ty: tt)+) => {{
@@ -48,6 +46,14 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         // Values //
         (Builtin::UnitValue, ty!(())),
         // Operators //
+        // (
+        //     Builtin::AddInt,
+        //     ty!([sess.def_table.builtin(Builtin::AddInt)] i32 -> i32 -> i32),
+        // ),
+        // (
+        //     Builtin::SubInt,
+        //     ty!([sess.def_table.builtin(Builtin::SubInt)] i32 -> i32 -> i32),
+        // ),
         (Builtin::AddInt, ty!(i32 -> i32 -> i32)),
         (Builtin::SubInt, ty!(i32 -> i32 -> i32)),
         // Types //
