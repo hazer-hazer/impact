@@ -49,21 +49,19 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     }
 
     pub fn conv_basic_ty(&self, ty: Ty) -> BasicTypeEnum<'ink> {
-        self.conv_ty(ty).try_into().unwrap()
+        self.conv_ty(ty)
+            .try_into()
+            .expect(&format!("Failed to convert {} to BasicType", ty))
     }
 
-    pub fn func_ty(&self, def_id: DefId) -> InstantiatedTy<(Ty, FunctionType<'ink>)> {
+    pub fn func_ty(&self, def_id: DefId) -> InstantiatedTy<Ty> {
         let inst_ty = self.sess.tyctx.instantiated_ty(def_id);
 
         match inst_ty {
-            InstantiatedTy::Mono(mono) => {
-                InstantiatedTy::Mono((mono, self.conv_ty(mono).into_function_type()))
-            },
+            InstantiatedTy::Mono(mono) => InstantiatedTy::Mono(mono),
             InstantiatedTy::Poly(poly) => InstantiatedTy::Poly(
                 poly.iter()
-                    .map(|res| {
-                        res.map(|(ty, expr)| ((ty, self.conv_ty(ty).into_function_type()), expr))
-                    })
+                    .map(|res| res.map(|(ty, expr)| (ty, expr)))
                     .collect(),
             ),
         }

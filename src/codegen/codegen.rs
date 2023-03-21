@@ -7,7 +7,11 @@ use crate::{
     session::{Session, Stage, StageOutput},
 };
 
-use super::{body::BodyCodeGen, ctx::CodeGenCtx, func::FunctionsCodeGen};
+use super::{
+    body::BodyCodeGen,
+    ctx::CodeGenCtx,
+    func::{FuncInstance, FunctionsCodeGen},
+};
 
 pub struct CodeGen<'ink, 'ctx> {
     mir: &'ctx MIR,
@@ -46,10 +50,16 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
 
         let function_map = FunctionsCodeGen::new(ctx).gen_functions();
 
-        // TODO
-        // for (def_id, _func) in function_map.iter_enumerated_flat() {
-        //     BodyCodeGen::new(ctx, def_id, &function_map).gen_body();
-        // }
+        for (def_id, inst) in function_map.iter() {
+            match inst {
+                &FuncInstance::Mono(ty, func) => {
+                    BodyCodeGen::new(ctx, def_id, ty, func, &function_map).gen_body();
+                },
+                FuncInstance::Poly(poly) => poly.iter().for_each(|(_, &(ty, func))| {
+                    BodyCodeGen::new(ctx, def_id, ty, func, &function_map).gen_body();
+                }),
+            }
+        }
     }
 }
 

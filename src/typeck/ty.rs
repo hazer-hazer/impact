@@ -107,10 +107,10 @@ pub enum IntKind {
 impl IntKind {
     pub fn bytes(&self) -> u8 {
         match self {
-            IntKind::U8 | IntKind::I8 => 8,
-            IntKind::U16 | IntKind::I16 => 16,
-            IntKind::U32 | IntKind::I32 => 32,
-            IntKind::I64 | IntKind::U64 => 64,
+            IntKind::U8 | IntKind::I8 => 1,
+            IntKind::U16 | IntKind::I16 => 2,
+            IntKind::U32 | IntKind::I32 => 4,
+            IntKind::I64 | IntKind::U64 => 8,
             // FIXME: Okay?
             IntKind::Uint | IntKind::Int => (std::mem::size_of::<*const u8>() * 8) as u8,
         }
@@ -460,7 +460,7 @@ impl std::fmt::Debug for Ty {
 
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.kind())
     }
 }
 
@@ -487,6 +487,24 @@ pub enum TyKind {
     Forall(TyVarId, Ty),
 }
 
+impl std::fmt::Display for TyKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TyKind::Error => write!(f, "[ERROR]"),
+            TyKind::Unit => write!(f, "()"),
+            TyKind::Bool => write!(f, "bool"),
+            TyKind::Int(kind) => write!(f, "{}", kind),
+            TyKind::Float(kind) => write!(f, "{}", kind),
+            TyKind::String => write!(f, "{}", "string"),
+            &TyKind::Func(param, body) => write!(f, "({} -> {})", param, body),
+            &TyKind::FuncDef(def_id, param, body) => write!(f, "({} -> {}){}", param, body, def_id),
+            TyKind::Var(name) => write!(f, "{}", name),
+            TyKind::Existential(ex) => write!(f, "{}", ex),
+            &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
+        }
+    }
+}
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct TyS {
     kind: TyKind,
@@ -508,19 +526,7 @@ impl TyS {
 
 impl std::fmt::Display for TyS {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.kind() {
-            TyKind::Error => write!(f, "[ERROR]"),
-            TyKind::Unit => write!(f, "()"),
-            TyKind::Bool => write!(f, "bool"),
-            TyKind::Int(kind) => write!(f, "{}", kind),
-            TyKind::Float(kind) => write!(f, "{}", kind),
-            TyKind::String => write!(f, "{}", "string"),
-            &TyKind::Func(param, body) => write!(f, "({} -> {})", param, body),
-            &TyKind::FuncDef(def_id, param, body) => write!(f, "({} -> {}){}", param, body, def_id),
-            TyKind::Var(name) => write!(f, "{}", name),
-            TyKind::Existential(ex) => write!(f, "{}", ex),
-            &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
-        }
+        write!(f, "{}", self.kind())
     }
 }
 

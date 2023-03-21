@@ -225,7 +225,16 @@ impl Body {
         self.locals.iter_enumerated().take(self.args)
     }
 
+    /// Get locals after return (0) and parameters
+    pub fn inner_locals(&self) -> impl Iterator<Item = (Local, &LocalInfo)> {
+        self.locals.iter_enumerated().skip(self.args)
+    }
+
     // pub fn local_name(&self, local: Local) ->
+
+    pub fn args(&self) -> usize {
+        self.args
+    }
 }
 
 #[derive(Default)]

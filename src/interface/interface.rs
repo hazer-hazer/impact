@@ -236,8 +236,7 @@ impl<'ast> Interface {
         let stage = StageName::Codegen;
 
         let llvm_ctx = Context::create();
-        let _llvm_module = llvm_ctx.create_module("kek");
-        let (_module, sess) = CodeGen::new(sess, &mir, &hir, &llvm_ctx).run_and_emit(true)?;
+        let ((), sess) = CodeGen::new(sess, &mir, &hir, &llvm_ctx).run_and_emit(true)?;
 
         let sess = self.should_stop(sess, stage)?;
 

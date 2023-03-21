@@ -6,10 +6,10 @@ use inkwell::{
 
 use crate::{
     dt::idx::IndexVec,
-    hir::BodyId,
+    hir::{expr::Expr, BodyId},
     mir::{
         Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator, TerminatorKind,
-        BB, START_BB,
+        Ty, BB, START_BB,
     },
     resolve::def::DefId,
     typeck::ty::{FloatKind, TyKind},
@@ -22,13 +22,13 @@ pub struct BodyCodeGen<'ink, 'ctx, 'a> {
 
     // Body context //
     func_def_id: DefId,
-    callee_expr: Expr,
     body_id: BodyId,
     body: &'ctx Body,
+    func_ty: Ty,
     func: FunctionValue<'ink>,
     builder: Builder<'ink>,
     /// Mapping locals to alloca pointers. Created as a decent IndexVec for optimization reasons and avoiding IndexVec<_, Option<_>>.
-    locals_pointers: IndexVec<Local, PointerValue<'ink>>,
+    locals_values: IndexVec<Local, Option<PointerValue<'ink>>>,
     function_map: &'a FunctionMap<'ink>,
 }
 
@@ -36,9 +36,10 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     pub fn new(
         ctx: CodeGenCtx<'ink, 'ctx>,
         func_def_id: DefId,
+        func_ty: Ty,
+        func: FunctionValue<'ink>,
         function_map: &'a FunctionMap<'ink>,
     ) -> Self {
-        let func = function_map.expect(func_def_id);
         let body_id = ctx.hir.owner_body(func_def_id.into()).unwrap();
         let body = ctx.mir.expect(body_id);
 
@@ -52,19 +53,20 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             func_def_id,
             body_id,
             body,
+            func_ty,
             func,
             builder,
-            locals_pointers: IndexVec::new_of(body.locals.len()),
+            locals_values: IndexVec::new_of(body.locals.len()),
             function_map,
         }
     }
 
     fn new_alloca_builder(&self) -> Builder<'ink> {
-        let alloca_builder = self.ctx.llvm_ctx.create_builder();
         let first_bb = self.func.get_first_basic_block().unwrap();
+        let alloca_builder = self.ctx.llvm_ctx.create_builder();
 
-        if let Some(first_inst) = first_bb.get_first_instruction() {
-            alloca_builder.position_before(&first_inst);
+        if let Some(first_instr) = first_bb.get_first_instruction() {
+            alloca_builder.position_before(&first_instr);
         } else {
             alloca_builder.position_at_end(first_bb);
         }
@@ -72,35 +74,25 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         alloca_builder
     }
 
-    // pub fn new(
-    //     sess: &'ctx Session,
-    //     mir: &'ctx MIR,
-    //     body_id: BodyId,
-    //     llvm_ctx: &'ink Context,
-    //     func: FunctionValue<'ink>,
-    //     function_map: DefMap<FunctionValue<'ink>>,
-    // ) -> Self {
-    //     let builder = llvm_ctx.create_builder();
-
-    //     let body_bb = llvm_ctx.append_basic_block(func, "body");
-    //     builder.position_at_end(body_bb);
-
-    //     Self {
-    //         body_id,
-    //         body: mir.expect(body_id),
-    //         builder,
-    //         func,
-    //         locals_pointers: Default::default(),
-    //     }
-    // }
-
     // Generators //
     pub fn gen_body(&mut self) {
+        let alloca_builder = self.new_alloca_builder();
+        let return_local_ty = self.ctx.conv_basic_ty(self.func_ty.return_ty());
+        let return_local_value = alloca_builder.build_alloca(return_local_ty, "alloca");
+        self.add_local(Local::return_local(), return_local_value);
+
         self.body.params().for_each(|(local, _)| {
-            let alloca_builder = self.new_alloca_builder();
             let func_param = self.func.get_nth_param(local.inner()).unwrap();
-            let param_ptr = alloca_builder.build_alloca(func_param.get_type(), &local.to_string());
-            alloca_builder.build_store(param_ptr, func_param);
+            let value = alloca_builder.build_alloca(func_param.get_type(), &local.to_string());
+            alloca_builder.build_store(value, func_param);
+            self.add_local(local, value);
+        });
+
+        self.body.inner_locals().for_each(|(local, info)| {
+            // TODO: Add name to `LocalInfo` and use it here
+            let value =
+                alloca_builder.build_alloca(self.ctx.conv_basic_ty(info.ty), &local.to_string());
+            self.add_local(local, value);
         });
 
         let _ll_bb = self.gen_bb(START_BB);
@@ -124,7 +116,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     fn gen_stmt(&mut self, stmt: &Stmt) {
         match &stmt.kind {
             StmtKind::Assign(lv, rv) => {
-                let ptr = self.local_ptr(lv.local);
+                let ptr = self.local_value(lv.local);
                 let value = self.rvalue_to_value(rv);
                 self.builder.build_store(ptr, value);
             },
@@ -140,7 +132,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             TerminatorKind::Return => {
                 let return_local = self
                     .builder
-                    .build_load(self.local_ptr(Local::return_local()), "load_return_load");
+                    .build_load(self.local_value(Local::return_local()), "load_return_load");
                 self.builder.build_return(Some(&return_local));
             },
         }
@@ -161,7 +153,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             RValue::Infix(_, _, _) => todo!(),
             &RValue::Closure(def_id) => self
                 .function_map
-                .expect(def_id)
+                .expect_mono(def_id)
                 .as_global_value()
                 .as_pointer_value()
                 .into(),
@@ -182,7 +174,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         match operand {
             Operand::LValue(lv) => {
                 // TODO: Useful info in name
-                self.builder.build_load(self.local_ptr(lv.local), "load")
+                self.builder.build_load(self.local_value(lv.local), "load")
             },
             Operand::Const(const_) => self.const_to_value(const_),
         }
@@ -248,8 +240,12 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         }
     }
 
-    //
-    fn local_ptr(&self, local: Local) -> PointerValue<'ink> {
-        self.locals_pointers.get(local).copied().unwrap()
+    // Locals //
+    fn add_local(&mut self, local: Local, value: PointerValue<'ink>) {
+        assert!(self.locals_values.insert(local, value).is_none());
+    }
+
+    fn local_value(&self, local: Local) -> PointerValue<'ink> {
+        self.locals_values.get_copied_unwrap(local)
     }
 }
