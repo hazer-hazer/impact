@@ -15,7 +15,7 @@ use crate::{
     typeck::ty::{FloatKind, TyKind},
 };
 
-use super::{ctx::CodeGenCtx, func::FunctionMap};
+use super::{ctx::CodeGenCtx, func::FunctionMap, value::ValueMap};
 
 pub struct BodyCodeGen<'ink, 'ctx, 'a> {
     ctx: CodeGenCtx<'ink, 'ctx>,
@@ -30,6 +30,7 @@ pub struct BodyCodeGen<'ink, 'ctx, 'a> {
     /// Mapping locals to alloca pointers. Created as a decent IndexVec for optimization reasons and avoiding IndexVec<_, Option<_>>.
     locals_values: IndexVec<Local, Option<PointerValue<'ink>>>,
     function_map: &'a FunctionMap<'ink>,
+    value_map: &'a ValueMap<'ink>,
 }
 
 impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
@@ -39,6 +40,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         func_ty: Ty,
         func: FunctionValue<'ink>,
         function_map: &'a FunctionMap<'ink>,
+        value_map: &'a ValueMap<'ink>,
     ) -> Self {
         let body_id = ctx.hir.owner_body(func_def_id.into()).unwrap();
         let body = ctx.mir.expect(body_id);
@@ -58,6 +60,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             builder,
             locals_values: IndexVec::new_of(body.locals.len()),
             function_map,
+            value_map,
         }
     }
 
@@ -139,14 +142,6 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     // To-value converters //
-    fn unit_value(&mut self) -> BasicValueEnum<'ink> {
-        self.ctx
-            .llvm_ctx
-            .struct_type(&[], false)
-            .const_zero()
-            .into()
-    }
-
     fn rvalue_to_value(&mut self, rvalue: &RValue) -> BasicValueEnum<'ink> {
         match rvalue {
             RValue::Operand(operand) => self.operand_to_value(operand),
@@ -157,7 +152,23 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 .as_global_value()
                 .as_pointer_value()
                 .into(),
-            RValue::Def(_, _) => todo!(),
+            &RValue::FuncRef(def_id, ty) => {
+                assert!(ty.is_func_like());
+                assert!(ty.is_instantiated());
+
+                self.function_map
+                    .instance(def_id, ty)
+                    .as_global_value()
+                    .as_pointer_value()
+                    .into()
+            },
+            &RValue::ClosureRef(def_id) => self
+                .function_map
+                .expect_mono(def_id)
+                .as_global_value()
+                .as_pointer_value()
+                .into(),
+            &RValue::ValueRef(def_id) => self.value_map.expect(def_id),
             RValue::Call { lhs, arg } => {
                 let func = CallableValue::try_from(self.operand_to_value(lhs).into_pointer_value())
                     .unwrap();
@@ -226,7 +237,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 },
             },
             ConstKind::ZeroSized => match const_.ty.kind() {
-                TyKind::Unit => self.unit_value(),
+                TyKind::Unit => self.ctx.unit_value(),
                 TyKind::Bool => todo!(),
                 TyKind::Int(_) => todo!(),
                 TyKind::Float(_) => todo!(),
@@ -242,7 +253,11 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
     // Locals //
     fn add_local(&mut self, local: Local, value: PointerValue<'ink>) {
-        assert!(self.locals_values.insert(local, value).is_none());
+        assert!(
+            self.locals_values.insert(local, value).is_none(),
+            "Duplicate local {} value insertion",
+            local
+        );
     }
 
     fn local_value(&self, local: Local) -> PointerValue<'ink> {

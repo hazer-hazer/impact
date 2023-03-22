@@ -1,4 +1,4 @@
-use inkwell::context::Context;
+use inkwell::{context::Context, targets::TargetMachine};
 
 use crate::{
     hir::HIR,
@@ -11,6 +11,7 @@ use super::{
     body::BodyCodeGen,
     ctx::CodeGenCtx,
     func::{FuncInstance, FunctionsCodeGen},
+    value::ValueCodeGen,
 };
 
 pub struct CodeGen<'ink, 'ctx> {
@@ -48,16 +49,24 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             llvm_ctx: self.llvm_ctx,
         };
 
-        let function_map = FunctionsCodeGen::new(ctx).gen_functions();
+        let llvm_module = self.llvm_ctx.create_module("kek");
+        let target_triple = TargetMachine::get_default_triple();
+        llvm_module.set_triple(&target_triple);
+
+        let function_map = FunctionsCodeGen::new(ctx, &llvm_module).gen_functions();
+        let value_map = ValueCodeGen::new(ctx, &function_map).gen_values();
 
         for (def_id, inst) in function_map.iter() {
             match inst {
                 &FuncInstance::Mono(ty, func) => {
-                    BodyCodeGen::new(ctx, def_id, ty, func, &function_map).gen_body();
+                    BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map).gen_body();
                 },
-                FuncInstance::Poly(poly) => poly.iter().for_each(|(_, &(ty, func))| {
-                    BodyCodeGen::new(ctx, def_id, ty, func, &function_map).gen_body();
-                }),
+                FuncInstance::Poly(poly) => {
+                    poly.iter_enumerated_flat().for_each(|(_, &(ty, func))| {
+                        BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map)
+                            .gen_body();
+                    })
+                },
             }
         }
     }

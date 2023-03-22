@@ -107,7 +107,10 @@ impl<'hir> Typecker<'hir> {
                 &ExprKind::Lambda(Lambda { body_id: body, .. }),
                 &TyKind::FuncDef(_, param_ty, body_ty),
             ) => {
-                let param_name = self.hir.pat_names(self.hir.body(body).param).unwrap();
+                let param_name = self
+                    .hir
+                    .pat_names(self.hir.body(body).param.unwrap())
+                    .unwrap();
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];
 

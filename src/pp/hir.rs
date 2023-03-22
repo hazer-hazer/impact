@@ -9,7 +9,7 @@ use crate::{
         BodyId, BodyOwner, Path, HIR,
     },
     parser::token::Punct,
-    resolve::{builtin::Builtin},
+    resolve::builtin::Builtin,
     session::Session,
     span::span::{Ident, Kw},
 };
@@ -76,7 +76,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         match item.kind() {
             ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
-            ItemKind::Value(value) => self.visit_var_item(item.name(), value, id, hir),
+            ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(value) => self.visit_func_item(item.name(), value, id, hir),
         }
     }
@@ -97,12 +97,12 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_block!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_var_item(&mut self, name: Ident, value: &Expr, id: ItemId, hir: &HIR) {
+    fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId, hir: &HIR) {
         self.pp.string(name.original_string());
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
         self.pp.str(" = ");
-        self.visit_expr(&value, hir);
+        self.visit_body(&value, BodyOwner::value(id.def_id()), hir);
     }
 
     fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId, hir: &HIR) {
@@ -110,7 +110,9 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
         self.pp.sp();
-        self.visit_pat(&hir.body(*body).param, hir);
+        hir.body(*body)
+            .param
+            .map(|param| self.visit_pat(&param, hir));
         self.pp.str(" = ");
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
@@ -146,7 +148,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
         let body = hir.body(lambda.body_id);
         self.pp.punct(Punct::Backslash);
-        self.visit_pat(&body.param, hir);
+        body.param.map(|param| self.visit_pat(&param, hir));
         self.pp.punct(Punct::Arrow);
         self.visit_expr(&body.value, hir);
     }

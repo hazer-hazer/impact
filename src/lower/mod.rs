@@ -258,7 +258,9 @@ impl<'ast> Lower<'ast> {
         body: &PR<N<Expr>>,
     ) -> hir::item::ItemKind {
         if ast_params.is_empty() {
-            hir::item::ItemKind::Value(lower_pr!(self, body, lower_expr))
+            let value = lower_pr!(self, body, lower_expr);
+            let body = self.body(None, value);
+            hir::item::ItemKind::Value(body)
         } else {
             let params = ast_params
                 .iter()
@@ -268,10 +270,10 @@ impl<'ast> Lower<'ast> {
             let mut value = lower_pr!(self, body, lower_expr);
             for (index, &param) in params[1..].iter().enumerate().rev() {
                 let span = ast_params[index].span().to(body.span());
-                let body = self.body(param, value);
+                let body = self.body(Some(param), value);
                 value = self.expr_lambda(span, body);
             }
-            hir::item::ItemKind::Func(self.body(params[0], value))
+            hir::item::ItemKind::Func(self.body(Some(params[0]), value))
         }
     }
 
@@ -374,7 +376,7 @@ impl<'ast> Lower<'ast> {
         let body = lower_pr!(self, &lambda.body, lower_expr);
         hir::expr::ExprKind::Lambda(hir::expr::Lambda {
             def_id: self.sess.def_table.get_def_id(node_id).unwrap(),
-            body_id: self.body(param, body),
+            body_id: self.body(Some(param), body),
         })
     }
 
@@ -662,7 +664,7 @@ impl<'ast> Lower<'ast> {
         )
     }
 
-    fn body(&mut self, param: hir::pat::Pat, value: hir::expr::Expr) -> BodyId {
+    fn body(&mut self, param: Option<hir::pat::Pat>, value: hir::expr::Expr) -> BodyId {
         let body = Body::new(param, value);
         let id = body.id();
 
@@ -673,7 +675,10 @@ impl<'ast> Lower<'ast> {
             .bodies
             .insert(id.inner().child_id(), body);
 
-        assert_eq!(self.owner_stack.last().unwrap().owner_id, id.inner().owner());
+        assert_eq!(
+            self.owner_stack.last().unwrap().owner_id,
+            id.inner().owner()
+        );
 
         id
     }
@@ -684,7 +689,7 @@ impl<'ast> Lower<'ast> {
             Span::new_error(),
             hir::expr::Lit::String(DeclareBuiltin::sym()),
         );
-        let body = self.body(param, body);
+        let body = self.body(Some(param), body);
         let _value = self.expr_lambda(Span::new_error(), body);
         let node_id = self
             .sess

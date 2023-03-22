@@ -56,7 +56,7 @@ impl<'hir> Typecker<'hir> {
             // Note: Actually, declaration type is a unit type, but we save it
             // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
             &ItemKind::Value(value) => {
-                let value_ty = self.synth_expr(value)?;
+                let value_ty = self.synth_body(item.def_id(), value)?;
                 self.type_term(self.hir.item(item).name(), value_ty);
                 value_ty
             },
@@ -187,12 +187,19 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    fn synth_value_body(&mut self, expr: Expr) -> TyResult<Ty> {
+        self.synth_expr(expr)
+    }
+
     fn synth_body(&mut self, owner_def_id: DefId, body_id: BodyId) -> TyResult<Ty> {
-        let &Body {
-            param,
-            value: _body,
-        } = self.hir.body(body_id);
+        let &Body { param, value } = self.hir.body(body_id);
         // FIXME: Rewrite when `match` added
+
+        if let None = param {
+            return self.synth_value_body(value);
+        }
+
+        let param = param.unwrap();
 
         // Get parameter type from pattern if possible, e.g. `()` is of type `()`.
         let early_param_ty = self.get_early_pat_type(param);

@@ -156,7 +156,11 @@ pub enum RValue {
 
     // TODO: Upvars
     Closure(DefId),
-    Def(DefId, Ty),
+
+    FuncRef(DefId, Ty),
+    ClosureRef(DefId),
+
+    ValueRef(DefId),
 
     // TODO: Maybe move to terminator only when doing algebraic effects.
     Call {
@@ -222,12 +226,12 @@ impl Body {
     }
 
     pub fn params(&self) -> impl Iterator<Item = (Local, &LocalInfo)> {
-        self.locals.iter_enumerated().take(self.args)
+        self.locals.iter_enumerated().skip(1).take(self.args)
     }
 
     /// Get locals after return (0) and parameters
     pub fn inner_locals(&self) -> impl Iterator<Item = (Local, &LocalInfo)> {
-        self.locals.iter_enumerated().skip(self.args)
+        self.locals.iter_enumerated().skip(self.args + 1)
     }
 
     // pub fn local_name(&self, local: Local) ->

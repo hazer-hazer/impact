@@ -1,5 +1,6 @@
 use crate::{
     mir::thir::Expr,
+    resolve::def::DefKind,
     typeck::ty::{FloatKind, IntKind},
 };
 
@@ -107,7 +108,20 @@ impl<'ctx> MirBuilder<'ctx> {
                 self.builder.references_body(body_id);
                 bb.with(RValue::Closure(def_id))
             },
-            &ExprKind::Def(def_id, ty) => bb.with(RValue::Def(def_id, ty)),
+            &ExprKind::Def(def_id, ty) => {
+                let rvalue = match self.sess.def_table.get_def(def_id).kind() {
+                    DefKind::Func => RValue::FuncRef(def_id, ty),
+                    DefKind::Value => RValue::ValueRef(def_id),
+                    DefKind::Lambda => {
+                        assert!(ty.is_instantiated());
+                        RValue::ClosureRef(def_id)
+                    },
+                    DefKind::Root | DefKind::TyAlias | DefKind::Mod | DefKind::DeclareBuiltin => {
+                        unreachable!()
+                    },
+                };
+                bb.with(rvalue)
+            },
 
             ExprKind::Builtin(_) => todo!(),
         }

@@ -18,6 +18,7 @@
     "Interner",
     "lval",
     "lvalue",
+    "monomorphize",
     "Monomorphizer",
     "nanos",
     "outl",

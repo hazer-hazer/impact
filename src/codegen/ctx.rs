@@ -1,9 +1,12 @@
 use inkwell::{
     context::Context,
     types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType},
+    values::BasicValueEnum,
+    AddressSpace,
 };
 
 use crate::{
+    cli::verbose,
     hir::{expr::Expr, HirId, HIR},
     mir::{Ty, MIR},
     resolve::def::DefId,
@@ -29,10 +32,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         match ty.kind() {
             TyKind::Unit => self.llvm_ctx.i8_type().into(),
             TyKind::Bool => self.llvm_ctx.bool_type().into(),
-            TyKind::Int(kind) => self
-                .llvm_ctx
-                .custom_width_int_type(kind.bits().into())
-                .into(),
+            TyKind::Int(kind) => self.llvm_ctx.custom_width_int_type(kind.bits()).into(),
             TyKind::Float(kind) => match kind {
                 FloatKind::F32 => self.llvm_ctx.f32_type().into(),
                 FloatKind::F64 => self.llvm_ctx.f64_type().into(),
@@ -49,9 +49,12 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     }
 
     pub fn conv_basic_ty(&self, ty: Ty) -> BasicTypeEnum<'ink> {
-        self.conv_ty(ty)
-            .try_into()
-            .expect(&format!("Failed to convert {} to BasicType", ty))
+        match self.conv_ty(ty) {
+            AnyTypeEnum::FunctionType(func_ty) => func_ty.ptr_type(AddressSpace::default()).into(),
+            conv @ _ => conv,
+        }
+        .try_into()
+        .expect(&format!("Failed to convert {} to BasicType", ty))
     }
 
     pub fn func_ty(&self, def_id: DefId) -> InstantiatedTy<Ty> {
@@ -68,5 +71,10 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
 
         // .map(|res| res.map(|ty| self.conv_ty(ty).into_function_type()))
         // .collect()
+    }
+
+    // Values //
+    pub fn unit_value(&self) -> BasicValueEnum<'ink> {
+        self.llvm_ctx.struct_type(&[], false).const_zero().into()
     }
 }

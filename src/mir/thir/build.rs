@@ -32,7 +32,7 @@ impl<'ctx> ThirBuilder<'ctx> {
             .hir
             .body(self.hir.owner_body(self.thir.body_owner).unwrap());
 
-        self.param(body.param);
+        body.param.map(|param| self.param(param));
         let expr = self.expr(body.value);
 
         (self.thir, expr)

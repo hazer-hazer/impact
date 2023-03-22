@@ -4,7 +4,10 @@ use inkwell::{module::Module, targets::TargetMachine, types::FunctionType, value
 
 use crate::{
     dt::idx::IndexVec,
-    hir::{expr::Expr, item::ItemId, visitor::HirVisitor, BodyId, BodyOwner, HirMap, HIR},
+    hir::{
+        expr::Expr, item::ItemId, visitor::HirVisitor, BodyId, BodyOwner, BodyOwnerKind, HirId,
+        HirMap, HIR,
+    },
     mir::Ty,
     resolve::def::{DefId, DefKind, DefMap},
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
@@ -13,14 +16,16 @@ use crate::{
 
 use super::ctx::CodeGenCtx;
 
+// TODO: Rename `FunctionsCodeGen` to `BodyOwnersCodeGen`?
+
 pub enum FuncInstance<'ink> {
     Mono(Ty, FunctionValue<'ink>),
-    Poly(HirMap<(Ty, FunctionValue<'ink>)>),
+    Poly(TyMap<(Ty, FunctionValue<'ink>)>),
 }
 
 impl<'ink> FuncInstance<'ink> {
-    fn add_poly(&mut self, expr: Expr, ty: Ty, value: FunctionValue<'ink>) {
-        match_expected!(self, Self::Poly(poly) => assert!(poly.insert(expr, (ty, value)).is_none()));
+    fn add_poly(&mut self, ty: Ty, value: FunctionValue<'ink>) {
+        match_expected!(self, Self::Poly(poly) => assert!(poly.insert(ty.id(), (ty, value)).is_none()));
     }
 }
 
@@ -35,26 +40,29 @@ impl<'ink> FunctionMap<'ink> {
         }
     }
 
-    pub fn instance(&self, def_id: DefId, expr: Expr) -> FunctionValue<'ink> {
+    pub fn instance(&self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
+        assert!(ty.is_instantiated());
         match self.0.get_unwrap(def_id) {
             &FuncInstance::Mono(_, mono) => mono,
-            FuncInstance::Poly(poly) => poly.get(&expr).copied().unwrap().1,
+            FuncInstance::Poly(poly) => poly.get_copied_unwrap(ty.id()).1,
         }
     }
 
     fn insert_mono(&mut self, ty: Ty, value: FunctionValue<'ink>) {
+        assert!(ty.is_instantiated());
         assert!(self
             .0
             .insert(ty.func_def_id().unwrap(), FuncInstance::Mono(ty, value))
             .is_none());
     }
 
-    fn insert_poly(&mut self, expr: Expr, ty: Ty, value: FunctionValue<'ink>) {
+    fn insert_poly(&mut self, ty: Ty, value: FunctionValue<'ink>) {
+        assert!(ty.is_instantiated());
         self.0
             .upsert(ty.func_def_id().unwrap(), || {
                 FuncInstance::Poly(Default::default())
             })
-            .add_poly(expr, ty, value);
+            .add_poly(ty, value);
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (DefId, &FuncInstance<'ink>)> + '_ {
@@ -64,7 +72,7 @@ impl<'ink> FunctionMap<'ink> {
 
 pub struct FunctionsCodeGen<'ink, 'ctx> {
     ctx: CodeGenCtx<'ink, 'ctx>,
-    llvm_module: Module<'ink>,
+    llvm_module: &'ctx Module<'ink>,
 
     function_map: FunctionMap<'ink>,
 }
@@ -81,7 +89,16 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             return;
         }
 
-        let func_ty = self.ctx.func_ty(def_id);
+        // For Func or Lambda owner we get its type (possibly polymorphic, in which case we monomorphize it).
+        // For value we'll generate anonymous function of type `() -> ValueType` and then immediately call it.
+        let func_ty = match owner.kind {
+            BodyOwnerKind::Value => InstantiatedTy::Mono(Ty::func(
+                None,
+                Ty::unit(),
+                self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id)),
+            )),
+            BodyOwnerKind::Func | BodyOwnerKind::Lambda => self.ctx.func_ty(def_id),
+        };
 
         match func_ty {
             InstantiatedTy::Mono(ty) => {
@@ -90,9 +107,9 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             },
             InstantiatedTy::Poly(poly) => {
                 poly.iter().for_each(|inst| {
-                    let (ty, expr) = inst.unwrap();
+                    let (ty, _) = inst.unwrap();
                     let value = self.func_value(def_id, ty);
-                    self.function_map.insert_poly(expr, ty, value);
+                    self.function_map.insert_poly(ty, value);
                 });
             },
         };
@@ -100,12 +117,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 }
 
 impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
-    pub fn new(ctx: CodeGenCtx<'ink, 'ctx>) -> Self {
-        let llvm_module = ctx.llvm_ctx.create_module("kek");
-
-        let target_triple = TargetMachine::get_default_triple();
-        llvm_module.set_triple(&target_triple);
-
+    pub fn new(ctx: CodeGenCtx<'ink, 'ctx>, llvm_module: &'ctx Module<'ink>) -> Self {
         Self {
             ctx,
             llvm_module,

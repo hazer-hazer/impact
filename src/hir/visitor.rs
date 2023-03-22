@@ -1,7 +1,4 @@
-use crate::{
-    resolve::{builtin::Builtin},
-    span::span::Ident,
-};
+use crate::{resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
@@ -49,7 +46,7 @@ pub trait HirVisitor {
         match item.kind() {
             ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
-            ItemKind::Value(value) => self.visit_var_item(item.name(), value, id, hir),
+            ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(body) => self.visit_func_item(item.name(), body, id, hir),
         }
     }
@@ -64,9 +61,9 @@ pub trait HirVisitor {
         walk_each!(self, mod_item.items, visit_item, hir);
     }
 
-    fn visit_var_item(&mut self, name: Ident, value: &Expr, _id: ItemId, hir: &HIR) {
+    fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
-        self.visit_expr(&value, hir);
+        self.visit_body(value, BodyOwner::value(id.def_id()), hir);
     }
 
     fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId, hir: &HIR) {
@@ -76,7 +73,7 @@ pub trait HirVisitor {
 
     fn visit_body(&mut self, &body: &BodyId, _owner: BodyOwner, hir: &HIR) {
         let body = hir.body(body);
-        self.visit_pat(&body.param, hir);
+        body.param.map(|param| self.visit_pat(&param, hir));
         self.visit_expr(&body.value, hir);
     }
 

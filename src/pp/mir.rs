@@ -91,13 +91,17 @@ impl<'ctx> MirPrinter<'ctx> {
                 self.pp.ch(')');
                 // self.pp.string(format!(" -> {}", target));
             },
-            &RValue::Def(def_id, ty) => {
+            &RValue::FuncRef(def_id, ty) => {
                 let def = self.sess.def_table.get_def(def_id);
                 // match def.kind() {
                 //     DefKind::Func => todo!(),
                 //     DefKind::Value => todo!(),
                 // }
                 self.pp.string(format!("{}: {}", def.name(), ty));
+            },
+            &RValue::ClosureRef(def_id) | &RValue::ValueRef(def_id) => {
+                let def = self.sess.def_table.get_def(def_id);
+                self.pp.string(def);
             },
         }
     }
@@ -155,7 +159,9 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
     }
 
     fn visit_body(&mut self, body: &BodyId, _owner: BodyOwner, hir: &HIR) {
-        self.visit_pat(&hir.body(*body).param, hir);
+        hir.body(*body)
+            .param
+            .map(|param| self.visit_pat(&param, hir));
         self.pp.sp();
 
         let body = self.mir.bodies.get(body).unwrap();

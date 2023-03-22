@@ -434,10 +434,15 @@ impl HIR {
         )
     }
 
+    /// Assumes def_id points to Func or Lambda
     pub fn return_ty_span(&self, def_id: DefId) -> Span {
-        self.pat(self.body(self.owner_body(def_id.into()).unwrap()).param)
-            .span()
-            .point_after_hi()
+        self.pat(
+            self.body(self.owner_body(def_id.into()).unwrap())
+                .param
+                .unwrap(),
+        )
+        .span()
+        .point_after_hi()
         // match self.node(HirId::new_owner(def_id)) {
         //     Node::ExprNode(expr) => match expr.kind() {
         //         ExprKind::Lambda(Lambda { body }) => todo!(),
@@ -466,6 +471,7 @@ impl HIR {
 pub enum BodyOwnerKind {
     Func,
     Lambda,
+    Value,
 }
 
 pub struct BodyOwner {
@@ -487,16 +493,23 @@ impl BodyOwner {
             kind: BodyOwnerKind::Lambda,
         }
     }
+
+    pub fn value(def_id: DefId) -> Self {
+        Self {
+            def_id,
+            kind: BodyOwnerKind::Value,
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct Body {
-    pub param: Pat,
+    pub param: Option<Pat>,
     pub value: Expr,
 }
 
 impl Body {
-    pub fn new(param: Pat, value: Expr) -> Self {
+    pub fn new(param: Option<Pat>, value: Expr) -> Self {
         Self { param, value }
     }
 

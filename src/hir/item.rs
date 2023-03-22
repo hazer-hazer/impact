@@ -1,7 +1,7 @@
 use crate::{
     cli::color::Color,
     cli::color::Colorize,
-    dt::idx::{declare_idx},
+    dt::idx::declare_idx,
     resolve::def::DefId,
     span::span::{Ident, Span, WithSpan},
 };
@@ -45,7 +45,7 @@ pub struct Func {
 pub enum ItemKind {
     TyAlias(TyAlias),
     Mod(Mod),
-    Value(Expr),
+    Value(BodyId),
     Func(BodyId),
 }
 
@@ -108,6 +108,6 @@ macro_rules! specific_item_nodes {
 specific_item_nodes!(
     TyAlias ty_alias TyAlias;
     Mod mod_ Mod;
-    Value var Expr;
+    Value value BodyId;
     Func func BodyId
 );

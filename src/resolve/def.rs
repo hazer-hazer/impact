@@ -58,7 +58,7 @@ impl Display for DefKind {
                 DefKind::TyAlias => "type alias",
                 DefKind::Mod => "module",
                 DefKind::Func => "function",
-                DefKind::Value => "var",
+                DefKind::Value => "value",
                 DefKind::Lambda => "lambda",
                 DefKind::Root => "[ROOT]",
                 DefKind::DeclareBuiltin => "[`builtin`]",

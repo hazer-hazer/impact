@@ -324,6 +324,10 @@ impl Ty {
         }
     }
 
+    pub fn is_func_like(&self) -> bool {
+        matches!(self.kind(), TyKind::Func(_, _) | TyKind::FuncDef(_, _, _))
+    }
+
     pub fn is_instantiated(&self) -> bool {
         match self.kind() {
             TyKind::Error => todo!(),

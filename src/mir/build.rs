@@ -34,12 +34,13 @@ pub(super) struct MirBuilder<'ctx> {
     pub bindings: HashMap<LocalVar, Local>,
 
     hir: &'ctx HIR,
-    tyctx: &'ctx TyCtx,
+    pub sess: &'ctx Session,
 }
 
 impl<'ctx> MirBuilder<'ctx> {
-    pub fn build(body_owner: OwnerId, hir: &'ctx HIR, tyctx: &'ctx TyCtx) -> Body {
-        let (thir, thir_entry_expr) = ThirBuilder::new(hir, tyctx, body_owner).build_body_thir();
+    pub fn build(body_owner: OwnerId, hir: &'ctx HIR, sess: &'ctx Session) -> Body {
+        let (thir, thir_entry_expr) =
+            ThirBuilder::new(hir, &sess.tyctx, body_owner).build_body_thir();
 
         let this = Self {
             thir_entry_expr,
@@ -47,11 +48,13 @@ impl<'ctx> MirBuilder<'ctx> {
             builder: BodyBuilder::default(),
             bindings: Default::default(),
             hir,
-            tyctx,
+            sess,
         };
 
         match this.hir.body_owner_kind(this.thir.body_owner()) {
             BodyOwnerKind::Func | BodyOwnerKind::Lambda => this.func(),
+            // TODO: Review `Value`s are globals with once-called initializer functions.
+            BodyOwnerKind::Value => this.func(),
         }
     }
 
@@ -59,7 +62,8 @@ impl<'ctx> MirBuilder<'ctx> {
         let bb = self.builder.begin_bb();
 
         self.push_return_local(
-            self.tyctx
+            self.sess
+                .tyctx
                 .tyof(HirId::new_owner(self.thir.body_owner().into()))
                 .return_ty(),
             self.hir.return_ty_span(self.thir.body_owner().into()),
@@ -103,7 +107,7 @@ impl<'ctx> BuildFullMir<'ctx> {
         match self.mir.bodies.entry(body_id) {
             Entry::Occupied(_) => {},
             Entry::Vacant(entry) => {
-                let body = MirBuilder::build(body_owner, self.hir, &self.sess.tyctx);
+                let body = MirBuilder::build(body_owner, self.hir, &self.sess);
                 entry.insert(body);
             },
         }
