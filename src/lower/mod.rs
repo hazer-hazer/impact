@@ -372,7 +372,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_lambda_expr(&mut self, lambda: &Lambda, node_id: NodeId) -> hir::expr::ExprKind {
-        let param = lower_pr!(self, &lambda.param, lower_pat);
+        let param = lower_pr!(self, &lambda.params, lower_pat);
         let body = lower_pr!(self, &lambda.body, lower_expr);
         hir::expr::ExprKind::Lambda(hir::expr::Lambda {
             def_id: self.sess.def_table.get_def_id(node_id).unwrap(),

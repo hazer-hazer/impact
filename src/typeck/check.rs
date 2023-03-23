@@ -109,7 +109,7 @@ impl<'hir> Typecker<'hir> {
             ) => {
                 let param_name = self
                     .hir
-                    .pat_names(self.hir.body(body).param.unwrap())
+                    .pat_names(self.hir.body(body).params.unwrap())
                     .unwrap();
                 assert!(param_name.len() == 1);
                 let param_name = param_name[0];

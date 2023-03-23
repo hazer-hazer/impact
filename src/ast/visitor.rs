@@ -156,7 +156,7 @@ pub trait AstVisitor<'ast> {
     }
 
     fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
-        walk_pr!(self, &lambda.param, visit_pat);
+        walk_each_pr!(self, &lambda.params, visit_pat);
         walk_pr!(self, &lambda.body, visit_expr);
     }
 

@@ -73,7 +73,7 @@ pub trait HirVisitor {
 
     fn visit_body(&mut self, &body: &BodyId, _owner: BodyOwner, hir: &HIR) {
         let body = hir.body(body);
-        body.param.map(|param| self.visit_pat(&param, hir));
+        walk_each!(self, body.params, visit_pat, hir);
         self.visit_expr(&body.value, hir);
     }
 

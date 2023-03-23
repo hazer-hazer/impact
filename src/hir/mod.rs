@@ -442,7 +442,9 @@ impl HIR {
     pub fn return_ty_span(&self, def_id: DefId) -> Span {
         self.pat(
             self.body(self.owner_body(def_id.into()).unwrap())
-                .param
+                .params
+                .last()
+                .copied()
                 .unwrap(),
         )
         .span()
@@ -462,7 +464,7 @@ impl HIR {
     /// otherwise span pointing after name of the definition.
     pub fn body_return_ty_span(&self, def_id: DefId) -> Span {
         let body = self.body(self.owner_body(def_id.into()).unwrap());
-        if let Some(param) = body.param {
+        if let Some(param) = body.params.last().copied() {
             self.pat(param).span().point_after_hi()
         } else {
             self.item_name(ItemId::new(def_id.into()))
@@ -522,13 +524,16 @@ impl BodyOwner {
 
 #[derive(Debug)]
 pub struct Body {
-    pub param: Option<Pat>,
+    pub params: Vec<Pat>,
     pub value: Expr,
 }
 
 impl Body {
-    pub fn new(param: Option<Pat>, value: Expr) -> Self {
-        Self { param, value }
+    pub fn new(param: Vec<Pat>, value: Expr) -> Self {
+        Self {
+            params: param,
+            value,
+        }
     }
 
     pub fn id(&self) -> BodyId {

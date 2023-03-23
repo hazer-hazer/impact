@@ -14,7 +14,7 @@ use crate::{
     span::span::Ident,
 };
 
-use super::AstLikePP;
+use super::{hir::walk_each_delim, AstLikePP};
 
 pub struct MirPrinter<'ctx> {
     pub pp: AstLikePP<'ctx>,
@@ -167,9 +167,7 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
     }
 
     fn visit_body(&mut self, body: &BodyId, _owner: BodyOwner, hir: &HIR) {
-        hir.body(*body)
-            .param
-            .map(|param| self.visit_pat(&param, hir));
+        walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
         self.pp.sp();
 
         let body = self.mir.bodies.get(body).unwrap();

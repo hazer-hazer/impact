@@ -149,7 +149,7 @@ impl Display for PathExpr {
 
 #[derive(Debug)]
 pub struct Lambda {
-    pub param: PR<Pat>,
+    pub params: Vec<PR<Pat>>,
     pub body: PR<N<Expr>>,
 }
 
@@ -158,7 +158,11 @@ impl Display for Lambda {
         write!(
             f,
             "{} -> {}",
-            pr_display(&self.param),
+            self.params
+                .iter()
+                .map(|param| pr_display(param))
+                .collect::<Vec<_>>()
+                .join(" "),
             pr_display(&self.body)
         )
     }

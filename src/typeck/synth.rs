@@ -192,7 +192,10 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_body(&mut self, owner_def_id: DefId, body_id: BodyId) -> TyResult<Ty> {
-        let &Body { param, value } = self.hir.body(body_id);
+        let &Body {
+            params: param,
+            value,
+        } = self.hir.body(body_id);
         // FIXME: Rewrite when `match` added
 
         if let None = param {

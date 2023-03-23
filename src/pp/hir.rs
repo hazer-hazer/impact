@@ -39,6 +39,8 @@ macro_rules! walk_each_delim {
     };
 }
 
+pub(crate) use walk_each_delim;
+
 pub struct HirPP<'a> {
     pub pp: AstLikePP<'a>,
 }
@@ -110,9 +112,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
         self.pp.sp();
-        hir.body(*body)
-            .param
-            .map(|param| self.visit_pat(&param, hir));
+        walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
         self.pp.str(" = ");
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
@@ -148,7 +148,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
         let body = hir.body(lambda.body_id);
         self.pp.punct(Punct::Backslash);
-        body.param.map(|param| self.visit_pat(&param, hir));
+        walk_each_delim!(self, body.params, visit_pat, " ", hir);
         self.pp.punct(Punct::Arrow);
         self.visit_expr(&body.value, hir);
     }

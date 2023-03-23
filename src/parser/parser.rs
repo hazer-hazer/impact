@@ -867,7 +867,10 @@ impl Parser {
 
         self.skip(TokenCmp::Punct(Punct::Backslash));
 
-        let param = self.parse_pat("lambda parameter (pattern)");
+        let mut params = vec![];
+        while !self.is(TokenCmp::Punct(Punct::Arrow)) {
+            params.push(self.parse_pat("lambda parameter (pattern)"));
+        }
 
         self.skip(TokenCmp::Punct(Punct::Arrow));
 
@@ -877,7 +880,7 @@ impl Parser {
 
         Some(Ok(Box::new(Expr::new(
             self.next_node_id(),
-            ExprKind::Lambda(Lambda { param, body }),
+            ExprKind::Lambda(Lambda { params, body }),
             self.close_span(lo),
         ))))
     }

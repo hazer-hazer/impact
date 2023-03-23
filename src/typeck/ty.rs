@@ -4,6 +4,7 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::Formatter,
     hash::{Hash, Hasher},
+    slice::Join,
     sync::RwLock,
 };
 
@@ -503,9 +504,9 @@ pub enum TyKind {
     String,
 
     /// Type of function or lambda
-    FuncDef(DefId, Ty, Ty),
+    FuncDef(DefId, Vec<Ty>, Ty),
 
-    Func(Ty, Ty),
+    Func(Vec<Ty>, Ty),
 
     Var(TyVarId),
     Existential(Existential),
@@ -521,8 +522,29 @@ impl std::fmt::Display for TyKind {
             TyKind::Int(kind) => write!(f, "{}", kind),
             TyKind::Float(kind) => write!(f, "{}", kind),
             TyKind::String => write!(f, "{}", "string"),
-            &TyKind::Func(param, body) => write!(f, "({} -> {})", param, body),
-            &TyKind::FuncDef(def_id, param, body) => write!(f, "({} -> {}){}", param, body, def_id),
+            &TyKind::Func(params, body) => write!(
+                f,
+                "({} -> {})",
+                params
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                body
+            ),
+            &TyKind::FuncDef(def_id, params, body) => {
+                write!(
+                    f,
+                    "({} -> {}){}",
+                    params
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    body,
+                    def_id
+                )
+            },
             TyKind::Var(name) => write!(f, "{}", name),
             TyKind::Existential(ex) => write!(f, "{}", ex),
             &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),

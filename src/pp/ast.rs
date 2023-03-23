@@ -151,7 +151,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
         self.punct(Punct::Backslash);
-        walk_pr!(self, &lambda.param, visit_pat);
+        walk_each_pr_delim!(self, &lambda.params, visit_pat, " ");
         self.punct(Punct::Arrow);
         walk_pr!(self, &lambda.body, visit_expr);
     }
