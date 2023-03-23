@@ -1,7 +1,10 @@
 use inkwell::{
+    attributes::Attribute,
+    builder::Builder,
     context::Context,
+    module::{Linkage, Module},
     types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType},
-    values::BasicValueEnum,
+    values::{BasicValue, BasicValueEnum, FunctionValue},
     AddressSpace,
 };
 
@@ -25,6 +28,7 @@ pub struct CodeGenCtx<'ink, 'ctx> {
 
     // LLVM Context //
     pub llvm_ctx: &'ink Context,
+    pub llvm_module: &'ctx Module<'ink>,
 }
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
@@ -71,6 +75,70 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
 
         // .map(|res| res.map(|ty| self.conv_ty(ty).into_function_type()))
         // .collect()
+    }
+
+    // Functions //
+    pub fn simple_func(
+        &self,
+        ty: Ty,
+        deep_func_modifier: impl Fn(FunctionValue<'ink>),
+        body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
+    ) -> FunctionValue<'ink> {
+        assert!(ty.is_func_like());
+        self._simple_func(Vec::new(), ty, deep_func_modifier, body)
+            .0
+    }
+
+    fn _simple_func(
+        &self,
+        mut params: Vec<BasicValueEnum<'ink>>,
+        ty: Ty,
+        deep_func_modifier: impl Fn(FunctionValue<'ink>),
+        body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
+    ) -> (FunctionValue<'ink>, Option<BasicValueEnum<'ink>>) {
+        let ll_ty = self.conv_ty(ty).into_function_type();
+        let func = self
+            .llvm_module
+            .add_function("anon", ll_ty, Some(Linkage::Internal));
+
+        params.push(func.get_nth_param(0).unwrap());
+
+        deep_func_modifier(func);
+
+        let builder = self.llvm_ctx.create_builder();
+        let entry_bb = self.llvm_ctx.append_basic_block(func, "entry");
+        builder.position_at_end(entry_bb);
+
+        let (func, result) = if ty.return_ty().is_func_like() {
+            (
+                self._simple_func(params, ty.return_ty(), deep_func_modifier, body)
+                    .0,
+                None,
+            )
+        } else {
+            (func, Some(body(&builder, params)))
+        };
+
+        if let Some(result) = result {
+            builder.build_return(Some(&result));
+        } else {
+            builder.build_return(Some(
+                &func
+                    .as_global_value()
+                    .as_pointer_value()
+                    .as_basic_value_enum(),
+            ));
+        }
+
+        (func, None)
+    }
+
+    // Function attributes //
+    pub fn always_inline(&self, func: FunctionValue<'ink>) {
+        let always_inline = Attribute::get_named_enum_kind_id("alwaysinline");
+        assert_ne!(always_inline, 0);
+        let attr = self.llvm_ctx.create_enum_attribute(always_inline, 1);
+        func.add_attribute(inkwell::attributes::AttributeLoc::Function, attr);
     }
 
     // Values //

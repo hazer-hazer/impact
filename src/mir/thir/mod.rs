@@ -42,6 +42,15 @@ pub enum ExprCategory {
     AsRValue,
 }
 
+/**
+ * Non-overloaded infix operators, e.g. `1 + 1`
+ */
+// #[derive(Clone, Copy)]
+// pub enum InfixOp {
+//     AddInt,
+//     SubInt,
+// }
+
 pub enum ExprKind {
     Lit(Lit),
     LocalRef(LocalVar),
@@ -79,12 +88,12 @@ impl Expr {
             ExprKind::LocalRef(_) => ExprCategory::LValue,
 
             ExprKind::Call { .. } | ExprKind::Block(_) => ExprCategory::StoreRValue,
-            ExprKind::Def(_, _) | ExprKind::Lambda { .. } => ExprCategory::AsRValue,
+            ExprKind::Def(..) | ExprKind::Lambda { .. } | ExprKind::Builtin(_) => {
+                ExprCategory::AsRValue
+            },
 
             // FIXME: Ascription is an lvalue or category of inner expression?
             ExprKind::Ty(_, _) => todo!(),
-
-            ExprKind::Builtin(_) => todo!(),
         }
     }
 }
@@ -142,6 +151,10 @@ impl THIR {
 
     pub fn param(&self, id: ParamId) -> &Param {
         self.params.get(id).unwrap()
+    }
+
+    pub fn params_count(&self) -> usize {
+        self.params.len()
     }
 
     pub fn add_stmt(&mut self, stmt: Stmt) -> StmtId {

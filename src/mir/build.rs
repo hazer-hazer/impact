@@ -65,13 +65,13 @@ impl<'ctx> MirBuilder<'ctx> {
             self.sess
                 .tyctx
                 .tyof(HirId::new_owner(self.thir.body_owner().into()))
-                .return_ty(),
-            self.hir.return_ty_span(self.thir.body_owner().into()),
+                .body_return_ty(),
+            self.hir.body_return_ty_span(self.thir.body_owner().into()),
         );
 
         // Note: Only one param for now
-        [ParamId::new(0)].into_iter().for_each(|param| {
-            self.declare_param_bindings(param);
+        (0..self.thir.params_count()).into_iter().for_each(|param| {
+            self.declare_param_bindings(ParamId::new(param as u32));
         });
 
         let bb = unpack!(self.store_expr(bb, LValue::return_lvalue(), self.thir_entry_expr));
@@ -130,6 +130,16 @@ impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
 
     fn visit_lambda(&mut self, lambda: &hir::expr::Lambda, _hir: &HIR) {
         self.build(lambda.body_id, lambda.def_id.into());
+    }
+
+    fn visit_value_item(
+        &mut self,
+        name: crate::span::span::Ident,
+        value: &BodyId,
+        id: hir::item::ItemId,
+        hir: &HIR,
+    ) {
+        self.build(*value, id.def_id().into());
     }
 }
 

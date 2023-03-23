@@ -47,9 +47,6 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
         let builder = ctx.llvm_ctx.create_builder();
 
-        let body_bb = ctx.llvm_ctx.append_basic_block(func, "body");
-        builder.position_at_end(body_bb);
-
         Self {
             ctx,
             func_def_id,
@@ -79,6 +76,9 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
     // Generators //
     pub fn gen_body(&mut self) {
+        let body_bb = self.ctx.llvm_ctx.append_basic_block(self.func, "body");
+        self.builder.position_at_end(body_bb);
+
         let alloca_builder = self.new_alloca_builder();
         let return_local_ty = self.ctx.conv_basic_ty(self.func_ty.return_ty());
         let return_local_value = alloca_builder.build_alloca(return_local_ty, "alloca");
@@ -86,7 +86,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
         self.body.params().for_each(|(local, _)| {
             let func_param = self.func.get_nth_param(local.inner()).unwrap();
-            let value = alloca_builder.build_alloca(func_param.get_type(), &local.to_string());
+            let value = alloca_builder.build_alloca(func_param.get_type(), &local.formatted());
             alloca_builder.build_store(value, func_param);
             self.add_local(local, value);
         });
@@ -94,11 +94,14 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         self.body.inner_locals().for_each(|(local, info)| {
             // TODO: Add name to `LocalInfo` and use it here
             let value =
-                alloca_builder.build_alloca(self.ctx.conv_basic_ty(info.ty), &local.to_string());
+                alloca_builder.build_alloca(self.ctx.conv_basic_ty(info.ty), &local.formatted());
             self.add_local(local, value);
         });
 
-        let _ll_bb = self.gen_bb(START_BB);
+        let start_bb = self.gen_bb(START_BB);
+
+        self.builder.position_at_end(body_bb);
+        self.builder.build_unconditional_branch(start_bb);
     }
 
     fn gen_bb(&mut self, bb: BB) -> BasicBlock<'ink> {
@@ -145,7 +148,12 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     fn rvalue_to_value(&mut self, rvalue: &RValue) -> BasicValueEnum<'ink> {
         match rvalue {
             RValue::Operand(operand) => self.operand_to_value(operand),
-            RValue::Infix(_, _, _) => todo!(),
+            &RValue::Infix(op) => self
+                .function_map
+                .infix(op)
+                .as_global_value()
+                .as_pointer_value()
+                .into(),
             &RValue::Closure(def_id) => self
                 .function_map
                 .expect_mono(def_id)

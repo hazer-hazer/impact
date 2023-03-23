@@ -1,6 +1,7 @@
 use inkwell::{context::Context, targets::TargetMachine};
 
 use crate::{
+    cli::{color::Colorize, verbose},
     hir::HIR,
     message::message::{MessageHolder, MessageStorage},
     mir::MIR,
@@ -42,18 +43,19 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
     }
 
     fn codegen(&mut self) {
+        let llvm_module = self.llvm_ctx.create_module("kek");
+        let target_triple = TargetMachine::get_default_triple();
+        llvm_module.set_triple(&target_triple);
+
         let ctx = CodeGenCtx {
             sess: &self.sess,
             mir: self.mir,
             hir: self.hir,
             llvm_ctx: self.llvm_ctx,
+            llvm_module: &llvm_module,
         };
 
-        let llvm_module = self.llvm_ctx.create_module("kek");
-        let target_triple = TargetMachine::get_default_triple();
-        llvm_module.set_triple(&target_triple);
-
-        let function_map = FunctionsCodeGen::new(ctx, &llvm_module).gen_functions();
+        let function_map = FunctionsCodeGen::new(ctx).gen_functions();
         let value_map = ValueCodeGen::new(ctx, &function_map).gen_values();
 
         for (def_id, inst) in function_map.iter() {
@@ -69,6 +71,19 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
                 },
             }
         }
+
+        verbose!("LLVM Module:\n{}", llvm_module.to_string());
+
+        llvm_module
+            .verify()
+            .map_err(|err| {
+                println!(
+                    "LLVM Module is invalid:\n{}",
+                    err.to_string()
+                        .fg_color(crate::cli::color::Color::BrightRed)
+                );
+            })
+            .unwrap();
     }
 }
 

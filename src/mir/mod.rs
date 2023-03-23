@@ -16,7 +16,7 @@ use crate::{
     cli::color::Colorize,
     dt::idx::{declare_idx, IndexVec},
     hir::BodyId,
-    resolve::def::DefId,
+    resolve::{builtin::Builtin, def::DefId},
     span::span::Span,
 };
 
@@ -130,10 +130,45 @@ impl Operand {
 }
 
 /// Only builtin infix operators, all overloaded are function calls
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum InfixOp {
     AddInt,
     SubInt,
+}
+
+impl InfixOp {
+    pub fn each() -> impl Iterator<Item = InfixOp> {
+        [Self::AddInt, Self::SubInt].into_iter()
+    }
+
+    pub fn func_ty(&self) -> Ty {
+        match self {
+            InfixOp::AddInt | InfixOp::SubInt => Ty::func(
+                None,
+                Ty::default_int(),
+                Ty::func(None, Ty::default_int(), Ty::default_int()),
+            ),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            InfixOp::AddInt => "add_int",
+            InfixOp::SubInt => "sub_int",
+        }
+    }
+}
+
+impl TryFrom<Builtin> for InfixOp {
+    type Error = ();
+
+    fn try_from(value: Builtin) -> Result<Self, Self::Error> {
+        match value {
+            Builtin::AddInt => Ok(InfixOp::AddInt),
+            Builtin::SubInt => Ok(InfixOp::SubInt),
+            _ => Err(()),
+        }
+    }
 }
 
 impl Display for InfixOp {
@@ -152,7 +187,7 @@ impl Display for InfixOp {
 #[derive(Clone, Copy)]
 pub enum RValue {
     Operand(Operand),
-    Infix(Operand, InfixOp, Operand),
+    Infix(InfixOp),
 
     // TODO: Upvars
     Closure(DefId),

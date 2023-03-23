@@ -380,7 +380,7 @@ impl HIR {
                 ..
             }) => Some(*body),
             Node::ItemNode(ItemNode {
-                kind: ItemKind::Func(body),
+                kind: ItemKind::Func(body) | ItemKind::Value(body),
                 ..
             }) => Some(*body),
             _ => None,
@@ -397,6 +397,10 @@ impl HIR {
                 kind: ItemKind::Func(_),
                 ..
             }) => BodyOwnerKind::Func,
+            Node::ItemNode(ItemNode {
+                kind: ItemKind::Value(_),
+                ..
+            }) => BodyOwnerKind::Value,
             _ => panic!(),
         }
     }
@@ -451,6 +455,20 @@ impl HIR {
         //     Node::ItemNode(item) => todo!(),
         //     _ => panic!(),
         // }
+    }
+
+    /// Assumes that def_id points to a body owner.
+    /// Returns span pointing after parameter of the body with a parameter,
+    /// otherwise span pointing after name of the definition.
+    pub fn body_return_ty_span(&self, def_id: DefId) -> Span {
+        let body = self.body(self.owner_body(def_id.into()).unwrap());
+        if let Some(param) = body.param {
+            self.pat(param).span().point_after_hi()
+        } else {
+            self.item_name(ItemId::new(def_id.into()))
+                .span()
+                .point_after_hi()
+        }
     }
 
     // // Debug //

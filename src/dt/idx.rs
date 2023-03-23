@@ -405,6 +405,12 @@ macro_rules! declare_idx {
                 usize::from(*self)
             }
         }
+
+        impl $name {
+            pub fn formatted(&self) -> String {
+                format!($format, self.0)
+            }
+        }
     };
 
     (@inner $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {

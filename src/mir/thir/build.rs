@@ -1,6 +1,6 @@
 use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
-    resolve::def::DefKind,
+    resolve::{builtin::Builtin, def::DefKind},
     span::span::WithSpan,
     typeck::tyctx::TyCtx,
 };
@@ -96,6 +96,26 @@ impl<'ctx> ThirBuilder<'ctx> {
             kind,
         })
     }
+
+    // fn call(&mut self, call: &hir::expr::Call) -> ExprKind {
+    //     let lhs = call.lhs;
+    //     let arg = call.arg;
+
+    //     match self.hir.expr(lhs).kind() {
+    //         hir::expr::ExprKind::BuiltinExpr(bt) => match bt {
+    //             Builtin::AddInt => todo!(),
+    //             Builtin::SubInt => todo!(),
+    //             _ => {},
+    //         },
+    //         _ => {},
+    //     }
+
+    //     ExprKind::Call {
+    //         lhs: self.expr(lhs),
+    //         arg: self.expr(arg),
+    //         func_ty: self.tyctx.instantiated_expr_ty(lhs).unwrap(),
+    //     }
+    // }
 
     fn stmt(&mut self, stmt_id: hir::stmt::Stmt) -> Option<StmtId> {
         let stmt = self.hir.stmt(stmt_id);

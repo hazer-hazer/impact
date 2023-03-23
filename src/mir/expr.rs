@@ -1,6 +1,6 @@
 use crate::{
-    mir::thir::Expr,
-    resolve::def::DefKind,
+    mir::{thir::Expr, InfixOp},
+    resolve::{builtin::Builtin, def::DefKind},
     typeck::ty::{FloatKind, IntKind},
 };
 
@@ -123,7 +123,16 @@ impl<'ctx> MirBuilder<'ctx> {
                 bb.with(rvalue)
             },
 
-            ExprKind::Builtin(_) => todo!(),
+            &ExprKind::Builtin(bt) => match bt {
+                Builtin::UnitValue => bb.with(self.unit_const().operand().rvalue()),
+                Builtin::AddInt | Builtin::SubInt => {
+                    bb.with(RValue::Infix(InfixOp::try_from(bt).unwrap()))
+                    // unreachable!("builtin {} must not appear as a standalone expression", bt)
+                },
+                Builtin::UnitTy | Builtin::I32 => {
+                    unreachable!("builtin {} is not an expression", bt)
+                },
+            },
         }
     }
 

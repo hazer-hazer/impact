@@ -1,14 +1,21 @@
 use std::collections::HashMap;
 
-use inkwell::{module::Module, targets::TargetMachine, types::FunctionType, values::FunctionValue};
+use inkwell::{
+    attributes::{Attribute, AttributeLoc},
+    module::{Linkage, Module},
+    targets::TargetMachine,
+    types::FunctionType,
+    values::{BasicValue, FunctionValue},
+};
 
 use crate::{
+    cli::verbose,
     dt::idx::IndexVec,
     hir::{
         expr::Expr, item::ItemId, visitor::HirVisitor, BodyId, BodyOwner, BodyOwnerKind, HirId,
         HirMap, HIR,
     },
-    mir::Ty,
+    mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
     utils::macros::match_expected,
@@ -30,19 +37,26 @@ impl<'ink> FuncInstance<'ink> {
 }
 
 #[derive(Default)]
-pub struct FunctionMap<'ink>(DefMap<FuncInstance<'ink>>);
+pub struct FunctionMap<'ink> {
+    instances: DefMap<FuncInstance<'ink>>,
+    infix_ops: HashMap<InfixOp, FunctionValue<'ink>>,
+}
 
 impl<'ink> FunctionMap<'ink> {
     pub fn expect_mono(&self, def_id: DefId) -> FunctionValue<'ink> {
-        match self.0.get_unwrap(def_id) {
+        match self.instances.get_unwrap(def_id) {
             &FuncInstance::Mono(_, mono) => mono,
             FuncInstance::Poly(_) => panic!(),
         }
     }
 
+    pub fn infix(&self, op: InfixOp) -> FunctionValue<'ink> {
+        self.infix_ops.get(&op).copied().unwrap()
+    }
+
     pub fn instance(&self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
         assert!(ty.is_instantiated());
-        match self.0.get_unwrap(def_id) {
+        match self.instances.get_unwrap(def_id) {
             &FuncInstance::Mono(_, mono) => mono,
             FuncInstance::Poly(poly) => poly.get_copied_unwrap(ty.id()).1,
         }
@@ -51,14 +65,14 @@ impl<'ink> FunctionMap<'ink> {
     fn insert_mono(&mut self, ty: Ty, value: FunctionValue<'ink>) {
         assert!(ty.is_instantiated());
         assert!(self
-            .0
+            .instances
             .insert(ty.func_def_id().unwrap(), FuncInstance::Mono(ty, value))
             .is_none());
     }
 
     fn insert_poly(&mut self, ty: Ty, value: FunctionValue<'ink>) {
         assert!(ty.is_instantiated());
-        self.0
+        self.instances
             .upsert(ty.func_def_id().unwrap(), || {
                 FuncInstance::Poly(Default::default())
             })
@@ -66,13 +80,12 @@ impl<'ink> FunctionMap<'ink> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (DefId, &FuncInstance<'ink>)> + '_ {
-        self.0.iter_enumerated_flat()
+        self.instances.iter_enumerated_flat()
     }
 }
 
 pub struct FunctionsCodeGen<'ink, 'ctx> {
     ctx: CodeGenCtx<'ink, 'ctx>,
-    llvm_module: &'ctx Module<'ink>,
 
     function_map: FunctionMap<'ink>,
 }
@@ -93,7 +106,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         // For value we'll generate anonymous function of type `() -> ValueType` and then immediately call it.
         let func_ty = match owner.kind {
             BodyOwnerKind::Value => InstantiatedTy::Mono(Ty::func(
-                None,
+                Some(def_id),
                 Ty::unit(),
                 self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id)),
             )),
@@ -117,23 +130,57 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 }
 
 impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
-    pub fn new(ctx: CodeGenCtx<'ink, 'ctx>, llvm_module: &'ctx Module<'ink>) -> Self {
+    pub fn new(ctx: CodeGenCtx<'ink, 'ctx>) -> Self {
         Self {
             ctx,
-            llvm_module,
             function_map: Default::default(),
         }
     }
 
+    fn gen_infix_op(&mut self, op: InfixOp) -> FunctionValue<'ink> {
+        self.ctx.simple_func(
+            op.func_ty(),
+            |func| {
+                // self.ctx.always_inline(func);
+            },
+            |builder, params| {
+                // verbose!(
+                //     "{}",
+                //     params
+                //         .iter()
+                //         .map(ToString::to_string)
+                //         .collect::<Vec<_>>()
+                //         .join(", ")
+                // );
+                assert_eq!(params.len(), 2);
+                let lhs = params[0];
+                let rhs = params[1];
+                match op {
+                    InfixOp::AddInt => {
+                        builder.build_int_add(lhs.into_int_value(), rhs.into_int_value(), op.name())
+                    },
+                    InfixOp::SubInt => {
+                        builder.build_int_sub(lhs.into_int_value(), rhs.into_int_value(), op.name())
+                    },
+                }
+                .into()
+            },
+        )
+    }
+
     pub fn gen_functions(mut self) -> FunctionMap<'ink> {
         self.visit_hir(self.ctx.hir);
+        InfixOp::each().for_each(|op| {
+            let func = self.gen_infix_op(op);
+            assert!(self.function_map.infix_ops.insert(op, func).is_none());
+        });
 
         self.function_map
     }
 
     fn func_value(&mut self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
         let ll_ty = self.ctx.conv_ty(ty).into_function_type();
-        self.llvm_module.add_function(
+        self.ctx.llvm_module.add_function(
             &self.func_name(def_id, ty),
             ll_ty,
             Some(inkwell::module::Linkage::External),
@@ -142,9 +189,12 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
 
     fn func_name(&self, def_id: DefId, ty: Ty) -> String {
         format!(
-            "{}:{}",
-            self.ctx.hir.item_name(ItemId::new(def_id.into())),
-            ty
+            "{}",
+            self.ctx
+                .hir
+                .item_name(ItemId::new(def_id.into()))
+                .original_string(),
+            // ty.id()
         )
     }
 }

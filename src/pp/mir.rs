@@ -75,10 +75,13 @@ impl<'ctx> MirPrinter<'ctx> {
     fn print_rvalue(&mut self, rvalue: &RValue) {
         match rvalue {
             RValue::Operand(operand) => self.print_operand(operand),
-            RValue::Infix(lhs, op, rhs) => {
-                self.print_operand(lhs);
-                self.pp.string(format!(" {} ", op));
-                self.print_operand(rhs);
+            // RValue::Infix(lhs, op, rhs) => {
+            //     self.print_operand(lhs);
+            //     self.pp.string(format!(" {} ", op));
+            //     self.print_operand(rhs);
+            // },
+            RValue::Infix(op) => {
+                self.pp.string(format!("({})", op));
             },
             RValue::Closure(def_id) => {
                 self.pp.string(format!("closure{}", def_id));
@@ -144,6 +147,11 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
         self.pp.string(format!("[lambda{}]", lambda.def_id)).sp();
         self.visit_body(&lambda.body_id, BodyOwner::lambda(lambda.def_id), hir);
+    }
+
+    fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId, hir: &HIR) {
+        self.pp.string(format!("{} =", name.original_string()));
+        self.visit_body(value, BodyOwner::value(id.def_id()), hir);
     }
 
     // Note: Only used for parameters

@@ -325,7 +325,7 @@ impl Ty {
     }
 
     pub fn is_func_like(&self) -> bool {
-        matches!(self.kind(), TyKind::Func(_, _) | TyKind::FuncDef(_, _, _))
+        matches!(self.kind(), TyKind::Func(..) | TyKind::FuncDef(..))
     }
 
     pub fn is_instantiated(&self) -> bool {
@@ -394,6 +394,16 @@ impl Ty {
         }
     }
 
+    pub fn uncurried_params_count(&self) -> usize {
+        let mut ty = self.as_func_like().1;
+        let mut count = 1;
+        while ty.is_func_like() {
+            count += 1;
+            ty = ty.as_func_like().1;
+        }
+        count
+    }
+
     pub fn substitute(&self, subst: Subst, with: Ty) -> Ty {
         verbose!("Substitute {} in {} with {}", subst, self, with);
 
@@ -447,8 +457,19 @@ impl Ty {
         match_expected!(self.kind(), &TyKind::FuncDef(def_id, param, body) => (def_id, param, body))
     }
 
+    pub fn as_func_like(&self) -> (Ty, Ty) {
+        match_expected!(self.kind(), &TyKind::FuncDef(_, param, body) | &TyKind::Func(param, body) => (param, body))
+    }
+
     pub fn return_ty(&self) -> Ty {
-        self.as_func().1
+        self.as_func_like().1
+    }
+
+    pub fn body_return_ty(&self) -> Ty {
+        match self.kind() {
+            &TyKind::FuncDef(_, _, body) | &TyKind::Func(_, body) => body,
+            _ => *self,
+        }
     }
 
     pub fn is_unit(&self) -> bool {
