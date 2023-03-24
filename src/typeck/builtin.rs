@@ -29,7 +29,7 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         // }};
 
         ($param: tt -> $($body: tt)+) => {{
-            Ty::func(None, ty!($param), ty!($($body)+))
+            Ty::func(None, (vec![ty!($param)]), ty!($($body)+))
         }};
 
         (forall $alpha: ident. $($ty: tt)+) => {{

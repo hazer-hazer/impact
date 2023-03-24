@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
+    ast::prs_display_join,
     parser::token::{FloatKind, IntKind},
     span::span::{Span, Symbol, WithSpan},
 };
@@ -126,15 +127,7 @@ impl WithSpan for Block {
 
 impl Display for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.stmts
-                .iter()
-                .map(|stmt| format!("{}", pr_display(stmt)))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
+        write!(f, "{}", prs_display_join(&self.stmts, "\n"))
     }
 }
 
@@ -158,11 +151,7 @@ impl Display for Lambda {
         write!(
             f,
             "{} -> {}",
-            self.params
-                .iter()
-                .map(|param| pr_display(param))
-                .collect::<Vec<_>>()
-                .join(" "),
+            prs_display_join(&self.params, " "),
             pr_display(&self.body)
         )
     }
@@ -171,12 +160,17 @@ impl Display for Lambda {
 #[derive(Debug)]
 pub struct Call {
     pub lhs: PR<N<Expr>>,
-    pub arg: PR<N<Expr>>,
+    pub args: Vec<PR<N<Expr>>>,
 }
 
 impl Display for Call {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", pr_display(&self.lhs), pr_display(&self.arg))
+        write!(
+            f,
+            "{} {}",
+            pr_display(&self.lhs),
+            prs_display_join(&self.args, " ")
+        )
     }
 }
 
@@ -212,7 +206,7 @@ impl IsBlockEnded for ExprKind {
             Self::Block(_) | Self::Let(_) => true,
             Self::Infix(infix) => is_block_ended!(infix.rhs),
             Self::Lambda(lambda) => is_block_ended!(lambda.body),
-            Self::Call(call) => is_block_ended!(call.arg),
+            Self::Call(call) => call.args.iter().any(|arg| is_block_ended!(arg)),
         }
     }
 }

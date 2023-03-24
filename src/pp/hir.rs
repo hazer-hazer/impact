@@ -180,17 +180,17 @@ impl<'a> HirVisitor for HirPP<'a> {
 
         match &ty.kind() {
             TyKind::Path(path) => self.visit_ty_path(path, hir),
-            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
+            TyKind::Func(params, body) => self.visit_func_ty(params, body, hir),
             TyKind::App(cons, arg) => self.visit_ty_app(cons, arg, hir),
             TyKind::Builtin(bt) => self.visit_builtin_ty(bt, hir),
         }
         self.pp.hir_id(ty);
     }
 
-    fn visit_func_ty(&mut self, param_ty: &Ty, return_ty: &Ty, hir: &HIR) {
-        self.visit_ty(param_ty, hir);
+    fn visit_func_ty(&mut self, params: &[Ty], body: &Ty, hir: &HIR) {
+        walk_each_delim!(self, params, visit_ty, " ", hir);
         self.pp.punct(Punct::Arrow);
-        self.visit_ty(return_ty, hir);
+        self.visit_ty(body, hir);
     }
 
     fn visit_ty_app(&mut self, cons: &Ty, arg: &Ty, hir: &HIR) {

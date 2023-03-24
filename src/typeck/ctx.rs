@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::zip};
 
 use crate::{
     cli::verbose,
@@ -88,9 +88,11 @@ impl GlobalCtx {
                 self.get_solution(ex)
                     .expect(&format!("Unsolved existential {}", ex)),
             ),
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
-                Ty::func(ty.func_def_id(), self.apply_on(param), self.apply_on(body))
-            },
+            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => Ty::func(
+                ty.func_def_id(),
+                params.iter().map(|param| self.apply_on(*param)).collect(),
+                self.apply_on(body),
+            ),
             &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
         }
     }
@@ -161,6 +163,18 @@ impl InferCtx {
     pub fn new_with_term(name: Ident, ty: Ty) -> Self {
         Self {
             terms: HashMap::from([(name.sym(), ty)]),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_with_term_map(names: &[Ident], tys: &[Ty]) -> Self {
+        assert_eq!(names.len(), tys.len());
+        Self {
+            terms: names
+                .iter()
+                .map(|name| name.sym())
+                .zip(tys.iter().copied())
+                .collect::<HashMap<_, _>>(),
             ..Default::default()
         }
     }

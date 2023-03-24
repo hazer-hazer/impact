@@ -152,7 +152,7 @@ pub trait AstVisitor<'ast> {
 
     fn visit_app_expr(&mut self, call: &'ast Call) {
         walk_pr!(self, &call.lhs, visit_expr);
-        walk_pr!(self, &call.arg, visit_expr);
+        walk_each_pr!(self, &call.args, visit_expr);
     }
 
     fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
@@ -173,9 +173,9 @@ pub trait AstVisitor<'ast> {
     fn visit_ty(&mut self, ty: &'ast Ty) {
         match ty.kind() {
             TyKind::Path(path) => self.visit_ty_path(path),
-            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+            TyKind::Func(params, body) => self.visit_func_ty(params, body),
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
-            TyKind::App(cons, arg) => self.visit_ty_app(cons, arg),
+            TyKind::App(cons, args) => self.visit_ty_app(cons, args),
             TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
         }
     }
@@ -186,23 +186,23 @@ pub trait AstVisitor<'ast> {
         walk_pr!(self, &path.0, visit_path)
     }
 
-    fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {
-        walk_pr!(self, param_ty, visit_ty);
-        walk_pr!(self, return_ty, visit_ty)
+    fn visit_func_ty(&mut self, params: &'ast [PR<N<Ty>>], body: &'ast PR<N<Ty>>) {
+        walk_each_pr!(self, params, visit_ty);
+        walk_pr!(self, body, visit_ty)
     }
 
     fn visit_paren_ty(&mut self, inner: &'ast PR<N<Ty>>) {
         walk_pr!(self, inner, visit_ty)
     }
 
-    fn visit_ty_app(&mut self, cons: &'ast PR<N<Ty>>, arg: &'ast PR<N<Ty>>) {
+    fn visit_ty_app(&mut self, cons: &'ast PR<N<Ty>>, args: &'ast [PR<N<Ty>>]) {
         walk_pr!(self, cons, visit_ty);
-        walk_pr!(self, arg, visit_ty);
+        walk_each_pr!(self, args, visit_ty);
     }
 
-    fn visit_ty_app_expr(&mut self, cons: &'ast PR<N<Ty>>, const_arg: &'ast PR<N<Expr>>) {
+    fn visit_ty_app_expr(&mut self, cons: &'ast PR<N<Ty>>, args: &'ast [PR<N<Expr>>]) {
         walk_pr!(self, cons, visit_ty);
-        walk_pr!(self, const_arg, visit_expr);
+        walk_each_pr!(self, args, visit_expr);
     }
 
     // Fragments //

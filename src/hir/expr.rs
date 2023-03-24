@@ -140,7 +140,7 @@ pub struct TyExpr {
 #[derive(Debug)]
 pub struct Call {
     pub lhs: Expr,
-    pub arg: Expr,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Debug)]

@@ -718,12 +718,18 @@ impl Parser {
                 ))));
             }
 
-            while let Some(arg) = self.parse_primary() {
+            if let Some(arg) = self.parse_primary() {
                 self.mark_late_check("function call");
+
+                let mut args = vec![arg];
+
+                while let Some(arg) = self.parse_primary() {
+                    args.push(arg);
+                }
 
                 lhs = Ok(Box::new(Expr::new(
                     self.next_node_id(),
-                    ExprKind::Call(Call { lhs, arg }),
+                    ExprKind::Call(Call { lhs, args }),
                     self.close_span(lo),
                 )));
             }
@@ -906,15 +912,25 @@ impl Parser {
         if let Some(mut lhs) = lhs {
             loop {
                 if let Some(arg) = self.parse_primary_ty() {
+                    let mut args = vec![arg];
+                    while let Some(arg) = self.parse_primary_ty() {
+                        args.push(arg);
+                    }
+
                     lhs = Ok(Box::new(Ty::new(
                         self.next_node_id(),
-                        TyKind::App(lhs, arg),
+                        TyKind::App(lhs, args),
                         self.close_span(lo),
                     )));
-                } else if let Some(const_arg) = self.parse_primary() {
+                } else if let Some(arg) = self.parse_primary() {
+                    let mut args = vec![arg];
+                    while let Some(arg) = self.parse_primary() {
+                        args.push(arg);
+                    }
+
                     lhs = Ok(Box::new(Ty::new(
                         self.next_node_id(),
-                        TyKind::AppExpr(lhs, const_arg),
+                        TyKind::AppExpr(lhs, args),
                         self.close_span(lo),
                     )));
                 } else {
@@ -929,6 +945,39 @@ impl Parser {
             self.exit_parsed_entity(pe);
 
             lhs
+        }
+    }
+
+    fn parse_func_ty(&mut self) -> Option<PR<N<Ty>>> {
+        let lo = self.span();
+
+        let ty = self.parse_primary_ty()?;
+        let mut params = vec![ty];
+        while self.skip(TokenCmp::Op(Op::Minus)).is_some() {
+            let param = self.parse_primary_ty();
+            if let Some(param) = param {
+                params.push(param);
+            } else {
+                break;
+            }
+        }
+
+        if params.len() > 1 {
+            self.expect(TokenCmp::Punct(Punct::Arrow))?;
+        }
+
+        if self.skip_punct(Punct::Arrow).is_some() {
+            let return_ty = self.parse_ty();
+
+            Some(Ok(Box::new(Ty::new(
+                self.next_node_id(),
+                TyKind::Func(params, return_ty),
+                self.close_span(lo),
+            ))))
+        } else if params.len() > 1 {
+            self.expect(TokenCmp::Arrow)
+        } else {
+            Some(params[0])
         }
     }
 

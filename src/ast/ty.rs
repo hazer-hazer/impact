@@ -1,17 +1,10 @@
 use std::fmt::Display;
 
-use crate::span::span::{ Span, WithSpan };
+use crate::span::span::{Span, WithSpan};
 
 use super::{
-    expr::Expr,
-    pr_display,
-    pr_node_kind_str,
-    NodeId,
-    NodeKindStr,
-    Path,
-    WithNodeId,
-    N,
-    PR,
+    expr::Expr, pr_display, pr_node_kind_str, prs_display_join, NodeId, NodeKindStr, Path,
+    WithNodeId, N, PR,
 };
 
 #[derive(Debug)]
@@ -61,26 +54,33 @@ pub struct TyPath(pub PR<Path>);
 #[derive(Debug)]
 pub enum TyKind {
     Path(TyPath),
-    Func(PR<N<Ty>>, PR<N<Ty>>),
+    Func(Vec<PR<N<Ty>>>, PR<N<Ty>>),
     Paren(PR<N<Ty>>),
-    App(PR<N<Ty>>, PR<N<Ty>>),
+    App(PR<N<Ty>>, Vec<PR<N<Ty>>>),
 
     // Now only used for builtins but may be used for const parameters
-    AppExpr(PR<N<Ty>>, PR<N<Expr>>),
+    AppExpr(PR<N<Ty>>, Vec<PR<N<Expr>>>),
 }
 
 impl Display for TyKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
             TyKind::Path(path) => write!(f, "{}", pr_display(&path.0)),
-            TyKind::Func(param_ty, return_ty) => {
-                write!(f, "{} -> {}", pr_display(param_ty), pr_display(return_ty))
-            }
+            TyKind::Func(params, body) => {
+                write!(
+                    f,
+                    "{} -> {}",
+                    prs_display_join(params, " "),
+                    pr_display(body)
+                )
+            },
             TyKind::Paren(inner) => write!(f, "{}", pr_display(inner)),
-            TyKind::App(cons, arg) => write!(f, "{} {}", pr_display(cons), pr_display(arg)),
-            TyKind::AppExpr(cons, const_arg) => {
-                write!(f, "{} {}", pr_display(cons), pr_display(const_arg))
-            }
+            TyKind::App(cons, args) => {
+                write!(f, "{} {}", pr_display(cons), prs_display_join(args, " "))
+            },
+            TyKind::AppExpr(cons, args) => {
+                write!(f, "{} {}", pr_display(cons), prs_display_join(args, " "))
+            },
         }
     }
 }
@@ -95,7 +95,7 @@ impl NodeKindStr for TyKind {
             TyKind::Paren(inner) => format!("{{{}}}", pr_node_kind_str(inner)),
             TyKind::AppExpr(cons, _) | TyKind::App(cons, _) => {
                 format!("{} type constructor", pr_node_kind_str(cons))
-            }
+            },
         }
     }
 }

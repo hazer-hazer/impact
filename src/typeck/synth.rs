@@ -31,7 +31,7 @@ impl<'hir> Typecker<'hir> {
                     hir_id,
                     Ty::func(
                         Some(item.def_id()),
-                        Ty::string(),
+                        vec![Ty::string()],
                         Ty::var(Ty::next_ty_var_id()),
                     ),
                 );
@@ -160,17 +160,27 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    fn get_pat_names(&self, pat: Pat) -> Vec<Ident> {
-        match self.hir.pat(pat).kind() {
-            hir::pat::PatKind::Unit => vec![],
-            &hir::pat::PatKind::Ident(name) => vec![name],
-        }
-    }
+    // TODO: If needs to be used -- move to HIR methods
+    // fn get_pat_names(&self, pat: Pat) -> Vec<Ident> {
+    //     match self.hir.pat(pat).kind() {
+    //         hir::pat::PatKind::Unit => vec![],
+    //         &hir::pat::PatKind::Ident(name) => vec![name],
+    //     }
+    // }
 
-    fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
+    /// Get pattern type based on pattern, e.g. unit pattern `()` definitely is of unit type.
+    // fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
+    //     match self.hir.pat(pat).kind() {
+    //         hir::pat::PatKind::Unit => Some(Ty::unit()),
+    //         hir::pat::PatKind::Ident(_) => None,
+    //     }
+    // }
+
+    // TODO: Update if type annotations added
+    fn get_param_type(&self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
         match self.hir.pat(pat).kind() {
-            hir::pat::PatKind::Unit => Some(Ty::unit()),
-            hir::pat::PatKind::Ident(_) => None,
+            hir::pat::PatKind::Unit => vec![(None, Ty::unit())],
+            &hir::pat::PatKind::Ident(name) => vec![(Some(name), self.add_fresh_common_ex().1)],
         }
     }
 
@@ -192,74 +202,65 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_body(&mut self, owner_def_id: DefId, body_id: BodyId) -> TyResult<Ty> {
-        let &Body {
-            params: param,
-            value,
-        } = self.hir.body(body_id);
+        let &Body { params, value } = self.hir.body(body_id);
         // FIXME: Rewrite when `match` added
 
-        if let None = param {
+        if params.is_empty() {
             return self.synth_value_body(value);
         }
 
-        let param = param.unwrap();
-
-        // Get parameter type from pattern if possible, e.g. `()` is of type `()`.
-        let early_param_ty = self.get_early_pat_type(param);
-
-        let param_names = self.get_pat_names(param);
-
-        let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
-            // FIXME: Should sub-pattern names existentials be defined outside this context?
-
-            let ex = self.add_fresh_common_ex();
-
-            //
-            // self.type_term(name, ex.1);
-
-            assert!(exes.insert(name, ex).is_none());
-            exes
-        });
+        let params_names_tys = params
+            .iter()
+            .copied()
+            .map(|param| self.get_param_type(param))
+            .collect::<Vec<_>>();
 
         let body_ex = self.add_fresh_common_ex();
 
         self.under_new_ctx(|this| {
-            // FIXME: Optimize fold moves of vec
-            param_exes.iter().for_each(|(&name, &ex)| {
-                // FIXME: Should sub-pattern names existentials be defined outside this context?
-                this.type_term(name, ex.1);
+            params_names_tys.iter().flatten().for_each(|&(name, ty)| {
+                if let Some(name) = name {
+                    this.type_term(name, ty);
+                }
             });
 
             let body_ty = this.check_discard_err(self.hir.body_value(body_id), body_ex.1);
 
-            // Apply context to function parameter to get its "known" type.
-            let param_ty = this.get_typed_pat(param);
+            // Apply context to function parameter to get its inferred type.
+            let params_tys = params
+                .iter()
+                .copied()
+                .map(|param| this.get_typed_pat(param))
+                .collect::<Vec<_>>();
 
             // If we know of which type function parameter is -- check inferred one against it
-            let param_ty = if let Some(early) = early_param_ty {
-                this.check_ty_discard_err(Spanned::new(this.hir.pat(param).span(), param_ty), early)
-            } else {
-                param_ty
-            };
+            // FIXME: Kinda useless
+            // let param_ty = if let Some(early) = early_param_ty {
+            //     this.check_ty_discard_err(Spanned::new(this.hir.pat(param).span(), param_ty), early)
+            // } else {
+            //     param_ty
+            // };
 
-            verbose!("Param ty {}", param_ty);
+            params
+                .iter()
+                .copied()
+                .zip(params_tys.iter().copied())
+                .for_each(|(param, ty)| this.tyctx_mut().type_node(param, ty));
 
-            this.tyctx_mut().type_node(param, param_ty);
-
-            let func_ty = param_exes.iter().fold(
-                Ty::func(Some(owner_def_id), param_ty, body_ty),
-                |ty, (&name, &(ex, _))| {
-                    verbose!(
-                        "Func type generation {ty}; push {name}: {ex} = {:?}",
-                        this.get_solution(ex)
-                    );
-                    if let Some(_) = this.get_solution(ex) {
-                        ty
+            let func_ty = params_tys.iter().fold(
+                Ty::func(Some(owner_def_id), params_tys, body_ty),
+                |func_ty, param_ty| {
+                    if let Some(ex) = param_ty.as_ex() {
+                        if let None = this.get_solution(ex) {
+                            // FIXME: Check type variable resolution
+                            let ty_var = Ty::next_ty_var_id();
+                            this.solve(ex, Ty::var(ty_var).mono());
+                            Ty::forall(ty_var, func_ty)
+                        } else {
+                            func_ty
+                        }
                     } else {
-                        // FIXME: Check type variable resolution
-                        let ty_var = Ty::next_ty_var_id();
-                        this.solve(ex, Ty::var(ty_var).mono());
-                        Ty::forall(ty_var, ty)
+                        func_ty
                     }
                 },
             );
@@ -325,19 +326,32 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
-                    let param_ex = this.add_fresh_common_ex();
+                    // FIXME: Add multiple arguments
+                    let params_exes = this.add_fresh_common_ex_list(1);
 
                     let body_ex = this.add_fresh_common_ex();
-                    let func_ty = Ty::func(None, param_ex.1, body_ex.1);
+                    let func_ty = Ty::func(
+                        None,
+                        params_exes.iter().map(|&(_, ty)| ty).collect(),
+                        body_ex.1,
+                    );
                     this.solve(ex, func_ty.mono());
 
                     // TODO: Can we infer param type from application as below in Func?
-                    this.check(arg, param_ex.1)?;
+                    // FIXME: Add multiple args
+                    vec![arg]
+                        .iter()
+                        .copied()
+                        .zip(params_exes.iter().copied())
+                        .try_for_each(|(param, (_, param_ex_ty))| {
+                            this.check(arg, param_ex_ty)?;
+                            Ok(())
+                        })?;
 
                     Ok(body_ex.1)
                 })
             },
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
+            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
                 // TODO?: Let arguments go first
                 // if let Some(param_ex) = param.as_ex() {
                 //     todo!();
@@ -348,7 +362,16 @@ impl<'hir> Typecker<'hir> {
                 // }
                 // self.check(arg, param)?;
 
-                self.check_discard_err(arg, param);
+                // FIXME: Multiple args
+
+                vec![arg]
+                    .iter()
+                    .copied()
+                    .zip(params.iter().copied())
+                    .try_for_each(|(arg, param)| {
+                        self.check(arg, param)?;
+                        Ok(())
+                    })?;
 
                 Ok(body)
             },

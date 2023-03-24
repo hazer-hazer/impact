@@ -1,5 +1,3 @@
-
-
 use crate::{
     resolve::builtin::Builtin,
     span::span::{Span, WithSpan},
@@ -42,8 +40,8 @@ pub struct TyPath(pub Path);
 #[derive(Debug)]
 pub enum TyKind {
     Path(TyPath),
-    Func(Ty, Ty),
-    App(Ty, Ty),
+    Func(Vec<Ty>, Ty),
+    App(Ty, Vec<Ty>),
     Builtin(Builtin),
 }
 

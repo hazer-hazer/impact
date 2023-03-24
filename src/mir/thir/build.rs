@@ -32,7 +32,9 @@ impl<'ctx> ThirBuilder<'ctx> {
             .hir
             .body(self.hir.owner_body(self.thir.body_owner).unwrap());
 
-        body.params.map(|param| self.param(param));
+        body.params.iter().copied().for_each(|param| {
+            self.param(param);
+        });
         let expr = self.expr(body.value);
 
         (self.thir, expr)
@@ -78,9 +80,9 @@ impl<'ctx> ThirBuilder<'ctx> {
                 body_id: body,
                 def_id,
             },
-            &hir::expr::ExprKind::Call(hir::expr::Call { lhs, arg }) => ExprKind::Call {
+            &hir::expr::ExprKind::Call(hir::expr::Call { lhs, args }) => ExprKind::Call {
                 lhs: self.expr(lhs),
-                arg: self.expr(arg),
+                args: args.iter().copied().map(|arg| self.expr(arg)).collect(),
                 func_ty: self.tyctx.instantiated_expr_ty(lhs).unwrap(),
             },
             &hir::expr::ExprKind::Let(block) => ExprKind::Block(self.block(block)),

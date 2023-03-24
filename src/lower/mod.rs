@@ -259,7 +259,7 @@ impl<'ast> Lower<'ast> {
     ) -> hir::item::ItemKind {
         if ast_params.is_empty() {
             let value = lower_pr!(self, body, lower_expr);
-            let body = self.body(None, value);
+            let body = self.body(vec![], value);
             hir::item::ItemKind::Value(body)
         } else {
             let params = ast_params
@@ -268,12 +268,15 @@ impl<'ast> Lower<'ast> {
                 .collect::<Vec<_>>();
 
             let mut value = lower_pr!(self, body, lower_expr);
-            for (index, &param) in params[1..].iter().enumerate().rev() {
-                let span = ast_params[index].span().to(body.span());
-                let body = self.body(Some(param), value);
-                value = self.expr_lambda(span, body);
-            }
-            hir::item::ItemKind::Func(self.body(Some(params[0]), value))
+
+            // Note: Removed currying
+            // for (index, &param) in params[1..].iter().enumerate().rev() {
+            //     let span = ast_params[index].span().to(body.span());
+            //     let body = self.body(params, value);
+            //     value = self.expr_lambda(span, body);
+            // }
+
+            hir::item::ItemKind::Func(self.body(params, value))
         }
     }
 
@@ -366,33 +369,37 @@ impl<'ast> Lower<'ast> {
 
         let first_op_arg = lower_pr!(self, &infix.lhs, lower_expr);
         hir::expr::ExprKind::Call(hir::expr::Call {
-            lhs: self.expr_call(op_path_span.to(infix.lhs.span()), op_path, first_op_arg),
-            arg: lower_pr!(self, &infix.rhs, lower_expr),
+            lhs: self.expr_call(
+                op_path_span.to(infix.lhs.span()),
+                op_path,
+                vec![first_op_arg],
+            ),
+            args: vec![lower_pr!(self, &infix.rhs, lower_expr)],
         })
     }
 
     fn lower_lambda_expr(&mut self, lambda: &Lambda, node_id: NodeId) -> hir::expr::ExprKind {
-        let param = lower_pr!(self, &lambda.params, lower_pat);
+        let params = lower_each_pr!(self, &lambda.params, lower_pat);
         let body = lower_pr!(self, &lambda.body, lower_expr);
         hir::expr::ExprKind::Lambda(hir::expr::Lambda {
             def_id: self.sess.def_table.get_def_id(node_id).unwrap(),
-            body_id: self.body(Some(param), body),
+            body_id: self.body(params, body),
         })
     }
 
     fn lower_call_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
         let lhs = lower_pr!(self, &call.lhs, lower_expr);
-        let arg = lower_pr!(self, &call.arg, lower_expr);
+        let args = lower_each_pr!(self, &call.args, lower_expr);
 
         match self.get_current_owner_node(lhs).expr().kind() {
             hir::expr::ExprKind::Path(path) => {
-                if let Ok(bt) = self.lower_builtin_call(path.0, arg) {
+                if let Ok(bt) = self.lower_builtin_call(path.0, &args) {
                     if bt.is_value() {
                         return hir::expr::ExprKind::BuiltinExpr(bt);
                     } else {
                         MessageBuilder::error()
                             .text(format!("{} builtin cannot be used as value", bt))
-                            .span(call.arg.span())
+                            .span(call.args.first().unwrap().span())
                             .emit_single_label(self);
                     }
                 }
@@ -400,15 +407,20 @@ impl<'ast> Lower<'ast> {
             _ => {},
         }
 
-        hir::expr::ExprKind::Call(hir::expr::Call { lhs, arg })
+        hir::expr::ExprKind::Call(hir::expr::Call { lhs, args })
     }
 
-    fn lower_builtin_call(&mut self, path: hir::Path, arg: hir::expr::Expr) -> Result<Builtin, ()> {
+    fn lower_builtin_call(
+        &mut self,
+        path: hir::Path,
+        args: &[hir::expr::Expr],
+    ) -> Result<Builtin, ()> {
+        let builtin_name_arg = args[0];
         let path = self.get_current_owner_node(path).path();
-        let arg_span = self.get_current_owner_node(arg).expr().span();
+        let arg_span = self.get_current_owner_node(builtin_name_arg).expr().span();
         match path.res() {
             Res::DeclareBuiltin => {
-                let name = match self.get_current_owner_node(arg).expr().kind() {
+                let name = match self.get_current_owner_node(builtin_name_arg).expr().kind() {
                     hir::expr::ExprKind::Lit(lit) => match lit {
                         hir::expr::Lit::String(name) => Some(name),
                         _ => None,
@@ -455,10 +467,10 @@ impl<'ast> Lower<'ast> {
     fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
         let kind = match ty.kind() {
             TyKind::Path(path) => Ok(self.lower_ty_path(path)),
-            TyKind::Func(param_ty, return_ty) => Ok(self.lower_func_ty(param_ty, return_ty)),
+            TyKind::Func(params, body) => Ok(self.lower_func_ty(params, body)),
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
-            TyKind::App(cons, arg) => Ok(self.lower_ty_app(cons, arg)),
-            TyKind::AppExpr(cons, const_arg) => self.lower_ty_app_expr(cons, const_arg),
+            TyKind::App(cons, args) => Ok(self.lower_ty_app(cons, args)),
+            TyKind::AppExpr(cons, args) => self.lower_ty_app_expr(cons, args),
         };
 
         let id = self.lower_node_id(ty.id());
@@ -477,31 +489,32 @@ impl<'ast> Lower<'ast> {
         hir::ty::TyKind::Path(hir::ty::TyPath(lower_pr!(self, &path.0, lower_path)))
     }
 
-    fn lower_func_ty(&mut self, param_ty: &PR<N<Ty>>, return_ty: &PR<N<Ty>>) -> hir::ty::TyKind {
+    fn lower_func_ty(&mut self, params: &Vec<PR<N<Ty>>>, body: &PR<N<Ty>>) -> hir::ty::TyKind {
         hir::ty::TyKind::Func(
-            lower_pr!(self, param_ty, lower_ty),
-            lower_pr!(self, return_ty, lower_ty),
+            lower_each_pr!(self, params, lower_ty),
+            lower_pr!(self, body, lower_ty),
         )
     }
 
-    fn lower_ty_app(&mut self, cons: &PR<N<Ty>>, arg: &PR<N<Ty>>) -> hir::ty::TyKind {
+    fn lower_ty_app(&mut self, cons: &PR<N<Ty>>, args: &[PR<N<Ty>>]) -> hir::ty::TyKind {
         hir::ty::TyKind::App(
             lower_pr!(self, cons, lower_ty),
-            lower_pr!(self, arg, lower_ty),
+            lower_each_pr!(self, args, lower_ty),
         )
     }
 
     fn lower_ty_app_expr(
         &mut self,
         cons: &PR<N<Ty>>,
-        const_arg: &PR<N<Expr>>,
+        args: &[PR<N<Expr>>],
     ) -> Result<hir::ty::TyKind, ()> {
         let cons = lower_pr!(self, cons, lower_ty);
-        let arg = lower_pr!(self, const_arg, lower_expr);
+        let args = lower_each_pr!(self, args, lower_expr);
         let cons_node = self.get_current_owner_node(cons).ty();
         let cons_span = cons_node.span();
 
-        let arg_span = self.get_current_owner_node(arg).expr().span();
+        // FIXME: Maybe span of the whole node?
+        let cons_span = self.get_current_owner_node(cons).expr().span();
 
         let path_cons = match cons_node.kind() {
             hir::ty::TyKind::Path(path) => Some(path.0),
@@ -509,13 +522,12 @@ impl<'ast> Lower<'ast> {
         };
 
         if let Some(path_cons) = path_cons {
-            let bt = self.lower_builtin_call(path_cons, arg);
-            if let Ok(bt) = bt {
+            if let Ok(bt) = self.lower_builtin_call(path_cons, &args) {
                 if bt.is_ty() {
                     return Ok(hir::ty::TyKind::Builtin(bt));
                 } else {
                     MessageBuilder::error()
-                        .span(arg_span)
+                        .span(cons_span)
                         .text(format!("{} builtin cannot be used as type", bt))
                         .emit_single_label(self);
                 }
@@ -523,7 +535,7 @@ impl<'ast> Lower<'ast> {
         }
 
         MessageBuilder::error()
-            .span(cons_span.to(arg_span))
+            .span(cons_span.to(cons_span))
             .text(
                 "Type constructors with const parameters can only be used with builtin for now"
                     .to_string(),
@@ -632,11 +644,11 @@ impl<'ast> Lower<'ast> {
         &mut self,
         span: Span,
         lhs: hir::expr::Expr,
-        arg: hir::expr::Expr,
+        args: Vec<hir::expr::Expr>,
     ) -> hir::expr::Expr {
         self.expr(
             span,
-            hir::expr::ExprKind::Call(hir::expr::Call { lhs, arg }),
+            hir::expr::ExprKind::Call(hir::expr::Call { lhs, args }),
         )
     }
 
@@ -664,8 +676,8 @@ impl<'ast> Lower<'ast> {
         )
     }
 
-    fn body(&mut self, param: Option<hir::pat::Pat>, value: hir::expr::Expr) -> BodyId {
-        let body = Body::new(param, value);
+    fn body(&mut self, params: Vec<hir::pat::Pat>, value: hir::expr::Expr) -> BodyId {
+        let body = Body::new(params, value);
         let id = body.id();
 
         self.owner_stack
@@ -684,12 +696,12 @@ impl<'ast> Lower<'ast> {
     }
 
     fn builtin_func(&mut self) -> ItemId {
-        let param = self.pat_ident(Ident::kw(Kw::Underscore));
+        let params = vec![self.pat_ident(Ident::kw(Kw::Underscore))];
         let body = self.expr_lit(
             Span::new_error(),
             hir::expr::Lit::String(DeclareBuiltin::sym()),
         );
-        let body = self.body(Some(param), body);
+        let body = self.body(params, body);
         let _value = self.expr_lambda(Span::new_error(), body);
         let node_id = self
             .sess

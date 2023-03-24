@@ -119,7 +119,7 @@ pub trait HirVisitor {
 
     fn visit_call_expr(&mut self, call: &Call, hir: &HIR) {
         self.visit_expr(&call.lhs, hir);
-        self.visit_expr(&call.arg, hir);
+        walk_each!(self, call.args, visit_expr, hir);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
@@ -142,8 +142,8 @@ pub trait HirVisitor {
         let ty = hir.ty(*ty);
         match &ty.kind() {
             TyKind::Path(path) => self.visit_ty_path(path, hir),
-            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty, hir),
-            TyKind::App(cons, arg) => self.visit_ty_app(cons, arg, hir),
+            TyKind::Func(params, body) => self.visit_func_ty(params, body, hir),
+            TyKind::App(cons, args) => self.visit_ty_app(cons, args, hir),
             TyKind::Builtin(bt) => self.visit_builtin_ty(bt, hir),
         }
     }
@@ -152,14 +152,14 @@ pub trait HirVisitor {
         self.visit_path(&path.0, hir)
     }
 
-    fn visit_func_ty(&mut self, param_ty: &Ty, return_ty: &Ty, hir: &HIR) {
-        self.visit_ty(param_ty, hir);
-        self.visit_ty(return_ty, hir);
+    fn visit_func_ty(&mut self, params: &[Ty], body: &Ty, hir: &HIR) {
+        walk_each!(self, params, visit_ty, hir);
+        self.visit_ty(body, hir);
     }
 
-    fn visit_ty_app(&mut self, cons: &Ty, arg: &Ty, hir: &HIR) {
+    fn visit_ty_app(&mut self, cons: &Ty, args: &[Ty], hir: &HIR) {
         self.visit_ty(cons, hir);
-        self.visit_ty(arg, hir);
+        walk_each!(self, args, visit_ty, hir);
     }
 
     fn visit_builtin_ty(&mut self, _bt: &Builtin, _hir: &HIR) {}

@@ -51,6 +51,13 @@ where
     }
 }
 
+pub fn prs_display_join<T>(prs: &[PR<T>], sep: &str) -> String
+where
+    T: Display,
+{
+    prs.iter().map(pr_display).collect::<Vec<_>>().join(sep)
+}
+
 pub fn pr_node_kind_str<T>(pr: &PR<T>) -> String
 where
     T: NodeKindStr,
@@ -426,14 +433,6 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
         }
     }
 
-    fn visit_expr_stmt(&mut self, expr: &'ast PR<N<Expr>>) {
-        walk_pr!(self, expr, visit_expr)
-    }
-
-    fn visit_item_stmt(&mut self, item: &'ast PR<N<Item>>) {
-        walk_pr!(self, item, visit_item)
-    }
-
     fn visit_item(&mut self, item: &'ast Item) {
         self.map.map.insert(item.id(), AstNode::Item(item));
         match item.kind() {
@@ -445,40 +444,12 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
         }
     }
 
-    fn visit_type_item(&mut self, name: &'ast PR<Ident>, ty: &'ast PR<N<Ty>>, _: NodeId) {
-        walk_pr!(self, name, visit_ident);
-        walk_pr!(self, ty, visit_ty);
-    }
-
-    fn visit_mod_item(&mut self, name: &'ast PR<Ident>, items: &'ast Vec<PR<N<Item>>>, _: NodeId) {
-        walk_pr!(self, name, visit_ident);
-        walk_each_pr!(self, items, visit_item);
-    }
-
-    fn visit_decl_item(
-        &mut self,
-        name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<Pat>>,
-        body: &'ast PR<N<Expr>>,
-        _: NodeId,
-    ) {
-        walk_pr!(self, name, visit_ident);
-        walk_each_pr!(self, params, visit_pat);
-        walk_pr!(self, body, visit_expr);
-    }
-
     fn visit_pat(&mut self, pat: &'ast Pat) {
         self.map.map.insert(pat.id(), AstNode::Pat(pat));
         match pat.kind() {
             pat::PatKind::Unit => self.visit_unit_pat(),
             pat::PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
         }
-    }
-
-    fn visit_unit_pat(&mut self) {}
-
-    fn visit_ident_pat(&mut self, ident: &'ast Ident) {
-        self.visit_ident(ident);
     }
 
     fn visit_expr(&mut self, expr: &'ast Expr) {
@@ -496,65 +467,16 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
         }
     }
 
-    fn visit_lit_expr(&mut self, _: &'ast Lit) {}
-
-    fn visit_path_expr(&mut self, path: &'ast PathExpr) {
-        walk_pr!(self, &path.0, visit_path)
-    }
-
-    fn visit_block_expr(&mut self, block: &'ast PR<Block>) {
-        walk_pr!(self, block, visit_block)
-    }
-
-    fn visit_infix_expr(&mut self, infix: &'ast Infix) {
-        walk_pr!(self, &infix.lhs, visit_expr);
-        walk_pr!(self, &infix.rhs, visit_expr);
-    }
-
-    fn visit_app_expr(&mut self, call: &'ast Call) {
-        walk_pr!(self, &call.lhs, visit_expr);
-        walk_pr!(self, &call.arg, visit_expr);
-    }
-
-    fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
-        walk_each_pr!(self, &lambda.params, visit_pat);
-        walk_pr!(self, &lambda.body, visit_expr);
-    }
-
-    fn visit_let_expr(&mut self, block: &'ast PR<Block>) {
-        walk_pr!(self, block, visit_block)
-    }
-
-    fn visit_type_expr(&mut self, ty_expr: &'ast TyExpr) {
-        walk_pr!(self, &ty_expr.expr, visit_expr);
-        walk_pr!(self, &ty_expr.ty, visit_ty);
-    }
-
     fn visit_ty(&mut self, ty: &'ast Ty) {
         self.map.map.insert(ty.id(), AstNode::Ty(ty));
         match ty.kind() {
             ty::TyKind::Path(path) => self.visit_ty_path(path),
-            ty::TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+            ty::TyKind::Func(params, body) => self.visit_func_ty(params, body),
             ty::TyKind::Paren(inner) => self.visit_paren_ty(inner),
-            ty::TyKind::App(cons, arg) => self.visit_ty_app(cons, arg),
-            ty::TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
+            ty::TyKind::App(cons, args) => self.visit_ty_app(cons, args),
+            ty::TyKind::AppExpr(cons, args) => self.visit_ty_app_expr(cons, args),
         }
     }
-
-    fn visit_ty_path(&mut self, path: &'ast TyPath) {
-        walk_pr!(self, &path.0, visit_path)
-    }
-
-    fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {
-        walk_pr!(self, param_ty, visit_ty);
-        walk_pr!(self, return_ty, visit_ty)
-    }
-
-    fn visit_paren_ty(&mut self, inner: &'ast PR<N<Ty>>) {
-        walk_pr!(self, inner, visit_ty)
-    }
-
-    fn visit_ident(&mut self, _: &'ast Ident) {}
 
     fn visit_path(&mut self, path: &'ast Path) {
         self.map.map.insert(path.id(), AstNode::Path(path));

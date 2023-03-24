@@ -59,7 +59,7 @@ pub enum ExprKind {
     Call {
         func_ty: Ty,
         lhs: ExprId,
-        arg: ExprId,
+        args: Vec<ExprId>,
     },
     Lambda {
         def_id: DefId,

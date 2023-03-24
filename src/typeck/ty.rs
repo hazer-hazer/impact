@@ -4,7 +4,6 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::Formatter,
     hash::{Hash, Hasher},
-    slice::Join,
     sync::RwLock,
 };
 
@@ -45,6 +44,9 @@ pub struct Existential {
     kind: ExistentialKind,
     id: ExistentialId,
 }
+
+/// Frequently used pair of Existential with Ty for this existential.
+pub type ExPair = (Existential, Ty);
 
 impl Existential {
     pub fn new(kind: ExistentialKind, id: ExistentialId) -> Self {
@@ -269,11 +271,11 @@ impl Ty {
         Self::new(TyKind::String)
     }
 
-    pub fn func(def_id: Option<DefId>, param: Ty, body: Ty) -> Ty {
+    pub fn func(def_id: Option<DefId>, params: Vec<Ty>, body: Ty) -> Ty {
         Self::new(if let Some(def_id) = def_id {
-            TyKind::FuncDef(def_id, param, body)
+            TyKind::FuncDef(def_id, params, body)
         } else {
-            TyKind::Func(param, body)
+            TyKind::Func(params, body)
         })
     }
 
@@ -318,8 +320,8 @@ impl Ty {
             | TyKind::String
             | TyKind::Var(_)
             | TyKind::Existential(_) => true,
-            TyKind::FuncDef(_, param, body) | TyKind::Func(param, body) => {
-                param.is_mono() && body.is_mono()
+            TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
+                params.iter().all(Ty::is_mono) && body.is_mono()
             },
             TyKind::Forall(_, _) => false,
         }
@@ -336,8 +338,8 @@ impl Ty {
                 true
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
-                param.is_instantiated() && body.is_instantiated()
+            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
+                params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
         }
     }
@@ -348,8 +350,8 @@ impl Ty {
             TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
                 true
             },
-            TyKind::FuncDef(_, param, body) | TyKind::Func(param, body) => {
-                param.is_solved() && body.is_solved()
+            TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
+                params.iter().all(Ty::is_solved) && body.is_solved()
             },
             // TODO: Check that var is bound in ty_bindings?
             TyKind::Var(_) => true,
@@ -366,10 +368,17 @@ impl Ty {
             &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
             &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
             TyKind::String => Some(MonoTyKind::String),
-            TyKind::Func(param, body) | TyKind::FuncDef(_, param, body) => {
-                let param = param.as_mono()?;
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+                let params = params
+                    .iter()
+                    .map(|param| param.as_mono().ok_or(()))
+                    .collect::<Result<Vec<_>, _>>()
+                    .ok()?
+                    .into_iter()
+                    .map(Box::new)
+                    .collect();
                 let body = body.as_mono()?;
-                Some(MonoTyKind::Func(Box::new(param), Box::new(body)))
+                Some(MonoTyKind::Func(params, Box::new(body)))
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
         }?;
@@ -429,8 +438,11 @@ impl Ty {
                     *self
                 }
             },
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => {
-                let param = param.substitute(subst, with);
+            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
+                let param = params
+                    .iter()
+                    .map(|param| param.substitute(subst, with))
+                    .collect();
                 let body = body.substitute(subst, with);
                 Ty::func(self.func_def_id(), param, body)
             },
@@ -454,12 +466,12 @@ impl Ty {
         match_expected!(self.kind(), &TyKind::Float(kind) => kind)
     }
 
-    pub fn as_func(&self) -> (DefId, Ty, Ty) {
-        match_expected!(self.kind(), &TyKind::FuncDef(def_id, param, body) => (def_id, param, body))
+    pub fn as_func(&self) -> (DefId, &[Ty], Ty) {
+        match_expected!(self.kind(), &TyKind::FuncDef(def_id, params, body) => (def_id, params.as_ref(), body))
     }
 
-    pub fn as_func_like(&self) -> (Ty, Ty) {
-        match_expected!(self.kind(), &TyKind::FuncDef(_, param, body) | &TyKind::Func(param, body) => (param, body))
+    pub fn as_func_like(&self) -> (&[Ty], Ty) {
+        match_expected!(self.kind(), &TyKind::FuncDef(_, params, body) | &TyKind::Func(params, body) => (params.as_ref(), body))
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -665,7 +677,7 @@ pub enum MonoTyKind {
     Int(IntKind),
     Float(FloatKind),
     String,
-    Func(Box<MonoTy>, Box<MonoTy>),
+    Func(Vec<Box<MonoTy>>, Box<MonoTy>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

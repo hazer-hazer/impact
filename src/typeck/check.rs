@@ -2,7 +2,7 @@ use crate::{
     cli::verbose,
     hir::expr::{Expr, ExprKind, Lambda, Lit},
     message::message::MessageBuilder,
-    span::span::{Spanned, WithSpan},
+    span::span::{Ident, Spanned, WithSpan},
     typeck::{ty::Subst, TypeckErr},
 };
 
@@ -105,18 +105,21 @@ impl<'hir> Typecker<'hir> {
 
             (
                 &ExprKind::Lambda(Lambda { body_id: body, .. }),
-                &TyKind::FuncDef(_, param_ty, body_ty),
+                &TyKind::FuncDef(_, params_tys, body_ty),
             ) => {
-                let param_name = self
+                let param_names = self
                     .hir
-                    .pat_names(self.hir.body(body).params.unwrap())
-                    .unwrap();
-                assert!(param_name.len() == 1);
-                let param_name = param_name[0];
+                    .body(body)
+                    .params
+                    .iter()
+                    .filter_map(|param| self.hir.pat_names(*param))
+                    .flatten()
+                    .collect::<Vec<Ident>>();
 
-                self.under_ctx(InferCtx::new_with_term(param_name, param_ty), |this| {
-                    this._check(self.hir.body(body).value, body_ty)
-                })
+                self.under_ctx(
+                    InferCtx::new_with_term_map(&param_names, &params_tys),
+                    |this| this._check(self.hir.body(body).value, body_ty),
+                )
             },
 
             (_, &TyKind::Forall(alpha, body)) => {
@@ -270,13 +273,13 @@ impl<'hir> Typecker<'hir> {
             (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr::LateReport),
 
             //
-            (&TyKind::Func(param1, body1), &TyKind::Func(param2, body2))
-            | (&TyKind::FuncDef(_, param1, body1), &TyKind::Func(param2, body2))
-            | (&TyKind::Func(param1, body1), &TyKind::FuncDef(_, param2, body2))
-            | (&TyKind::FuncDef(_, param1, body1), &TyKind::FuncDef(_, param2, body2)) => {
+            (&TyKind::Func(params, body1), &TyKind::Func(params_, body2))
+            | (&TyKind::FuncDef(_, params, body1), &TyKind::Func(params_, body2))
+            | (&TyKind::Func(params, body1), &TyKind::FuncDef(_, params_, body2))
+            | (&TyKind::FuncDef(_, params, body1), &TyKind::FuncDef(_, params_, body2)) => {
                 // self.under_new_ctx(|this| {
                 // Enter Θ
-                self._subtype(param1, param2)?;
+                self._subtype_lists(&params, &params_)?;
                 let body1 = self.apply_ctx_on(body1);
                 let body2 = self.apply_ctx_on(body2);
                 self._subtype(body1, body2)
@@ -316,6 +319,19 @@ impl<'hir> Typecker<'hir> {
             },
 
             _ => Err(TypeckErr::LateReport),
+        }
+    }
+
+    fn _subtype_lists(&mut self, l_tys: &[Ty], r_tys: &[Ty]) -> TyResult<()> {
+        if l_tys.len() != r_tys.len() {
+            Err(TypeckErr::LateReport)
+        } else {
+            l_tys
+                .iter()
+                .zip(r_tys.iter())
+                .all(|(a, b)| a == b)
+                .then_some(())
+                .ok_or(TypeckErr::LateReport)
         }
     }
 
@@ -391,19 +407,32 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => self.try_to(|this| {
-                let range_ex = this.add_fresh_common_ex();
-                let domain_ex = this.add_fresh_common_ex();
+            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
+                self.try_to(|this| {
+                    let range_ex = this.add_fresh_common_ex();
+                    let domain_exes = this.add_fresh_common_ex_list(params.len());
 
-                let func_ty = Ty::func(r_ty.func_def_id(), domain_ex.1, range_ex.1);
+                    let func_ty = Ty::func(
+                        r_ty.func_def_id(),
+                        domain_exes.iter().copied().map(|(_, ty)| ty).collect(),
+                        range_ex.1,
+                    );
 
-                this.solve(ex, func_ty.mono());
+                    this.solve(ex, func_ty.mono());
 
-                this.instantiate_r(param, domain_ex.0)?;
+                    params
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .try_for_each(|(index, param)| {
+                            this.instantiate_r(param, domain_exes[index].0)?;
+                            Ok(())
+                        })?;
 
-                let range_ty = this.apply_ctx_on(body);
-                this.instantiate_l(range_ex.0, range_ty)
-            }),
+                    let range_ty = this.apply_ctx_on(body);
+                    this.instantiate_l(range_ex.0, range_ty)
+                })
+            },
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 this.under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this.instantiate_l(ex, body)
@@ -439,19 +468,32 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => self.try_to(|this| {
-                let domain_ex = this.add_fresh_common_ex();
-                let range_ex = this.add_fresh_common_ex();
+            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
+                self.try_to(|this| {
+                    let range_ex = this.add_fresh_common_ex();
+                    let domain_exes = this.add_fresh_common_ex_list(params.len());
 
-                let func_ty = Ty::func(l_ty.func_def_id(), domain_ex.1, range_ex.1);
+                    let func_ty = Ty::func(
+                        l_ty.func_def_id(),
+                        domain_exes.iter().copied().map(|(_, ty)| ty).collect(),
+                        range_ex.1,
+                    );
 
-                this.solve(ex, func_ty.mono());
+                    this.solve(ex, func_ty.mono());
 
-                this.instantiate_l(domain_ex.0, param)?;
+                    params
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .try_for_each(|(index, param)| {
+                            this.instantiate_l(domain_exes[index].0, param)?;
+                            Ok(())
+                        })?;
 
-                let range_ty = this.apply_ctx_on(body);
-                this.instantiate_r(range_ty, range_ex.0)
-            }),
+                    let range_ty = this.apply_ctx_on(body);
+                    this.instantiate_r(range_ty, range_ex.0)
+                })
+            },
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 verbose!("Instantiate forall Right {} = {}", ex, l_ty);
 

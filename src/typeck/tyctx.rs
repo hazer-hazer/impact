@@ -117,9 +117,13 @@ impl TyCtx {
             &TyKind::Var(var) => self.instantiated_expr_ty_var(expr, var),
             // FIXME: Panic?
             TyKind::Existential(_) => panic!(),
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => Ok(Ty::func(
+            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => Ok(Ty::func(
                 ty.func_def_id(),
-                self._instantiated_ty(expr, param)?,
+                params
+                    .iter()
+                    .copied()
+                    .map(|param| self._instantiated_ty(expr, param))
+                    .collect::<Result<_, _>>()?,
                 self._instantiated_ty(expr, body)?,
             )),
             &TyKind::Forall(alpha, body) => {

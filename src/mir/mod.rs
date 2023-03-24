@@ -145,8 +145,8 @@ impl InfixOp {
         match self {
             InfixOp::AddInt | InfixOp::SubInt => Ty::func(
                 None,
-                Ty::default_int(),
-                Ty::func(None, Ty::default_int(), Ty::default_int()),
+                vec![Ty::default_int()],
+                Ty::func(None, vec![Ty::default_int()], Ty::default_int()),
             ),
         }
     }
