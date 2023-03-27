@@ -220,13 +220,15 @@ impl<'ast> Lower<'ast> {
     // Items //
     fn lower_item(&mut self, item: &Item) -> ItemId {
         let owner_id = self.with_owner(item.id(), |this| {
+            let def_id = this.sess.def_table.get_def_id(item.id()).unwrap();
+
             let kind = match item.kind() {
                 ItemKind::Type(name, ty) => this.lower_type_item(name, ty),
                 ItemKind::Mod(name, items) => this.lower_mod_item(name, items),
-                ItemKind::Decl(name, params, body) => this.lower_decl_item(name, params, body),
+                ItemKind::Decl(name, params, body) => {
+                    this.lower_decl_item(name, params, body, def_id)
+                },
             };
-
-            let def_id = this.sess.def_table.get_def_id(item.id()).unwrap();
 
             LoweredOwner::Item(hir::item::ItemNode::new(
                 *item.name().unwrap(),
@@ -256,10 +258,22 @@ impl<'ast> Lower<'ast> {
         _name: &PR<Ident>,
         ast_params: &Vec<PR<Pat>>,
         body: &PR<N<Expr>>,
+        def_id: DefId,
     ) -> hir::item::ItemKind {
         if ast_params.is_empty() {
             let value = lower_pr!(self, body, lower_expr);
             let body = self.body(vec![], value);
+
+            match self.get_current_owner_node(value) {
+                Node::ExprNode(expr) => match expr.kind() {
+                    &hir::expr::ExprKind::BuiltinExpr(bt) => {
+                        self.sess.def_table.add_builtin(bt, def_id)
+                    },
+                    _ => {},
+                },
+                _ => {},
+            }
+
             hir::item::ItemKind::Value(body)
         } else {
             let params = ast_params
@@ -267,7 +281,7 @@ impl<'ast> Lower<'ast> {
                 .map(|param| lower_pr!(self, param, lower_pat))
                 .collect::<Vec<_>>();
 
-            let mut value = lower_pr!(self, body, lower_expr);
+            let value = lower_pr!(self, body, lower_expr);
 
             // Note: Removed currying
             // for (index, &param) in params[1..].iter().enumerate().rev() {
@@ -511,10 +525,10 @@ impl<'ast> Lower<'ast> {
         let cons = lower_pr!(self, cons, lower_ty);
         let args = lower_each_pr!(self, args, lower_expr);
         let cons_node = self.get_current_owner_node(cons).ty();
-        let cons_span = cons_node.span();
+        let _cons_span = cons_node.span();
 
         // FIXME: Maybe span of the whole node?
-        let cons_span = self.get_current_owner_node(cons).expr().span();
+        let cons_span = self.get_current_owner_node(cons).ty().span();
 
         let path_cons = match cons_node.kind() {
             hir::ty::TyKind::Path(path) => Some(path.0),

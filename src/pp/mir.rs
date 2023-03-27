@@ -86,11 +86,11 @@ impl<'ctx> MirPrinter<'ctx> {
             RValue::Closure(def_id) => {
                 self.pp.string(format!("closure{}", def_id));
             },
-            RValue::Call { lhs, arg } => {
+            RValue::Call { lhs, args } => {
                 self.pp.ch('(');
                 self.print_operand(lhs);
                 self.pp.sp();
-                self.print_operand(arg);
+                walk_each_delim!(self, args, print_operand, " ");
                 self.pp.ch(')');
                 // self.pp.string(format!(" -> {}", target));
             },

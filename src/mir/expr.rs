@@ -89,16 +89,22 @@ impl<'ctx> MirBuilder<'ctx> {
 
                 bb.with(operand.rvalue())
             },
-            &ExprKind::Call { func_ty, lhs, arg } => {
-                let lhs = unpack!(bb = self.as_operand(bb, lhs));
-                let arg = unpack!(bb = self.as_operand(bb, arg));
+            ExprKind::Call { func_ty, lhs, args } => {
+                // FIXME: Clone
+                let func_ty = *func_ty;
+                let args = args.clone();
+                let lhs = unpack!(bb = self.as_operand(bb, *lhs));
+                let args = args
+                    .iter()
+                    .map(|arg| unpack!(bb = self.as_operand(bb, *arg)))
+                    .collect();
 
                 let dest = self.temp_lvalue(func_ty.return_ty(), expr_span);
 
                 // let target = self.builder.begin_bb();
 
                 // FIXME: Calls should be terminators?
-                self.push_assign(bb, dest, RValue::Call { lhs, arg });
+                self.push_assign(bb, dest, RValue::Call { lhs, args });
 
                 // self.builder.goto(bb, target);
 
@@ -164,18 +170,23 @@ impl<'ctx> MirBuilder<'ctx> {
                 bb.unit()
             },
             &ExprKind::Block(block_id) => self.block(bb, block_id, lvalue),
-            &ExprKind::Call {
+            ExprKind::Call {
                 func_ty: _,
                 lhs,
-                arg,
+                args,
             } => {
-                let lhs = unpack!(bb = self.as_operand(bb, lhs));
-                let arg = unpack!(bb = self.as_operand(bb, arg));
+                // FIXME: Can I remove cloning?
+                let args = args.clone();
+                let lhs = unpack!(bb = self.as_operand(bb, *lhs));
+                let args = args
+                    .iter()
+                    .map(|&arg| unpack!(bb = self.as_operand(bb, arg)))
+                    .collect();
 
                 // let target = self.builder.begin_bb();
 
                 // FIXME: Calls should be terminators?
-                self.push_assign(bb, lvalue, RValue::Call { lhs, arg });
+                self.push_assign(bb, lvalue, RValue::Call { lhs, args });
 
                 // self.builder.goto(bb, target);
                 // target.unit()

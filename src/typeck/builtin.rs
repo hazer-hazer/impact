@@ -28,8 +28,8 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         //     Ty::func(Some($def_id), ty!($param), ty!($($body)+))
         // }};
 
-        ($param: tt -> $($body: tt)+) => {{
-            Ty::func(None, (vec![ty!($param)]), ty!($($body)+))
+        ($($params: tt)-+ -> $($body: tt)+) => {{
+            Ty::func(None, vec![$(ty!($params)),+], ty!($($body)+))
         }};
 
         (forall $alpha: ident. $($ty: tt)+) => {{
@@ -54,8 +54,8 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         //     Builtin::SubInt,
         //     ty!([sess.def_table.builtin(Builtin::SubInt)] i32 -> i32 -> i32),
         // ),
-        (Builtin::AddInt, ty!(i32 -> i32 -> i32)),
-        (Builtin::SubInt, ty!(i32 -> i32 -> i32)),
+        (Builtin::AddInt, ty!(i32 - i32 -> i32)),
+        (Builtin::SubInt, ty!(i32 - i32 -> i32)),
         // Types //
         (Builtin::UnitTy, ty!(())),
         (Builtin::I32, ty!(i32)),

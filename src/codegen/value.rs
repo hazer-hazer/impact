@@ -47,21 +47,21 @@ impl<'ink, 'ctx, 'a> HirVisitor for ValueCodeGen<'ink, 'ctx, 'a> {
     fn visit_value_item(
         &mut self,
         name: crate::span::span::Ident,
-        value: &crate::hir::BodyId,
+        _value: &crate::hir::BodyId,
         id: crate::hir::item::ItemId,
-        hir: &crate::hir::HIR,
+        _hir: &crate::hir::HIR,
     ) {
-        let builder = self.ctx.llvm_ctx.create_builder();
-        self.value_map.insert(
-            id.def_id(),
-            builder
-                .build_call(
-                    self.function_map.expect_mono(id.def_id()),
-                    &[self.ctx.unit_value().into()],
-                    &format!("{}_val_init", name),
-                )
-                .try_as_basic_value()
-                .unwrap_left(),
-        );
+        // let builder = self.ctx.llvm_ctx.create_builder();
+        // self.value_map.insert(
+        //     id.def_id(),
+        //     builder
+        //         .build_call(
+        //             self.function_map.expect_mono(id.def_id()),
+        //             &[self.ctx.unit_value().into()],
+        //             &format!("{}_val_init", name),
+        //         )
+        //         .try_as_basic_value()
+        //         .unwrap_left(),
+        // );
     }
 }

@@ -1,4 +1,4 @@
-use inkwell::{context::Context, targets::TargetMachine};
+use inkwell::{context::Context, module::Module, targets::TargetMachine};
 
 use crate::{
     cli::{color::Colorize, verbose},
@@ -42,7 +42,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         }
     }
 
-    fn codegen(&mut self) {
+    fn codegen(&mut self) -> Module<'ink> {
         let llvm_module = self.llvm_ctx.create_module("kek");
         let target_triple = TargetMachine::get_default_triple();
         llvm_module.set_triple(&target_triple);
@@ -84,13 +84,15 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
                 );
             })
             .unwrap();
+
+        llvm_module
     }
 }
 
-impl<'ink, 'ctx> Stage<()> for CodeGen<'ink, 'ctx> {
-    fn run(mut self) -> StageOutput<()> {
-        self.codegen();
+impl<'ink, 'ctx> Stage<Module<'ink>> for CodeGen<'ink, 'ctx> {
+    fn run(mut self) -> StageOutput<Module<'ink>> {
+        let module = self.codegen();
         // FIXME: Rewrite stages to error propagation model
-        StageOutput::new(self.sess, (), self.msg)
+        StageOutput::new(self.sess, module, self.msg)
     }
 }

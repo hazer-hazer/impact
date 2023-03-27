@@ -1,20 +1,9 @@
 use std::collections::HashMap;
 
-use inkwell::{
-    attributes::{Attribute, AttributeLoc},
-    module::{Linkage, Module},
-    targets::TargetMachine,
-    types::FunctionType,
-    values::{BasicValue, FunctionValue},
-};
+use inkwell::values::FunctionValue;
 
 use crate::{
-    cli::verbose,
-    dt::idx::IndexVec,
-    hir::{
-        expr::Expr, item::ItemId, visitor::HirVisitor, BodyId, BodyOwner, BodyOwnerKind, HirId,
-        HirMap, HIR,
-    },
+    hir::{item::ItemId, visitor::HirVisitor, BodyId, BodyOwner, BodyOwnerKind, HirId, HIR},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
@@ -107,7 +96,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         let func_ty = match owner.kind {
             BodyOwnerKind::Value => InstantiatedTy::Mono(Ty::func(
                 Some(def_id),
-                Ty::unit(),
+                vec![Ty::unit()],
                 self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id)),
             )),
             BodyOwnerKind::Func | BodyOwnerKind::Lambda => self.ctx.func_ty(def_id),
@@ -139,10 +128,11 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
 
     fn gen_infix_op(&mut self, op: InfixOp) -> FunctionValue<'ink> {
         self.ctx.simple_func(
-            op.func_ty(),
-            |func| {
-                // self.ctx.always_inline(func);
-            },
+            op.name(),
+            self.ctx
+                .sess
+                .tyctx
+                .tyof(self.ctx.sess.def_table.builtin(op.builtin()).into()),
             |builder, params| {
                 // verbose!(
                 //     "{}",
@@ -152,18 +142,30 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
                 //         .collect::<Vec<_>>()
                 //         .join(", ")
                 // );
-                assert_eq!(params.len(), 2);
+                assert_eq!(
+                    params.len(),
+                    2,
+                    "Infix operator function {} expected {} parameters ",
+                    op.name(),
+                    2
+                );
                 let lhs = params[0];
                 let rhs = params[1];
-                match op {
-                    InfixOp::AddInt => {
-                        builder.build_int_add(lhs.into_int_value(), rhs.into_int_value(), op.name())
-                    },
-                    InfixOp::SubInt => {
-                        builder.build_int_sub(lhs.into_int_value(), rhs.into_int_value(), op.name())
-                    },
-                }
-                .into()
+                Some(
+                    match op {
+                        InfixOp::AddInt => builder.build_int_add(
+                            lhs.into_int_value(),
+                            rhs.into_int_value(),
+                            op.name(),
+                        ),
+                        InfixOp::SubInt => builder.build_int_sub(
+                            lhs.into_int_value(),
+                            rhs.into_int_value(),
+                            op.name(),
+                        ),
+                    }
+                    .into(),
+                )
             },
         )
     }
@@ -187,7 +189,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         )
     }
 
-    fn func_name(&self, def_id: DefId, ty: Ty) -> String {
+    fn func_name(&self, def_id: DefId, _ty: Ty) -> String {
         format!(
             "{}",
             self.ctx

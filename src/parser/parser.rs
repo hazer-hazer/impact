@@ -904,7 +904,41 @@ impl Parser {
     }
 
     fn parse_opt_ty(&mut self) -> Option<PR<N<Ty>>> {
-        let pe = self.enter_entity(ParseEntryKind::Opt, "type");
+        self.parse_func_ty()
+    }
+
+    fn parse_func_ty(&mut self) -> Option<PR<N<Ty>>> {
+        let lo = self.span();
+
+        let ty = self.parse_app_ty()?;
+        let mut params = vec![ty];
+        while self.skip(TokenCmp::Op(Op::Minus)).is_some() {
+            let param = self.parse_app_ty();
+            if let Some(param) = param {
+                params.push(param);
+            } else {
+                break;
+            }
+        }
+
+        if self.skip_punct(Punct::Arrow).is_some() {
+            let return_ty = self.parse_ty();
+
+            Some(Ok(Box::new(Ty::new(
+                self.next_node_id(),
+                TyKind::Func(params, return_ty),
+                self.close_span(lo),
+            ))))
+        } else if params.len() > 1 {
+            self.expect(TokenCmp::Punct(Punct::Arrow)).ok()?;
+            None
+        } else {
+            Some(params.remove(0))
+        }
+    }
+
+    fn parse_app_ty(&mut self) -> Option<PR<N<Ty>>> {
+        let pe = self.enter_entity(ParseEntryKind::Opt, "app type");
 
         let lo = self.span();
         let lhs = self.parse_primary_ty();
@@ -948,41 +982,8 @@ impl Parser {
         }
     }
 
-    fn parse_func_ty(&mut self) -> Option<PR<N<Ty>>> {
-        let lo = self.span();
-
-        let ty = self.parse_primary_ty()?;
-        let mut params = vec![ty];
-        while self.skip(TokenCmp::Op(Op::Minus)).is_some() {
-            let param = self.parse_primary_ty();
-            if let Some(param) = param {
-                params.push(param);
-            } else {
-                break;
-            }
-        }
-
-        if params.len() > 1 {
-            self.expect(TokenCmp::Punct(Punct::Arrow))?;
-        }
-
-        if self.skip_punct(Punct::Arrow).is_some() {
-            let return_ty = self.parse_ty();
-
-            Some(Ok(Box::new(Ty::new(
-                self.next_node_id(),
-                TyKind::Func(params, return_ty),
-                self.close_span(lo),
-            ))))
-        } else if params.len() > 1 {
-            self.expect(TokenCmp::Arrow)
-        } else {
-            Some(params[0])
-        }
-    }
-
     fn parse_primary_ty(&mut self) -> Option<PR<N<Ty>>> {
-        let pe = self.enter_entity(ParseEntryKind::Opt, "primary type");
+        let _pe = self.enter_entity(ParseEntryKind::Opt, "primary type");
 
         let lo = self.span();
 
@@ -1019,27 +1020,11 @@ impl Parser {
             },
         };
 
-        let ty = Ok(Box::new(Ty::new(
+        Some(Ok(Box::new(Ty::new(
             self.next_node_id(),
             kind,
             self.close_span(lo),
-        )));
-
-        if self.skip_punct(Punct::Arrow).is_some() {
-            let return_ty = self.parse_ty();
-
-            self.exit_parsed_entity(pe);
-
-            Some(Ok(Box::new(Ty::new(
-                self.next_node_id(),
-                TyKind::Func(ty, return_ty),
-                self.close_span(lo),
-            ))))
-        } else {
-            self.exit_parsed_entity(pe);
-
-            Some(ty)
-        }
+        ))))
     }
 
     fn parse<'ast>(&mut self) -> AST {

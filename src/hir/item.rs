@@ -94,6 +94,7 @@ macro_rules! specific_item_nodes {
     ($($variant: ident $method_name: ident $($ty: ty),+);*) => {
         $(
             impl ItemNode {
+                #[allow(unused_parens)]
                 pub fn $method_name(&self) -> &($($ty),+) {
                     match self.kind() {
                         ItemKind::$variant(inner) => inner,

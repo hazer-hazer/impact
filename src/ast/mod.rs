@@ -9,11 +9,11 @@ use crate::{
 };
 
 use self::{
-    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+    expr::{Block, Expr, ExprKind},
     item::Item,
     pat::Pat,
     stmt::Stmt,
-    ty::{Ty, TyPath},
+    ty::{Ty},
     visitor::{walk_pr, AstVisitor},
 };
 

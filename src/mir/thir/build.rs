@@ -1,6 +1,6 @@
 use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
-    resolve::{builtin::Builtin, def::DefKind},
+    resolve::{def::DefKind},
     span::span::WithSpan,
     typeck::tyctx::TyCtx,
 };
@@ -80,10 +80,10 @@ impl<'ctx> ThirBuilder<'ctx> {
                 body_id: body,
                 def_id,
             },
-            &hir::expr::ExprKind::Call(hir::expr::Call { lhs, args }) => ExprKind::Call {
-                lhs: self.expr(lhs),
+            hir::expr::ExprKind::Call(hir::expr::Call { lhs, args }) => ExprKind::Call {
+                lhs: self.expr(*lhs),
                 args: args.iter().copied().map(|arg| self.expr(arg)).collect(),
-                func_ty: self.tyctx.instantiated_expr_ty(lhs).unwrap(),
+                func_ty: self.tyctx.instantiated_expr_ty(*lhs).unwrap(),
             },
             &hir::expr::ExprKind::Let(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Ty(hir::expr::TyExpr { expr, ty: _ }) => {

@@ -1,6 +1,6 @@
 use std::{
     collections::{
-        hash_map::{DefaultHasher, Entry},
+        hash_map::{DefaultHasher},
         HashMap, HashSet,
     },
     hash::{Hash, Hasher},
@@ -117,14 +117,14 @@ impl TyCtx {
             &TyKind::Var(var) => self.instantiated_expr_ty_var(expr, var),
             // FIXME: Panic?
             TyKind::Existential(_) => panic!(),
-            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => Ok(Ty::func(
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => Ok(Ty::func(
                 ty.func_def_id(),
                 params
                     .iter()
                     .copied()
                     .map(|param| self._instantiated_ty(expr, param))
                     .collect::<Result<_, _>>()?,
-                self._instantiated_ty(expr, body)?,
+                self._instantiated_ty(expr, *body)?,
             )),
             &TyKind::Forall(alpha, body) => {
                 let alpha_ty = self.instantiated_expr_ty_var(expr, alpha)?;

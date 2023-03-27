@@ -3,14 +3,13 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::{Linkage, Module},
-    types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType},
+    types::{AnyTypeEnum, BasicType, BasicTypeEnum},
     values::{BasicValue, BasicValueEnum, FunctionValue},
     AddressSpace,
 };
 
 use crate::{
-    cli::verbose,
-    hir::{expr::Expr, HirId, HIR},
+    hir::HIR,
     mir::{Ty, MIR},
     resolve::def::DefId,
     session::Session,
@@ -34,7 +33,7 @@ pub struct CodeGenCtx<'ink, 'ctx> {
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     pub fn conv_ty(&self, ty: Ty) -> AnyTypeEnum<'ink> {
         match ty.kind() {
-            TyKind::Unit => self.llvm_ctx.i8_type().into(),
+            TyKind::Unit => self.llvm_ctx.struct_type(&[], false).into(),
             TyKind::Bool => self.llvm_ctx.bool_type().into(),
             TyKind::Int(kind) => self.llvm_ctx.custom_width_int_type(kind.bits()).into(),
             TyKind::Float(kind) => match kind {
@@ -42,9 +41,15 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                 FloatKind::F64 => self.llvm_ctx.f64_type().into(),
             },
             TyKind::String => todo!(),
-            &TyKind::Func(param, body) | &TyKind::FuncDef(_, param, body) => self
-                .conv_basic_ty(body)
-                .fn_type(&[self.conv_basic_ty(param).into()], false)
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self
+                .conv_basic_ty(*body)
+                .fn_type(
+                    &params
+                        .iter()
+                        .map(|&param| self.conv_basic_ty(param).into())
+                        .collect::<Vec<_>>(),
+                    false,
+                )
                 .into(),
             TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
                 unreachable!()
@@ -80,58 +85,85 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     // Functions //
     pub fn simple_func(
         &self,
+        name: &str,
         ty: Ty,
-        deep_func_modifier: impl Fn(FunctionValue<'ink>),
-        body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
+        body: impl Fn(&Builder<'ink>, &[BasicValueEnum<'ink>]) -> Option<BasicValueEnum<'ink>>,
     ) -> FunctionValue<'ink> {
         assert!(ty.is_func_like());
-        self._simple_func(Vec::new(), ty, deep_func_modifier, body)
-            .0
-    }
-
-    fn _simple_func(
-        &self,
-        mut params: Vec<BasicValueEnum<'ink>>,
-        ty: Ty,
-        deep_func_modifier: impl Fn(FunctionValue<'ink>),
-        body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
-    ) -> (FunctionValue<'ink>, Option<BasicValueEnum<'ink>>) {
         let ll_ty = self.conv_ty(ty).into_function_type();
         let func = self
             .llvm_module
-            .add_function("anon", ll_ty, Some(Linkage::Internal));
-
-        params.push(func.get_nth_param(0).unwrap());
-
-        deep_func_modifier(func);
+            .add_function(name, ll_ty, Some(Linkage::Internal));
 
         let builder = self.llvm_ctx.create_builder();
         let entry_bb = self.llvm_ctx.append_basic_block(func, "entry");
         builder.position_at_end(entry_bb);
 
-        let (func, result) = if ty.return_ty().is_func_like() {
-            (
-                self._simple_func(params, ty.return_ty(), deep_func_modifier, body)
-                    .0,
-                None,
-            )
-        } else {
-            (func, Some(body(&builder, params)))
-        };
+        let result = body(&builder, &func.get_params());
 
         if let Some(result) = result {
             builder.build_return(Some(&result));
         } else {
-            builder.build_return(Some(
-                &func
-                    .as_global_value()
-                    .as_pointer_value()
-                    .as_basic_value_enum(),
-            ));
+            builder.build_return(None);
         }
 
-        (func, None)
+        func
     }
+
+    // pub fn simple_func(
+    //     &self,
+    //     ty: Ty,
+    //     deep_func_modifier: impl Fn(FunctionValue<'ink>),
+    //     body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
+    // ) -> FunctionValue<'ink> {
+    //     assert!(ty.is_func_like());
+    //     self._simple_func(Vec::new(), ty, deep_func_modifier, body)
+    //         .0
+    // }
+
+    // fn _simple_func(
+    //     &self,
+    //     mut params: Vec<BasicValueEnum<'ink>>,
+    //     ty: Ty,
+    //     deep_func_modifier: impl Fn(FunctionValue<'ink>),
+    //     body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
+    // ) -> (FunctionValue<'ink>, Option<BasicValueEnum<'ink>>) {
+    //     let ll_ty = self.conv_ty(ty).into_function_type();
+    //     let func = self
+    //         .llvm_module
+    //         .add_function("anon", ll_ty, Some(Linkage::Internal));
+
+    //     params.push(func.get_nth_param(0).unwrap());
+
+    //     deep_func_modifier(func);
+
+    //     let builder = self.llvm_ctx.create_builder();
+    //     let entry_bb = self.llvm_ctx.append_basic_block(func, "entry");
+    //     builder.position_at_end(entry_bb);
+
+    //     let (func, result) = if ty.return_ty().is_func_like() {
+    //         (
+    //             self._simple_func(params, ty.return_ty(), deep_func_modifier, body)
+    //                 .0,
+    //             None,
+    //         )
+    //     } else {
+    //         (func, Some(body(&builder, params)))
+    //     };
+
+    //     if let Some(result) = result {
+    //         builder.build_return(Some(&result));
+    //     } else {
+    //         builder.build_return(Some(
+    //             &func
+    //                 .as_global_value()
+    //                 .as_pointer_value()
+    //                 .as_basic_value_enum(),
+    //         ));
+    //     }
+
+    //     (func, None)
+    // }
 
     // Function attributes //
     pub fn always_inline(&self, func: FunctionValue<'ink>) {
@@ -143,6 +175,6 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
 
     // Values //
     pub fn unit_value(&self) -> BasicValueEnum<'ink> {
-        self.llvm_ctx.struct_type(&[], false).const_zero().into()
+        self.conv_basic_ty(Ty::unit()).const_zero().into()
     }
 }

@@ -338,7 +338,7 @@ impl Ty {
                 true
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
-            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
         }
@@ -438,7 +438,7 @@ impl Ty {
                     *self
                 }
             },
-            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let param = params
                     .iter()
                     .map(|param| param.substitute(subst, with))
@@ -467,11 +467,11 @@ impl Ty {
     }
 
     pub fn as_func(&self) -> (DefId, &[Ty], Ty) {
-        match_expected!(self.kind(), &TyKind::FuncDef(def_id, params, body) => (def_id, params.as_ref(), body))
+        match_expected!(self.kind(), TyKind::FuncDef(def_id, params, body) => (*def_id, params.as_ref(), *body))
     }
 
     pub fn as_func_like(&self) -> (&[Ty], Ty) {
-        match_expected!(self.kind(), &TyKind::FuncDef(_, params, body) | &TyKind::Func(params, body) => (params.as_ref(), body))
+        match_expected!(self.kind(), TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => (params.as_ref(), *body))
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -534,7 +534,7 @@ impl std::fmt::Display for TyKind {
             TyKind::Int(kind) => write!(f, "{}", kind),
             TyKind::Float(kind) => write!(f, "{}", kind),
             TyKind::String => write!(f, "{}", "string"),
-            &TyKind::Func(params, body) => write!(
+            TyKind::Func(params, body) => write!(
                 f,
                 "({} -> {})",
                 params
@@ -544,7 +544,7 @@ impl std::fmt::Display for TyKind {
                     .join(" "),
                 body
             ),
-            &TyKind::FuncDef(def_id, params, body) => {
+            TyKind::FuncDef(def_id, params, body) => {
                 write!(
                     f,
                     "({} -> {}){}",

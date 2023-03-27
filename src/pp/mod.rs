@@ -154,6 +154,19 @@ impl<'a, D> AstLikePP<'a, D> {
         self
     }
 
+    fn join<T>(&mut self, values: impl Iterator<Item = T>, sep: &str) -> &mut Self
+    where
+        T: ToString,
+    {
+        // TODO: Prettify
+        self.string(
+            values
+                .map(|val| val.to_string())
+                .collect::<Vec<String>>()
+                .join(sep),
+        )
+    }
+
     fn indent(&mut self) -> &mut Self {
         self.indent_level += 1;
         self

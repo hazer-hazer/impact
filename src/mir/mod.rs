@@ -78,10 +78,25 @@ impl LValue {
     }
 }
 
+impl Display for LValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "lv{}", self.local)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum ConstKind {
     Scalar(Scalar),
     ZeroSized,
+}
+
+impl Display for ConstKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConstKind::Scalar(scalar) => scalar.fmt(f),
+            ConstKind::ZeroSized => write!(f, "{{ZeroSized}}"),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -110,6 +125,12 @@ impl Const {
     }
 }
 
+impl Display for Const {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.kind, self.ty)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum Operand {
     LValue(LValue),
@@ -129,6 +150,15 @@ impl Operand {
     }
 }
 
+impl Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operand::LValue(lvalue) => lvalue.fmt(f),
+            Operand::Const(const_) => const_.fmt(f),
+        }
+    }
+}
+
 /// Only builtin infix operators, all overloaded are function calls
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum InfixOp {
@@ -141,13 +171,10 @@ impl InfixOp {
         [Self::AddInt, Self::SubInt].into_iter()
     }
 
-    pub fn func_ty(&self) -> Ty {
+    pub fn builtin(&self) -> Builtin {
         match self {
-            InfixOp::AddInt | InfixOp::SubInt => Ty::func(
-                None,
-                vec![Ty::default_int()],
-                Ty::func(None, vec![Ty::default_int()], Ty::default_int()),
-            ),
+            InfixOp::AddInt => Builtin::AddInt,
+            InfixOp::SubInt => Builtin::SubInt,
         }
     }
 
@@ -184,7 +211,7 @@ impl Display for InfixOp {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum RValue {
     Operand(Operand),
     Infix(InfixOp),
@@ -200,17 +227,47 @@ pub enum RValue {
     // TODO: Maybe move to terminator only when doing algebraic effects.
     Call {
         lhs: Operand,
-        arg: Operand,
+        args: Vec<Operand>,
         // target: BB,
     },
 }
 
-#[derive(Clone, Copy)]
+impl Display for RValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RValue::Operand(operand) => operand.fmt(f),
+            RValue::Infix(infix) => write!(f, "({})", infix),
+            RValue::Closure(def_id) => write!(f, "closure{}", def_id),
+            RValue::FuncRef(def_id, ty) => write!(f, "func{}: {}", def_id, ty),
+            RValue::ClosureRef(def_id) => write!(f, "@closure_ref{}", def_id),
+            RValue::ValueRef(def_id) => write!(f, "value_ref{}", def_id),
+            RValue::Call { lhs, args } => write!(
+                f,
+                "{}({})",
+                lhs,
+                args.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum StmtKind {
     Assign(LValue, RValue),
 }
 
-#[derive(Clone, Copy)]
+impl Display for StmtKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StmtKind::Assign(lv, rv) => write!(f, "{lv} = {rv}"),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Stmt {
     pub kind: StmtKind,
 }
@@ -221,15 +278,36 @@ impl Stmt {
     }
 }
 
+impl Display for Stmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum TerminatorKind {
     Goto(BB),
     Return,
 }
 
+impl Display for TerminatorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TerminatorKind::Goto(to) => write!(f, "goto {to}"),
+            TerminatorKind::Return => "return".fmt(f),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct Terminator {
     pub kind: TerminatorKind,
+}
+
+impl Display for Terminator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
 }
 
 pub struct BasicBlock {

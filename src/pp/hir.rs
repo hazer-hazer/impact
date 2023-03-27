@@ -37,6 +37,15 @@ macro_rules! walk_each_delim {
             }
         })
     };
+
+    ($self: ident, $nodes: expr, $visitor: ident, $sep: expr) => {
+        $nodes.iter().enumerate().for_each(|(index, node)| {
+            $self.$visitor(node);
+            if index < $nodes.len() - 1 {
+                $self.pp.str($sep);
+            }
+        })
+    };
 }
 
 pub(crate) use walk_each_delim;
@@ -156,7 +165,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_call_expr(&mut self, call: &Call, hir: &HIR) {
         self.visit_expr(&call.lhs, hir);
         self.pp.sp();
-        self.visit_expr(&call.arg, hir);
+        walk_each_delim!(self, &call.args, visit_expr, " ", hir);
     }
 
     fn visit_let_expr(&mut self, block: &Block, hir: &HIR) {
@@ -193,10 +202,10 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_ty(body, hir);
     }
 
-    fn visit_ty_app(&mut self, cons: &Ty, arg: &Ty, hir: &HIR) {
+    fn visit_ty_app(&mut self, cons: &Ty, args: &[Ty], hir: &HIR) {
         self.visit_ty(cons, hir);
         self.pp.sp();
-        self.visit_ty(arg, hir);
+        walk_each_delim!(self, args, visit_ty, " ", hir);
     }
 
     fn visit_builtin_ty(&mut self, bt: &Builtin, _hir: &HIR) {

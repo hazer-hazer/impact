@@ -5,8 +5,9 @@ use inkwell::{
 };
 
 use crate::{
+    cli::verbose,
     dt::idx::IndexVec,
-    hir::{expr::Expr, BodyId},
+    hir::BodyId,
     mir::{
         Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator, TerminatorKind,
         Ty, BB, START_BB,
@@ -76,6 +77,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
     // Generators //
     pub fn gen_body(&mut self) {
+        verbose!("Gen body of function{}: {}", self.func_def_id, self.func_ty);
+
         let body_bb = self.ctx.llvm_ctx.append_basic_block(self.func, "body");
         self.builder.position_at_end(body_bb);
 
@@ -105,6 +108,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn gen_bb(&mut self, bb: BB) -> BasicBlock<'ink> {
+        verbose!("Gen bb {}", bb);
+
         let ll_bb = self
             .ctx
             .llvm_ctx
@@ -120,6 +125,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn gen_stmt(&mut self, stmt: &Stmt) {
+        verbose!("Gen stmt {}", stmt);
+
         match &stmt.kind {
             StmtKind::Assign(lv, rv) => {
                 let ptr = self.local_value(lv.local);
@@ -130,6 +137,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn gen_terminator(&mut self, terminator: &Terminator) {
+        verbose!("Gen terminator {}", terminator);
+
         match terminator.kind {
             TerminatorKind::Goto(bb) => {
                 let ll_bb = self.gen_bb(bb);
@@ -146,6 +155,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
     // To-value converters //
     fn rvalue_to_value(&mut self, rvalue: &RValue) -> BasicValueEnum<'ink> {
+        verbose!("Convert RValue to BasicValue {}", rvalue);
+
         match rvalue {
             RValue::Operand(operand) => self.operand_to_value(operand),
             &RValue::Infix(op) => self
@@ -176,13 +187,27 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 .as_global_value()
                 .as_pointer_value()
                 .into(),
-            &RValue::ValueRef(def_id) => self.value_map.expect(def_id),
-            RValue::Call { lhs, arg } => {
+            &RValue::ValueRef(def_id) => self
+                .builder
+                .build_call(
+                    self.function_map.expect_mono(def_id),
+                    &[self.ctx.unit_value().into()],
+                    &format!(
+                        "{}_val_init",
+                        self.ctx.sess.def_table.get_def(def_id).name()
+                    ),
+                )
+                .try_as_basic_value()
+                .unwrap_left(),
+            RValue::Call { lhs, args } => {
                 let func = CallableValue::try_from(self.operand_to_value(lhs).into_pointer_value())
                     .unwrap();
-                let arg = self.operand_to_value(arg).into();
+                let args = args
+                    .iter()
+                    .map(|arg| self.operand_to_value(arg).into())
+                    .collect::<Vec<_>>();
                 self.builder
-                    .build_call(func, &[arg], "call")
+                    .build_call(func, &args, "call")
                     .try_as_basic_value()
                     .unwrap_left()
             },
@@ -190,6 +215,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn operand_to_value(&mut self, operand: &Operand) -> BasicValueEnum<'ink> {
+        verbose!("Convert operand {} to BasicValue", operand);
+
         match operand {
             Operand::LValue(lv) => {
                 // TODO: Useful info in name
@@ -209,6 +236,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     // }
 
     fn const_to_value(&mut self, const_: &Const) -> BasicValueEnum<'ink> {
+        verbose!("Convert const {} to BasicValue", const_);
+
         match const_.kind {
             ConstKind::Scalar(scalar) => match const_.ty.kind() {
                 TyKind::Bool => self

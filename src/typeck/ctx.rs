@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::zip};
+use std::{collections::HashMap};
 
 use crate::{
     cli::verbose,
@@ -88,10 +88,10 @@ impl GlobalCtx {
                 self.get_solution(ex)
                     .expect(&format!("Unsolved existential {}", ex)),
             ),
-            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => Ty::func(
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => Ty::func(
                 ty.func_def_id(),
                 params.iter().map(|param| self.apply_on(*param)).collect(),
-                self.apply_on(body),
+                self.apply_on(*body),
             ),
             &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
         }

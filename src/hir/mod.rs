@@ -99,6 +99,12 @@ impl WithHirId for HirId {
     }
 }
 
+impl From<DefId> for HirId {
+    fn from(def_id: DefId) -> Self {
+        Self::new_owner(def_id)
+    }
+}
+
 pub type HirMap<T> = HashMap<HirId, T>;
 
 pub trait WithHirId {
@@ -137,7 +143,7 @@ macro_rules! hir_nodes {
                 pub fn $name(&self) -> &$ty {
                     match self {
                         Self::$ty(inner) => inner,
-                        _ => panic!(),
+                        _ => panic!("Expected `{}` HIR node", stringify!($name)),
                     }
                 }
             )*
@@ -146,7 +152,7 @@ macro_rules! hir_nodes {
                 pub fn $other_name(&self) -> &$other_ty {
                     match self {
                         Self::$other_ty(inner) => inner,
-                        _ => panic!(),
+                        _ => panic!("Expected `{}` HIR node", stringify!($other_name)),
                     }
                 }
             )*

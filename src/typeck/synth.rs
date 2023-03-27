@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use crate::{
     cli::verbose,
@@ -177,7 +177,7 @@ impl<'hir> Typecker<'hir> {
     // }
 
     // TODO: Update if type annotations added
-    fn get_param_type(&self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
+    fn get_param_type(&mut self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![(None, Ty::unit())],
             &hir::pat::PatKind::Ident(name) => vec![(Some(name), self.add_fresh_common_ex().1)],
@@ -202,11 +202,11 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_body(&mut self, owner_def_id: DefId, body_id: BodyId) -> TyResult<Ty> {
-        let &Body { params, value } = self.hir.body(body_id);
+        let Body { params, value } = self.hir.body(body_id);
         // FIXME: Rewrite when `match` added
 
         if params.is_empty() {
-            return self.synth_value_body(value);
+            return self.synth_value_body(*value);
         }
 
         let params_names_tys = params
@@ -247,8 +247,9 @@ impl<'hir> Typecker<'hir> {
                 .zip(params_tys.iter().copied())
                 .for_each(|(param, ty)| this.tyctx_mut().type_node(param, ty));
 
+            // FIXME: Clone
             let func_ty = params_tys.iter().fold(
-                Ty::func(Some(owner_def_id), params_tys, body_ty),
+                Ty::func(Some(owner_def_id), params_tys.clone(), body_ty),
                 |func_ty, param_ty| {
                     if let Some(ex) = param_ty.as_ex() {
                         if let None = this.get_solution(ex) {
@@ -309,12 +310,12 @@ impl<'hir> Typecker<'hir> {
         let lhs_ty = self.apply_ctx_on(lhs_ty);
         self._synth_call(
             Spanned::new(self.hir.expr(call.lhs).span(), Typed::new(call.lhs, lhs_ty)),
-            call.arg,
+            &call.args,
         )
     }
 
-    fn _synth_call(&mut self, lhs: Spanned<Typed<Expr>>, arg: Expr) -> TyResult<Ty> {
-        verbose!("Synthesize call {} with arg {}", lhs, arg);
+    fn _synth_call(&mut self, lhs: Spanned<Typed<Expr>>, args: &[Expr]) -> TyResult<Ty> {
+        verbose!("Synthesize call {} with args {:?}", lhs, args);
 
         let span = lhs.span();
         let lhs_expr = *lhs.node().node();
@@ -339,11 +340,10 @@ impl<'hir> Typecker<'hir> {
 
                     // TODO: Can we infer param type from application as below in Func?
                     // FIXME: Add multiple args
-                    vec![arg]
-                        .iter()
+                    args.iter()
                         .copied()
                         .zip(params_exes.iter().copied())
-                        .try_for_each(|(param, (_, param_ex_ty))| {
+                        .try_for_each(|(arg, (_, param_ex_ty))| {
                             this.check(arg, param_ex_ty)?;
                             Ok(())
                         })?;
@@ -351,7 +351,7 @@ impl<'hir> Typecker<'hir> {
                     Ok(body_ex.1)
                 })
             },
-            &TyKind::Func(params, body) | &TyKind::FuncDef(_, params, body) => {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 // TODO?: Let arguments go first
                 // if let Some(param_ex) = param.as_ex() {
                 //     todo!();
@@ -364,8 +364,7 @@ impl<'hir> Typecker<'hir> {
 
                 // FIXME: Multiple args
 
-                vec![arg]
-                    .iter()
+                args.iter()
                     .copied()
                     .zip(params.iter().copied())
                     .try_for_each(|(arg, param)| {
@@ -373,14 +372,14 @@ impl<'hir> Typecker<'hir> {
                         Ok(())
                     })?;
 
-                Ok(body)
+                Ok(*body)
             },
             &TyKind::Forall(alpha, ty) => {
                 let alpha_ex = self.add_fresh_common_ex();
                 let substituted_ty = ty.substitute(Subst::Var(alpha), alpha_ex.1);
                 let body_ty = self._synth_call(
                     Spanned::new(span, Typed::new(lhs_expr, substituted_ty)),
-                    arg,
+                    args,
                 );
 
                 let func_def_id = self.deep_func_def_id(ty);

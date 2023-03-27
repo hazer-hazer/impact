@@ -4,7 +4,6 @@ use crate::{
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
     message::message::MessageStorage,
     session::{Session, Stage, StageOutput},
-    typeck::tyctx::TyCtx,
 };
 
 use super::{
@@ -134,10 +133,10 @@ impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
 
     fn visit_value_item(
         &mut self,
-        name: crate::span::span::Ident,
+        _name: crate::span::span::Ident,
         value: &BodyId,
         id: hir::item::ItemId,
-        hir: &HIR,
+        _hir: &HIR,
     ) {
         self.build(*value, id.def_id().into());
     }

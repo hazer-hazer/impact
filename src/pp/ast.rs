@@ -159,7 +159,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_app_expr(&mut self, call: &'ast Call) {
         walk_pr!(self, &call.lhs, visit_expr);
         self.sp();
-        walk_pr!(self, &call.arg, visit_expr);
+        walk_each_pr_delim!(self, &call.args, visit_expr, " ");
     }
 
     fn visit_let_expr(&mut self, block: &'ast PR<Block>) {
@@ -177,7 +177,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_ty(&mut self, ty: &'ast Ty) {
         match ty.kind() {
             TyKind::Path(path) => self.visit_ty_path(path),
-            TyKind::Func(param_ty, return_ty) => self.visit_func_ty(param_ty, return_ty),
+            TyKind::Func(params, return_ty) => self.visit_func_ty(params, return_ty),
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
             TyKind::App(cons, arg) => self.visit_ty_app(cons, arg),
             TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
@@ -185,10 +185,10 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         self.node_id(ty);
     }
 
-    fn visit_func_ty(&mut self, param_ty: &'ast PR<N<Ty>>, return_ty: &'ast PR<N<Ty>>) {
-        walk_pr!(self, param_ty, visit_ty);
+    fn visit_func_ty(&mut self, params: &'ast [PR<N<Ty>>], body: &'ast PR<N<Ty>>) {
+        walk_each_pr_delim!(self, params, visit_ty, " - ");
         self.punct(Punct::Arrow);
-        walk_pr!(self, return_ty, visit_ty);
+        walk_pr!(self, body, visit_ty);
     }
 
     fn visit_paren_ty(&mut self, inner: &'ast PR<N<Ty>>) {
@@ -197,16 +197,16 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         self.punct(Punct::RParen);
     }
 
-    fn visit_ty_app(&mut self, cons: &'ast PR<N<Ty>>, arg: &'ast PR<N<Ty>>) {
+    fn visit_ty_app(&mut self, cons: &'ast PR<N<Ty>>, args: &'ast [PR<N<Ty>>]) {
         walk_pr!(self, cons, visit_ty);
         self.sp();
-        walk_pr!(self, arg, visit_ty);
+        walk_each_pr_delim!(self, args, visit_ty, " ");
     }
 
-    fn visit_ty_app_expr(&mut self, cons: &'ast PR<N<Ty>>, const_arg: &'ast PR<N<Expr>>) {
+    fn visit_ty_app_expr(&mut self, cons: &'ast PR<N<Ty>>, args: &'ast [PR<N<Expr>>]) {
         walk_pr!(self, cons, visit_ty);
         self.sp();
-        walk_pr!(self, const_arg, visit_expr);
+        walk_each_pr_delim!(self, args, visit_expr, " ");
     }
 
     // Fragments //
