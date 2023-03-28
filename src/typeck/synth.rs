@@ -1,5 +1,3 @@
-
-
 use crate::{
     cli::verbose,
     hir::{
@@ -7,7 +5,7 @@ use crate::{
         expr::{Block, Call, Expr, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         pat::Pat,
-        stmt::{Stmt, StmtKind},
+        stmt::{Local, Stmt, StmtKind},
         Body, BodyId, HirId, Path,
     },
     message::message::MessageBuilder,
@@ -82,8 +80,18 @@ impl<'hir> Typecker<'hir> {
             &StmtKind::Item(item) => {
                 self.synth_item(item)?;
             },
+            StmtKind::Local(local) => {
+                self.synth_local_stmt(local)?;
+            },
         }
 
+        Ok(Ty::unit())
+    }
+
+    fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
+        let local_ty = self.synth_expr(local.value)?;
+        self.type_term(local.name, local_ty);
+        self.tyctx_mut().type_node(local.def_id.into(), local_ty);
         Ok(Ty::unit())
     }
 

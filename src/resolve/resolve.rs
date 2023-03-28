@@ -57,7 +57,7 @@ impl<'ast> NameResolver<'ast> {
         }
     }
 
-    fn define_var(&mut self, node_id: NodeId, ident: &Ident) {
+    fn define_local(&mut self, node_id: NodeId, ident: &Ident) {
         verbose!("Define var {} {}", node_id, ident);
 
         match self.scope() {
@@ -93,7 +93,7 @@ impl<'ast> NameResolver<'ast> {
                 .label(ident.span(), "Redefined here".to_string())
                 .emit(self);
         } else {
-            self.sess.def_table.define(node_id, DefKind::Value, ident);
+            self.sess.def_table.define(node_id, DefKind::Local, ident);
             self.locals_spans.insert(node_id, ident.span());
         }
     }
@@ -147,6 +147,7 @@ impl<'ast> NameResolver<'ast> {
                 // Yeah, crutches
                 return Res::declare_builtin();
             },
+            DefKind::Local => unreachable!(),
         }
     }
 
@@ -230,6 +231,7 @@ impl<'ast> NameResolver<'ast> {
                     | DefKind::Func
                     | DefKind::Value
                     | DefKind::Lambda
+                    | DefKind::Local
                     | DefKind::DeclareBuiltin => unreachable!(),
                 }
             })
@@ -318,6 +320,15 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
     fn visit_item(&mut self, item: &'ast Item) {
+        match item.kind() {
+            ItemKind::Decl(name, params, body) if params.is_empty() => {
+                self.define_local(item.id(), name.as_ref().unwrap());
+                self.visit_decl_item(name, params, body, item.id());
+                return;
+            },
+            _ => {},
+        }
+
         let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
         self.enter_module_scope(ModuleId::Def(def_id));
 
@@ -333,13 +344,6 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         }
 
         self.exit_scope();
-
-        match item.kind() {
-            ItemKind::Decl(name, params, _) if params.is_empty() => {
-                self.define_var(item.id(), name.as_ref().unwrap());
-            },
-            _ => {},
-        }
     }
 
     fn visit_decl_item(
@@ -363,7 +367,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         verbose!("Visit pat {}", pat.id());
         match pat.kind() {
             PatKind::Unit => {},
-            PatKind::Ident(ident) => self.define_var(pat.id(), ident.as_ref().unwrap()),
+            PatKind::Ident(ident) => self.define_local(pat.id(), ident.as_ref().unwrap()),
         }
     }
 

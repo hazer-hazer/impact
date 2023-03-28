@@ -3,8 +3,8 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::{Linkage, Module},
-    types::{AnyTypeEnum, BasicType, BasicTypeEnum},
-    values::{BasicValue, BasicValueEnum, FunctionValue},
+    types::{AnyTypeEnum, BasicType, BasicTypeEnum, PointerType, StructType},
+    values::{BasicValueEnum, FunctionValue, PointerValue},
     AddressSpace,
 };
 
@@ -31,16 +31,24 @@ pub struct CodeGenCtx<'ink, 'ctx> {
 }
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
+    pub fn unit_ty(&self) -> StructType<'ink> {
+        self.llvm_ctx.struct_type(&[], false)
+    }
+
+    pub fn cstring_ptr_ty(&self) -> PointerType<'ink> {
+        self.llvm_ctx.i8_type().ptr_type(AddressSpace::default())
+    }
+
     pub fn conv_ty(&self, ty: Ty) -> AnyTypeEnum<'ink> {
         match ty.kind() {
-            TyKind::Unit => self.llvm_ctx.struct_type(&[], false).into(),
+            TyKind::Unit => self.unit_ty().into(),
             TyKind::Bool => self.llvm_ctx.bool_type().into(),
             TyKind::Int(kind) => self.llvm_ctx.custom_width_int_type(kind.bits()).into(),
             TyKind::Float(kind) => match kind {
                 FloatKind::F32 => self.llvm_ctx.f32_type().into(),
                 FloatKind::F64 => self.llvm_ctx.f64_type().into(),
             },
-            TyKind::String => todo!(),
+            TyKind::String => self.cstring_ptr_ty().into(),
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self
                 .conv_basic_ty(*body)
                 .fn_type(
@@ -175,6 +183,15 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
 
     // Values //
     pub fn unit_value(&self) -> BasicValueEnum<'ink> {
-        self.conv_basic_ty(Ty::unit()).const_zero().into()
+        self.unit_ty().const_zero().into()
+    }
+
+    pub fn cstring_ptr_value(&self, bytes: &[u8]) -> PointerValue<'ink> {
+        let str = self.llvm_ctx.const_string(bytes, true);
+        let global = self
+            .llvm_module
+            .add_global(str.get_type(), None, "string_slice");
+        global.set_initializer(&str);
+        global.as_pointer_value()
     }
 }

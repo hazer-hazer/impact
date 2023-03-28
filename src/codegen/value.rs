@@ -46,9 +46,9 @@ impl<'ink, 'ctx, 'a> ValueCodeGen<'ink, 'ctx, 'a> {
 impl<'ink, 'ctx, 'a> HirVisitor for ValueCodeGen<'ink, 'ctx, 'a> {
     fn visit_value_item(
         &mut self,
-        name: crate::span::span::Ident,
+        _name: crate::span::span::Ident,
         _value: &crate::hir::BodyId,
-        id: crate::hir::item::ItemId,
+        _id: crate::hir::item::ItemId,
         _hir: &crate::hir::HIR,
     ) {
         // let builder = self.ctx.llvm_ctx.create_builder();

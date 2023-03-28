@@ -4,7 +4,7 @@ use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
     item::{ItemId, ItemKind, Mod, TyAlias},
     pat::{Pat, PatKind},
-    stmt::{Stmt, StmtKind},
+    stmt::{Local, Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
     BodyId, BodyOwner, Path, HIR,
 };
@@ -26,8 +26,9 @@ pub trait HirVisitor {
     fn visit_stmt(&mut self, stmt: &Stmt, hir: &HIR) {
         let stmt = hir.stmt(*stmt);
         match stmt.kind() {
-            StmtKind::Expr(expr) => self.visit_expr_stmt(&expr, hir),
-            StmtKind::Item(item) => self.visit_item_stmt(&item, hir),
+            StmtKind::Expr(expr) => self.visit_expr_stmt(expr, hir),
+            StmtKind::Item(item) => self.visit_item_stmt(item, hir),
+            StmtKind::Local(local) => self.visit_local_stmt(local, hir),
         }
     }
 
@@ -37,6 +38,11 @@ pub trait HirVisitor {
 
     fn visit_item_stmt(&mut self, id: &ItemId, hir: &HIR) {
         self.visit_item(id, hir)
+    }
+
+    fn visit_local_stmt(&mut self, local: &Local, hir: &HIR) {
+        self.visit_ident(&local.name, hir);
+        self.visit_expr(&local.value, hir);
     }
 
     // Items //

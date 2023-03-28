@@ -23,6 +23,8 @@ pub enum DefKind {
     Value,
     Lambda,
 
+    Local,
+
     DeclareBuiltin,
 }
 
@@ -45,6 +47,7 @@ impl DefKind {
             DefKind::Value => Namespace::Value,
             DefKind::DeclareBuiltin => Namespace::Value,
             DefKind::Lambda => Namespace::Value,
+            DefKind::Local => unreachable!(),
         }
     }
 }
@@ -62,6 +65,7 @@ impl Display for DefKind {
                 DefKind::Lambda => "lambda",
                 DefKind::Root => "[ROOT]",
                 DefKind::DeclareBuiltin => "[`builtin`]",
+                DefKind::Local => "local",
             }
         )
     }

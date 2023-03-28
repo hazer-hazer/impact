@@ -6,7 +6,7 @@ use crate::{
     span::span::{Ident, Span, WithSpan},
 };
 
-use super::{expr::Expr, ty::Ty, BodyId, HirId, OwnerId, ROOT_OWNER_ID};
+use super::{ty::Ty, BodyId, HirId, OwnerId, ROOT_OWNER_ID};
 
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 pub const ROOT_ITEM_ID: ItemId = ItemId(ROOT_OWNER_ID);
@@ -29,11 +29,6 @@ pub struct TyAlias {
 #[derive(Debug)]
 pub struct Mod {
     pub items: Vec<ItemId>,
-}
-
-#[derive(Debug)]
-pub struct Var {
-    value: Expr,
 }
 
 #[derive(Debug)]

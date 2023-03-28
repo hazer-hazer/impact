@@ -1,7 +1,7 @@
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
-    values::{BasicValueEnum, CallableValue, FunctionValue, PointerValue},
+    values::{BasicValue, BasicValueEnum, CallableValue, FunctionValue, PointerValue},
 };
 
 use crate::{
@@ -238,7 +238,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     fn const_to_value(&mut self, const_: &Const) -> BasicValueEnum<'ink> {
         verbose!("Convert const {} to BasicValue", const_);
 
-        match const_.kind {
+        match &const_.kind {
             ConstKind::Scalar(scalar) => match const_.ty.kind() {
                 TyKind::Bool => self
                     .ctx
@@ -285,7 +285,16 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     unreachable!()
                 },
             },
+            ConstKind::Slice { data } => self.build_cstring_value(data),
         }
+    }
+
+    pub fn build_cstring_value(&self, bytes: &[u8]) -> BasicValueEnum<'ink> {
+        let ptr = self.ctx.cstring_ptr_value(bytes);
+        let cast =
+            self.builder
+                .build_pointer_cast(ptr, self.ctx.cstring_ptr_ty(), "string_slice_cast");
+        cast.as_basic_value_enum()
     }
 
     // Locals //

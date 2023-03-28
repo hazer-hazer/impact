@@ -3,7 +3,7 @@ use crate::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod, TyAlias, ROOT_ITEM_ID},
         pat::{Pat, PatKind},
-        stmt::{Stmt, StmtKind},
+        stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
         BodyId, BodyOwner, Path, HIR,
@@ -74,10 +74,17 @@ impl<'a> HirVisitor for HirPP<'a> {
         let stmt = hir.stmt(*stmt);
 
         match stmt.kind() {
-            StmtKind::Expr(expr) => self.visit_expr_stmt(&expr, hir),
-            StmtKind::Item(item) => self.visit_item_stmt(&item, hir),
+            StmtKind::Expr(expr) => self.visit_expr_stmt(expr, hir),
+            StmtKind::Item(item) => self.visit_item_stmt(item, hir),
+            StmtKind::Local(local) => self.visit_local_stmt(local, hir),
         }
         self.pp.hir_id(stmt);
+    }
+
+    fn visit_local_stmt(&mut self, local: &Local, hir: &HIR) {
+        self.visit_ident(&local.name, hir);
+        self.pp.str(" = ");
+        self.visit_expr(&local.value, hir);
     }
 
     // Items //

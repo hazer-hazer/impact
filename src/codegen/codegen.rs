@@ -1,4 +1,13 @@
-use inkwell::{context::Context, module::Module, targets::TargetMachine};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+use inkwell::{
+    context::Context,
+    module::Module,
+    targets::{FileType, InitializationConfig, Target, TargetMachine},
+};
 
 use crate::{
     cli::{color::Colorize, verbose},
@@ -44,7 +53,9 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
 
     fn codegen(&mut self) -> Module<'ink> {
         let llvm_module = self.llvm_ctx.create_module("kek");
+        Target::initialize_all(&InitializationConfig::default());
         let target_triple = TargetMachine::get_default_triple();
+        dbg!(&target_triple);
         llvm_module.set_triple(&target_triple);
 
         let ctx = CodeGenCtx {
@@ -84,6 +95,37 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
                 );
             })
             .unwrap();
+
+        let path = Path::new("kek").with_extension("o");
+        let target = Target::from_triple(&target_triple).unwrap();
+        let target_machine = target
+            .create_target_machine(
+                &target_triple,
+                "",
+                "",
+                inkwell::OptimizationLevel::None,
+                inkwell::targets::RelocMode::PIC,
+                inkwell::targets::CodeModel::Default,
+            )
+            .unwrap();
+
+        target_machine
+            .write_to_file(&llvm_module, FileType::Object, &path)
+            .unwrap();
+
+        let mut child = Command::new("gcc")
+            .arg(path.to_string_lossy().as_ref())
+            .arg("-Wno-everything")
+            .arg("-O0")
+            .arg("-lm")
+            .arg(format!(
+                "-o{}",
+                PathBuf::from("kek").with_extension("").to_string_lossy()
+            ))
+            .spawn()
+            .unwrap();
+
+        child.wait().unwrap();
 
         llvm_module
     }

@@ -29,6 +29,11 @@ impl<'ctx> MirBuilder<'ctx> {
         Const::scalar(Ty::float(kind), Scalar::new(val.to_bits(), kind.bytes()))
     }
 
+    pub(super) fn string_slice_const(&self, val: &[u8]) -> Const {
+        // FIXME: `to_owner` ok? Maybe we can leak as all strings are interned globally?
+        Const::slice(Ty::string(), val.to_owned().into_boxed_slice())
+    }
+
     // Expressions as categories //
     pub(super) fn as_operand(&mut self, mut bb: BB, expr_id: ExprId) -> BBWith<Operand> {
         let expr = self.thir.expr(expr_id);
@@ -47,7 +52,7 @@ impl<'ctx> MirBuilder<'ctx> {
                 &Lit::Bool(val) => self.bool_const(val),
                 &Lit::Int(val, kind) => self.int_const(val, kind),
                 &Lit::Float(val, kind) => self.float_const(val, kind),
-                Lit::String(_) => todo!(),
+                &Lit::String(sym) => self.string_slice_const(sym.as_str().as_bytes()),
             },
             _ => panic!(),
         }
@@ -122,7 +127,11 @@ impl<'ctx> MirBuilder<'ctx> {
                         assert!(ty.is_instantiated());
                         RValue::ClosureRef(def_id)
                     },
-                    DefKind::Root | DefKind::TyAlias | DefKind::Mod | DefKind::DeclareBuiltin => {
+                    DefKind::Local
+                    | DefKind::Root
+                    | DefKind::TyAlias
+                    | DefKind::Mod
+                    | DefKind::DeclareBuiltin => {
                         unreachable!()
                     },
                 };

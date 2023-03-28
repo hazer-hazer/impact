@@ -1,6 +1,6 @@
 use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
-    resolve::{def::DefKind},
+    resolve::def::DefKind,
     span::span::WithSpan,
     typeck::tyctx::TyCtx,
 };
@@ -68,6 +68,7 @@ impl<'ctx> ThirBuilder<'ctx> {
                     DefKind::TyAlias | DefKind::DeclareBuiltin | DefKind::Root | DefKind::Mod => {
                         unreachable!("Expression path cannot point to such definition kinds")
                     },
+                    DefKind::Local => unreachable!("Locals must be resolved as Res::Local"),
                 },
                 &hir::Res::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
                 hir::Res::Builtin(_) | hir::Res::DeclareBuiltin | hir::Res::Error => unreachable!(),
@@ -124,10 +125,25 @@ impl<'ctx> ThirBuilder<'ctx> {
 
         let stmt = match stmt.kind() {
             &hir::stmt::StmtKind::Expr(expr) => Some(Stmt::Expr(self.expr(expr))),
+            hir::stmt::StmtKind::Local(local) => Some(self.local(local)),
             hir::stmt::StmtKind::Item(_) => None,
         };
 
         stmt.map(|stmt| self.thir.add_stmt(stmt))
+    }
+
+    fn local(&mut self, local: &hir::stmt::Local) -> Stmt {
+        let ty = self.tyctx.tyof(local.def_id.into());
+        let pat = Pat {
+            ty,
+            kind: PatKind::Ident {
+                name: local.name,
+                var: LocalVar::new(local.def_id.into()),
+                ty,
+            },
+            span: local.name.span(),
+        };
+        Stmt::Local(pat, self.expr(local.value))
     }
 
     fn block(&mut self, block_id: hir::expr::Block) -> BlockId {

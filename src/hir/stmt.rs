@@ -1,4 +1,7 @@
-use crate::span::span::{Span, WithSpan};
+use crate::{
+    resolve::def::DefId,
+    span::span::{Ident, Span, WithSpan},
+};
 
 use super::{expr::Expr, item::ItemId, HirId, WithHirId};
 
@@ -32,7 +35,16 @@ impl WithSpan for StmtNode {
 }
 
 #[derive(Debug)]
+pub struct Local {
+    pub name: Ident,
+    pub value: Expr,
+    pub def_id: DefId,
+    pub span: Span,
+}
+
+#[derive(Debug)]
 pub enum StmtKind {
+    Local(Local),
     Expr(Expr),
     Item(ItemId),
 }

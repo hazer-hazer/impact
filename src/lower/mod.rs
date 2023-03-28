@@ -11,6 +11,7 @@ use crate::{
     hir::{
         self,
         item::{ItemId, ItemNode, Mod, TyAlias},
+        stmt::Local,
         Body, BodyId, HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
         OWNER_SELF_CHILD_ID,
     },
@@ -206,7 +207,10 @@ impl<'ast> Lower<'ast> {
     fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
         let kind = match stmt.kind() {
             StmtKind::Expr(expr) => hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
-            StmtKind::Item(item) => hir::stmt::StmtKind::Item(lower_pr!(self, item, lower_item)),
+            StmtKind::Item(item) => lower_pr!(self, item, maybe_lower_local).map_or_else(
+                || hir::stmt::StmtKind::Item(lower_pr!(self, item, lower_item)),
+                |local| hir::stmt::StmtKind::Local(local),
+            ),
         };
 
         let id = self.lower_node_id(stmt.id());
@@ -215,6 +219,25 @@ impl<'ast> Lower<'ast> {
             kind,
             stmt.span(),
         )))
+    }
+
+    fn maybe_lower_local(&mut self, item: &Item) -> Option<Local> {
+        match item.kind() {
+            ItemKind::Decl(name, params, body) if params.is_empty() => {
+                let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
+                let def = self.sess.def_table.get_def(def_id);
+                match def.kind() {
+                    DefKind::Local => Some(Local {
+                        name: lower_pr!(self, name, lower_ident),
+                        value: lower_pr!(self, body, lower_expr),
+                        def_id,
+                        span: item.span(),
+                    }),
+                    _ => None,
+                }
+            },
+            _ => None,
+        }
     }
 
     // Items //

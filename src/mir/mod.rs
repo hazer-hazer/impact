@@ -84,22 +84,24 @@ impl Display for LValue {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum ConstKind {
     Scalar(Scalar),
     ZeroSized,
+    Slice { data: Box<[u8]> },
 }
 
 impl Display for ConstKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConstKind::Scalar(scalar) => scalar.fmt(f),
+            ConstKind::Slice { data } => write!(f, "{:02x?}", data),
             ConstKind::ZeroSized => write!(f, "{{ZeroSized}}"),
         }
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Const {
     pub ty: Ty,
     pub kind: ConstKind,
@@ -120,8 +122,15 @@ impl Const {
         }
     }
 
-    pub fn operand(&self) -> Operand {
-        Operand::Const(*self)
+    pub fn slice(ty: Ty, data: Box<[u8]>) -> Self {
+        Self {
+            ty,
+            kind: ConstKind::Slice { data },
+        }
+    }
+
+    pub fn operand(self) -> Operand {
+        Operand::Const(self)
     }
 }
 
@@ -131,15 +140,15 @@ impl Display for Const {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum Operand {
     LValue(LValue),
     Const(Const),
 }
 
 impl Operand {
-    pub fn rvalue(&self) -> RValue {
-        RValue::Operand(*self)
+    pub fn rvalue(self) -> RValue {
+        RValue::Operand(self)
     }
 
     pub fn as_lvalue(&self) -> &LValue {
