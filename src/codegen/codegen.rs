@@ -96,7 +96,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             })
             .unwrap();
 
-        let path = Path::new("kek").with_extension("o");
+        let path = Path::new("output/kek").with_extension("o");
         let target = Target::from_triple(&target_triple).unwrap();
         let target_machine = target
             .create_target_machine(
@@ -120,7 +120,9 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             .arg("-lm")
             .arg(format!(
                 "-o{}",
-                PathBuf::from("kek").with_extension("").to_string_lossy()
+                PathBuf::from("output/kek")
+                    .with_extension("")
+                    .to_string_lossy()
             ))
             .spawn()
             .unwrap();

@@ -13,3 +13,4 @@ Cargo.lock
 src/typeck/bidir.md
 
 completions/
+output/

@@ -3,8 +3,8 @@ use std::fmt::Display;
 use crate::span::span::{Ident, Span, WithSpan};
 
 use super::{
-    expr::Expr, is_block_ended, pat::Pat, pr_display, ty::Ty, IsBlockEnded, NodeId, NodeKindStr,
-    WithNodeId, N, PR,
+    expr::Expr, is_block_ended, pat::Pat, pr_display, prs_display_join, ty::Ty, IsBlockEnded,
+    NodeId, NodeKindStr, WithNodeId, N, PR,
 };
 
 #[derive(Debug)]
@@ -28,6 +28,7 @@ impl Item {
             ItemKind::Type(name, _) | ItemKind::Mod(name, _) | ItemKind::Decl(name, _, _) => {
                 Some(name.as_ref().expect("Error Ident node in `Item::name`"))
             },
+            ItemKind::Extern(_) => None,
         }
     }
 
@@ -69,18 +70,30 @@ impl NodeKindStr for Item {
     }
 }
 
+pub struct ExternItem {
+    name: PR<Ident>,
+    ty: PR<Ty>,
+}
+
+impl Display for ExternItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", pr_display(&self.name), pr_display&self.tyy))
+    }
+}
+
 #[derive(Debug)]
 pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
+    Extern(Vec<ExternItem>),
 }
 
 impl IsBlockEnded for ItemKind {
     fn is_block_ended(&self) -> bool {
         match self {
             ItemKind::Type(_, _) => false, // FIXME: Always?
-            ItemKind::Mod(_, _) => true,
+            ItemKind::Mod(_, _) | ItemKind::Extern(_) => true,
             ItemKind::Decl(_, _, body) => is_block_ended!(body),
         }
     }
@@ -111,6 +124,7 @@ impl Display for ItemKind {
                     .join(" "),
                 pr_display(body)
             ),
+            ItemKind::Extern(items) => write!(f, "extern {{{}}}", prs_display_join(items, ", ")),
         }
     }
 }
@@ -121,6 +135,7 @@ impl NodeKindStr for ItemKind {
             ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
             ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
             ItemKind::Decl(name, _, _) => format!("{} declaration", pr_display(name)),
+            ItemKind::Extern(items) => format!("extern block"),
         }
     }
 }
