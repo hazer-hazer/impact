@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
-        item::{Item, ItemKind},
+        item::{ExternItem, Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -70,6 +70,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            ItemKind::Extern(items) => self.visit_extern_block(items),
         }
         self.node_id(item);
     }
@@ -102,6 +103,19 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_each_pr_delim!(self, params, visit_pat, " ");
         self.str(" = ");
         walk_pr!(self, body, visit_expr);
+    }
+
+    fn visit_extern_block(&mut self, items: &'ast [PR<ExternItem>]) {
+        self.kw(Kw::Extern);
+        self.indent();
+        walk_each_pr_delim!(self, items, visit_extern_item, "\n");
+        self.dedent();
+    }
+
+    fn visit_extern_item(&mut self, item: &'ast ExternItem) {
+        walk_pr!(self, &item.name, visit_ident);
+        self.str(": ");
+        walk_pr!(self, &item.ty, visit_ty);
     }
 
     // Patterns //

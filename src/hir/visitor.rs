@@ -2,7 +2,7 @@ use crate::{resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{ItemId, ItemKind, Mod, TyAlias},
+    item::{ExternItem, ItemId, ItemKind, Mod, TyAlias},
     pat::{Pat, PatKind},
     stmt::{Local, Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -46,14 +46,16 @@ pub trait HirVisitor {
     }
 
     // Items //
-    fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
-        let id = *id;
+    fn visit_item(&mut self, &id: &ItemId, hir: &HIR) {
         let item = hir.item(id);
         match item.kind() {
             ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
             ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(body) => self.visit_func_item(item.name(), body, id, hir),
+            ItemKind::ExternItem(extern_item) => {
+                self.visit_extern_item(item.name(), extern_item, id, hir)
+            },
         }
     }
 
@@ -75,6 +77,11 @@ pub trait HirVisitor {
     fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
+    }
+
+    fn visit_extern_item(&mut self, name: Ident, extern_item: &ExternItem, _id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        self.visit_ty(&extern_item.ty, hir);
     }
 
     fn visit_body(&mut self, &body: &BodyId, _owner: BodyOwner, hir: &HIR) {

@@ -37,11 +37,17 @@ pub struct Func {
 }
 
 #[derive(Debug)]
+pub struct ExternItem {
+    pub ty: Ty,
+}
+
+#[derive(Debug)]
 pub enum ItemKind {
     TyAlias(TyAlias),
     Mod(Mod),
     Value(BodyId),
     Func(BodyId),
+    ExternItem(ExternItem),
 }
 
 #[derive(Debug)]
@@ -86,7 +92,7 @@ impl WithSpan for ItemNode {
 }
 
 macro_rules! specific_item_nodes {
-    ($($variant: ident $method_name: ident $($ty: ty),+);*) => {
+    ($($variant: ident $method_name: ident $($ty: ty),+;)*) => {
         $(
             impl ItemNode {
                 #[allow(unused_parens)]
@@ -105,5 +111,6 @@ specific_item_nodes!(
     TyAlias ty_alias TyAlias;
     Mod mod_ Mod;
     Value value BodyId;
-    Func func BodyId
+    Func func BodyId;
+    ExternItem extern_item ExternItem;
 );

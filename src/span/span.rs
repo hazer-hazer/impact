@@ -21,6 +21,7 @@ pub enum Kw {
     In,
     Mod,
     Type,
+    Extern,
 
     Underscore,
     Unit, // `()`, allowed is type or expression
@@ -38,6 +39,7 @@ impl Kw {
             Kw::In => "in",
             Kw::Mod => "mod",
             Kw::Type => "type",
+            Kw::Extern => "extern",
             Kw::Underscore => "_",
             Kw::Unit => "()",
             Kw::Root => "[root]",
@@ -123,6 +125,7 @@ impl TryInto<Kw> for Symbol {
             "in" => Ok(Kw::In),
             "mod" => Ok(Kw::Mod),
             "type" => Ok(Kw::Type),
+            "extern" => Ok(Kw::Extern),
             "[root]" => Ok(Kw::Root),
             _ => Err(()),
         }

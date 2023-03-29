@@ -247,7 +247,7 @@ impl Display for RValue {
             RValue::Operand(operand) => operand.fmt(f),
             RValue::Infix(infix) => write!(f, "({})", infix),
             RValue::Closure(def_id) => write!(f, "closure{}", def_id),
-            RValue::FuncRef(def_id, ty) => write!(f, "func{}: {}", def_id, ty),
+            RValue::FuncRef(def_id, ty) => write!(f, "func{}:{}", def_id, ty),
             RValue::ClosureRef(def_id) => write!(f, "@closure_ref{}", def_id),
             RValue::ValueRef(def_id) => write!(f, "value_ref{}", def_id),
             RValue::Call { lhs, args } => write!(

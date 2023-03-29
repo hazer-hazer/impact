@@ -4,13 +4,16 @@ use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         is_block_ended,
-        item::{Item, ItemKind},
+        item::{ExternItem, Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
         ErrorNode, IsBlockEnded, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
     },
-    cli::color::{Color, Colorize},
+    cli::{
+        color::{Color, Colorize},
+        verbose,
+    },
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
@@ -18,6 +21,15 @@ use crate::{
 };
 
 use super::token::{Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
+
+macro_rules! pr_call {
+    ($error: expr, $pr: expr, $method: ident $(,$args: expr)*) => {
+        match &$pr {
+            Ok(ok) => ok.$method($($args),*),
+            Err(_) => $error,
+        }
+    };
+}
 
 #[derive(Debug, PartialEq)]
 enum ParseEntryKind {
@@ -250,13 +262,13 @@ impl Parser {
         }
     }
 
-    fn expect_semis(&mut self) -> PR<()> {
+    fn expect_semis(&mut self, after: &str) -> PR<()> {
         // If we encountered EOF don't skip it
         // Note: Keep order
         if self.eof() || self.is(TokenCmp::BlockEnd) || self.skip_opt_nls() {
             Ok(())
         } else {
-            self.expected_error("semi", self.peek())
+            self.expected_error(&format!("semi after {}", after), self.peek())
         }
     }
 
@@ -405,7 +417,11 @@ impl Parser {
             let span = item.span();
 
             if !is_block_ended!(item) {
-                self.expect_semis()?;
+                self.expect_semis(
+                    &item
+                        .as_ref()
+                        .map_or("item".to_string(), |item| item.kind_str()),
+                )?;
             }
 
             Ok(Box::new(Stmt::new(
@@ -415,7 +431,7 @@ impl Parser {
             )))
         } else if let Some(expr) = self.parse_opt_expr() {
             if !is_block_ended!(expr) {
-                self.expect_semis()?;
+                self.expect_semis("expression statement")?;
             }
 
             let span = expr.span();
@@ -444,7 +460,10 @@ impl Parser {
         let pe = self.enter_entity(ParseEntryKind::Wrapper, "item with semi");
 
         let item = self.parse_item();
-        self.expect_semis()?;
+
+        if !is_block_ended!(item) {
+            self.expect_semis(&pr_call!("item".to_string(), item, kind_str))?;
+        }
 
         self.exit_entity(pe, &item);
 
@@ -472,6 +491,12 @@ impl Parser {
             self.exit_entity(pe, &decl);
 
             Some(decl)
+        } else if self.is(TokenCmp::Kw(Kw::Extern)) {
+            let extern_block = self.parse_extern_block();
+
+            self.exit_entity(pe, &extern_block);
+
+            Some(extern_block)
         } else {
             self.exit_parsed_entity(pe);
 
@@ -549,6 +574,44 @@ impl Parser {
             ItemKind::Decl(name, params, body),
             self.close_span(lo),
         )))
+    }
+
+    fn parse_extern_block(&mut self) -> PR<N<Item>> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "extern block");
+
+        let lo = self.span();
+
+        self.just_skip(TokenCmp::Kw(Kw::Extern));
+
+        let items = parse_block_common!(self, parse_extern_item);
+
+        self.exit_parsed_entity(pe);
+
+        Ok(Box::new(Item::new(
+            self.next_node_id(),
+            ItemKind::Extern(items),
+            self.close_span(lo),
+        )))
+    }
+
+    fn parse_extern_item(&mut self) -> PR<ExternItem> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "extern item");
+
+        let lo = self.span();
+
+        let name = self.parse_ident("extern item name");
+        self.expect(TokenCmp::Punct(Punct::Colon))?;
+
+        let ty = self.parse_ty();
+
+        self.exit_parsed_entity(pe);
+
+        Ok(ExternItem::new(
+            self.next_node_id(),
+            name,
+            ty,
+            self.close_span(lo),
+        ))
     }
 
     // Patterns //

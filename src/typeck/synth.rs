@@ -38,7 +38,9 @@ impl<'hir> Typecker<'hir> {
             _ => {},
         }
 
-        let ty = match self.hir.item(item).kind() {
+        let item = self.hir.item(item);
+
+        let ty = match item.kind() {
             ItemKind::TyAlias(_ty) => {
                 verbose!("Synth ty alias {}", item.def_id());
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
@@ -53,16 +55,30 @@ impl<'hir> Typecker<'hir> {
             },
             // Note: Actually, declaration type is a unit type, but we save it
             // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
+            // TODO: Merge these branches?
             &ItemKind::Value(value) => {
                 let value_ty = self.synth_body(item.def_id(), value)?;
-                self.type_term(self.hir.item(item).name(), value_ty);
+                self.type_term(item.name(), value_ty);
                 value_ty
             },
             &ItemKind::Func(body) => {
                 let value_ty = self.synth_body(item.def_id(), body)?;
-                self.type_term(self.hir.item(item).name(), value_ty);
+                self.type_term(item.name(), value_ty);
                 value_ty
             },
+            ItemKind::ExternItem(extern_item) => {
+                let ty = self.conv(extern_item.ty);
+                self.type_term(item.name(), ty);
+                ty
+            },
+            // ItemKind::ExternBlock(items) => {
+            //     items.iter().for_each(|item| {
+            //         let ty = self.conv(item.ty);
+            //         self.type_term(item.name, ty);
+            //         self.tyctx_mut().type_node(item.id, ty)
+            //     });
+            //     Ty::unit()
+            // },
         };
 
         self.tyctx_mut().type_node(hir_id, ty);

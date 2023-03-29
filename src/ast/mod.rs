@@ -13,7 +13,7 @@ use self::{
     item::Item,
     pat::Pat,
     stmt::Stmt,
-    ty::{Ty},
+    ty::Ty,
     visitor::{walk_pr, AstVisitor},
 };
 
@@ -441,6 +441,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             item::ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            item::ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }
 

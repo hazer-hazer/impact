@@ -3,9 +3,14 @@ use std::collections::HashMap;
 use inkwell::values::FunctionValue;
 
 use crate::{
-    hir::{item::ItemId, visitor::HirVisitor, BodyId, BodyOwner, BodyOwnerKind, HirId, HIR},
+    hir::{
+        item::{ExternItem, ItemId},
+        visitor::HirVisitor,
+        BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
+    },
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
+    span::span::Ident,
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
     utils::macros::match_expected,
 };
@@ -116,6 +121,24 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             },
         };
     }
+
+    fn visit_extern_item(
+        &mut self,
+        name: Ident,
+        extern_item: &ExternItem,
+        item_id: ItemId,
+        hir: &HIR,
+    ) {
+        let def_id = item_id.def_id();
+        let ty = self.ctx.sess.tyctx.tyof(def_id.into());
+
+        if ty.is_func_like() {
+            let func = self.func_value(def_id, ty);
+            self.function_map.insert_mono(ty, func);
+        } else {
+            todo!("Extern values")
+        }
+    }
 }
 
 impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
@@ -172,6 +195,8 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
 
     pub fn gen_functions(mut self) -> FunctionMap<'ink> {
         self.visit_hir(self.ctx.hir);
+
+        // Add infix operators functions
         InfixOp::each().for_each(|op| {
             let func = self.gen_infix_op(op);
             assert!(self.function_map.infix_ops.insert(op, func).is_none());

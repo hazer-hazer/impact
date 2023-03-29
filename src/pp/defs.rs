@@ -67,6 +67,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                     | DefKind::Value
                     | DefKind::TyAlias
                     | DefKind::Local
+                    | DefKind::External
                     | DefKind::Func => {
                         self.nl();
                     },

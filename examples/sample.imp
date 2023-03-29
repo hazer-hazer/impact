@@ -6,6 +6,9 @@ type () = builtin "UnitTy"
 (+) = builtin "AddInt"
 (-) = builtin "SubInt"
 
+extern
+    puts: string -> i32
+
 foo () = 123: i32
 
 main () =

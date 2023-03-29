@@ -70,14 +70,35 @@ impl NodeKindStr for Item {
     }
 }
 
+#[derive(Debug)]
 pub struct ExternItem {
-    name: PR<Ident>,
-    ty: PR<Ty>,
+    id: NodeId,
+    pub name: PR<Ident>,
+    pub ty: PR<N<Ty>>,
+    span: Span,
+}
+
+impl ExternItem {
+    pub fn new(id: NodeId, name: PR<Ident>, ty: PR<N<Ty>>, span: Span) -> Self {
+        Self { id, name, ty, span }
+    }
+}
+
+impl WithNodeId for ExternItem {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
+impl WithSpan for ExternItem {
+    fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl Display for ExternItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", pr_display(&self.name), pr_display&self.tyy))
+        write!(f, "{}: {}", pr_display(&self.name), pr_display(&self.ty))
     }
 }
 
@@ -86,7 +107,7 @@ pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
-    Extern(Vec<ExternItem>),
+    Extern(Vec<PR<ExternItem>>),
 }
 
 impl IsBlockEnded for ItemKind {
@@ -135,7 +156,7 @@ impl NodeKindStr for ItemKind {
             ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
             ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
             ItemKind::Decl(name, _, _) => format!("{} declaration", pr_display(name)),
-            ItemKind::Extern(items) => format!("extern block"),
+            ItemKind::Extern(_) => format!("extern block"),
         }
     }
 }

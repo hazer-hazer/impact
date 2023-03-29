@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Expr, ExprKind},
-        item::{Item, ItemKind},
+        item::{ExternItem, Item, ItemKind},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
@@ -146,6 +146,12 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
     fn visit_item(&mut self, item: &'ast Item) {
+        // External block is not an item by itself, it is a container for them
+        match item.kind() {
+            ItemKind::Extern(items) => return self.visit_extern_block(items),
+            _ => {},
+        }
+
         // Do not collect locals, they are defined and resolved in NameResolver.
         if let ModuleKind::Block(_) = self.module().kind() {
             match item.kind() {
@@ -174,9 +180,14 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            ItemKind::Extern(_) => unreachable!(),
         }
 
         self.exit_module();
+    }
+
+    fn visit_extern_item(&mut self, item: &'ast ExternItem) {
+        self.define(item.id(), DefKind::External, item.name.as_ref().unwrap());
     }
 
     fn visit_block(&mut self, block: &'ast Block) -> () {

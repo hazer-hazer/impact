@@ -2,7 +2,7 @@ use crate::span::span::Ident;
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
-    item::{Item, ItemKind},
+    item::{ExternItem, Item, ItemKind},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -74,6 +74,7 @@ pub trait AstVisitor<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }
 
@@ -101,6 +102,15 @@ pub trait AstVisitor<'ast> {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, params, visit_pat);
         walk_pr!(self, body, visit_expr);
+    }
+
+    fn visit_extern_block(&mut self, items: &'ast [PR<ExternItem>]) {
+        walk_each_pr!(self, items, visit_extern_item)
+    }
+
+    fn visit_extern_item(&mut self, item: &'ast ExternItem) {
+        walk_pr!(self, &item.name, visit_ident);
+        walk_pr!(self, &item.ty, visit_ty);
     }
 
     // Patterns //

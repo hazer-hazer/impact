@@ -1,7 +1,7 @@
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{ItemId, ItemKind, Mod, TyAlias, ROOT_ITEM_ID},
+        item::{ExternItem, ItemId, ItemKind, Mod, TyAlias, ROOT_ITEM_ID},
         pat::{Pat, PatKind},
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -96,6 +96,9 @@ impl<'a> HirVisitor for HirPP<'a> {
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
             ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(value) => self.visit_func_item(item.name(), value, id, hir),
+            ItemKind::ExternItem(extern_item) => {
+                self.visit_extern_item(item.name(), extern_item, id, hir)
+            },
         }
     }
 
@@ -131,6 +134,13 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
         self.pp.str(" = ");
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
+    }
+
+    fn visit_extern_item(&mut self, name: Ident, extern_item: &ExternItem, id: ItemId, hir: &HIR) {
+        self.pp.string(name);
+        self.pp.item_id(id);
+        self.pp.str(": ");
+        self.visit_ty(&extern_item.ty, hir);
     }
 
     fn visit_body(&mut self, &body: &BodyId, _owner: BodyOwner, hir: &HIR) {

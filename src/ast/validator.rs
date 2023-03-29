@@ -7,8 +7,8 @@ use crate::{
 };
 
 use super::{
-    item::{Item, ItemKind},
-    visitor::AstVisitor,
+    item::{ExternItem, Item, ItemKind},
+    visitor::{walk_pr, AstVisitor},
     ErrorNode, Path, WithNodeId, AST,
 };
 
@@ -209,7 +209,13 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.validate_name(name.as_ref().unwrap(), name_kind);
                 self.visit_decl_item(name, params, body, item.id());
             },
+            ItemKind::Extern(items) => self.visit_extern_block(items),
         }
+    }
+
+    fn visit_extern_item(&mut self, item: &'ast ExternItem) {
+        self.validate_name(item.name.as_ref().unwrap(), NameKind::Var);
+        walk_pr!(self, &item.ty, visit_ty);
     }
 
     fn visit_path(&mut self, path: &'ast Path) {

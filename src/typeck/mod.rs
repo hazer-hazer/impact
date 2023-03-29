@@ -529,7 +529,11 @@ impl<'hir> Typecker<'hir> {
                     DefKind::DeclareBuiltin => todo!(),
 
                     // Definitions from value namespace
-                    DefKind::Local | DefKind::Lambda | DefKind::Func | DefKind::Value => {
+                    DefKind::External
+                    | DefKind::Local
+                    | DefKind::Lambda
+                    | DefKind::Func
+                    | DefKind::Value => {
                         unreachable!()
                     },
                 }

@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
-        item::{Item, ItemKind},
+        item::{ExternItem, Item, ItemKind},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
@@ -39,6 +39,15 @@ macro_rules! lower_each_pr {
     ($self: ident, $prs: expr, $lower: ident) => {
         $prs.into_iter()
             .map(|pr| lower_pr!($self, pr, $lower))
+            .collect::<Vec<_>>()
+    };
+}
+
+macro_rules! lower_each_pr_flat {
+    ($self: ident, $prs: expr, $lower: ident) => {
+        $prs.into_iter()
+            .map(|pr| lower_pr!($self, pr, $lower))
+            .flatten()
             .collect::<Vec<_>>()
     };
 }
@@ -197,28 +206,38 @@ impl<'ast> Lower<'ast> {
 
     fn lower_ast(&mut self) {
         self.with_owner(ROOT_NODE_ID, |this| {
-            let mut items = lower_each_pr!(this, this.ast.items(), lower_item);
+            let mut items = lower_each_pr_flat!(this, this.ast.items(), lower_item);
             items.push(this.builtin_func());
             LoweredOwner::Root(Mod { items })
         });
     }
 
     // Statements //
-    fn lower_stmt(&mut self, stmt: &Stmt) -> hir::stmt::Stmt {
-        let kind = match stmt.kind() {
-            StmtKind::Expr(expr) => hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr)),
+    fn lower_stmt(&mut self, stmt: &Stmt) -> Vec<hir::stmt::Stmt> {
+        match stmt.kind() {
+            StmtKind::Expr(expr) => {
+                vec![hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr))]
+            },
             StmtKind::Item(item) => lower_pr!(self, item, maybe_lower_local).map_or_else(
-                || hir::stmt::StmtKind::Item(lower_pr!(self, item, lower_item)),
-                |local| hir::stmt::StmtKind::Local(local),
+                || {
+                    lower_pr!(self, item, lower_item)
+                        .into_iter()
+                        .map(|item| hir::stmt::StmtKind::Item(item))
+                        .collect()
+                },
+                |local| vec![hir::stmt::StmtKind::Local(local)],
             ),
-        };
-
-        let id = self.lower_node_id(stmt.id());
-        self.add_node(Node::StmtNode(hir::stmt::StmtNode::new(
-            id,
-            kind,
-            stmt.span(),
-        )))
+        }
+        .into_iter()
+        .map(|kind| {
+            let id = self.lower_node_id(stmt.id());
+            self.add_node(Node::StmtNode(hir::stmt::StmtNode::new(
+                id,
+                kind,
+                stmt.span(),
+            )))
+        })
+        .collect()
     }
 
     fn maybe_lower_local(&mut self, item: &Item) -> Option<Local> {
@@ -241,7 +260,12 @@ impl<'ast> Lower<'ast> {
     }
 
     // Items //
-    fn lower_item(&mut self, item: &Item) -> ItemId {
+    fn lower_item(&mut self, item: &Item) -> Vec<ItemId> {
+        match item.kind() {
+            ItemKind::Extern(items) => return self.lower_extern_block(items),
+            _ => {},
+        }
+
         let owner_id = self.with_owner(item.id(), |this| {
             let def_id = this.sess.def_table.get_def_id(item.id()).unwrap();
 
@@ -251,6 +275,7 @@ impl<'ast> Lower<'ast> {
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
                 },
+                ItemKind::Extern(_) => unreachable!(),
             };
 
             LoweredOwner::Item(hir::item::ItemNode::new(
@@ -261,7 +286,7 @@ impl<'ast> Lower<'ast> {
             ))
         });
 
-        ItemId::new(owner_id)
+        vec![ItemId::new(owner_id)]
     }
 
     fn lower_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
@@ -272,7 +297,7 @@ impl<'ast> Lower<'ast> {
 
     fn lower_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> hir::item::ItemKind {
         hir::item::ItemKind::Mod(Mod {
-            items: lower_each_pr!(self, items, lower_item),
+            items: lower_each_pr_flat!(self, items, lower_item),
         })
     }
 
@@ -315,6 +340,29 @@ impl<'ast> Lower<'ast> {
 
             hir::item::ItemKind::Func(self.body(params, value))
         }
+    }
+
+    fn lower_extern_block(&mut self, items: &Vec<PR<ExternItem>>) -> Vec<ItemId> {
+        lower_each_pr!(self, items, lower_extern_item)
+    }
+
+    fn lower_extern_item(&mut self, item: &ExternItem) -> ItemId {
+        let owner_id = self.with_owner(item.id(), |this| {
+            let def_id = this.sess.def_table.get_def_id(item.id()).unwrap();
+            let name = lower_pr!(this, &item.name, lower_ident);
+            let extern_item = hir::item::ExternItem {
+                ty: lower_pr!(this, &item.ty, lower_ty),
+            };
+
+            LoweredOwner::Item(hir::item::ItemNode::new(
+                name,
+                def_id,
+                hir::item::ItemKind::ExternItem(extern_item),
+                item.span(),
+            ))
+        });
+
+        owner_id.into()
     }
 
     // Patterns //
@@ -591,7 +639,7 @@ impl<'ast> Lower<'ast> {
             &res::ResKind::Local(node_id) => Res::Local(
                 *self
                     .node_id_hir_id
-                    .get_expect(node_id, &format!("Local ciable resolution {}", res)),
+                    .get_expect(node_id, &format!("Local resolution {}", res)),
             ),
             &res::ResKind::Def(def_id) => {
                 Res::Def(self.sess.def_table.get_def(def_id).kind, def_id)
@@ -623,14 +671,18 @@ impl<'ast> Lower<'ast> {
         let mut stmts = block.stmts()[0..block.stmts().len() - 1]
             .iter()
             .map(|stmt| lower_pr!(self, stmt, lower_stmt))
+            .flatten()
             .collect::<Vec<_>>();
 
         let expr = match block.stmts().last().unwrap().as_ref().unwrap().kind() {
             StmtKind::Expr(expr) => Some(lower_pr!(self, expr, lower_expr)),
             StmtKind::Item(item) => {
                 let span = item.span();
-                let item = lower_pr!(self, item, lower_item);
-                stmts.push(self.stmt_item(span, item));
+                stmts.extend(
+                    lower_pr!(self, item, lower_item)
+                        .into_iter()
+                        .map(|item| self.stmt_item(span, item)),
+                );
                 None
             },
         };

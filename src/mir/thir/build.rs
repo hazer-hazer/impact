@@ -61,7 +61,7 @@ impl<'ctx> ThirBuilder<'ctx> {
             },
             hir::expr::ExprKind::Path(path) => match self.hir.path(path.0).res() {
                 &hir::Res::Def(kind, def_id) => match kind {
-                    DefKind::Func | DefKind::Value => {
+                    DefKind::External | DefKind::Func | DefKind::Value => {
                         ExprKind::Def(def_id, self.tyctx.tyof(expr_id))
                     },
                     DefKind::Lambda => unreachable!("Lambda cannot be resolved by path"),

@@ -138,6 +138,7 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::TyAlias
             | DefKind::Mod
             | DefKind::Func
+            | DefKind::External
             | DefKind::Value => {
                 assert_eq!(def.kind().namespace(), target_ns);
                 return Res::def(def_id);
@@ -227,11 +228,13 @@ impl<'ast> NameResolver<'ast> {
                             .emit_single_label(self);
                         None
                     },
+                    // FIXME: Really unreachable?
                     DefKind::Root
                     | DefKind::Func
                     | DefKind::Value
                     | DefKind::Lambda
                     | DefKind::Local
+                    | DefKind::External
                     | DefKind::DeclareBuiltin => unreachable!(),
                 }
             })
@@ -341,6 +344,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id());
             },
+            ItemKind::Extern(items) => self.visit_extern_block(items),
         }
 
         self.exit_scope();
