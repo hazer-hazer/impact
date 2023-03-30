@@ -1,8 +1,5 @@
 use std::{
-    collections::{
-        hash_map::{DefaultHasher},
-        HashMap, HashSet,
-    },
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
 };
 
@@ -111,9 +108,7 @@ impl TyCtx {
     fn _instantiated_ty(&self, expr: Expr, ty: Ty) -> Result<Ty, ()> {
         match ty.kind() {
             TyKind::Error => todo!(),
-            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
-                Ok(ty)
-            },
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
             &TyKind::Var(var) => self.instantiated_expr_ty_var(expr, var),
             // FIXME: Panic?
             TyKind::Existential(_) => panic!(),
@@ -130,6 +125,7 @@ impl TyCtx {
                 let alpha_ty = self.instantiated_expr_ty_var(expr, alpha)?;
                 Ok(body.substitute(Subst::Var(alpha), alpha_ty))
             },
+            &TyKind::Ref(inner) => self._instantiated_ty(expr, inner),
         }
     }
 

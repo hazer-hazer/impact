@@ -95,7 +95,13 @@ builtin_table! {
     // Values //
     Value UnitValue;
 
-    // Primitive //
+    // Constructors //
+    // FIXME: Constructors are not implemented
+    Value RefCons;
+
+    // Primitive types //
     Type UnitTy;
     Type I32;
+    Type Str;
+    Type RefTy;
 }

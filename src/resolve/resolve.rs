@@ -329,10 +329,15 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 self.visit_decl_item(name, params, body, item.id());
                 return;
             },
+            ItemKind::Extern(items) => return self.visit_extern_block(items),
             _ => {},
         }
 
-        let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
+        let def_id = self
+            .sess
+            .def_table
+            .get_def_id(item.id())
+            .expect(&format!("Expected DefId for NodeId{}", item.id()));
         self.enter_module_scope(ModuleId::Def(def_id));
 
         match item.kind() {
@@ -344,7 +349,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id());
             },
-            ItemKind::Extern(items) => self.visit_extern_block(items),
+            ItemKind::Extern(_) => unreachable!(),
         }
 
         self.exit_scope();

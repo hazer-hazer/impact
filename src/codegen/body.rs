@@ -211,6 +211,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     .try_as_basic_value()
                     .unwrap_left()
             },
+            RValue::Ref(lv) => self.local_value(lv.local).into(),
         }
     }
 
@@ -267,9 +268,13 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                         .const_float(scalar.data as f64)
                         .into(),
                 },
-                TyKind::String => todo!(),
+                TyKind::Str => todo!(),
                 TyKind::Func(..) | TyKind::FuncDef(..) | TyKind::Unit => todo!(),
-                TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
+                TyKind::Ref(_)
+                | TyKind::Existential(_)
+                | TyKind::Forall(_, _)
+                | TyKind::Error
+                | TyKind::Var(_) => {
                     unreachable!()
                 },
             },
@@ -278,9 +283,10 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 TyKind::Bool => todo!(),
                 TyKind::Int(_) => todo!(),
                 TyKind::Float(_) => todo!(),
-                TyKind::String => todo!(),
+                TyKind::Str => todo!(),
                 TyKind::FuncDef(..) => todo!(),
                 TyKind::Func(..) => todo!(),
+                TyKind::Ref(_) => todo!(),
                 TyKind::Error | TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => {
                     unreachable!()
                 },

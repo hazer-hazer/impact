@@ -108,6 +108,10 @@ impl<'ctx> MirPrinter<'ctx> {
                 let def = self.sess.def_table.get_def(def_id);
                 self.pp.string(def);
             },
+            RValue::Ref(lv) => {
+                self.pp.str("ref ");
+                self.print_lvalue(lv);
+            },
         }
     }
 
@@ -124,7 +128,7 @@ impl<'ctx> MirPrinter<'ctx> {
             // FIXME: ZeroSized formatting?
             ConstKind::ZeroSized => self.pp.str("()"),
             ConstKind::Slice { data } => match const_.ty.kind() {
-                crate::typeck::ty::TyKind::String => {
+                crate::typeck::ty::TyKind::Str => {
                     self.pp.string(format!("\"{}\"", from_utf8(data).unwrap()))
                 },
                 _ => self.pp.string(format!("{:02x?}", data)),

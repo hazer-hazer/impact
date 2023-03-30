@@ -71,7 +71,7 @@ impl<'hir> Typecker<'hir> {
         match (expr.kind(), ty.kind()) {
             (&ExprKind::Lit(lit), check) => {
                 match (lit, check) {
-                    (Lit::Bool(_), TyKind::Bool) | (Lit::String(_), TyKind::String) => Ok(ty),
+                    (Lit::Bool(_), TyKind::Bool) | (Lit::String(_), TyKind::Str) => Ok(ty),
                     (Lit::Int(_, ast_kind), &TyKind::Int(kind)) => IntKind::try_from(ast_kind)
                         .map_or_else(
                             |_| self.expr_subtype(expr_id, ty),
@@ -245,7 +245,7 @@ impl<'hir> Typecker<'hir> {
             (TyKind::Bool, TyKind::Bool) => Ok(r_ty),
             (TyKind::Int(kind), TyKind::Int(kind_)) if kind == kind_ => Ok(r_ty),
             (TyKind::Float(kind), TyKind::Float(kind_)) if kind == kind_ => Ok(r_ty),
-            (TyKind::String, TyKind::String) => Ok(r_ty),
+            (TyKind::Str, TyKind::Str) => Ok(r_ty),
 
             (TyKind::Var(var), TyKind::Var(var_)) if var == var_ => Ok(r_ty),
 
@@ -279,11 +279,16 @@ impl<'hir> Typecker<'hir> {
             | (TyKind::FuncDef(_, params, body1), TyKind::FuncDef(_, params_, body2)) => {
                 // self.under_new_ctx(|this| {
                 // Enter Θ
-                self._subtype_lists(&params, &params_)?;
+                let params = self._subtype_lists(&params, &params_)?;
                 let body1 = self.apply_ctx_on(*body1);
                 let body2 = self.apply_ctx_on(*body2);
-                self._subtype(body1, body2)
+                let body = self._subtype(body1, body2)?;
+                Ok(Ty::func(r_ty.func_def_id(), params, body))
                 // })
+            },
+
+            (&TyKind::Ref(inner), &TyKind::Ref(inner_)) => {
+                Ok(Ty::ref_to(self._subtype(inner, inner_)?))
             },
 
             (&TyKind::Forall(alpha, body), _) => {
@@ -322,16 +327,21 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn _subtype_lists(&mut self, l_tys: &[Ty], r_tys: &[Ty]) -> TyResult<()> {
+    fn _subtype_lists(&mut self, l_tys: &[Ty], r_tys: &[Ty]) -> TyResult<Vec<Ty>> {
         if l_tys.len() != r_tys.len() {
             Err(TypeckErr::LateReport)
         } else {
             l_tys
                 .iter()
                 .zip(r_tys.iter())
-                .all(|(a, b)| a == b)
-                .then_some(())
-                .ok_or(TypeckErr::LateReport)
+                .map(|(&a, &b)| {
+                    if a == b {
+                        Ok(b)
+                    } else {
+                        Err(TypeckErr::LateReport)
+                    }
+                })
+                .collect()
         }
     }
 
@@ -402,7 +412,7 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
-            | TyKind::String
+            | TyKind::Str
             | TyKind::Var(_)
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
@@ -436,6 +446,12 @@ impl<'hir> Typecker<'hir> {
                     this.instantiate_l(ex, body)
                 })
             }),
+            &TyKind::Ref(inner) => self.try_to(|this| {
+                let inner_ex = this.add_fresh_common_ex();
+                let ref_ty = Ty::ref_to(inner_ex.1);
+                this.solve(ex, ref_ty.mono());
+                this.instantiate_l(inner_ex.0, inner)
+            }),
         }
     }
 
@@ -461,7 +477,7 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
-            | TyKind::String
+            | TyKind::Str
             | TyKind::Var(_)
             | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
@@ -500,6 +516,12 @@ impl<'hir> Typecker<'hir> {
                     let body_ty = body.substitute(Subst::Var(alpha), alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)
                 })
+            }),
+            &TyKind::Ref(inner) => self.try_to(|this| {
+                let inner_ex = this.add_fresh_common_ex();
+                let ref_ty = Ty::ref_to(inner_ex.1);
+                this.solve(ex, ref_ty.mono());
+                this.instantiate_r(inner, inner_ex.0)
             }),
         }
     }

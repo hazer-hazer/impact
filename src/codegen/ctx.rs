@@ -48,7 +48,11 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                 FloatKind::F32 => self.llvm_ctx.f32_type().into(),
                 FloatKind::F64 => self.llvm_ctx.f64_type().into(),
             },
-            TyKind::String => self.cstring_ptr_ty().into(),
+            &TyKind::Ref(inner) => self
+                .conv_basic_ty(inner)
+                .ptr_type(AddressSpace::default())
+                .into(),
+            TyKind::Str => self.cstring_ptr_ty().into(),
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self
                 .conv_basic_ty(*body)
                 .fn_type(

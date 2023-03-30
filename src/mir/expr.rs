@@ -31,7 +31,7 @@ impl<'ctx> MirBuilder<'ctx> {
 
     pub(super) fn string_slice_const(&self, val: &[u8]) -> Const {
         // FIXME: `to_owner` ok? Maybe we can leak as all strings are interned globally?
-        Const::slice(Ty::string(), val.to_owned().into_boxed_slice())
+        Const::slice(Ty::str(), val.to_owned().into_boxed_slice())
     }
 
     // Expressions as categories //
@@ -68,6 +68,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Lambda { .. }
             | ExprKind::Ty(_, _)
             | ExprKind::Def(_, _)
+            | ExprKind::Ref(_)
             | ExprKind::Builtin(_) => {
                 let temp = unpack!(bb = self.as_temp(bb, expr_id));
                 bb.with(temp.lvalue())
@@ -151,9 +152,20 @@ impl<'ctx> MirBuilder<'ctx> {
                     bb.with(RValue::Infix(InfixOp::try_from(bt).unwrap()))
                     // unreachable!("builtin {} must not appear as a standalone expression", bt)
                 },
-                Builtin::UnitTy | Builtin::I32 => {
+                Builtin::RefTy | Builtin::Str | Builtin::UnitTy | Builtin::I32 => {
                     unreachable!("builtin {} is not an expression", bt)
                 },
+                Builtin::RefCons => {
+                    panic!("Ref constructor used as a standalone expression and must not appear on MIR building stage as Builtin")
+                },
+            },
+            ExprKind::Ref(_) => {
+                assert!(!matches!(
+                    expr.categorize(),
+                    ExprCategory::AsRValue | ExprCategory::Const
+                ));
+                let operand = unpack!(bb = self.as_operand(bb, expr_id));
+                bb.with(operand.rvalue())
             },
         }
     }
@@ -207,6 +219,12 @@ impl<'ctx> MirBuilder<'ctx> {
                 // self.builder.goto(bb, target);
                 // target.unit()
 
+                bb.unit()
+            },
+
+            &ExprKind::Ref(arg) => {
+                let operand = unpack!(bb = self.as_operand(bb, arg));
+                self.push_assign(bb, lvalue, operand.rvalue());
                 bb.unit()
             },
 

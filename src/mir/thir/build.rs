@@ -1,6 +1,6 @@
 use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
-    resolve::def::DefKind,
+    resolve::{builtin::Builtin, def::DefKind},
     span::span::WithSpan,
     typeck::tyctx::TyCtx,
 };
@@ -81,11 +81,7 @@ impl<'ctx> ThirBuilder<'ctx> {
                 body_id: body,
                 def_id,
             },
-            hir::expr::ExprKind::Call(hir::expr::Call { lhs, args }) => ExprKind::Call {
-                lhs: self.expr(*lhs),
-                args: args.iter().copied().map(|arg| self.expr(arg)).collect(),
-                func_ty: self.tyctx.instantiated_expr_ty(*lhs).unwrap(),
-            },
+            hir::expr::ExprKind::Call(call) => self.call(call),
             &hir::expr::ExprKind::Let(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Ty(hir::expr::TyExpr { expr, ty: _ }) => {
                 ExprKind::Ty(self.expr(expr), self.tyctx.tyof(expr_id))
@@ -100,25 +96,28 @@ impl<'ctx> ThirBuilder<'ctx> {
         })
     }
 
-    // fn call(&mut self, call: &hir::expr::Call) -> ExprKind {
-    //     let lhs = call.lhs;
-    //     let arg = call.arg;
+    fn call(&mut self, call: &hir::expr::Call) -> ExprKind {
+        let lhs = call.lhs;
+        let args = &call.args;
 
-    //     match self.hir.expr(lhs).kind() {
-    //         hir::expr::ExprKind::BuiltinExpr(bt) => match bt {
-    //             Builtin::AddInt => todo!(),
-    //             Builtin::SubInt => todo!(),
-    //             _ => {},
-    //         },
-    //         _ => {},
-    //     }
+        match self.hir.expr(lhs).kind() {
+            hir::expr::ExprKind::BuiltinExpr(bt) => match bt {
+                Builtin::RefCons => {
+                    assert_eq!(args.len(), 1);
+                    let arg = self.expr(args[0]);
+                    return ExprKind::Ref(arg);
+                },
+                _ => {},
+            },
+            _ => {},
+        }
 
-    //     ExprKind::Call {
-    //         lhs: self.expr(lhs),
-    //         arg: self.expr(arg),
-    //         func_ty: self.tyctx.instantiated_expr_ty(lhs).unwrap(),
-    //     }
-    // }
+        ExprKind::Call {
+            lhs: self.expr(lhs),
+            args: args.iter().copied().map(|arg| self.expr(arg)).collect(),
+            func_ty: self.tyctx.instantiated_expr_ty(lhs).unwrap(),
+        }
+    }
 
     fn stmt(&mut self, stmt_id: hir::stmt::Stmt) -> Option<StmtId> {
         let stmt = self.hir.stmt(stmt_id);

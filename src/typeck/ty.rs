@@ -267,8 +267,8 @@ impl Ty {
         Self::new(TyKind::Float(kind))
     }
 
-    pub fn string() -> Ty {
-        Self::new(TyKind::String)
+    pub fn str() -> Ty {
+        Self::new(TyKind::Str)
     }
 
     pub fn func(def_id: Option<DefId>, params: Vec<Ty>, body: Ty) -> Ty {
@@ -277,6 +277,10 @@ impl Ty {
         } else {
             TyKind::Func(params, body)
         })
+    }
+
+    pub fn ref_to(ty: Ty) -> Ty {
+        Self::new(TyKind::Ref(ty))
     }
 
     pub fn forall(var: TyVarId, body: Ty) -> Ty {
@@ -317,13 +321,14 @@ impl Ty {
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
-            | TyKind::String
+            | TyKind::Str
             | TyKind::Var(_)
             | TyKind::Existential(_) => true,
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_mono) && body.is_mono()
             },
             TyKind::Forall(_, _) => false,
+            TyKind::Ref(ty) => ty.is_mono(),
         }
     }
 
@@ -334,22 +339,19 @@ impl Ty {
     pub fn is_instantiated(&self) -> bool {
         match self.kind() {
             TyKind::Error => todo!(),
-            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
-                true
-            },
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => true,
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
+            TyKind::Ref(ty) => ty.is_instantiated(),
         }
     }
 
     pub fn is_solved(&self) -> bool {
         match self.kind() {
             TyKind::Error => todo!(),
-            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
-                true
-            },
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => true,
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_solved) && body.is_solved()
             },
@@ -357,6 +359,7 @@ impl Ty {
             TyKind::Var(_) => true,
             TyKind::Existential(_) => false,
             TyKind::Forall(_, ty) => ty.is_solved(),
+            TyKind::Ref(ty) => ty.is_solved(),
         }
     }
 
@@ -367,7 +370,7 @@ impl Ty {
             TyKind::Bool => Some(MonoTyKind::Bool),
             &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
             &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
-            TyKind::String => Some(MonoTyKind::String),
+            TyKind::Str => Some(MonoTyKind::String),
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let params = params
                     .iter()
@@ -381,6 +384,7 @@ impl Ty {
                 Some(MonoTyKind::Func(params, Box::new(body)))
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
+            TyKind::Ref(ty) => Some(MonoTyKind::Ref(Box::new(ty.as_mono()?))),
         }?;
 
         Some(MonoTy { kind, ty: *self })
@@ -423,7 +427,7 @@ impl Ty {
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
-            | TyKind::String => *self,
+            | TyKind::Str => *self,
             &TyKind::Var(ident) => {
                 if subst == ident {
                     with
@@ -446,6 +450,7 @@ impl Ty {
                 let body = body.substitute(subst, with);
                 Ty::func(self.func_def_id(), param, body)
             },
+            &TyKind::Ref(ty) => Ty::ref_to(ty.substitute(subst, with)),
             &TyKind::Forall(ident, body) => {
                 if subst == ident {
                     Ty::forall(ident, with)
@@ -513,12 +518,15 @@ pub enum TyKind {
     Int(IntKind),
     Float(FloatKind),
 
-    String,
+    Str,
 
     /// Type of function or lambda
     FuncDef(DefId, Vec<Ty>, Ty),
 
     Func(Vec<Ty>, Ty),
+
+    // Constructors? -> Kinds? -> PANIC!!! 😨
+    Ref(Ty),
 
     Var(TyVarId),
     Existential(Existential),
@@ -533,7 +541,7 @@ impl std::fmt::Display for TyKind {
             TyKind::Bool => write!(f, "bool"),
             TyKind::Int(kind) => write!(f, "{}", kind),
             TyKind::Float(kind) => write!(f, "{}", kind),
-            TyKind::String => write!(f, "{}", "string"),
+            TyKind::Str => write!(f, "{}", "string"),
             TyKind::Func(params, body) => write!(
                 f,
                 "({} -> {})",
@@ -557,6 +565,7 @@ impl std::fmt::Display for TyKind {
                     def_id
                 )
             },
+            TyKind::Ref(ty) => write!(f, "ref {}", ty),
             TyKind::Var(name) => write!(f, "{}", name),
             TyKind::Existential(ex) => write!(f, "{}", ex),
             &TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
@@ -678,6 +687,7 @@ pub enum MonoTyKind {
     Float(FloatKind),
     String,
     Func(Vec<Box<MonoTy>>, Box<MonoTy>),
+    Ref(Box<MonoTy>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

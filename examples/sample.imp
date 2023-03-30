@@ -1,13 +1,17 @@
+type () = builtin "UnitTy"
 type i32 = builtin "I32"
+type str = builtin "Str"
+type Ref = builtin "RefTy"
 
 () = builtin "UnitValue"
-type () = builtin "UnitTy"
 
 (+) = builtin "AddInt"
 (-) = builtin "SubInt"
 
+ref = builtin "RefCons"
+
 extern
-    puts: string -> i32
+    puts: str -> i32
 
 foo () = 123: i32
 

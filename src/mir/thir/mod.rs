@@ -56,6 +56,7 @@ pub enum ExprKind {
     LocalRef(LocalVar),
     Def(DefId, Ty),
     Block(BlockId),
+    Ref(ExprId),
     Call {
         func_ty: Ty,
         lhs: ExprId,
@@ -87,7 +88,9 @@ impl Expr {
             ExprKind::Lit(_) => ExprCategory::Const,
             ExprKind::LocalRef(_) => ExprCategory::LValue,
 
-            ExprKind::Call { .. } | ExprKind::Block(_) => ExprCategory::StoreRValue,
+            ExprKind::Ref(_) | ExprKind::Call { .. } | ExprKind::Block(_) => {
+                ExprCategory::StoreRValue
+            },
             ExprKind::Def(..) | ExprKind::Lambda { .. } | ExprKind::Builtin(_) => {
                 ExprCategory::AsRValue
             },

@@ -24,6 +24,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Call { .. }
             | ExprKind::Lambda { .. }
             | ExprKind::Ty(_, _)
+            | ExprKind::Ref(_)
             | ExprKind::Builtin(_) => {
                 let _temp = unpack!(bb = self.as_temp(bb, expr_id));
             },

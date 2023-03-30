@@ -5,7 +5,7 @@ use crate::{resolve::builtin::Builtin, typeck::ty::TyVarId};
 use super::ty::{IntKind, Ty};
 
 pub fn builtins() -> HashMap<Builtin, Ty> {
-    let _ty_vars = HashMap::<&str, TyVarId>::new();
+    let mut ty_vars = HashMap::<&str, TyVarId>::new();
 
     macro_rules! ty {
         (()) => {
@@ -15,6 +15,14 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         (i32) => {
             Ty::int(IntKind::I32)
         };
+
+        (str) => {
+            Ty::str()
+        };
+
+        (ref $($ty: tt)+) => {{
+            Ty::ref_to(ty!($($ty)+))
+        }};
 
         ($var: ident) => {
             Ty::var(ty_vars.get(stringify!($var)).copied().unwrap())
@@ -56,9 +64,12 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         // ),
         (Builtin::AddInt, ty!(i32 - i32 -> i32)),
         (Builtin::SubInt, ty!(i32 - i32 -> i32)),
+        // FIXME: Must be a constructor?
+        (Builtin::RefCons, ty!(forall r. r -> ref r)),
         // Types //
         (Builtin::UnitTy, ty!(())),
         (Builtin::I32, ty!(i32)),
+        (Builtin::Str, ty!(str)),
     ]);
 
     builtins

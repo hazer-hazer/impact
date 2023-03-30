@@ -225,6 +225,8 @@ pub enum RValue {
     Operand(Operand),
     Infix(InfixOp),
 
+    Ref(LValue),
+
     // TODO: Upvars
     Closure(DefId),
 
@@ -246,6 +248,7 @@ impl Display for RValue {
         match self {
             RValue::Operand(operand) => operand.fmt(f),
             RValue::Infix(infix) => write!(f, "({})", infix),
+            RValue::Ref(operand) => write!(f, "ref {}", operand),
             RValue::Closure(def_id) => write!(f, "closure{}", def_id),
             RValue::FuncRef(def_id, ty) => write!(f, "func{}:{}", def_id, ty),
             RValue::ClosureRef(def_id) => write!(f, "@closure_ref{}", def_id),

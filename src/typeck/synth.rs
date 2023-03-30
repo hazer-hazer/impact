@@ -29,7 +29,7 @@ impl<'hir> Typecker<'hir> {
                     hir_id,
                     Ty::func(
                         Some(item.def_id()),
-                        vec![Ty::string()],
+                        vec![Ty::str()],
                         Ty::var(Ty::next_ty_var_id()),
                     ),
                 );
@@ -138,7 +138,7 @@ impl<'hir> Typecker<'hir> {
     fn synth_lit(&mut self, lit: &Lit) -> TyResult<Ty> {
         Ok(match lit {
             Lit::Bool(_) => Ty::bool(),
-            Lit::String(_) => Ty::string(),
+            Lit::String(_) => Ty::str(),
 
             &Lit::Int(_, kind) => self.conv_int(kind),
             &Lit::Float(_, kind) => self.conv_float(kind),

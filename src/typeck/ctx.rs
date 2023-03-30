@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::{
     cli::verbose,
@@ -81,7 +81,7 @@ impl GlobalCtx {
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
-            | TyKind::String
+            | TyKind::Str
             | TyKind::Var(_) => ty,
             // FIXME: Can we panic on unwrap?
             &TyKind::Existential(ex) => self.apply_on(
@@ -94,6 +94,7 @@ impl GlobalCtx {
                 self.apply_on(*body),
             ),
             &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
+            &TyKind::Ref(inner) => Ty::ref_to(self.apply_on(inner)),
         }
     }
 

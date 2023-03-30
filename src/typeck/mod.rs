@@ -34,6 +34,7 @@ pub mod ctx;
 mod synth;
 pub mod ty;
 pub mod tyctx;
+mod kind;
 
 #[derive(Debug)]
 pub enum TypeckErr {
@@ -356,7 +357,7 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
-            | TyKind::String => ty,
+            | TyKind::Str => ty,
 
             &TyKind::Existential(ex) => self
                 .get_solution(ex)
@@ -376,6 +377,7 @@ impl<'hir> Typecker<'hir> {
                 let body = self._apply_ctx_on(body);
                 Ty::forall(ident, body)
             },
+            &TyKind::Ref(inner) => Ty::ref_to(self._apply_ctx_on(inner)),
         }
     }
 
@@ -386,7 +388,7 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Bool
             | TyKind::Int(_)
             | TyKind::Float(_)
-            | TyKind::String => false,
+            | TyKind::Str => false,
             &TyKind::Var(name_) if name == name_ => true,
             TyKind::Var(_) => false,
             &TyKind::Existential(ex) if name == ex => {
@@ -403,15 +405,14 @@ impl<'hir> Typecker<'hir> {
             },
             &TyKind::Forall(alpha, _) if name == alpha => true,
             &TyKind::Forall(_, body) => self.ty_occurs_in(body, name),
+            &TyKind::Ref(inner) => self.ty_occurs_in(inner, name),
         }
     }
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
         match ty.kind() {
             TyKind::Error => Ok(ty),
-            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::String => {
-                Ok(ty)
-            },
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
             &TyKind::Var(_ident) => {
                 // FIXME
                 Ok(ty)
@@ -439,6 +440,7 @@ impl<'hir> Typecker<'hir> {
                 // let open_forall = this.open_forall(body, alpha);
                 this.ty_wf(body)
             }),
+            &TyKind::Ref(inner) => self.ty_wf(inner),
         }
     }
 
@@ -496,11 +498,35 @@ impl<'hir> Typecker<'hir> {
                 let body = self.conv(*body);
                 Ty::func(None, params, body)
             },
-            hir::ty::TyKind::App(_cons, _arg) => todo!(),
+            hir::ty::TyKind::App(cons, args) => match self.hir.ty(*cons).kind() {
+                hir::ty::TyKind::Builtin(bt) => match bt {
+                    Builtin::RefTy => {
+                        let mut args = args.iter().map(|&arg| self.conv(arg)).collect::<Vec<_>>();
+                        assert_eq!(args.len(), 1);
+                        return Ty::ref_to(args.remove(0));
+                    },
+                    _ => panic!(),
+                },
+                _ => panic!(),
+            },
             hir::ty::TyKind::Builtin(bt) => match bt {
                 Builtin::UnitTy => Ty::unit(),
                 Builtin::I32 => Ty::int(IntKind::I32),
-                _ => unreachable!(),
+                Builtin::Str => Ty::str(),
+                Builtin::RefTy => {
+                    // FIXME: Remove and return constructor type. KINDS AAAAAAA
+                    MessageBuilder::error()
+                        .span(ty.span())
+                        .text(format!(
+                            "{} is a type constructor and cannot be used without parameter",
+                            bt
+                        ))
+                        .emit_single_label(self);
+                    Ty::error()
+                },
+                Builtin::RefCons | Builtin::AddInt | Builtin::SubInt | Builtin::UnitValue => {
+                    unreachable!()
+                },
             },
         }
     }
