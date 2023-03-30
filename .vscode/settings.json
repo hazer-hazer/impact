@@ -17,6 +17,7 @@
     "Internable",
     "interner",
     "Interner",
+    "Kinded",
     "lval",
     "lvalue",
     "monomorphize",
