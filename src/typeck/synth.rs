@@ -345,7 +345,7 @@ impl<'hir> Typecker<'hir> {
         let lhs_expr = *lhs.node().node();
         let lhs_ty = lhs.node().ty();
 
-        match lhs_ty.kind() {
+        match lhs_ty.ty_kind() {
             // FIXME: Or return Ok(lhs_ty)?
             TyKind::Error => Ok(lhs_ty),
             &TyKind::Existential(ex) => {

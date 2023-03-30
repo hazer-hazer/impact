@@ -75,7 +75,7 @@ impl GlobalCtx {
      * If returned type contains unsolved existentials -- we failed to infer its type.
      */
     pub fn apply_on(&self, ty: Ty) -> Ty {
-        match ty.kind() {
+        match ty.ty_kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Bool

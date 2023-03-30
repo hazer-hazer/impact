@@ -68,7 +68,7 @@ impl<'hir> Typecker<'hir> {
     fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
 
-        match (expr.kind(), ty.kind()) {
+        match (expr.kind(), ty.ty_kind()) {
             (&ExprKind::Lit(lit), check) => {
                 match (lit, check) {
                     (Lit::Bool(_), TyKind::Bool) | (Lit::String(_), TyKind::Str) => Ok(ty),
@@ -211,7 +211,7 @@ impl<'hir> Typecker<'hir> {
                 //     .emit(self);
 
                 // TODO: Check this logic
-                match l_ty.node().kind() {
+                match l_ty.node().ty_kind() {
                     &TyKind::Existential(ex) => {
                         self.solve(ex, Ty::error().mono());
                     },
@@ -237,7 +237,7 @@ impl<'hir> Typecker<'hir> {
         assert!(self.ty_wf(l_ty).is_ok());
         assert!(self.ty_wf(r_ty).is_ok());
 
-        match (l_ty.kind(), r_ty.kind()) {
+        match (l_ty.ty_kind(), r_ty.ty_kind()) {
             // FIXME: Is these pats ok?
             (TyKind::Error, _) | (_, TyKind::Error) => Err(TypeckErr::LateReport),
 
@@ -352,7 +352,7 @@ impl<'hir> Typecker<'hir> {
     #[deprecated]
     fn try_instantiate_common(&mut self, ex: Existential, ty: Ty) -> TyResult<Ty> {
         // Inst(L|R)Reach
-        match ty.kind() {
+        match ty.ty_kind() {
             &TyKind::Existential(ty_ex) => {
                 let ex_depth = self.find_unbound_ex_depth(ex);
                 let ty_ex_depth = self.find_unbound_ex_depth(ty_ex);
@@ -394,7 +394,7 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_l(&mut self, ex: Existential, r_ty: Ty) -> TyResult<Ty> {
         verbose!("Instantiate Left {} / {}", ex, r_ty);
 
-        if let &TyKind::Existential(beta_ex) = r_ty.kind() {
+        if let &TyKind::Existential(beta_ex) = r_ty.ty_kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
                 verbose!("InstLReach: ");
                 return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
@@ -406,7 +406,7 @@ impl<'hir> Typecker<'hir> {
             return Ok(self.solve(ex, mono));
         }
 
-        match r_ty.kind() {
+        match r_ty.ty_kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Bool
@@ -461,7 +461,7 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_r(&mut self, l_ty: Ty, ex: Existential) -> TyResult<Ty> {
         verbose!("Instantiate Right {} / {}", ex, l_ty);
 
-        if let &TyKind::Existential(beta_ex) = l_ty.kind() {
+        if let &TyKind::Existential(beta_ex) = l_ty.ty_kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
                 return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
             }
@@ -471,7 +471,7 @@ impl<'hir> Typecker<'hir> {
             return Ok(self.solve(ex, mono));
         }
 
-        match l_ty.kind() {
+        match l_ty.ty_kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Bool

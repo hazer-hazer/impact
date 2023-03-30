@@ -31,10 +31,10 @@ use self::{
 pub mod builtin;
 mod check;
 pub mod ctx;
+mod kind;
 mod synth;
 pub mod ty;
 pub mod tyctx;
-mod kind;
 
 #[derive(Debug)]
 pub enum TypeckErr {
@@ -295,7 +295,7 @@ impl<'hir> Typecker<'hir> {
 
     fn solve(&mut self, ex: Existential, sol: MonoTy) -> Ty {
         let sol = sol.ty;
-        if let &TyKind::Existential(sol_ex) = sol.kind() {
+        if let &TyKind::Existential(sol_ex) = sol.ty_kind() {
             assert_ne!(sol_ex, ex, "Tried to solve ex with itself {} / {}", ex, sol);
         }
         verbose!("Solve {} as {}", ex, sol);
@@ -350,7 +350,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _apply_ctx_on(&self, ty: Ty) -> Ty {
-        match ty.kind() {
+        match ty.ty_kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Var(_)
@@ -382,7 +382,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn ty_occurs_in(&mut self, ty: Ty, name: Subst) -> bool {
-        match ty.kind() {
+        match ty.ty_kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Bool
@@ -410,7 +410,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
-        match ty.kind() {
+        match ty.ty_kind() {
             TyKind::Error => Ok(ty),
             TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
             &TyKind::Var(_ident) => {
@@ -446,7 +446,7 @@ impl<'hir> Typecker<'hir> {
 
     /// Substitute all occurrences of universally quantified type inside it body
     pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
-        match ty.kind() {
+        match ty.ty_kind() {
             &TyKind::Forall(alpha, body) => ty.substitute(Subst::Var(alpha), body),
             _ => unreachable!(),
         }

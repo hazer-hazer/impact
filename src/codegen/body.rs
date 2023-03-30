@@ -240,7 +240,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         verbose!("Convert const {} to BasicValue", const_);
 
         match &const_.kind {
-            ConstKind::Scalar(scalar) => match const_.ty.kind() {
+            ConstKind::Scalar(scalar) => match const_.ty.ty_kind() {
                 TyKind::Bool => self
                     .ctx
                     .llvm_ctx
@@ -278,7 +278,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     unreachable!()
                 },
             },
-            ConstKind::ZeroSized => match const_.ty.kind() {
+            ConstKind::ZeroSized => match const_.ty.ty_kind() {
                 TyKind::Unit => self.ctx.unit_value(),
                 TyKind::Bool => todo!(),
                 TyKind::Int(_) => todo!(),

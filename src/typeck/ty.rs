@@ -18,6 +18,8 @@ use crate::{
     utils::macros::match_expected,
 };
 
+use super::kind::Kind;
+
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 declare_idx!(TyVarId, u32, "{}", Color::Cyan);
 
@@ -235,8 +237,12 @@ impl Ty {
         Self(TY_INTERNER.write().unwrap().intern(tys))
     }
 
-    fn new(kind: TyKind) -> Self {
-        Self::intern(TyS::new(kind))
+    fn new(ty_kind: TyKind, kind: Kind) -> Self {
+        Self::intern(TyS::new(ty_kind, kind))
+    }
+
+    fn new_ty(ty_kind: TyKind) -> Self {
+        Self::new(ty_kind, Kind::Ty)
     }
 
     pub fn next_ty_var_id() -> TyVarId {
@@ -244,35 +250,36 @@ impl Ty {
     }
 
     pub fn unit() -> Ty {
-        Self::new(TyKind::Unit)
+        Self::new_ty(TyKind::Unit)
     }
 
     pub fn error() -> Ty {
-        Self::new(TyKind::Error)
+        Self::new_ty(TyKind::Error)
     }
 
     pub fn var(id: TyVarId) -> Ty {
-        Self::new(TyKind::Var(id))
+        Self::new_ty(TyKind::Var(id))
     }
 
     pub fn bool() -> Ty {
-        Self::new(TyKind::Bool)
+        Self::new_ty(TyKind::Bool)
     }
 
     pub fn int(kind: IntKind) -> Ty {
-        Self::new(TyKind::Int(kind))
+        Self::new_ty(TyKind::Int(kind))
     }
 
     pub fn float(kind: FloatKind) -> Ty {
-        Self::new(TyKind::Float(kind))
+        Self::new_ty(TyKind::Float(kind))
     }
 
     pub fn str() -> Ty {
-        Self::new(TyKind::Str)
+        Self::new_ty(TyKind::Str)
     }
 
     pub fn func(def_id: Option<DefId>, params: Vec<Ty>, body: Ty) -> Ty {
-        Self::new(if let Some(def_id) = def_id {
+        assert!(params.iter().all(|param| param.ty_kind() == body.ty_kind()));
+        Self::new_ty(if let Some(def_id) = def_id {
             TyKind::FuncDef(def_id, params, body)
         } else {
             TyKind::Func(params, body)
@@ -280,15 +287,15 @@ impl Ty {
     }
 
     pub fn ref_to(ty: Ty) -> Ty {
-        Self::new(TyKind::Ref(ty))
+        Self::new_ty(TyKind::Ref(ty))
     }
 
     pub fn forall(var: TyVarId, body: Ty) -> Ty {
-        Self::new(TyKind::Forall(var, body))
+        Self::new_ty(TyKind::Forall(var, body))
     }
 
     pub fn existential(ex: Existential) -> Ty {
-        Self::new(TyKind::Existential(ex))
+        Self::new_ty(TyKind::Existential(ex))
     }
 
     pub fn default_int() -> Ty {
@@ -303,19 +310,23 @@ impl Ty {
         TY_INTERNER.read().unwrap().expect(self.0)
     }
 
-    pub fn kind(&self) -> &TyKind {
+    pub fn kind(&self) -> &Kind {
         self.tys().kind()
     }
 
+    pub fn ty_kind(&self) -> &TyKind {
+        self.tys().ty_kind()
+    }
+
     pub fn as_ex(&self) -> Option<Existential> {
-        match self.kind() {
+        match self.ty_kind() {
             &TyKind::Existential(ex) => Some(ex),
             _ => None,
         }
     }
 
     pub fn is_mono(&self) -> bool {
-        match self.kind() {
+        match self.ty_kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Bool
@@ -333,11 +344,11 @@ impl Ty {
     }
 
     pub fn is_func_like(&self) -> bool {
-        matches!(self.kind(), TyKind::Func(..) | TyKind::FuncDef(..))
+        matches!(self.ty_kind(), TyKind::Func(..) | TyKind::FuncDef(..))
     }
 
     pub fn is_instantiated(&self) -> bool {
-        match self.kind() {
+        match self.ty_kind() {
             TyKind::Error => todo!(),
             TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => true,
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
@@ -349,8 +360,8 @@ impl Ty {
     }
 
     pub fn is_solved(&self) -> bool {
-        match self.kind() {
-            TyKind::Error => todo!(),
+        match self.ty_kind() {
+            TyKind::Error => true,
             TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => true,
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_solved) && body.is_solved()
@@ -364,7 +375,7 @@ impl Ty {
     }
 
     pub fn as_mono(&self) -> Option<MonoTy> {
-        let kind = match self.kind() {
+        let kind = match self.ty_kind() {
             TyKind::Error => Some(MonoTyKind::Error),
             TyKind::Unit => Some(MonoTyKind::Unit),
             TyKind::Bool => Some(MonoTyKind::Bool),
@@ -401,27 +412,17 @@ impl Ty {
     }
 
     pub fn func_def_id(&self) -> Option<DefId> {
-        if let &TyKind::FuncDef(def_id, ..) = self.kind() {
+        if let &TyKind::FuncDef(def_id, ..) = self.ty_kind() {
             Some(def_id)
         } else {
             None
         }
     }
 
-    pub fn uncurried_params_count(&self) -> usize {
-        let mut ty = self.as_func_like().1;
-        let mut count = 1;
-        while ty.is_func_like() {
-            count += 1;
-            ty = ty.as_func_like().1;
-        }
-        count
-    }
-
     pub fn substitute(&self, subst: Subst, with: Ty) -> Ty {
         verbose!("Substitute {} in {} with {}", subst, self, with);
 
-        match self.kind() {
+        match self.ty_kind() {
             TyKind::Error
             | TyKind::Unit
             | TyKind::Bool
@@ -464,19 +465,19 @@ impl Ty {
 
     // Strict getters //
     pub fn as_int(&self) -> IntKind {
-        match_expected!(self.kind(), &TyKind::Int(kind) => kind)
+        match_expected!(self.ty_kind(), &TyKind::Int(kind) => kind)
     }
 
     pub fn as_float_kind(&self) -> FloatKind {
-        match_expected!(self.kind(), &TyKind::Float(kind) => kind)
+        match_expected!(self.ty_kind(), &TyKind::Float(kind) => kind)
     }
 
     pub fn as_func(&self) -> (DefId, &[Ty], Ty) {
-        match_expected!(self.kind(), TyKind::FuncDef(def_id, params, body) => (*def_id, params.as_ref(), *body))
+        match_expected!(self.ty_kind(), TyKind::FuncDef(def_id, params, body) => (*def_id, params.as_ref(), *body))
     }
 
     pub fn as_func_like(&self) -> (&[Ty], Ty) {
-        match_expected!(self.kind(), TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => (params.as_ref(), *body))
+        match_expected!(self.ty_kind(), TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => (params.as_ref(), *body))
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -484,14 +485,14 @@ impl Ty {
     }
 
     pub fn body_return_ty(&self) -> Ty {
-        match self.kind() {
+        match self.ty_kind() {
             &TyKind::FuncDef(_, _, body) | &TyKind::Func(_, body) => body,
             _ => *self,
         }
     }
 
     pub fn is_unit(&self) -> bool {
-        self.kind() == &TyKind::Unit
+        self.ty_kind() == &TyKind::Unit
     }
 }
 
@@ -503,7 +504,7 @@ impl std::fmt::Debug for Ty {
 
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind())
+        write!(f, "{}", self.ty_kind())
     }
 }
 
@@ -575,26 +576,31 @@ impl std::fmt::Display for TyKind {
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct TyS {
-    kind: TyKind,
+    ty_kind: TyKind,
+    kind: Kind,
 }
 
 impl TyS {
-    pub fn new(kind: TyKind) -> Self {
-        Self { kind }
+    pub fn new(ty_kind: TyKind, kind: Kind) -> Self {
+        Self { ty_kind, kind }
     }
 
     pub fn error() -> Self {
-        Self::new(TyKind::Error)
+        Self::new(TyKind::Error, Kind::ty())
     }
 
-    pub fn kind(&self) -> &TyKind {
+    pub fn ty_kind(&self) -> &TyKind {
+        &self.ty_kind
+    }
+
+    pub fn kind(&self) -> &Kind {
         &self.kind
     }
 }
 
 impl std::fmt::Display for TyS {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind())
+        write!(f, "{}", self.ty_kind())
     }
 }
 

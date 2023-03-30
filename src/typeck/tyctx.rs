@@ -106,7 +106,7 @@ impl TyCtx {
     }
 
     fn _instantiated_ty(&self, expr: Expr, ty: Ty) -> Result<Ty, ()> {
-        match ty.kind() {
+        match ty.ty_kind() {
             TyKind::Error => todo!(),
             TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
             &TyKind::Var(var) => self.instantiated_expr_ty_var(expr, var),

@@ -40,7 +40,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     }
 
     pub fn conv_ty(&self, ty: Ty) -> AnyTypeEnum<'ink> {
-        match ty.kind() {
+        match ty.ty_kind() {
             TyKind::Unit => self.unit_ty().into(),
             TyKind::Bool => self.llvm_ctx.bool_type().into(),
             TyKind::Int(kind) => self.llvm_ctx.custom_width_int_type(kind.bits()).into(),
