@@ -22,8 +22,7 @@ use crate::{
 use self::{
     ctx::{GlobalCtx, InferCtx},
     ty::{
-        ExPair, Existential, ExistentialId, ExistentialKind, FloatKind, IntKind, MonoTy, Ty,
-        TyKind, TyVarId,
+        ExPair, ExSort, Existential, ExistentialId, FloatKind, IntKind, MonoTy, Ty, TySort, TyVarId,
     },
     tyctx::TyCtx,
 };
@@ -31,6 +30,7 @@ use self::{
 pub mod builtin;
 mod check;
 pub mod ctx;
+pub mod kind;
 mod synth;
 pub mod ty;
 pub mod tyctx;
@@ -271,18 +271,18 @@ impl<'hir> Typecker<'hir> {
         ))
     }
 
-    fn fresh_ex(&mut self, kind: ExistentialKind) -> Existential {
-        Existential::new(kind, *self.existential.inc())
+    fn fresh_ex(&mut self, sort: ExSort) -> Existential {
+        Existential::new(sort, *self.existential.inc())
     }
 
-    fn add_fresh_ex(&mut self, kind: ExistentialKind) -> ExPair {
-        let ex = self.fresh_ex(kind);
+    fn add_fresh_ex(&mut self, sort: ExSort) -> ExPair {
+        let ex = self.fresh_ex(sort);
         self.add_ex(ex);
         (ex, Ty::existential(ex))
     }
 
     fn add_fresh_common_ex(&mut self) -> ExPair {
-        self.add_fresh_ex(ExistentialKind::Common)
+        self.add_fresh_ex(ExSort::Common)
     }
 
     fn add_fresh_common_ex_list(&mut self, count: usize) -> Vec<ExPair> {
@@ -294,7 +294,7 @@ impl<'hir> Typecker<'hir> {
 
     fn solve(&mut self, ex: Existential, sol: MonoTy) -> Ty {
         let sol = sol.ty;
-        if let &TyKind::Existential(sol_ex) = sol.kind() {
+        if let &TySort::Existential(sol_ex) = sol.sort() {
             assert_ne!(sol_ex, ex, "Tried to solve ex with itself {} / {}", ex, sol);
         }
         verbose!("Solve {} as {}", ex, sol);
@@ -349,20 +349,20 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _apply_ctx_on(&self, ty: Ty) -> Ty {
-        match ty.kind() {
-            TyKind::Error
-            | TyKind::Unit
-            | TyKind::Var(_)
-            | TyKind::Bool
-            | TyKind::Int(_)
-            | TyKind::Float(_)
-            | TyKind::Str => ty,
+        match ty.sort() {
+            TySort::Error
+            | TySort::Unit
+            | TySort::Var(_)
+            | TySort::Bool
+            | TySort::Int(_)
+            | TySort::Float(_)
+            | TySort::Str => ty,
 
-            &TyKind::Existential(ex) => self
+            &TySort::Existential(ex) => self
                 .get_solution(ex)
                 .map_or(ty, |ty| self._apply_ctx_on(ty)),
 
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
                 let params = params
                     .iter()
                     .copied()
@@ -372,53 +372,47 @@ impl<'hir> Typecker<'hir> {
                 Ty::func(ty.func_def_id(), params, body)
             },
 
-            &TyKind::Forall(ident, body) => {
+            &TySort::Forall(ident, body) => {
                 let body = self._apply_ctx_on(body);
                 Ty::forall(ident, body)
             },
-            &TyKind::Ref(inner) => Ty::ref_to(self._apply_ctx_on(inner)),
-            // TODO: Review
-            TyKind::HigherKinded(_, _) => ty,
+            &TySort::Ref(inner) => Ty::ref_to(self._apply_ctx_on(inner)),
         }
     }
 
     pub fn ty_occurs_in(&mut self, ty: Ty, name: Subst) -> bool {
-        match ty.kind() {
-            TyKind::Error
-            | TyKind::Unit
-            | TyKind::Bool
-            | TyKind::Int(_)
-            | TyKind::Float(_)
-            | TyKind::Str => false,
-            &TyKind::Var(name_) if name == name_ => true,
-            TyKind::Var(_) => false,
-            &TyKind::Existential(ex) if name == ex => {
+        match ty.sort() {
+            TySort::Error
+            | TySort::Unit
+            | TySort::Bool
+            | TySort::Int(_)
+            | TySort::Float(_)
+            | TySort::Str => false,
+            &TySort::Var(name_) if name == name_ => true,
+            TySort::Var(_) => false,
+            &TySort::Existential(ex) if name == ex => {
                 // TODO: Is this right?!
                 true
             },
-            TyKind::Existential(_) => false,
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+            TySort::Existential(_) => false,
+            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
                 params
                     .iter()
                     .copied()
                     .any(|param| self.ty_occurs_in(param, name))
                     || self.ty_occurs_in(*body, name)
             },
-            &TyKind::Forall(alpha, _) if name == alpha => true,
-            &TyKind::Forall(_, body) => self.ty_occurs_in(body, name),
-            &TyKind::Ref(inner) => self.ty_occurs_in(inner, name),
-            // TODO: Review
-            &TyKind::HigherKinded(domain, range) => {
-                self.ty_occurs_in(domain, name) || self.ty_occurs_in(range, name)
-            },
+            &TySort::Forall(alpha, _) if name == alpha => true,
+            &TySort::Forall(_, body) => self.ty_occurs_in(body, name),
+            &TySort::Ref(inner) => self.ty_occurs_in(inner, name),
         }
     }
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
-        match ty.kind() {
-            TyKind::Error => Ok(ty),
-            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
-            &TyKind::Var(_ident) => {
+        match ty.sort() {
+            TySort::Error => Ok(ty),
+            TySort::Unit | TySort::Bool | TySort::Int(_) | TySort::Float(_) | TySort::Str => Ok(ty),
+            &TySort::Var(_ident) => {
                 // FIXME
                 Ok(ty)
                 // if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
@@ -427,32 +421,32 @@ impl<'hir> Typecker<'hir> {
                 //     self.ty_illformed(ty)
                 // }
             },
-            &TyKind::Existential(ex) => {
+            &TySort::Existential(ex) => {
                 if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() || self.global_ctx.has_ex(ex) {
                     Ok(ty)
                 } else {
                     self.ty_illformed(ty)
                 }
             },
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
                 params.iter().copied().try_for_each(|param| {
                     self.ty_wf(param)?;
                     Ok(())
                 })?;
                 self.ty_wf(*body)
             },
-            &TyKind::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
+            &TySort::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
                 // let open_forall = this.open_forall(body, alpha);
                 this.ty_wf(body)
             }),
-            &TyKind::Ref(inner) => self.ty_wf(inner),
+            &TySort::Ref(inner) => self.ty_wf(inner),
         }
     }
 
     /// Substitute all occurrences of universally quantified type inside it body
     pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
-        match ty.kind() {
-            &TyKind::Forall(alpha, body) => ty.substitute(Subst::Var(alpha), body),
+        match ty.sort() {
+            &TySort::Forall(alpha, body) => ty.substitute(Subst::Var(alpha), body),
             _ => unreachable!(),
         }
     }
@@ -588,15 +582,13 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn conv_int(&mut self, kind: hir::expr::IntKind) -> Ty {
-        IntKind::try_from(kind).map_or_else(
-            |_| self.add_fresh_ex(ExistentialKind::Int).1,
-            |kind| Ty::int(kind),
-        )
+        IntKind::try_from(kind)
+            .map_or_else(|_| self.add_fresh_ex(ExSort::Int).1, |kind| Ty::int(kind))
     }
 
     fn conv_float(&mut self, kind: hir::expr::FloatKind) -> Ty {
         FloatKind::try_from(kind).map_or_else(
-            |_| self.add_fresh_ex(ExistentialKind::Float).1,
+            |_| self.add_fresh_ex(ExSort::Float).1,
             |kind| Ty::float(kind),
         )
     }

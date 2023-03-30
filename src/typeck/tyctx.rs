@@ -16,7 +16,7 @@ use crate::{
 use super::{
     builtin::builtins,
     ctx::GlobalCtx,
-    ty::{Subst, Ty, TyKind, TyVarId},
+    ty::{Subst, Ty, TySort, TyVarId},
 };
 
 #[derive(Debug, Default, PartialEq, Eq, Hash)]
@@ -106,13 +106,13 @@ impl TyCtx {
     }
 
     fn _instantiated_ty(&self, expr: Expr, ty: Ty) -> Result<Ty, ()> {
-        match ty.kind() {
-            TyKind::Error => todo!(),
-            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
-            &TyKind::Var(var) => self.instantiated_expr_ty_var(expr, var),
+        match ty.sort() {
+            TySort::Error => todo!(),
+            TySort::Unit | TySort::Bool | TySort::Int(_) | TySort::Float(_) | TySort::Str => Ok(ty),
+            &TySort::Var(var) => self.instantiated_expr_ty_var(expr, var),
             // FIXME: Panic?
-            TyKind::Existential(_) => panic!(),
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => Ok(Ty::func(
+            TySort::Existential(_) => panic!(),
+            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => Ok(Ty::func(
                 ty.func_def_id(),
                 params
                     .iter()
@@ -121,13 +121,11 @@ impl TyCtx {
                     .collect::<Result<_, _>>()?,
                 self._instantiated_ty(expr, *body)?,
             )),
-            &TyKind::Forall(alpha, body) => {
+            &TySort::Forall(alpha, body) => {
                 let alpha_ty = self.instantiated_expr_ty_var(expr, alpha)?;
                 Ok(body.substitute(Subst::Var(alpha), alpha_ty))
             },
-            &TyKind::Ref(inner) => self._instantiated_ty(expr, inner),
-            // TODO: Review
-            TyKind::HigherKinded(_, _) => Err(()),
+            &TySort::Ref(inner) => self._instantiated_ty(expr, inner),
         }
     }
 

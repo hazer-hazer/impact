@@ -13,7 +13,7 @@ use crate::{
         Ty, BB, START_BB,
     },
     resolve::def::DefId,
-    typeck::ty::{FloatKind, TyKind},
+    typeck::ty::{FloatKind, TySort},
 };
 
 use super::{ctx::CodeGenCtx, func::FunctionMap, value::ValueMap};
@@ -240,21 +240,21 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         verbose!("Convert const {} to BasicValue", const_);
 
         match &const_.kind {
-            ConstKind::Scalar(scalar) => match const_.ty.kind() {
-                TyKind::Bool => self
+            ConstKind::Scalar(scalar) => match const_.ty.sort() {
+                TySort::Bool => self
                     .ctx
                     .llvm_ctx
                     .bool_type()
                     .const_int(scalar.data, false)
                     .into(),
-                TyKind::Int(kind) => self
+                TySort::Int(kind) => self
                     .ctx
                     .llvm_ctx
                     .custom_width_int_type(kind.bits())
                     .const_int(scalar.data, false)
                     .into(),
 
-                TyKind::Float(kind) => match kind {
+                TySort::Float(kind) => match kind {
                     FloatKind::F32 => self
                         .ctx
                         .llvm_ctx
@@ -268,26 +268,26 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                         .const_float(scalar.data as f64)
                         .into(),
                 },
-                TyKind::Str => todo!(),
-                TyKind::Func(..) | TyKind::FuncDef(..) | TyKind::Unit => todo!(),
-                TyKind::Ref(_)
-                | TyKind::Existential(_)
-                | TyKind::Forall(_, _)
-                | TyKind::Error
-                | TyKind::Var(_) => {
+                TySort::Str => todo!(),
+                TySort::Func(..) | TySort::FuncDef(..) | TySort::Unit => todo!(),
+                TySort::Ref(_)
+                | TySort::Existential(_)
+                | TySort::Forall(_, _)
+                | TySort::Error
+                | TySort::Var(_) => {
                     unreachable!()
                 },
             },
-            ConstKind::ZeroSized => match const_.ty.kind() {
-                TyKind::Unit => self.ctx.unit_value(),
-                TyKind::Bool => todo!(),
-                TyKind::Int(_) => todo!(),
-                TyKind::Float(_) => todo!(),
-                TyKind::Str => todo!(),
-                TyKind::FuncDef(..) => todo!(),
-                TyKind::Func(..) => todo!(),
-                TyKind::Ref(_) => todo!(),
-                TyKind::Error | TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => {
+            ConstKind::ZeroSized => match const_.ty.sort() {
+                TySort::Unit => self.ctx.unit_value(),
+                TySort::Bool => todo!(),
+                TySort::Int(_) => todo!(),
+                TySort::Float(_) => todo!(),
+                TySort::Str => todo!(),
+                TySort::FuncDef(..) => todo!(),
+                TySort::Func(..) => todo!(),
+                TySort::Ref(_) => todo!(),
+                TySort::Error | TySort::Var(_) | TySort::Existential(_) | TySort::Forall(_, _) => {
                     unreachable!()
                 },
             },

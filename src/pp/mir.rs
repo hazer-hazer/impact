@@ -127,8 +127,8 @@ impl<'ctx> MirPrinter<'ctx> {
             ConstKind::Scalar(scalar) => self.pp.string(scalar),
             // FIXME: ZeroSized formatting?
             ConstKind::ZeroSized => self.pp.str("()"),
-            ConstKind::Slice { data } => match const_.ty.kind() {
-                crate::typeck::ty::TyKind::Str => {
+            ConstKind::Slice { data } => match const_.ty.sort() {
+                crate::typeck::ty::TySort::Str => {
                     self.pp.string(format!("\"{}\"", from_utf8(data).unwrap()))
                 },
                 _ => self.pp.string(format!("{:02x?}", data)),

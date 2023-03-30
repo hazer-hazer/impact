@@ -6,7 +6,7 @@ use crate::{
     span::span::{Ident, Symbol},
 };
 
-use super::ty::{Existential, ExistentialId, ExistentialKind, Ty, TyKind, TyVarId};
+use super::ty::{ExSort, Existential, ExistentialId, Ty, TySort, TyVarId};
 
 #[derive(Default, Debug)]
 pub struct GlobalCtx {
@@ -75,28 +75,26 @@ impl GlobalCtx {
      * If returned type contains unsolved existentials -- we failed to infer its type.
      */
     pub fn apply_on(&self, ty: Ty) -> Ty {
-        match ty.kind() {
-            TyKind::Error
-            | TyKind::Unit
-            | TyKind::Bool
-            | TyKind::Int(_)
-            | TyKind::Float(_)
-            | TyKind::Str
-            | TyKind::Var(_) => ty,
+        match ty.sort() {
+            TySort::Error
+            | TySort::Unit
+            | TySort::Bool
+            | TySort::Int(_)
+            | TySort::Float(_)
+            | TySort::Str
+            | TySort::Var(_) => ty,
             // FIXME: Can we panic on unwrap?
-            &TyKind::Existential(ex) => self.apply_on(
+            &TySort::Existential(ex) => self.apply_on(
                 self.get_solution(ex)
                     .expect(&format!("Unsolved existential {}", ex)),
             ),
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => Ty::func(
+            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => Ty::func(
                 ty.func_def_id(),
                 params.iter().map(|param| self.apply_on(*param)).collect(),
                 self.apply_on(*body),
             ),
-            &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
-            &TyKind::Ref(inner) => Ty::ref_to(self.apply_on(inner)),
-            // TODO: Review
-            TyKind::HigherKinded(_, _) => ty,
+            &TySort::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
+            &TySort::Ref(inner) => Ty::ref_to(self.apply_on(inner)),
         }
     }
 
@@ -261,8 +259,8 @@ impl InferCtx {
     pub fn add_func_param_sol(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
         if self.has_ex(ex) {
             // FIXME: Can function parameter existential be other than Common?
-            match ex.kind() {
-                ExistentialKind::Common => {},
+            match ex.sort() {
+                ExSort::Common => {},
                 _ => panic!(),
             }
 
@@ -298,8 +296,8 @@ impl InferCtx {
     pub fn int_exes(&self) -> Vec<Existential> {
         self.existentials()
             .iter()
-            .filter_map(|&ex| match ex.kind() {
-                ExistentialKind::Int => Some(ex),
+            .filter_map(|&ex| match ex.sort() {
+                ExSort::Int => Some(ex),
                 _ => None,
             })
             .collect()
@@ -308,8 +306,8 @@ impl InferCtx {
     pub fn float_exes(&self) -> Vec<Existential> {
         self.existentials()
             .iter()
-            .filter_map(|&ex| match ex.kind() {
-                ExistentialKind::Float => Some(ex),
+            .filter_map(|&ex| match ex.sort() {
+                ExSort::Float => Some(ex),
                 _ => None,
             })
             .collect()

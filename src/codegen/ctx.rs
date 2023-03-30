@@ -14,7 +14,7 @@ use crate::{
     resolve::def::DefId,
     session::Session,
     typeck::{
-        ty::{FloatKind, TyKind},
+        ty::{FloatKind, TySort},
         tyctx::InstantiatedTy,
     },
 };
@@ -40,20 +40,20 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     }
 
     pub fn conv_ty(&self, ty: Ty) -> AnyTypeEnum<'ink> {
-        match ty.kind() {
-            TyKind::Unit => self.unit_ty().into(),
-            TyKind::Bool => self.llvm_ctx.bool_type().into(),
-            TyKind::Int(kind) => self.llvm_ctx.custom_width_int_type(kind.bits()).into(),
-            TyKind::Float(kind) => match kind {
+        match ty.sort() {
+            TySort::Unit => self.unit_ty().into(),
+            TySort::Bool => self.llvm_ctx.bool_type().into(),
+            TySort::Int(kind) => self.llvm_ctx.custom_width_int_type(kind.bits()).into(),
+            TySort::Float(kind) => match kind {
                 FloatKind::F32 => self.llvm_ctx.f32_type().into(),
                 FloatKind::F64 => self.llvm_ctx.f64_type().into(),
             },
-            &TyKind::Ref(inner) => self
+            &TySort::Ref(inner) => self
                 .conv_basic_ty(inner)
                 .ptr_type(AddressSpace::default())
                 .into(),
-            TyKind::Str => self.cstring_ptr_ty().into(),
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self
+            TySort::Str => self.cstring_ptr_ty().into(),
+            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => self
                 .conv_basic_ty(*body)
                 .fn_type(
                     &params
@@ -63,7 +63,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                     false,
                 )
                 .into(),
-            TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
+            TySort::Existential(_) | TySort::Forall(_, _) | TySort::Error | TySort::Var(_) => {
                 unreachable!()
             },
         }
