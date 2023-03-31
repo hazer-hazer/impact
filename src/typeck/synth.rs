@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::{
-    ty::{Ty, TySort},
+    ty::{Ty, TyKind},
     TyResult, TypeckErr, Typed,
 };
 
@@ -345,10 +345,10 @@ impl<'hir> Typecker<'hir> {
         let lhs_expr = *lhs.node().node();
         let lhs_ty = lhs.node().ty();
 
-        match lhs_ty.sort() {
+        match lhs_ty.kind() {
             // FIXME: Or return Ok(lhs_ty)?
-            TySort::Error => Ok(lhs_ty),
-            &TySort::Existential(ex) => {
+            TyKind::Error => Ok(lhs_ty),
+            &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
                     // FIXME: Add multiple arguments
@@ -375,7 +375,7 @@ impl<'hir> Typecker<'hir> {
                     Ok(body_ex.1)
                 })
             },
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 // TODO?: Let arguments go first
                 // if let Some(param_ex) = param.as_ex() {
                 //     todo!();
@@ -398,7 +398,7 @@ impl<'hir> Typecker<'hir> {
 
                 Ok(*body)
             },
-            &TySort::Forall(alpha, ty) => {
+            &TyKind::Forall(alpha, ty) => {
                 let alpha_ex = self.add_fresh_common_ex();
                 let substituted_ty = ty.substitute(Subst::Var(alpha), alpha_ex.1);
                 let body_ty = self._synth_call(

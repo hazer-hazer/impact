@@ -19,22 +19,34 @@ pub struct Kind(KindId);
 
 impl Kind {
     pub fn intern(data: KindData) -> Self {
-        KIND_INTERNER.write().unwrap().intern(data)
+        Self(KIND_INTERNER.write().unwrap().intern(data))
     }
 
-    fn data(&self) -> KindData {
+    fn new(kind: KindKind) -> Self {
+        Self::intern(KindData { kind })
+    }
+
+    pub fn ty() -> Self {
+        Self::new(KindKind::Ty)
+    }
+
+    pub fn cons(domain: Kind, range: Kind) -> Self {
+        Self::new(KindKind::Cons(domain, range))
+    }
+
+    pub fn kind(&self) -> &KindKind {
+        &self.data().kind
+    }
+
+    fn data(&self) -> &KindData {
         KIND_INTERNER.read().unwrap().expect(self.0)
-    }
-
-    pub fn kind(&self) -> KindKind {
-        self
     }
 }
 
 impl Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind() {
-            KindKind::Type => write!(f, "*"),
+            KindKind::Ty => write!(f, "*"),
             KindKind::Cons(domain, range) => write!(f, "{} -> {}", domain, range),
         }
     }
@@ -43,7 +55,7 @@ impl Display for Kind {
 // Yes, KindKind, you see it, it is right here
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub enum KindKind {
-    Type,
+    Ty,
     Cons(Kind, Kind),
 }
 

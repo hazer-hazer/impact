@@ -22,7 +22,7 @@ use crate::{
 use self::{
     ctx::{GlobalCtx, InferCtx},
     ty::{
-        ExPair, ExSort, Existential, ExistentialId, FloatKind, IntKind, MonoTy, Ty, TySort, TyVarId,
+        ExPair, ExSort, Existential, ExistentialId, FloatKind, IntKind, MonoTy, Ty, TyKind, TyVarId,
     },
     tyctx::TyCtx,
 };
@@ -30,7 +30,7 @@ use self::{
 pub mod builtin;
 mod check;
 pub mod ctx;
-pub mod kind;
+// pub mod kind;
 mod synth;
 pub mod ty;
 pub mod tyctx;
@@ -294,7 +294,7 @@ impl<'hir> Typecker<'hir> {
 
     fn solve(&mut self, ex: Existential, sol: MonoTy) -> Ty {
         let sol = sol.ty;
-        if let &TySort::Existential(sol_ex) = sol.sort() {
+        if let &TyKind::Existential(sol_ex) = sol.kind() {
             assert_ne!(sol_ex, ex, "Tried to solve ex with itself {} / {}", ex, sol);
         }
         verbose!("Solve {} as {}", ex, sol);
@@ -349,20 +349,20 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _apply_ctx_on(&self, ty: Ty) -> Ty {
-        match ty.sort() {
-            TySort::Error
-            | TySort::Unit
-            | TySort::Var(_)
-            | TySort::Bool
-            | TySort::Int(_)
-            | TySort::Float(_)
-            | TySort::Str => ty,
+        match ty.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Var(_)
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str => ty,
 
-            &TySort::Existential(ex) => self
+            &TyKind::Existential(ex) => self
                 .get_solution(ex)
                 .map_or(ty, |ty| self._apply_ctx_on(ty)),
 
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let params = params
                     .iter()
                     .copied()
@@ -372,47 +372,47 @@ impl<'hir> Typecker<'hir> {
                 Ty::func(ty.func_def_id(), params, body)
             },
 
-            &TySort::Forall(ident, body) => {
+            &TyKind::Forall(ident, body) => {
                 let body = self._apply_ctx_on(body);
                 Ty::forall(ident, body)
             },
-            &TySort::Ref(inner) => Ty::ref_to(self._apply_ctx_on(inner)),
+            &TyKind::Ref(inner) => Ty::ref_to(self._apply_ctx_on(inner)),
         }
     }
 
     pub fn ty_occurs_in(&mut self, ty: Ty, name: Subst) -> bool {
-        match ty.sort() {
-            TySort::Error
-            | TySort::Unit
-            | TySort::Bool
-            | TySort::Int(_)
-            | TySort::Float(_)
-            | TySort::Str => false,
-            &TySort::Var(name_) if name == name_ => true,
-            TySort::Var(_) => false,
-            &TySort::Existential(ex) if name == ex => {
+        match ty.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str => false,
+            &TyKind::Var(name_) if name == name_ => true,
+            TyKind::Var(_) => false,
+            &TyKind::Existential(ex) if name == ex => {
                 // TODO: Is this right?!
                 true
             },
-            TySort::Existential(_) => false,
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
+            TyKind::Existential(_) => false,
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params
                     .iter()
                     .copied()
                     .any(|param| self.ty_occurs_in(param, name))
                     || self.ty_occurs_in(*body, name)
             },
-            &TySort::Forall(alpha, _) if name == alpha => true,
-            &TySort::Forall(_, body) => self.ty_occurs_in(body, name),
-            &TySort::Ref(inner) => self.ty_occurs_in(inner, name),
+            &TyKind::Forall(alpha, _) if name == alpha => true,
+            &TyKind::Forall(_, body) => self.ty_occurs_in(body, name),
+            &TyKind::Ref(inner) => self.ty_occurs_in(inner, name),
         }
     }
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
-        match ty.sort() {
-            TySort::Error => Ok(ty),
-            TySort::Unit | TySort::Bool | TySort::Int(_) | TySort::Float(_) | TySort::Str => Ok(ty),
-            &TySort::Var(_ident) => {
+        match ty.kind() {
+            TyKind::Error => Ok(ty),
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
+            &TyKind::Var(_ident) => {
                 // FIXME
                 Ok(ty)
                 // if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
@@ -421,32 +421,32 @@ impl<'hir> Typecker<'hir> {
                 //     self.ty_illformed(ty)
                 // }
             },
-            &TySort::Existential(ex) => {
+            &TyKind::Existential(ex) => {
                 if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() || self.global_ctx.has_ex(ex) {
                     Ok(ty)
                 } else {
                     self.ty_illformed(ty)
                 }
             },
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().copied().try_for_each(|param| {
                     self.ty_wf(param)?;
                     Ok(())
                 })?;
                 self.ty_wf(*body)
             },
-            &TySort::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
+            &TyKind::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
                 // let open_forall = this.open_forall(body, alpha);
                 this.ty_wf(body)
             }),
-            &TySort::Ref(inner) => self.ty_wf(inner),
+            &TyKind::Ref(inner) => self.ty_wf(inner),
         }
     }
 
     /// Substitute all occurrences of universally quantified type inside it body
     pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
-        match ty.sort() {
-            &TySort::Forall(alpha, body) => ty.substitute(Subst::Var(alpha), body),
+        match ty.kind() {
+            &TyKind::Forall(alpha, body) => ty.substitute(Subst::Var(alpha), body),
             _ => unreachable!(),
         }
     }

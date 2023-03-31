@@ -3,12 +3,12 @@ use crate::{
     hir::expr::{Expr, ExprKind, Lambda, Lit},
     message::message::MessageBuilder,
     span::span::{Ident, Spanned, WithSpan},
-    typeck::{ty::Subst, TypeckErr},
+    typeck::{ty::{Subst, Kind}, TypeckErr},
 };
 
 use super::{
     ctx::InferCtx,
-    ty::{ExSort, Existential, FloatKind, IntKind, Ty, TySort},
+    ty::{ExSort, Existential, FloatKind, IntKind, Ty, TyKind},
     TyResult,
 };
 
@@ -68,11 +68,11 @@ impl<'hir> Typecker<'hir> {
     fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
 
-        match (expr.kind(), ty.sort()) {
+        match (expr.kind(), ty.kind()) {
             (&ExprKind::Lit(lit), check) => {
                 match (lit, check) {
-                    (Lit::Bool(_), TySort::Bool) | (Lit::String(_), TySort::Str) => Ok(ty),
-                    (Lit::Int(_, ast_kind), &TySort::Int(kind)) => IntKind::try_from(ast_kind)
+                    (Lit::Bool(_), TyKind::Bool) | (Lit::String(_), TyKind::Str) => Ok(ty),
+                    (Lit::Int(_, ast_kind), &TyKind::Int(kind)) => IntKind::try_from(ast_kind)
                         .map_or_else(
                             |_| self.expr_subtype(expr_id, ty),
                             |kind_| {
@@ -84,7 +84,7 @@ impl<'hir> Typecker<'hir> {
                             },
                         ),
 
-                    (Lit::Float(_, ast_kind), &TySort::Float(kind)) => {
+                    (Lit::Float(_, ast_kind), &TyKind::Float(kind)) => {
                         FloatKind::try_from(ast_kind).map_or_else(
                             |_| self.expr_subtype(expr_id, ty),
                             |kind_| {
@@ -105,7 +105,7 @@ impl<'hir> Typecker<'hir> {
 
             (
                 &ExprKind::Lambda(Lambda { body_id: body, .. }),
-                TySort::FuncDef(_, params_tys, body_ty),
+                TyKind::FuncDef(_, params_tys, body_ty),
             ) => {
                 let param_names = self
                     .hir
@@ -122,7 +122,7 @@ impl<'hir> Typecker<'hir> {
                 )
             },
 
-            (_, &TySort::Forall(alpha, body)) => {
+            (_, &TyKind::Forall(alpha, body)) => {
                 self.under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this._check(expr_id, body)?;
                     Ok(ty)
@@ -211,8 +211,8 @@ impl<'hir> Typecker<'hir> {
                 //     .emit(self);
 
                 // TODO: Check this logic
-                match l_ty.node().sort() {
-                    &TySort::Existential(ex) => {
+                match l_ty.node().kind() {
+                    &TyKind::Existential(ex) => {
                         self.solve(ex, Ty::error().mono());
                     },
                     _ => {},
@@ -237,46 +237,46 @@ impl<'hir> Typecker<'hir> {
         assert!(self.ty_wf(l_ty).is_ok());
         assert!(self.ty_wf(r_ty).is_ok());
 
-        match (l_ty.sort(), r_ty.sort()) {
+        match (l_ty.kind(), r_ty.kind()) {
             // FIXME: Is these pats ok?
-            (TySort::Error, _) | (_, TySort::Error) => Err(TypeckErr::LateReport),
+            (TyKind::Error, _) | (_, TyKind::Error) => Err(TypeckErr::LateReport),
 
-            (TySort::Unit, TySort::Unit) => Ok(r_ty),
-            (TySort::Bool, TySort::Bool) => Ok(r_ty),
-            (TySort::Int(kind), TySort::Int(kind_)) if kind == kind_ => Ok(r_ty),
-            (TySort::Float(kind), TySort::Float(kind_)) if kind == kind_ => Ok(r_ty),
-            (TySort::Str, TySort::Str) => Ok(r_ty),
+            (TyKind::Unit, TyKind::Unit) => Ok(r_ty),
+            (TyKind::Bool, TyKind::Bool) => Ok(r_ty),
+            (TyKind::Int(kind), TyKind::Int(kind_)) if kind == kind_ => Ok(r_ty),
+            (TyKind::Float(kind), TyKind::Float(kind_)) if kind == kind_ => Ok(r_ty),
+            (TyKind::Str, TyKind::Str) => Ok(r_ty),
 
-            (TySort::Var(var), TySort::Var(var_)) if var == var_ => Ok(r_ty),
+            (TyKind::Var(var), TyKind::Var(var_)) if var == var_ => Ok(r_ty),
 
-            (TySort::Existential(ex1), TySort::Existential(ex2)) if ex1 == ex2 => {
+            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => {
                 self.ty_wf(l_ty).and(self.ty_wf(r_ty))
             },
 
             // Int existentials //
-            (&TySort::Existential(int_ex), TySort::Int(_)) if int_ex.is_int() => {
+            (&TyKind::Existential(int_ex), TyKind::Int(_)) if int_ex.is_int() => {
                 Ok(self.solve(int_ex, r_ty.mono()))
             },
 
-            (&TySort::Existential(int_ex), &TySort::Existential(ex)) if int_ex.is_int() => {
+            (&TyKind::Existential(int_ex), &TyKind::Existential(ex)) if int_ex.is_int() => {
                 // FIXME: This is a test logic
                 Ok(self.solve(ex, Ty::default_int().mono()))
             },
 
-            (TySort::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
+            (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
 
             // Float existentials //
-            (&TySort::Existential(float_ex), TySort::Float(_)) if float_ex.is_float() => {
+            (&TyKind::Existential(float_ex), TyKind::Float(_)) if float_ex.is_float() => {
                 Ok(self.solve(float_ex, r_ty.mono()))
             },
 
-            (TySort::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr::LateReport),
+            (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr::LateReport),
 
             //
-            (TySort::Func(params, body1), TySort::Func(params_, body2))
-            | (TySort::FuncDef(_, params, body1), TySort::Func(params_, body2))
-            | (TySort::Func(params, body1), TySort::FuncDef(_, params_, body2))
-            | (TySort::FuncDef(_, params, body1), TySort::FuncDef(_, params_, body2)) => {
+            (TyKind::Func(params, body1), TyKind::Func(params_, body2))
+            | (TyKind::FuncDef(_, params, body1), TyKind::Func(params_, body2))
+            | (TyKind::Func(params, body1), TyKind::FuncDef(_, params_, body2))
+            | (TyKind::FuncDef(_, params, body1), TyKind::FuncDef(_, params_, body2)) => {
                 // self.under_new_ctx(|this| {
                 // Enter Θ
                 let params = self._subtype_lists(&params, &params_)?;
@@ -287,11 +287,11 @@ impl<'hir> Typecker<'hir> {
                 // })
             },
 
-            (&TySort::Ref(inner), &TySort::Ref(inner_)) => {
+            (&TyKind::Ref(inner), &TyKind::Ref(inner_)) => {
                 Ok(Ty::ref_to(self._subtype(inner, inner_)?))
             },
 
-            (&TySort::Forall(alpha, body), _) => {
+            (&TyKind::Forall(alpha, body), _) => {
                 verbose!("forall {}. {} subtype of (?)", alpha, body);
                 let ex = self.fresh_ex(ExSort::Common);
                 let ex_ty = Ty::existential(ex);
@@ -302,12 +302,12 @@ impl<'hir> Typecker<'hir> {
                 })
             },
 
-            (_, &TySort::Forall(alpha, body)) => self
+            (_, &TyKind::Forall(alpha, body)) => self
                 .under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this._subtype(l_ty, body)
                 }),
 
-            (&TySort::Existential(ex), _) if ex.is_common() => {
+            (&TyKind::Existential(ex), _) if ex.is_common() => {
                 if !self.ty_occurs_in(r_ty, Subst::Existential(ex)) {
                     self.instantiate_l(ex, r_ty)
                 } else {
@@ -315,7 +315,7 @@ impl<'hir> Typecker<'hir> {
                 }
             },
 
-            (_, &TySort::Existential(ex)) if ex.is_common() => {
+            (_, &TyKind::Existential(ex)) if ex.is_common() => {
                 if !self.ty_occurs_in(l_ty, Subst::Existential(ex)) {
                     self.instantiate_r(l_ty, ex)
                 } else {
@@ -352,8 +352,8 @@ impl<'hir> Typecker<'hir> {
     #[deprecated]
     fn try_instantiate_common(&mut self, ex: Existential, ty: Ty) -> TyResult<Ty> {
         // Inst(L|R)Reach
-        match ty.sort() {
-            &TySort::Existential(ty_ex) => {
+        match ty.kind() {
+            &TyKind::Existential(ty_ex) => {
                 let ex_depth = self.find_unbound_ex_depth(ex);
                 let ty_ex_depth = self.find_unbound_ex_depth(ty_ex);
 
@@ -394,7 +394,7 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_l(&mut self, ex: Existential, r_ty: Ty) -> TyResult<Ty> {
         verbose!("Instantiate Left {} / {}", ex, r_ty);
 
-        if let &TySort::Existential(beta_ex) = r_ty.sort() {
+        if let &TyKind::Existential(beta_ex) = r_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
                 verbose!("InstLReach: ");
                 return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
@@ -406,18 +406,18 @@ impl<'hir> Typecker<'hir> {
             return Ok(self.solve(ex, mono));
         }
 
-        match r_ty.sort() {
-            TySort::Error
-            | TySort::Unit
-            | TySort::Bool
-            | TySort::Int(_)
-            | TySort::Float(_)
-            | TySort::Str
-            | TySort::Var(_)
-            | TySort::Existential(_) => {
+        match r_ty.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str
+            | TyKind::Var(_)
+            | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => self.try_to(|this| {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self.try_to(|this| {
                 let range_ex = this.add_fresh_common_ex();
                 let domain_exes = this.add_fresh_common_ex_list(params.len());
 
@@ -441,17 +441,20 @@ impl<'hir> Typecker<'hir> {
                 let range_ty = this.apply_ctx_on(*body);
                 this.instantiate_l(range_ex.0, range_ty)
             }),
-            &TySort::Forall(alpha, body) => self.try_to(|this| {
+            &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 this.under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this.instantiate_l(ex, body)
                 })
             }),
-            &TySort::Ref(inner) => self.try_to(|this| {
+            &TyKind::Ref(inner) => self.try_to(|this| {
                 let inner_ex = this.add_fresh_common_ex();
                 let ref_ty = Ty::ref_to(inner_ex.1);
                 this.solve(ex, ref_ty.mono());
                 this.instantiate_l(inner_ex.0, inner)
             }),
+            TyKind::Kind(kind) => {
+                // TODO: Review
+            }
         }
     }
 
@@ -461,7 +464,7 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_r(&mut self, l_ty: Ty, ex: Existential) -> TyResult<Ty> {
         verbose!("Instantiate Right {} / {}", ex, l_ty);
 
-        if let &TySort::Existential(beta_ex) = l_ty.sort() {
+        if let &TyKind::Existential(beta_ex) = l_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
                 return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
             }
@@ -471,18 +474,18 @@ impl<'hir> Typecker<'hir> {
             return Ok(self.solve(ex, mono));
         }
 
-        match l_ty.sort() {
-            TySort::Error
-            | TySort::Unit
-            | TySort::Bool
-            | TySort::Int(_)
-            | TySort::Float(_)
-            | TySort::Str
-            | TySort::Var(_)
-            | TySort::Existential(_) => {
+        match l_ty.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str
+            | TyKind::Var(_)
+            | TyKind::Existential(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => self.try_to(|this| {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self.try_to(|this| {
                 let range_ex = this.add_fresh_common_ex();
                 let domain_exes = this.add_fresh_common_ex_list(params.len());
 
@@ -506,7 +509,7 @@ impl<'hir> Typecker<'hir> {
                 let range_ty = this.apply_ctx_on(*body);
                 this.instantiate_r(range_ty, range_ex.0)
             }),
-            &TySort::Forall(alpha, body) => self.try_to(|this| {
+            &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 verbose!("Instantiate forall Right {} = {}", ex, l_ty);
 
                 let alpha_ex = this.fresh_ex(ExSort::Common);
@@ -517,7 +520,7 @@ impl<'hir> Typecker<'hir> {
                     this.instantiate_r(body_ty, ex)
                 })
             }),
-            &TySort::Ref(inner) => self.try_to(|this| {
+            &TyKind::Ref(inner) => self.try_to(|this| {
                 let inner_ex = this.add_fresh_common_ex();
                 let ref_ty = Ty::ref_to(inner_ex.1);
                 this.solve(ex, ref_ty.mono());

@@ -4,6 +4,7 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::Formatter,
     hash::{Hash, Hasher},
+    num::NonZeroUsize,
     sync::RwLock,
 };
 
@@ -17,8 +18,6 @@ use crate::{
     resolve::def::DefId,
     utils::macros::match_expected,
 };
-
-use super::kind::Kind;
 
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 declare_idx!(TyVarId, u32, "{}", Color::Cyan);
@@ -237,7 +236,7 @@ impl Ty {
         Self(TY_INTERNER.write().unwrap().intern(tys))
     }
 
-    fn new(sort: TySort) -> Self {
+    fn new(sort: TyKind) -> Self {
         Self::intern(TyS::new(sort))
     }
 
@@ -246,52 +245,52 @@ impl Ty {
     }
 
     pub fn unit() -> Ty {
-        Self::new(TySort::Unit)
+        Self::new(TyKind::Unit)
     }
 
     pub fn error() -> Ty {
-        Self::new(TySort::Error)
+        Self::new(TyKind::Error)
     }
 
     pub fn var(id: TyVarId) -> Ty {
-        Self::new(TySort::Var(id))
+        Self::new(TyKind::Var(id))
     }
 
     pub fn bool() -> Ty {
-        Self::new(TySort::Bool)
+        Self::new(TyKind::Bool)
     }
 
     pub fn int(kind: IntKind) -> Ty {
-        Self::new(TySort::Int(kind))
+        Self::new(TyKind::Int(kind))
     }
 
     pub fn float(kind: FloatKind) -> Ty {
-        Self::new(TySort::Float(kind))
+        Self::new(TyKind::Float(kind))
     }
 
     pub fn str() -> Ty {
-        Self::new(TySort::Str)
+        Self::new(TyKind::Str)
     }
 
     pub fn func(def_id: Option<DefId>, params: Vec<Ty>, body: Ty) -> Ty {
-        assert!(params.iter().all(|param| param.sort() == body.sort()));
+        assert!(params.iter().all(|param| param.kind() == body.kind()));
         Self::new(if let Some(def_id) = def_id {
-            TySort::FuncDef(def_id, params, body)
+            TyKind::FuncDef(def_id, params, body)
         } else {
-            TySort::Func(params, body)
+            TyKind::Func(params, body)
         })
     }
 
     pub fn ref_to(ty: Ty) -> Ty {
-        Self::new(TySort::Ref(ty))
+        Self::new(TyKind::Ref(ty))
     }
 
     pub fn forall(var: TyVarId, body: Ty) -> Ty {
-        Self::new(TySort::Forall(var, body))
+        Self::new(TyKind::Forall(var, body))
     }
 
     pub fn existential(ex: Existential) -> Ty {
-        Self::new(TySort::Existential(ex))
+        Self::new(TyKind::Existential(ex))
     }
 
     pub fn default_int() -> Ty {
@@ -306,75 +305,103 @@ impl Ty {
         TY_INTERNER.read().unwrap().expect(self.0)
     }
 
-    pub fn sort(&self) -> &TySort {
-        self.tys().sort()
+    pub fn kind(&self) -> &TyKind {
+        self.tys().kind()
     }
 
     pub fn as_ex(&self) -> Option<Existential> {
-        match self.sort() {
-            &TySort::Existential(ex) => Some(ex),
+        match self.kind() {
+            &TyKind::Existential(ex) => Some(ex),
             _ => None,
         }
     }
 
+    pub fn is_ty(&self) -> bool {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str
+            | TyKind::FuncDef(_, _, _)
+            | TyKind::Func(_, _)
+            | TyKind::Ref(_)
+            // TODO: Can existentials and vars be higher-kinded?
+            | TyKind::Var(_)
+            | TyKind::Existential(_)
+            | TyKind::Forall(_, _) => true,
+            TyKind::Kind(_) => false,
+        }
+    }
+
+    pub fn assert_is_ty(&self) {
+        assert!(self.is_ty(), "Expected a type, got {}", self);
+    }
+
     pub fn is_mono(&self) -> bool {
-        match self.sort() {
-            TySort::Error
-            | TySort::Unit
-            | TySort::Bool
-            | TySort::Int(_)
-            | TySort::Float(_)
-            | TySort::Str
-            | TySort::Var(_)
-            | TySort::Existential(_) => true,
-            TySort::FuncDef(_, params, body) | TySort::Func(params, body) => {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str
+            | TyKind::Var(_)
+            | TyKind::Existential(_) => true,
+            TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_mono) && body.is_mono()
             },
-            TySort::Forall(_, _) => false,
-            TySort::Ref(ty) => ty.is_mono(),
+            TyKind::Forall(_, _) => false,
+            TyKind::Ref(ty) => ty.is_mono(),
+            TyKind::Kind(_) => false,
         }
     }
 
     pub fn is_func_like(&self) -> bool {
-        matches!(self.sort(), TySort::Func(..) | TySort::FuncDef(..))
+        matches!(self.kind(), TyKind::Func(..) | TyKind::FuncDef(..))
     }
 
     pub fn is_instantiated(&self) -> bool {
-        match self.sort() {
-            TySort::Error => todo!(),
-            TySort::Unit | TySort::Bool | TySort::Int(_) | TySort::Float(_) | TySort::Str => true,
-            TySort::Var(_) | TySort::Existential(_) | TySort::Forall(_, _) => false,
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
+        match self.kind() {
+            TyKind::Error => todo!(),
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => true,
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
-            TySort::Ref(ty) => ty.is_instantiated(),
+            TyKind::Ref(ty) => ty.is_instantiated(),
+            TyKind::Kind(_) => false,
         }
     }
 
     pub fn is_solved(&self) -> bool {
-        match self.sort() {
-            TySort::Error => true,
-            TySort::Unit | TySort::Bool | TySort::Int(_) | TySort::Float(_) | TySort::Str => true,
-            TySort::FuncDef(_, params, body) | TySort::Func(params, body) => {
+        match self.kind() {
+            TyKind::Error => true,
+            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => true,
+            TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_solved) && body.is_solved()
             },
             // TODO: Check that var is bound in ty_bindings?
-            TySort::Var(_) => true,
-            TySort::Existential(_) => false,
-            TySort::Forall(_, ty) => ty.is_solved(),
-            TySort::Ref(ty) => ty.is_solved(),
+            TyKind::Var(_) => true,
+            TyKind::Existential(_) => false,
+            TyKind::Forall(_, ty) => ty.is_solved(),
+            TyKind::Ref(ty) => ty.is_solved(),
+
+            // TODO: Review
+            TyKind::Kind(_) => false,
         }
     }
 
     pub fn as_mono(&self) -> Option<MonoTy> {
-        let sort = match self.sort() {
-            TySort::Error => Some(MonoTySort::Error),
-            TySort::Unit => Some(MonoTySort::Unit),
-            TySort::Bool => Some(MonoTySort::Bool),
-            &TySort::Int(kind) => Some(MonoTySort::Int(kind)),
-            &TySort::Float(kind) => Some(MonoTySort::Float(kind)),
-            TySort::Str => Some(MonoTySort::String),
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
+        let sort = match self.kind() {
+            TyKind::Error => Some(MonoTyKind::Error),
+            TyKind::Unit => Some(MonoTyKind::Unit),
+            TyKind::Bool => Some(MonoTyKind::Bool),
+            &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
+            &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
+            TyKind::Str => Some(MonoTyKind::String),
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let params = params
                     .iter()
                     .map(|param| param.as_mono().ok_or(()))
@@ -384,10 +411,11 @@ impl Ty {
                     .map(Box::new)
                     .collect();
                 let body = body.as_mono()?;
-                Some(MonoTySort::Func(params, Box::new(body)))
+                Some(MonoTyKind::Func(params, Box::new(body)))
             },
-            TySort::Var(_) | TySort::Existential(_) | TySort::Forall(_, _) => None,
-            TySort::Ref(ty) => Some(MonoTySort::Ref(Box::new(ty.as_mono()?))),
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
+            TyKind::Ref(ty) => Some(MonoTyKind::Ref(Box::new(ty.as_mono()?))),
+            TyKind::Kind(_) => None,
         }?;
 
         Some(MonoTy { sort, ty: *self })
@@ -404,7 +432,7 @@ impl Ty {
     }
 
     pub fn func_def_id(&self) -> Option<DefId> {
-        if let &TySort::FuncDef(def_id, ..) = self.sort() {
+        if let &TyKind::FuncDef(def_id, ..) = self.kind() {
             Some(def_id)
         } else {
             None
@@ -414,28 +442,28 @@ impl Ty {
     pub fn substitute(&self, subst: Subst, with: Ty) -> Ty {
         verbose!("Substitute {} in {} with {}", subst, self, with);
 
-        match self.sort() {
-            TySort::Error
-            | TySort::Unit
-            | TySort::Bool
-            | TySort::Int(_)
-            | TySort::Float(_)
-            | TySort::Str => *self,
-            &TySort::Var(ident) => {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str => *self,
+            &TyKind::Var(ident) => {
                 if subst == ident {
                     with
                 } else {
                     *self
                 }
             },
-            &TySort::Existential(ex) => {
+            &TyKind::Existential(ex) => {
                 if subst == ex {
                     with
                 } else {
                     *self
                 }
             },
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => {
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let param = params
                     .iter()
                     .map(|param| param.substitute(subst, with))
@@ -443,8 +471,8 @@ impl Ty {
                 let body = body.substitute(subst, with);
                 Ty::func(self.func_def_id(), param, body)
             },
-            &TySort::Ref(ty) => Ty::ref_to(ty.substitute(subst, with)),
-            &TySort::Forall(ident, body) => {
+            &TyKind::Ref(ty) => Ty::ref_to(ty.substitute(subst, with)),
+            &TyKind::Forall(ident, body) => {
                 if subst == ident {
                     Ty::forall(ident, with)
                 } else {
@@ -452,24 +480,25 @@ impl Ty {
                     Ty::forall(ident, subst)
                 }
             },
+            TyKind::Kind(_) => todo!(),
         }
     }
 
     // Strict getters //
     pub fn as_int(&self) -> IntKind {
-        match_expected!(self.sort(), &TySort::Int(kind) => kind)
+        match_expected!(self.kind(), &TyKind::Int(kind) => kind)
     }
 
     pub fn as_float_kind(&self) -> FloatKind {
-        match_expected!(self.sort(), &TySort::Float(kind) => kind)
+        match_expected!(self.kind(), &TyKind::Float(kind) => kind)
     }
 
     pub fn as_func(&self) -> (DefId, &[Ty], Ty) {
-        match_expected!(self.sort(), TySort::FuncDef(def_id, params, body) => (*def_id, params.as_ref(), *body))
+        match_expected!(self.kind(), TyKind::FuncDef(def_id, params, body) => (*def_id, params.as_ref(), *body))
     }
 
     pub fn as_func_like(&self) -> (&[Ty], Ty) {
-        match_expected!(self.sort(), TySort::FuncDef(_, params, body) | TySort::Func(params, body) => (params.as_ref(), *body))
+        match_expected!(self.kind(), TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => (params.as_ref(), *body))
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -477,14 +506,14 @@ impl Ty {
     }
 
     pub fn body_return_ty(&self) -> Ty {
-        match self.sort() {
-            &TySort::FuncDef(_, _, body) | &TySort::Func(_, body) => body,
+        match self.kind() {
+            &TyKind::FuncDef(_, _, body) | &TyKind::Func(_, body) => body,
             _ => *self,
         }
     }
 
     pub fn is_unit(&self) -> bool {
-        self.sort() == &TySort::Unit
+        self.kind() == &TyKind::Unit
     }
 }
 
@@ -496,14 +525,49 @@ impl std::fmt::Debug for Ty {
 
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.sort())
+        write!(f, "{}", self.kind())
     }
 }
 
 pub type FuncTy = (Ty, Ty);
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub enum TySort {
+pub enum Kind {
+    RefCons,
+    Cons(NonZeroUsize),
+    HigherOrder(Vec<Kind>),
+}
+
+impl Kind {
+    pub fn arity(&self) -> usize {
+        match self {
+            Kind::RefCons => 1,
+            Kind::Cons(arity) => arity.get(),
+            Kind::HigherOrder(_) => panic!("Cannot get arity from higher-order kind"),
+        }
+    }
+}
+
+impl std::fmt::Display for Kind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Kind::RefCons => write!(f, "* -> ref *"),
+            &Kind::Cons(arity) => write!(f, "*{}", " -> *".repeat(arity.get() - 1)),
+            Kind::HigherOrder(kinds) => write!(
+                f,
+                "{}",
+                kinds
+                    .iter()
+                    .map(|kind| format!("({kind})"))
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub enum TyKind {
     Error,
 
     Unit,
@@ -518,24 +582,26 @@ pub enum TySort {
 
     Func(Vec<Ty>, Ty),
 
-    // Constructors? -> Kinds? -> PANIC!!! 😨
     Ref(Ty),
 
     Var(TyVarId),
     Existential(Existential),
     Forall(TyVarId, Ty),
+
+    // Type constructors //
+    Kind(Kind),
 }
 
-impl std::fmt::Display for TySort {
+impl std::fmt::Display for TyKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TySort::Error => write!(f, "[ERROR]"),
-            TySort::Unit => write!(f, "()"),
-            TySort::Bool => write!(f, "bool"),
-            TySort::Int(kind) => write!(f, "{}", kind),
-            TySort::Float(kind) => write!(f, "{}", kind),
-            TySort::Str => write!(f, "{}", "string"),
-            TySort::Func(params, body) => write!(
+            TyKind::Error => write!(f, "[ERROR]"),
+            TyKind::Unit => write!(f, "()"),
+            TyKind::Bool => write!(f, "bool"),
+            TyKind::Int(kind) => write!(f, "{}", kind),
+            TyKind::Float(kind) => write!(f, "{}", kind),
+            TyKind::Str => write!(f, "{}", "string"),
+            TyKind::Func(params, body) => write!(
                 f,
                 "({} -> {})",
                 params
@@ -545,7 +611,7 @@ impl std::fmt::Display for TySort {
                     .join(" "),
                 body
             ),
-            TySort::FuncDef(def_id, params, body) => {
+            TyKind::FuncDef(def_id, params, body) => {
                 write!(
                     f,
                     "({} -> {}){}",
@@ -558,40 +624,41 @@ impl std::fmt::Display for TySort {
                     def_id
                 )
             },
-            TySort::Ref(ty) => write!(f, "ref {}", ty),
-            TySort::Var(name) => write!(f, "{}", name),
-            TySort::Existential(ex) => write!(f, "{}", ex),
-            TySort::Forall(alpha, ty) => write!(f, "(∀{}. {})", alpha, ty),
+            TyKind::Ref(ty) => write!(f, "ref {ty}"),
+            TyKind::Var(name) => write!(f, "{name}"),
+            TyKind::Existential(ex) => write!(f, "{ex}"),
+            TyKind::Forall(alpha, ty) => write!(f, "(∀{alpha}. {ty})"),
+            TyKind::Kind(kind) => write!(f, "{kind}"),
         }
     }
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct TyS {
-    sort: TySort,
-    kind: Kind,
+    kind: TyKind,
+    // kind: Kind,
 }
 
 impl TyS {
-    pub fn new(sort: TySort, kind: Kind) -> Self {
-        Self { sort, kind }
+    pub fn new(kind: TyKind) -> Self {
+        Self { kind }
     }
 
     pub fn error() -> Self {
-        Self::new(TySort::Error, Kind::)
+        Self::new(TyKind::Error)
     }
 
-    pub fn sort(&self) -> &TySort {
-        &self.sort
+    pub fn kind(&self) -> &TyKind {
+        &self.kind
     }
 }
 
 impl std::fmt::Display for TyS {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.sort())
+        write!(f, "{}", self.kind())
     }
 }
-    
+
 static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| RwLock::new(TyInterner::new()));
 
 pub struct TyInterner {
@@ -673,7 +740,7 @@ impl PartialEq<Existential> for Subst {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MonoTySort {
+pub enum MonoTyKind {
     Error,
     Unit,
     Bool,
@@ -686,7 +753,7 @@ pub enum MonoTySort {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MonoTy {
-    pub sort: MonoTySort,
+    pub sort: MonoTyKind,
     pub ty: Ty,
 }
 

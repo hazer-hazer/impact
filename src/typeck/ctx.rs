@@ -6,7 +6,7 @@ use crate::{
     span::span::{Ident, Symbol},
 };
 
-use super::ty::{ExSort, Existential, ExistentialId, Ty, TySort, TyVarId};
+use super::ty::{ExSort, Existential, ExistentialId, Ty, TyKind, TyVarId};
 
 #[derive(Default, Debug)]
 pub struct GlobalCtx {
@@ -75,26 +75,28 @@ impl GlobalCtx {
      * If returned type contains unsolved existentials -- we failed to infer its type.
      */
     pub fn apply_on(&self, ty: Ty) -> Ty {
-        match ty.sort() {
-            TySort::Error
-            | TySort::Unit
-            | TySort::Bool
-            | TySort::Int(_)
-            | TySort::Float(_)
-            | TySort::Str
-            | TySort::Var(_) => ty,
+        match ty.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str
+            | TyKind::Var(_) => ty,
             // FIXME: Can we panic on unwrap?
-            &TySort::Existential(ex) => self.apply_on(
+            &TyKind::Existential(ex) => self.apply_on(
                 self.get_solution(ex)
                     .expect(&format!("Unsolved existential {}", ex)),
             ),
-            TySort::Func(params, body) | TySort::FuncDef(_, params, body) => Ty::func(
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => Ty::func(
                 ty.func_def_id(),
                 params.iter().map(|param| self.apply_on(*param)).collect(),
                 self.apply_on(*body),
             ),
-            &TySort::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
-            &TySort::Ref(inner) => Ty::ref_to(self.apply_on(inner)),
+            &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
+            &TyKind::Ref(inner) => Ty::ref_to(self.apply_on(inner)),
+            // TODO: Review
+            TyKind::Kind(_) => todo!(),
         }
     }
 
