@@ -46,8 +46,8 @@ impl<'hir> Typecker<'hir> {
 
             (&KindSort::Abs(param1, body1), &KindSort::Abs(param2, body2)) => {
                 let param = self._subtype_kinds(param1, param2)?;
-                let body1 = body1.apply_ctx(self.ctx_mut()).into();
-                let body2 = body2.apply_ctx(self.ctx_mut()).into();
+                let body1 = body1.apply_ctx(self.ctx()).into();
+                let body2 = body2.apply_ctx(self.ctx()).into();
                 let body = self.subtype_kind(body1, body2)?.expect_kind();
                 Ok(Kind::new_abs(param, body))
             },
@@ -108,7 +108,7 @@ impl<'hir> Typecker<'hir> {
 
                 this.instantiate_kind_r(param, param_ex)?;
 
-                let body_kind = body.apply_ctx(this.ctx_mut());
+                let body_kind = body.apply_ctx(this.ctx());
                 this.instantiate_kind_l(param_ex, body_kind)
             }),
             &KindSort::Forall(var, body) => self.try_to(|this| {
@@ -140,7 +140,7 @@ impl<'hir> Typecker<'hir> {
 
                 this.instantiate_kind_l(ex, param)?;
 
-                let body_kind = body.apply_ctx(this.ctx_mut());
+                let body_kind = body.apply_ctx(this.ctx());
                 this.instantiate_kind_r(body_kind, body_ex)
             }),
             &KindSort::Forall(var, body) => self.try_to(|this| {

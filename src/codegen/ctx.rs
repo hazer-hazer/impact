@@ -64,7 +64,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                 )
                 .into(),
             TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
-                unreachable!()
+                unreachable!("Type {} must not exist on codegen stage", ty)
             },
             TyKind::Kind(_) => todo!(),
         }

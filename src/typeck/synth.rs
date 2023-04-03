@@ -129,7 +129,7 @@ impl<'hir> Typecker<'hir> {
             },
         }?;
 
-        let expr_ty = expr_ty.apply_ctx(self.ctx_mut());
+        let expr_ty = expr_ty.apply_ctx(self.ctx());
 
         self.tyctx_mut().type_node(expr_id, expr_ty);
 
@@ -334,7 +334,7 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_call(&mut self, call: &Call, _expr_id: Expr) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(call.lhs)?;
-        let lhs_ty = lhs_ty.apply_ctx(self.ctx_mut());
+        let lhs_ty = lhs_ty.apply_ctx(self.ctx());
         self._synth_call(
             Spanned::new(self.hir.expr(call.lhs).span(), Typed::new(call.lhs, lhs_ty)),
             &call.args,

@@ -1,4 +1,4 @@
-use std::str::from_utf8;
+use std::{borrow::Borrow, str::from_utf8};
 
 use crate::{
     hir::{
@@ -182,7 +182,10 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
         self.pp.sp();
 
-        let body = self.mir.bodies.get(body).unwrap();
-        self.print_body(body);
+        if let Some(body) = self.mir.bodies.get(body) {
+            self.print_body(body);
+        } else {
+            self.pp.str("[NO BODY]");
+        }
     }
 }

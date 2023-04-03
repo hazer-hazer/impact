@@ -78,7 +78,10 @@ impl TyCtx {
 
     pub fn apply_ctx_on_typed_nodes(&mut self, ctx: &GlobalCtx) {
         self.typed.iter_mut().for_each(|(_, ty)| {
-            assert!(ty.apply_ctx(ctx).is_solved());
+            let applied = ty.apply_ctx(ctx);
+            // TODO: Error reporting instead of assertion
+            assert!(applied.is_solved());
+            *ty = applied;
         });
     }
 
@@ -143,7 +146,7 @@ impl TyCtx {
     pub fn instantiated_ty(&self, def_id: DefId) -> InstantiatedTy {
         let ty = self.tyof(HirId::new_owner(def_id));
         if ty.is_instantiated() {
-            InstantiatedTy::Mono(ty)
+            InstantiatedTy::Mono(ty.mono_checked())
         } else {
             InstantiatedTy::Poly(
                 self.def_ty_bindings

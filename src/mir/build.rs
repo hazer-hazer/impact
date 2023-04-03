@@ -38,22 +38,6 @@ pub(super) struct MirBuilder<'ctx> {
 }
 
 impl<'ctx> MirBuilder<'ctx> {
-    fn should_be_built(sess: &'ctx Session, body_owner: OwnerId) -> bool {
-        if let Some(bt) = sess.def_table.as_builtin(body_owner.into()) {
-            match bt {
-                Builtin::RefCons => false,
-                Builtin::AddInt
-                | Builtin::SubInt
-                | Builtin::UnitValue
-                | Builtin::UnitTy
-                | Builtin::I32
-                | Builtin::Str
-                | Builtin::RefTy => true,
-            }
-        } else {
-            true
-        }
-    }
 
     pub fn build(body_owner: OwnerId, hir: &'ctx HIR, sess: &'ctx Session) -> Option<Body> {
         if !Self::should_be_built(sess, body_owner) {

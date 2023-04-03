@@ -533,6 +533,12 @@ impl Ty {
     }
 
     pub fn apply_ctx(&self, ctx: &impl AlgoCtx) -> Ty {
+        let ty = self._apply_ctx(ctx);
+        verbose!("Apply ctx on {} => {}", self, ty);
+        ty
+    }
+
+    pub fn _apply_ctx(&self, ctx: &impl AlgoCtx) -> Ty {
         match self.kind() {
             TyKind::Error
             | TyKind::Unit
