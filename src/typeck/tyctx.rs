@@ -126,6 +126,7 @@ impl TyCtx {
                 Ok(body.substitute(Subst::Var(alpha), alpha_ty))
             },
             &TyKind::Ref(inner) => self._instantiated_ty(expr, inner),
+            TyKind::Kind(_) => todo!(),
         }
     }
 

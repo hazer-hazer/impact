@@ -277,6 +277,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 | TyKind::Var(_) => {
                     unreachable!()
                 },
+                TyKind::Kind(_) => todo!(),
             },
             ConstKind::ZeroSized => match const_.ty.kind() {
                 TyKind::Unit => self.ctx.unit_value(),
@@ -290,6 +291,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 TyKind::Error | TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => {
                     unreachable!()
                 },
+                TyKind::Kind(_) => todo!(),
             },
             ConstKind::Slice { data } => self.build_cstring_value(data),
         }

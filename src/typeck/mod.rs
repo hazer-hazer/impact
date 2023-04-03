@@ -21,8 +21,9 @@ use crate::{
 
 use self::{
     ctx::{GlobalCtx, InferCtx},
+    kind::{Kind, KindEx, KindExId, KindSort},
     ty::{
-        ExPair, ExSort, Existential, ExistentialId, FloatKind, IntKind, MonoTy, Ty, TyKind, TyVarId,
+        ExKind, ExPair, Existential, ExistentialId, FloatKind, IntKind, MonoTy, Ty, TyKind, TyVarId,
     },
     tyctx::TyCtx,
 };
@@ -31,6 +32,7 @@ pub mod builtin;
 mod check;
 pub mod ctx;
 // pub mod kind;
+pub mod kind;
 mod synth;
 pub mod ty;
 pub mod tyctx;
@@ -87,6 +89,7 @@ pub struct Typecker<'hir> {
     global_ctx: GlobalCtx,
     ctx_stack: Vec<InferCtx>,
     existential: ExistentialId,
+    kind_ex: KindExId,
     try_mode: bool,
 
     hir: &'hir HIR,
@@ -108,6 +111,7 @@ impl<'hir> Typecker<'hir> {
             global_ctx: Default::default(),
             ctx_stack: Default::default(),
             existential: ExistentialId::new(0),
+            kind_ex: KindExId::new(0),
             try_mode: false,
 
             hir,
@@ -129,6 +133,14 @@ impl<'hir> Typecker<'hir> {
     fn ty_illformed(&mut self, ty: Ty) -> TyResult<Ty> {
         panic!("Illformed type {}; Context:\n{}", ty, self.dump_ctx_stack());
         // Err(TypeckErr::Check)
+    }
+
+    fn kind_illformed(&mut self, kind: Kind) -> TyResult<Kind> {
+        panic!(
+            "Illformed kind {}; Context:\n{}",
+            kind,
+            self.dump_ctx_stack()
+        );
     }
 
     // fn cyclic_ty(&mut self, ty: Ty, references: Ty, on: ExistentialId) {
@@ -256,33 +268,65 @@ impl<'hir> Typecker<'hir> {
 
     /// Returns (existential context depth, existential position in context)
     fn find_unbound_ex_depth(&self, ex: Existential) -> (usize, usize) {
-        self._ascend_ctx(|ctx| {
-            if let Some(pos) = ctx.get_ex_index(ex) {
-                Some(pos)
-            } else {
-                None
-            }
-        })
-        .or_else(|| self.global_ctx.get_ex_index(ex))
-        .expect(&format!(
-            "Undefined existential {}; ctx {}",
-            ex,
-            self.dump_ctx_stack()
-        ))
+        self._ascend_ctx(|ctx| ctx.get_ex_index(ex))
+            .or_else(|| self.global_ctx.get_ex_index(ex))
+            .expect(&format!(
+                "Undefined existential {}; ctx {}",
+                ex,
+                self.dump_ctx_stack()
+            ))
     }
 
-    fn fresh_ex(&mut self, sort: ExSort) -> Existential {
+    fn find_unbound_kind_ex_depth(&self, ex: KindEx) -> (usize, usize) {
+        self._ascend_ctx(|ctx| ctx.get_kind_ex_index(ex))
+            .or_else(|| self.global_ctx.get_kind_ex_index(ex))
+            .expect(&format!(
+                "Undefined existential {}; ctx {}",
+                ex,
+                self.dump_ctx_stack()
+            ))
+    }
+
+    fn fresh_ex(&mut self, sort: ExKind) -> Existential {
         Existential::new(sort, *self.existential.inc())
     }
 
-    fn add_fresh_ex(&mut self, sort: ExSort) -> ExPair {
+    fn fresh_kind_ex(&mut self) -> KindEx {
+        KindEx::new(*self.kind_ex.inc())
+    }
+
+    fn add_fresh_ex(&mut self, sort: ExKind) -> ExPair {
         let ex = self.fresh_ex(sort);
         self.add_ex(ex);
         (ex, Ty::existential(ex))
     }
 
     fn add_fresh_common_ex(&mut self) -> ExPair {
-        self.add_fresh_ex(ExSort::Common)
+        self.add_fresh_ex(ExKind::Common)
+    }
+
+    fn add_fresh_kind_ex(&mut self) -> ExPair<KindEx> {
+        let ex = self.fresh_kind_ex();
+        self.ctx().add_kind_ex(ex);
+        (ex, Ty::ty_kind(Kind::new_ex(ex)))
+    }
+
+    fn is_unsolved_ex(&self, ty: Ty) -> Option<Existential> {
+        if let Some(ex) = ty.as_ex() {
+            if let None = self.get_solution(ex) {
+                return Some(ex);
+            }
+        }
+        None
+    }
+
+    fn is_unsolved_kind_ex(&self, ty: Ty) -> Option<KindEx> {
+        if let Some(ex) = ty.as_kind_ex() {
+            if let None = self.get_kind_ex_solution(ex) {
+                return Some(ex);
+            }
+        }
+        None
     }
 
     fn add_fresh_common_ex_list(&mut self, count: usize) -> Vec<ExPair> {
@@ -292,6 +336,7 @@ impl<'hir> Typecker<'hir> {
             .collect()
     }
 
+    // TODO: Solutions must be stored just in the current context, DO NOT ASCEND
     fn solve(&mut self, ex: Existential, sol: MonoTy) -> Ty {
         let sol = sol.ty;
         if let &TyKind::Existential(sol_ex) = sol.kind() {
@@ -301,6 +346,20 @@ impl<'hir> Typecker<'hir> {
         self._ascend_ctx_mut(|ctx| ctx.solve(ex, sol))
             .map_or_else(|| self.global_ctx.solve(ex, sol), |(ty, _)| Some(ty))
             .unwrap()
+    }
+
+    fn solve_kind_ex(&mut self, ex: KindEx, sol: Kind) -> Kind {
+        if let &KindSort::Ex(sol_ex) = sol.sort() {
+            assert_ne!(
+                sol_ex, ex,
+                "Tried to solve kind ex with itself {} / {}",
+                ex, sol
+            );
+        }
+
+        verbose!("Solve {} as {}", ex, sol);
+        self.ctx().solve_kind_ex(ex, sol);
+        sol
     }
 
     fn add_func_param_sol(&mut self, ex: Existential, sol: MonoTy) -> Ty {
@@ -330,6 +389,11 @@ impl<'hir> Typecker<'hir> {
     fn get_solution(&self, ex: Existential) -> Option<Ty> {
         self.ascend_ctx(|ctx| ctx.get_solution(ex))
             .or_else(|| self.global_ctx.get_solution(ex))
+    }
+
+    fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
+        self.ascend_ctx(|ctx| ctx.get_kind_ex_solution(ex))
+            .or_else(|| self.global_ctx.get_kind_ex_solution(ex))
     }
 
     fn is_unsolved(&self, ex: Existential) -> bool {
@@ -377,34 +441,22 @@ impl<'hir> Typecker<'hir> {
                 Ty::forall(ident, body)
             },
             &TyKind::Ref(inner) => Ty::ref_to(self._apply_ctx_on(inner)),
+            &TyKind::Kind(kind) => match kind.sort() {
+                &KindSort::Ty(ty) => self._apply_ctx_on(ty),
+                _ => Ty::ty_kind(self._apply_ctx_on_kind(kind)),
+            },
         }
     }
 
-    pub fn ty_occurs_in(&mut self, ty: Ty, name: Subst) -> bool {
-        match ty.kind() {
-            TyKind::Error
-            | TyKind::Unit
-            | TyKind::Bool
-            | TyKind::Int(_)
-            | TyKind::Float(_)
-            | TyKind::Str => false,
-            &TyKind::Var(name_) if name == name_ => true,
-            TyKind::Var(_) => false,
-            &TyKind::Existential(ex) if name == ex => {
-                // TODO: Is this right?!
-                true
-            },
-            TyKind::Existential(_) => false,
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
-                params
-                    .iter()
-                    .copied()
-                    .any(|param| self.ty_occurs_in(param, name))
-                    || self.ty_occurs_in(*body, name)
-            },
-            &TyKind::Forall(alpha, _) if name == alpha => true,
-            &TyKind::Forall(_, body) => self.ty_occurs_in(body, name),
-            &TyKind::Ref(inner) => self.ty_occurs_in(inner, name),
+    fn _apply_ctx_on_kind(&self, kind: Kind) -> Kind {
+        match kind.sort() {
+            &KindSort::Ty(_) => unreachable!(),
+            &KindSort::Abs(param, body) => Kind::new_abs(
+                self._apply_ctx_on_kind(param),
+                self._apply_ctx_on_kind(body),
+            ),
+            &KindSort::Ex(_) | &KindSort::Var(_) => kind,
+            &KindSort::Forall(var, body) => Kind::new_forall(var, self._apply_ctx_on_kind(body)),
         }
     }
 
@@ -440,6 +492,31 @@ impl<'hir> Typecker<'hir> {
                 this.ty_wf(body)
             }),
             &TyKind::Ref(inner) => self.ty_wf(inner),
+            &TyKind::Kind(kind) => match kind.sort() {
+                &KindSort::Ty(ty) => self.ty_wf(ty),
+                _ => Ok(Ty::ty_kind(self.kind_wf(kind)?)),
+            },
+        }
+    }
+
+    pub fn kind_wf(&mut self, kind: Kind) -> TyResult<Kind> {
+        match kind.sort() {
+            KindSort::Ty(_) => unreachable!(),
+            &KindSort::Abs(param, body) => self.kind_wf(param).and(self.kind_wf(body)),
+            // TODO: Check context contains kind?
+            &KindSort::Var(_) => Ok(kind),
+            &KindSort::Ex(ex) => {
+                if self.ascend_ctx(|ctx| ctx.get_kind_ex(ex)).is_some()
+                    || self.global_ctx.has_kind_ex(ex)
+                {
+                    Ok(kind)
+                } else {
+                    self.kind_illformed(kind)
+                }
+            },
+            &KindSort::Forall(var, body) => {
+                self.under_ctx(InferCtx::new_with_kind_var(var), |this| this.kind_wf(body))
+            },
         }
     }
 
@@ -583,12 +660,12 @@ impl<'hir> Typecker<'hir> {
 
     fn conv_int(&mut self, kind: hir::expr::IntKind) -> Ty {
         IntKind::try_from(kind)
-            .map_or_else(|_| self.add_fresh_ex(ExSort::Int).1, |kind| Ty::int(kind))
+            .map_or_else(|_| self.add_fresh_ex(ExKind::Int).1, |kind| Ty::int(kind))
     }
 
     fn conv_float(&mut self, kind: hir::expr::FloatKind) -> Ty {
         FloatKind::try_from(kind).map_or_else(
-            |_| self.add_fresh_ex(ExSort::Float).1,
+            |_| self.add_fresh_ex(ExKind::Float).1,
             |kind| Ty::float(kind),
         )
     }

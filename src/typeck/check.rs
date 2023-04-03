@@ -3,12 +3,12 @@ use crate::{
     hir::expr::{Expr, ExprKind, Lambda, Lit},
     message::message::MessageBuilder,
     span::span::{Ident, Spanned, WithSpan},
-    typeck::{ty::{Subst, Kind}, TypeckErr},
+    typeck::{ty::Subst, TypeckErr},
 };
 
 use super::{
     ctx::InferCtx,
-    ty::{ExSort, Existential, FloatKind, IntKind, Ty, TyKind},
+    ty::{ExKind, Existential, FloatKind, IntKind, Ty, TyKind},
     TyResult,
 };
 
@@ -227,7 +227,7 @@ impl<'hir> Typecker<'hir> {
     /**
      * Subtype logic starts here.
      */
-    fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
+    pub fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         verbose!(
             "Subtype {} <: {}",
             self.apply_ctx_on(l_ty),
@@ -293,7 +293,7 @@ impl<'hir> Typecker<'hir> {
 
             (&TyKind::Forall(alpha, body), _) => {
                 verbose!("forall {}. {} subtype of (?)", alpha, body);
-                let ex = self.fresh_ex(ExSort::Common);
+                let ex = self.fresh_ex(ExKind::Common);
                 let ex_ty = Ty::existential(ex);
                 let with_substituted_alpha = body.substitute(Subst::Var(alpha), ex_ty);
 
@@ -308,7 +308,7 @@ impl<'hir> Typecker<'hir> {
                 }),
 
             (&TyKind::Existential(ex), _) if ex.is_common() => {
-                if !self.ty_occurs_in(r_ty, Subst::Existential(ex)) {
+                if !r_ty.contains_ex(ex) {
                     self.instantiate_l(ex, r_ty)
                 } else {
                     todo!("Cycle error");
@@ -316,12 +316,14 @@ impl<'hir> Typecker<'hir> {
             },
 
             (_, &TyKind::Existential(ex)) if ex.is_common() => {
-                if !self.ty_occurs_in(l_ty, Subst::Existential(ex)) {
+                if !l_ty.contains_ex(ex) {
                     self.instantiate_r(l_ty, ex)
                 } else {
                     todo!("Cycle error");
                 }
             },
+
+            (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
 
             _ => Err(TypeckErr::LateReport),
         }
@@ -414,7 +416,8 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Float(_)
             | TyKind::Str
             | TyKind::Var(_)
-            | TyKind::Existential(_) => {
+            | TyKind::Existential(_)
+            | TyKind::Ref(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self.try_to(|this| {
@@ -446,15 +449,7 @@ impl<'hir> Typecker<'hir> {
                     this.instantiate_l(ex, body)
                 })
             }),
-            &TyKind::Ref(inner) => self.try_to(|this| {
-                let inner_ex = this.add_fresh_common_ex();
-                let ref_ty = Ty::ref_to(inner_ex.1);
-                this.solve(ex, ref_ty.mono());
-                this.instantiate_l(inner_ex.0, inner)
-            }),
-            TyKind::Kind(kind) => {
-                // TODO: Review
-            }
+            TyKind::Kind(_) => unreachable!(),
         }
     }
 
@@ -482,7 +477,8 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Float(_)
             | TyKind::Str
             | TyKind::Var(_)
-            | TyKind::Existential(_) => {
+            | TyKind::Existential(_)
+            | TyKind::Ref(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self.try_to(|this| {
@@ -512,7 +508,7 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 verbose!("Instantiate forall Right {} = {}", ex, l_ty);
 
-                let alpha_ex = this.fresh_ex(ExSort::Common);
+                let alpha_ex = this.fresh_ex(ExKind::Common);
 
                 this.under_ctx(InferCtx::new_with_ex(alpha_ex), |this| {
                     let alpha_ex_ty = Ty::existential(alpha_ex);
@@ -520,12 +516,7 @@ impl<'hir> Typecker<'hir> {
                     this.instantiate_r(body_ty, ex)
                 })
             }),
-            &TyKind::Ref(inner) => self.try_to(|this| {
-                let inner_ex = this.add_fresh_common_ex();
-                let ref_ty = Ty::ref_to(inner_ex.1);
-                this.solve(ex, ref_ty.mono());
-                this.instantiate_r(inner, inner_ex.0)
-            }),
+            TyKind::Kind(_) => unreachable!(),
         }
     }
 }

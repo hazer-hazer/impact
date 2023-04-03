@@ -11,7 +11,7 @@ use crate::{
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
     span::span::{Ident, Spanned, WithSpan},
-    typeck::ty::Subst,
+    typeck::{kind::Kind, ty::Subst},
 };
 
 use super::{
@@ -204,7 +204,9 @@ impl<'hir> Typecker<'hir> {
     fn get_param_type(&mut self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![(None, Ty::unit())],
-            &hir::pat::PatKind::Ident(name) => vec![(Some(name), self.add_fresh_common_ex().1)],
+            &hir::pat::PatKind::Ident(name) => {
+                vec![(Some(name), self.add_fresh_kind_ex().1)]
+            },
         }
     }
 
@@ -239,7 +241,7 @@ impl<'hir> Typecker<'hir> {
             .map(|param| self.get_param_type(param))
             .collect::<Vec<_>>();
 
-        let body_ex = self.add_fresh_common_ex();
+        let body_ex = self.add_fresh_kind_ex();
 
         self.under_new_ctx(|this| {
             params_names_tys.iter().flatten().for_each(|&(name, ty)| {
@@ -274,16 +276,15 @@ impl<'hir> Typecker<'hir> {
             // FIXME: Clone
             let func_ty = params_tys.iter().fold(
                 Ty::func(Some(owner_def_id), params_tys.clone(), body_ty),
-                |func_ty, param_ty| {
-                    if let Some(ex) = param_ty.as_ex() {
-                        if let None = this.get_solution(ex) {
-                            // FIXME: Check type variable resolution
-                            let ty_var = Ty::next_ty_var_id();
-                            this.solve(ex, Ty::var(ty_var).mono());
-                            Ty::forall(ty_var, func_ty)
-                        } else {
-                            func_ty
-                        }
+                |func_ty, &param_ty| {
+                    if let Some(ex) = this.is_unsolved_ex(param_ty) {
+                        let ty_var = Ty::next_ty_var_id();
+                        this.solve(ex, Ty::var(ty_var).mono());
+                        Ty::forall(ty_var, func_ty)
+                    } else if let Some(ex) = this.is_unsolved_kind_ex(param_ty) {
+                        let kind_var = Kind::next_kind_var_id();
+                        this.solve_kind_ex(ex, Kind::new_var(kind_var));
+                        Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
                     } else {
                         func_ty
                     }

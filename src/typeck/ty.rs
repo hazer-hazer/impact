@@ -4,7 +4,6 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::Formatter,
     hash::{Hash, Hasher},
-    num::NonZeroUsize,
     sync::RwLock,
 };
 
@@ -19,22 +18,25 @@ use crate::{
     utils::macros::match_expected,
 };
 
+use super::kind::{Kind, KindEx, KindSort};
+
+declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 declare_idx!(TyVarId, u32, "{}", Color::Cyan);
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub enum ExSort {
+pub enum ExKind {
     Common,
     Int,
     Float,
 }
 
-impl std::fmt::Display for ExSort {
+impl std::fmt::Display for ExKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExSort::Common => "",
-            ExSort::Int => "int",
-            ExSort::Float => "float",
+            ExKind::Common => "",
+            ExKind::Int => "int",
+            ExKind::Float => "float",
         }
         .fmt(f)
     }
@@ -42,54 +44,54 @@ impl std::fmt::Display for ExSort {
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Existential {
-    sort: ExSort,
+    kind: ExKind,
     id: ExistentialId,
 }
 
 /// Frequently used pair of Existential with Ty for this existential.
-pub type ExPair = (Existential, Ty);
+pub type ExPair<E = Existential> = (E, Ty);
 
 impl Existential {
-    pub fn new(sort: ExSort, id: ExistentialId) -> Self {
-        Self { sort, id }
+    pub fn new(kind: ExKind, id: ExistentialId) -> Self {
+        Self { kind, id }
     }
 
     pub fn common(id: ExistentialId) -> Self {
-        Self::new(ExSort::Common, id)
+        Self::new(ExKind::Common, id)
     }
 
     pub fn int(id: ExistentialId) -> Self {
-        Self::new(ExSort::Int, id)
+        Self::new(ExKind::Int, id)
     }
 
     pub fn float(id: ExistentialId) -> Self {
-        Self::new(ExSort::Float, id)
+        Self::new(ExKind::Float, id)
     }
 
     pub fn id(&self) -> ExistentialId {
         self.id
     }
 
-    pub fn sort(&self) -> ExSort {
-        self.sort
+    pub fn kind(&self) -> ExKind {
+        self.kind
     }
 
     pub fn is_common(&self) -> bool {
-        self.sort() == ExSort::Common
+        self.kind() == ExKind::Common
     }
 
     pub fn is_int(&self) -> bool {
-        self.sort() == ExSort::Int
+        self.kind() == ExKind::Int
     }
 
     pub fn is_float(&self) -> bool {
-        self.sort() == ExSort::Float
+        self.kind() == ExKind::Float
     }
 }
 
 impl std::fmt::Display for Existential {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.sort(), self.id())
+        write!(f, "{}{}", self.kind(), self.id())
     }
 }
 
@@ -219,8 +221,6 @@ impl std::fmt::Display for FloatKind {
     }
 }
 
-declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
-
 pub type TyMap<T> = IndexVec<TyId, Option<T>>;
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
@@ -236,14 +236,15 @@ impl Ty {
         Self(TY_INTERNER.write().unwrap().intern(tys))
     }
 
-    fn new(sort: TyKind) -> Self {
-        Self::intern(TyS::new(sort))
+    fn new(kind: TyKind) -> Self {
+        Self::intern(TyS::new(kind))
     }
 
     pub fn next_ty_var_id() -> TyVarId {
         *TY_INTERNER.write().unwrap().ty_var_id.inc()
     }
 
+    // Constructors //
     pub fn unit() -> Ty {
         Self::new(TyKind::Unit)
     }
@@ -273,7 +274,7 @@ impl Ty {
     }
 
     pub fn func(def_id: Option<DefId>, params: Vec<Ty>, body: Ty) -> Ty {
-        assert!(params.iter().all(|param| param.kind() == body.kind()));
+        assert!(!params.is_empty());
         Self::new(if let Some(def_id) = def_id {
             TyKind::FuncDef(def_id, params, body)
         } else {
@@ -282,6 +283,7 @@ impl Ty {
     }
 
     pub fn ref_to(ty: Ty) -> Ty {
+        assert!(ty.is_mono());
         Self::new(TyKind::Ref(ty))
     }
 
@@ -293,6 +295,10 @@ impl Ty {
         Self::new(TyKind::Existential(ex))
     }
 
+    pub fn ty_kind(kind: Kind) -> Ty {
+        Self::new(TyKind::Kind(kind))
+    }
+
     pub fn default_int() -> Ty {
         Self::int(DEFAULT_INT_KIND)
     }
@@ -301,6 +307,7 @@ impl Ty {
         Self::float(DEFAULT_FLOAT_KIND)
     }
 
+    //
     pub fn tys(&self) -> &TyS {
         TY_INTERNER.read().unwrap().expect(self.0)
     }
@@ -312,6 +319,23 @@ impl Ty {
     pub fn as_ex(&self) -> Option<Existential> {
         match self.kind() {
             &TyKind::Existential(ex) => Some(ex),
+            _ => None,
+        }
+    }
+
+    pub fn expect_kind(&self) -> Kind {
+        match self.kind() {
+            &TyKind::Kind(kind) => kind,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_kind_ex(&self) -> Option<KindEx> {
+        match self.kind() {
+            TyKind::Kind(kind) => match kind.sort() {
+                &KindSort::Ex(ex) => Some(ex),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -333,6 +357,10 @@ impl Ty {
             | TyKind::Forall(_, _) => true,
             TyKind::Kind(_) => false,
         }
+    }
+
+    pub fn is_kind(&self) -> bool {
+        matches!(self.kind(), TyKind::Kind(_))
     }
 
     pub fn assert_is_ty(&self) {
@@ -401,6 +429,7 @@ impl Ty {
             &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
             &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
             TyKind::Str => Some(MonoTyKind::String),
+            TyKind::Ref(ty) => Some(MonoTyKind::Ref(Box::new(ty.as_mono().unwrap()))),
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let params = params
                     .iter()
@@ -414,11 +443,29 @@ impl Ty {
                 Some(MonoTyKind::Func(params, Box::new(body)))
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
-            TyKind::Ref(ty) => Some(MonoTyKind::Ref(Box::new(ty.as_mono()?))),
             TyKind::Kind(_) => None,
         }?;
 
         Some(MonoTy { sort, ty: *self })
+    }
+
+    pub fn contains_ex(&self, ex: Existential) -> bool {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str
+            | TyKind::Var(_) => false,
+            &TyKind::Existential(ex_) => ex == ex_,
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+                params.iter().copied().any(|param| param.contains_ex(ex)) || body.contains_ex(ex)
+            },
+            &TyKind::Forall(_, body) => body.contains_ex(ex),
+            &TyKind::Ref(inner) => inner.contains_ex(ex),
+            TyKind::Kind(kind) => kind.contains_ty_ex(ex),
+        }
     }
 
     pub fn mono(&self) -> MonoTy {
@@ -532,41 +579,6 @@ impl std::fmt::Display for Ty {
 pub type FuncTy = (Ty, Ty);
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub enum Kind {
-    RefCons,
-    Cons(NonZeroUsize),
-    HigherOrder(Vec<Kind>),
-}
-
-impl Kind {
-    pub fn arity(&self) -> usize {
-        match self {
-            Kind::RefCons => 1,
-            Kind::Cons(arity) => arity.get(),
-            Kind::HigherOrder(_) => panic!("Cannot get arity from higher-order kind"),
-        }
-    }
-}
-
-impl std::fmt::Display for Kind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Kind::RefCons => write!(f, "* -> ref *"),
-            &Kind::Cons(arity) => write!(f, "*{}", " -> *".repeat(arity.get() - 1)),
-            Kind::HigherOrder(kinds) => write!(
-                f,
-                "{}",
-                kinds
-                    .iter()
-                    .map(|kind| format!("({kind})"))
-                    .collect::<Vec<_>>()
-                    .join(" -> ")
-            ),
-        }
-    }
-}
-
-#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
     Error,
 
@@ -588,7 +600,9 @@ pub enum TyKind {
     Existential(Existential),
     Forall(TyVarId, Ty),
 
-    // Type constructors //
+    /// Type kind.
+    /// This might seem strange, but `Kind` is inside `TyKind` to simplify typeck code,
+    /// as we always work with `Ty`
     Kind(Kind),
 }
 
@@ -608,7 +622,7 @@ impl std::fmt::Display for TyKind {
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
-                    .join(" "),
+                    .join(" - "),
                 body
             ),
             TyKind::FuncDef(def_id, params, body) => {

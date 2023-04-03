@@ -11,3 +11,4 @@ PascalCase
 SomeType
 non-corelative
 Builtins
+existentials

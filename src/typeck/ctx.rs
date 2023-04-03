@@ -6,7 +6,10 @@ use crate::{
     span::span::{Ident, Symbol},
 };
 
-use super::ty::{ExSort, Existential, ExistentialId, Ty, TyKind, TyVarId};
+use super::{
+    kind::{Kind, KindEx, KindExId, KindVarId},
+    ty::{ExKind, Existential, ExistentialId, Ty, TyKind, TyVarId},
+};
 
 #[derive(Default, Debug)]
 pub struct GlobalCtx {
@@ -14,6 +17,9 @@ pub struct GlobalCtx {
 
     // FIXME: This might be absolutely wrong
     existentials: IndexVec<ExistentialId, Option<(usize, usize)>>,
+
+    kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
+    kind_exes: IndexVec<KindExId, Option<(usize, usize)>>,
 }
 
 impl GlobalCtx {
@@ -42,12 +48,27 @@ impl GlobalCtx {
         self.solved.get_flat(ex.id()).copied()
     }
 
+    pub fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
+        self.kind_exes_sol.get_flat(ex.id()).copied()
+    }
+
     pub fn has_ex(&self, ex: Existential) -> bool {
         self.existentials().contains(&ex.id()) || self.solved.has(ex.id())
     }
 
+    pub fn has_kind_ex(&self, ex: KindEx) -> bool {
+        self.kind_exes
+            .iter_enumerated_flat()
+            .any(|(ex_, _)| ex.id() == ex_)
+            || self.kind_exes_sol.has(ex.id())
+    }
+
     pub fn get_ex_index(&self, ex: Existential) -> Option<(usize, usize)> {
         self.existentials.get_flat(ex.id()).copied()
+    }
+
+    pub fn get_kind_ex_index(&self, ex: KindEx) -> Option<(usize, usize)> {
+        self.kind_exes.get_flat(ex.id()).copied()
     }
 
     pub fn solved(&self) -> &IndexVec<ExistentialId, Option<Ty>> {
@@ -123,7 +144,10 @@ impl GlobalCtx {
 
 /**
  * InferCtx is a common abstraction similar to algorithmic context
- * from CAEBTC.
+ * from CaEBTC.
+ *
+ * TODO: Possible optimization is to split `InferCtx` to two kinds: `KindInferCtx` and `TyInferCtx`.
+ * TODO:  Because kind existentials and variables do not exists on the same context frame at one moment.
  */
 #[derive(Default, Clone, Debug)]
 pub struct InferCtx {
@@ -139,12 +163,22 @@ pub struct InferCtx {
     func_param_solutions: IndexVec<ExistentialId, Option<Vec<Ty>>>,
 
     /// Type variables defined in current context. Do not leak to global context.
-    /// Actually only used for well-formedness.
+    /// Actually only used for well-formedness checks.
     vars: Vec<TyVarId>,
 
     /// Typed terms. Do not leak to global context
     /// FIXME: Possibly get rid of this. Could be replaced with `HirId -> Ty` bindings globally.
     terms: HashMap<Symbol, Ty>,
+
+    /// Kind variables defined in current context. Do not leak to global context.
+    /// As type variables only used for well-formedness checks.
+    kind_vars: Vec<KindVarId>,
+
+    /// Kind existentials defined in current context.
+    kind_exes: Vec<KindEx>,
+
+    /// Kind existentials solved in current context. Have same properties as `solved`.
+    kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
 }
 
 impl InferCtx {
@@ -182,6 +216,20 @@ impl InferCtx {
         }
     }
 
+    pub fn new_with_kind_ex(ex: KindEx) -> Self {
+        Self {
+            kind_exes: Vec::from([ex]),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_with_kind_var(var: KindVarId) -> Self {
+        Self {
+            kind_vars: Vec::from([var]),
+            ..Default::default()
+        }
+    }
+
     // Getters //
     pub fn get_term(&self, name: Ident) -> Option<Ty> {
         self.terms.get(&name.sym()).copied()
@@ -195,10 +243,18 @@ impl InferCtx {
         self.existentials.iter().position(|&ex_| ex == ex_)
     }
 
+    pub fn get_kind_ex_index(&self, ex: KindEx) -> Option<usize> {
+        self.kind_exes.iter().position(|&ex_| ex == ex_)
+    }
+
     /// Checks if existential is declared in this context.
     /// Solutions of existentials do not count.
     pub fn has_ex(&self, ex: Existential) -> bool {
         self.existentials.contains(&ex)
+    }
+
+    pub fn has_kind_ex(&self, ex: KindEx) -> bool {
+        self.kind_exes.contains(&ex)
     }
 
     /// Seems to be a strange function, but useful in `ascend_ctx` checks.
@@ -210,8 +266,20 @@ impl InferCtx {
         }
     }
 
+    pub fn get_kind_ex(&self, ex: KindEx) -> Option<KindEx> {
+        if self.has_kind_ex(ex) {
+            Some(ex)
+        } else {
+            None
+        }
+    }
+
     pub fn get_solution(&self, ex: Existential) -> Option<Ty> {
         self.solved.get_flat(ex.id()).copied()
+    }
+
+    pub fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
+        self.kind_exes_sol.get_flat(ex.id()).copied()
     }
 
     // pub fn get_unsolved(&self) -> Vec<ExistentialId> {
@@ -231,6 +299,11 @@ impl InferCtx {
     pub fn add_ex(&mut self, ex: Existential) {
         assert!(!self.has_ex(ex));
         self.existentials.push(ex);
+    }
+
+    pub fn add_kind_ex(&mut self, ex: KindEx) {
+        assert!(!self.has_kind_ex(ex));
+        self.kind_exes.push(ex);
     }
 
     pub fn type_term(&mut self, name: Ident, ty: Ty) {
@@ -258,11 +331,16 @@ impl InferCtx {
         }
     }
 
+    pub fn solve_kind_ex(&mut self, ex: KindEx, sol: Kind) {
+        // TODO: Can existentials out of context be solved here?
+        assert!(self.kind_exes_sol.insert(ex.id(), sol).is_none());
+    }
+
     pub fn add_func_param_sol(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
         if self.has_ex(ex) {
             // FIXME: Can function parameter existential be other than Common?
-            match ex.sort() {
-                ExSort::Common => {},
+            match ex.kind() {
+                ExKind::Common => {},
                 _ => panic!(),
             }
 
@@ -298,8 +376,8 @@ impl InferCtx {
     pub fn int_exes(&self) -> Vec<Existential> {
         self.existentials()
             .iter()
-            .filter_map(|&ex| match ex.sort() {
-                ExSort::Int => Some(ex),
+            .filter_map(|&ex| match ex.kind() {
+                ExKind::Int => Some(ex),
                 _ => None,
             })
             .collect()
@@ -308,8 +386,8 @@ impl InferCtx {
     pub fn float_exes(&self) -> Vec<Existential> {
         self.existentials()
             .iter()
-            .filter_map(|&ex| match ex.sort() {
-                ExSort::Float => Some(ex),
+            .filter_map(|&ex| match ex.kind() {
+                ExKind::Float => Some(ex),
                 _ => None,
             })
             .collect()

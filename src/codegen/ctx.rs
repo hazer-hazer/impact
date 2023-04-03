@@ -66,6 +66,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
             TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
                 unreachable!()
             },
+            TyKind::Kind(_) => todo!(),
         }
     }
 
