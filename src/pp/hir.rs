@@ -102,10 +102,11 @@ impl<'a> HirVisitor for HirPP<'a> {
         }
     }
 
-    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, item_id: ItemId, hir: &HIR) {
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Type);
-        self.pp.item_id(item_id);
+        self.pp.item_id(id);
         self.visit_ident(&name, hir);
+        self.pp.ty_anno(id.hir_id());
         self.pp.str(" = ");
         self.visit_ty(&ty_item.ty, hir);
     }

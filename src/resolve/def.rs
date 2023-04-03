@@ -299,7 +299,7 @@ pub struct DefTable {
 
     declare_builtin: Option<DeclareBuiltin>,
     builtins: HashMap<Builtin, DefId>,
-    // node_id_builtin: NodeMap<Builtin>,
+    def_id_builtins: DefMap<Builtin>,
     main_func: Option<DefId>,
 
     /// Span of definition name
@@ -419,7 +419,11 @@ impl DefTable {
 
     pub fn add_builtin(&mut self, builtin: Builtin, def_id: DefId) {
         assert!(self.builtins.insert(builtin, def_id).is_none());
-        // assert!(self.node_id_builtin.insert(node_id, builtin).is_none());
+        assert!(self.def_id_builtins.insert(def_id, builtin).is_none());
+    }
+
+    pub fn as_builtin(&self, def_id: DefId) -> Option<Builtin> {
+        self.def_id_builtins.get_flat(def_id).copied()
     }
 
     pub fn builtin(&self, bt: Builtin) -> DefId {

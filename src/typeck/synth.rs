@@ -81,6 +81,7 @@ impl<'hir> Typecker<'hir> {
             // },
         };
 
+        let ty = ty.apply_ctx(self.ctx());
         self.tyctx_mut().type_node(hir_id, ty);
 
         TyResult::Ok(Ty::unit())
@@ -105,7 +106,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
-        let local_ty = self.synth_expr(local.value)?;
+        let local_ty = self.synth_expr(local.value)?.apply_ctx(self.ctx());
         self.type_term(local.name, local_ty);
         self.tyctx_mut().type_node(local.def_id.into(), local_ty);
         Ok(Ty::unit())
@@ -128,7 +129,7 @@ impl<'hir> Typecker<'hir> {
             },
         }?;
 
-        let expr_ty = self.apply_ctx_on(expr_ty);
+        let expr_ty = expr_ty.apply_ctx(self.ctx_mut());
 
         self.tyctx_mut().type_node(expr_id, expr_ty);
 
@@ -217,9 +218,10 @@ impl<'hir> Typecker<'hir> {
             hir::pat::PatKind::Unit => Ty::unit(),
 
             // Assumed that all names in pattern are typed, at least as existentials
-            &hir::pat::PatKind::Ident(name) => {
-                self.apply_ctx_on(self.lookup_typed_term_ty(name).unwrap())
-            },
+            &hir::pat::PatKind::Ident(name) => self
+                .lookup_typed_term_ty(name)
+                .unwrap()
+                .apply_ctx(self.ctx()),
         }
     }
 
@@ -332,7 +334,7 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_call(&mut self, call: &Call, _expr_id: Expr) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(call.lhs)?;
-        let lhs_ty = self.apply_ctx_on(lhs_ty);
+        let lhs_ty = lhs_ty.apply_ctx(self.ctx_mut());
         self._synth_call(
             Spanned::new(self.hir.expr(call.lhs).span(), Typed::new(call.lhs, lhs_ty)),
             &call.args,

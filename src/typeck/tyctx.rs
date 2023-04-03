@@ -78,8 +78,7 @@ impl TyCtx {
 
     pub fn apply_ctx_on_typed_nodes(&mut self, ctx: &GlobalCtx) {
         self.typed.iter_mut().for_each(|(_, ty)| {
-            *ty = ctx.apply_on(*ty);
-            assert!(ty.is_solved());
+            assert!(ty.apply_ctx(ctx).is_solved());
         });
     }
 

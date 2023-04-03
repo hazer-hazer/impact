@@ -15,7 +15,7 @@ use crate::{
     typeck::ty::{Ty, TyKind},
 };
 
-use super::ty::Existential;
+use super::{ctx::AlgoCtx, ty::Existential};
 
 declare_idx!(KindId, u32, "{}", Color::White);
 declare_idx!(KindExId, u32, "'^{}", Color::BrightMagenta);
@@ -124,6 +124,18 @@ impl Kind {
         }
     }
 
+    pub fn apply_ctx(&self, ctx: &impl AlgoCtx) -> Kind {
+        match self.sort() {
+            &KindSort::Ty(ty) => Kind::new_ty(ty.apply_ctx(ctx)),
+            &KindSort::Var(_) => *self,
+            &KindSort::Abs(param, body) => Kind::new_abs(param.apply_ctx(ctx), body.apply_ctx(ctx)),
+            &KindSort::Ex(ex) => ctx
+                .get_kind_ex_solution(ex)
+                .map_or(*self, |kind| kind.apply_ctx(ctx)),
+            &KindSort::Forall(var, body) => Kind::new_forall(var, body.apply_ctx(ctx)),
+        }
+    }
+
     pub fn contains_ex(&self, ex: KindEx) -> bool {
         match self.sort() {
             KindSort::Ty(_) => false,
@@ -140,6 +152,19 @@ impl Kind {
             KindSort::Abs(param, body) => param.contains_ty_ex(ex) | body.contains_ty_ex(ex),
             KindSort::Var(_) | KindSort::Ex(_) => false,
             KindSort::Forall(_, body) => body.contains_ty_ex(ex),
+        }
+    }
+
+    /// This is a context-independent check, i.e. we applied context and
+    ///  if existentials occur
+    pub fn is_solved(&self) -> bool {
+        match self.sort() {
+            KindSort::Ty(ty) => ty.is_solved(),
+            KindSort::Abs(param, body) => param.is_solved() && body.is_solved(),
+            // TODO: Why true?
+            KindSort::Var(_) => true,
+            KindSort::Ex(_) => false,
+            KindSort::Forall(_, body) => body.is_solved(),
         }
     }
 }
@@ -169,7 +194,7 @@ pub enum KindSort {
 impl Display for KindSort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            KindSort::Ty(_) => write!(f, "*"),
+            KindSort::Ty(ty) => write!(f, "'({})", ty),
             KindSort::Abs(param, body) => write!(f, "{param} -> {body}"),
             KindSort::Var(var) => write!(f, "{var}"),
             KindSort::Ex(ex) => write!(f, "{ex}"),

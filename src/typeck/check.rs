@@ -36,7 +36,7 @@ impl<'hir> Typecker<'hir> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
                 verbose!("[+] Expr {} is of type {}", expr_id, ty);
-                Ok(self.apply_ctx_on(ok))
+                Ok(ok.apply_ctx(self.ctx()))
             },
             Err(_) => {
                 verbose!("[-] Expr {} is NOT of type {}", expr_id, ty);
@@ -180,8 +180,8 @@ impl<'hir> Typecker<'hir> {
         verbose!("Subtype expr ty: {}", expr_ty);
 
         let span = self.hir.expr(expr_id).span();
-        let l = self.apply_ctx_on(expr_ty);
-        let r = self.apply_ctx_on(ty);
+        let l = expr_ty.apply_ctx(self.ctx());
+        let r = ty.apply_ctx(self.ctx());
 
         self.subtype(Spanned::new(span, l), r)
     }
@@ -196,7 +196,7 @@ impl<'hir> Typecker<'hir> {
         match self._subtype(*l_ty.node(), r_ty) {
             Ok(ty) => {
                 verbose!("[+] {} is a subtype of {}", l_ty.node(), ty);
-                Ok(self.apply_ctx_on(ty))
+                Ok(ty.apply_ctx(self.ctx()))
             },
             Err(err) => {
                 verbose!("[-] {} is NOT a subtype of {}", l_ty.node(), r_ty);
@@ -230,8 +230,8 @@ impl<'hir> Typecker<'hir> {
     pub fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         verbose!(
             "Subtype {} <: {}",
-            self.apply_ctx_on(l_ty),
-            self.apply_ctx_on(r_ty)
+            l_ty.apply_ctx(self.ctx()),
+            r_ty.apply_ctx(self.ctx())
         );
 
         assert!(self.ty_wf(l_ty).is_ok());
@@ -280,8 +280,8 @@ impl<'hir> Typecker<'hir> {
                 // self.under_new_ctx(|this| {
                 // Enter Θ
                 let params = self._subtype_lists(&params, &params_)?;
-                let body1 = self.apply_ctx_on(*body1);
-                let body2 = self.apply_ctx_on(*body2);
+                let body1 = body1.apply_ctx(self.ctx());
+                let body2 = body2.apply_ctx(self.ctx());
                 let body = self._subtype(body1, body2)?;
                 Ok(Ty::func(r_ty.func_def_id(), params, body))
                 // })
@@ -373,7 +373,7 @@ impl<'hir> Typecker<'hir> {
                     verbose!("Instantiate L|R Reach {} = {}", ty_ex, ex_ty);
 
                     self.solve(ty_ex, ex_ty.mono());
-                    return Ok(self.apply_ctx_on(ex_ty));
+                    return Ok(ex_ty.apply_ctx(self.ctx()));
                 }
             },
             _ => {},
@@ -384,7 +384,7 @@ impl<'hir> Typecker<'hir> {
             verbose!("Instantiate L|R Solve {} = {}", ex, ty);
             // FIXME: check WF?
             self.solve(ex, mono);
-            return Ok(self.apply_ctx_on(ty));
+            return Ok(ty.apply_ctx(self.ctx()));
         }
 
         Err(TypeckErr::Check)
@@ -441,7 +441,7 @@ impl<'hir> Typecker<'hir> {
                         Ok(())
                     })?;
 
-                let range_ty = this.apply_ctx_on(*body);
+                let range_ty = body.apply_ctx(this.ctx());
                 this.instantiate_l(range_ex.0, range_ty)
             }),
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
@@ -502,7 +502,7 @@ impl<'hir> Typecker<'hir> {
                         Ok(())
                     })?;
 
-                let range_ty = this.apply_ctx_on(*body);
+                let range_ty = body.apply_ctx(this.ctx());
                 this.instantiate_r(range_ty, range_ex.0)
             }),
             &TyKind::Forall(alpha, body) => self.try_to(|this| {

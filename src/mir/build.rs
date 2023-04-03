@@ -3,6 +3,7 @@ use std::collections::{hash_map::Entry, HashMap};
 use crate::{
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
     message::message::MessageStorage,
+    resolve::{builtin::Builtin, def::DefKind},
     session::{Session, Stage, StageOutput},
 };
 
@@ -37,7 +38,28 @@ pub(super) struct MirBuilder<'ctx> {
 }
 
 impl<'ctx> MirBuilder<'ctx> {
-    pub fn build(body_owner: OwnerId, hir: &'ctx HIR, sess: &'ctx Session) -> Body {
+    fn should_be_built(sess: &'ctx Session, body_owner: OwnerId) -> bool {
+        if let Some(bt) = sess.def_table.as_builtin(body_owner.into()) {
+            match bt {
+                Builtin::RefCons => false,
+                Builtin::AddInt
+                | Builtin::SubInt
+                | Builtin::UnitValue
+                | Builtin::UnitTy
+                | Builtin::I32
+                | Builtin::Str
+                | Builtin::RefTy => true,
+            }
+        } else {
+            true
+        }
+    }
+
+    pub fn build(body_owner: OwnerId, hir: &'ctx HIR, sess: &'ctx Session) -> Option<Body> {
+        if !Self::should_be_built(sess, body_owner) {
+            return None;
+        }
+
         let (thir, thir_entry_expr) =
             ThirBuilder::new(hir, &sess.tyctx, body_owner).build_body_thir();
 
@@ -50,11 +72,11 @@ impl<'ctx> MirBuilder<'ctx> {
             sess,
         };
 
-        match this.hir.body_owner_kind(this.thir.body_owner()) {
+        Some(match this.hir.body_owner_kind(this.thir.body_owner()) {
             BodyOwnerKind::Func | BodyOwnerKind::Lambda => this.func(),
             // TODO: Review `Value`s are globals with once-called initializer functions.
             BodyOwnerKind::Value => this.func(),
-        }
+        })
     }
 
     fn func(mut self) -> Body {
@@ -106,8 +128,9 @@ impl<'ctx> BuildFullMir<'ctx> {
         match self.mir.bodies.entry(body_id) {
             Entry::Occupied(_) => {},
             Entry::Vacant(entry) => {
-                let body = MirBuilder::build(body_owner, self.hir, &self.sess);
-                entry.insert(body);
+                if let Some(body) = MirBuilder::build(body_owner, self.hir, &self.sess) {
+                    entry.insert(body);
+                }
             },
         }
     }

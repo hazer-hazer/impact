@@ -8,8 +8,13 @@ use crate::{
 
 use super::{
     kind::{Kind, KindEx, KindExId, KindVarId},
-    ty::{ExKind, Existential, ExistentialId, Ty, TyKind, TyVarId},
+    ty::{ExKind, Existential, ExistentialId, Ty, TyVarId},
 };
+
+pub trait AlgoCtx {
+    fn get_solution(&self, ex: Existential) -> Option<Ty>;
+    fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind>;
+}
 
 #[derive(Default, Debug)]
 pub struct GlobalCtx {
@@ -20,6 +25,16 @@ pub struct GlobalCtx {
 
     kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
     kind_exes: IndexVec<KindExId, Option<(usize, usize)>>,
+}
+
+impl AlgoCtx for GlobalCtx {
+    fn get_solution(&self, ex: Existential) -> Option<Ty> {
+        self.solved.get_flat(ex.id()).copied()
+    }
+
+    fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
+        self.kind_exes_sol.get_flat(ex.id()).copied()
+    }
 }
 
 impl GlobalCtx {
@@ -42,14 +57,6 @@ impl GlobalCtx {
                     assert!(self.existentials.insert(ex.id(), (depth, index)).is_none())
                 }
             });
-    }
-
-    pub fn get_solution(&self, ex: Existential) -> Option<Ty> {
-        self.solved.get_flat(ex.id()).copied()
-    }
-
-    pub fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
-        self.kind_exes_sol.get_flat(ex.id()).copied()
     }
 
     pub fn has_ex(&self, ex: Existential) -> bool {
@@ -88,36 +95,6 @@ impl GlobalCtx {
             Some(sol)
         } else {
             None
-        }
-    }
-
-    /**
-     * Applies global context on the type.
-     * If returned type contains unsolved existentials -- we failed to infer its type.
-     */
-    pub fn apply_on(&self, ty: Ty) -> Ty {
-        match ty.kind() {
-            TyKind::Error
-            | TyKind::Unit
-            | TyKind::Bool
-            | TyKind::Int(_)
-            | TyKind::Float(_)
-            | TyKind::Str
-            | TyKind::Var(_) => ty,
-            // FIXME: Can we panic on unwrap?
-            &TyKind::Existential(ex) => self.apply_on(
-                self.get_solution(ex)
-                    .expect(&format!("Unsolved existential {}", ex)),
-            ),
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => Ty::func(
-                ty.func_def_id(),
-                params.iter().map(|param| self.apply_on(*param)).collect(),
-                self.apply_on(*body),
-            ),
-            &TyKind::Forall(alpha, body) => Ty::forall(alpha, self.apply_on(body)),
-            &TyKind::Ref(inner) => Ty::ref_to(self.apply_on(inner)),
-            // TODO: Review
-            TyKind::Kind(_) => todo!(),
         }
     }
 
@@ -179,6 +156,16 @@ pub struct InferCtx {
 
     /// Kind existentials solved in current context. Have same properties as `solved`.
     kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
+}
+
+impl AlgoCtx for InferCtx {
+    fn get_solution(&self, ex: Existential) -> Option<Ty> {
+        self.solved.get_flat(ex.id()).copied()
+    }
+
+    fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
+        self.kind_exes_sol.get_flat(ex.id()).copied()
+    }
 }
 
 impl InferCtx {
@@ -272,14 +259,6 @@ impl InferCtx {
         } else {
             None
         }
-    }
-
-    pub fn get_solution(&self, ex: Existential) -> Option<Ty> {
-        self.solved.get_flat(ex.id()).copied()
-    }
-
-    pub fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
-        self.kind_exes_sol.get_flat(ex.id()).copied()
     }
 
     // pub fn get_unsolved(&self) -> Vec<ExistentialId> {

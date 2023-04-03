@@ -170,6 +170,8 @@ impl<'ctx> MirBuilder<'ctx> {
         }
     }
 
+    // fn call_as_rvalue(&mut self, bb: BB, func_ty: &Ty, lhs: &ExprId, args: &[ExprId]) -> BBWith<RValue> {}
+
     pub(super) fn as_temp(&mut self, bb: BB, expr_id: ExprId) -> BBWith<Local> {
         let &Expr { ty, span, .. } = self.thir.expr(expr_id);
         let temp = self.temp_lvalue(ty, span);

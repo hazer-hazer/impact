@@ -179,4 +179,11 @@ impl THIR {
     pub fn body_owner(&self) -> OwnerId {
         self.body_owner
     }
+
+    pub fn is_builtin_expr(&self, id: ExprId, bt: Builtin) -> bool {
+        match self.expr(id).kind {
+            ExprKind::Builtin(bt_) => bt == bt_,
+            _ => false,
+        }
+    }
 }

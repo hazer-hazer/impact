@@ -18,7 +18,10 @@ use crate::{
     utils::macros::match_expected,
 };
 
-use super::kind::{Kind, KindEx, KindSort};
+use super::{
+    ctx::AlgoCtx,
+    kind::{Kind, KindEx, KindSort},
+};
 
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
@@ -283,7 +286,7 @@ impl Ty {
     }
 
     pub fn ref_to(ty: Ty) -> Ty {
-        assert!(ty.is_mono());
+        // assert!(ty.is_mono());
         Self::new(TyKind::Ref(ty))
     }
 
@@ -415,9 +418,7 @@ impl Ty {
             TyKind::Existential(_) => false,
             TyKind::Forall(_, ty) => ty.is_solved(),
             TyKind::Ref(ty) => ty.is_solved(),
-
-            // TODO: Review
-            TyKind::Kind(_) => false,
+            TyKind::Kind(kind) => kind.is_solved(),
         }
     }
 
@@ -531,13 +532,48 @@ impl Ty {
         }
     }
 
+    pub fn apply_ctx(&self, ctx: &impl AlgoCtx) -> Ty {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Var(_)
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str => *self,
+
+            // FIXME: Can we panic on unwrap?
+            &TyKind::Existential(ex) => ctx.get_solution(ex).map_or(*self, |ty| ty.apply_ctx(ctx)),
+
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+                let params = params
+                    .iter()
+                    .copied()
+                    .map(|param| param.apply_ctx(ctx))
+                    .collect();
+                let body = body.apply_ctx(ctx);
+                Ty::func(self.func_def_id(), params, body)
+            },
+
+            &TyKind::Forall(ident, body) => Ty::forall(ident, body.apply_ctx(ctx)),
+            &TyKind::Ref(inner) => Ty::ref_to(inner.apply_ctx(ctx)),
+            TyKind::Kind(kind) => {
+                let kind = kind.apply_ctx(ctx);
+                match kind.sort() {
+                    &KindSort::Ty(ty) => ty,
+                    _ => Ty::ty_kind(kind),
+                }
+            },
+        }
+    }
+
     // Strict getters //
     pub fn as_int(&self) -> IntKind {
-        match_expected!(self.kind(), &TyKind::Int(kind) => kind)
+        match_expected!(@pp self.kind(), &TyKind::Int(kind) => kind)
     }
 
     pub fn as_float_kind(&self) -> FloatKind {
-        match_expected!(self.kind(), &TyKind::Float(kind) => kind)
+        match_expected!(@pp self.kind(), &TyKind::Float(kind) => kind)
     }
 
     pub fn as_func(&self) -> (DefId, &[Ty], Ty) {

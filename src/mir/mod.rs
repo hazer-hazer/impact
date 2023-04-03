@@ -207,6 +207,15 @@ impl TryFrom<Builtin> for InfixOp {
     }
 }
 
+impl Into<Builtin> for InfixOp {
+    fn into(self) -> Builtin {
+        match self {
+            InfixOp::AddInt => Builtin::AddInt,
+            InfixOp::SubInt => Builtin::SubInt,
+        }
+    }
+}
+
 impl Display for InfixOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

@@ -20,7 +20,7 @@ use crate::{
 };
 
 use self::{
-    ctx::{GlobalCtx, InferCtx},
+    ctx::{AlgoCtx, GlobalCtx, InferCtx},
     kind::{Kind, KindEx, KindExId, KindSort},
     ty::{
         ExKind, ExPair, Existential, ExistentialId, FloatKind, IntKind, MonoTy, Ty, TyKind, TyVarId,
@@ -150,7 +150,11 @@ impl<'hir> Typecker<'hir> {
     // }
 
     // Context //
-    fn ctx(&mut self) -> &mut InferCtx {
+    fn ctx(&self) -> &InferCtx {
+        self.ctx_stack.last().unwrap()
+    }
+
+    fn ctx_mut(&mut self) -> &mut InferCtx {
         self.ctx_stack.last_mut().unwrap()
     }
 
@@ -307,7 +311,7 @@ impl<'hir> Typecker<'hir> {
 
     fn add_fresh_kind_ex(&mut self) -> ExPair<KindEx> {
         let ex = self.fresh_kind_ex();
-        self.ctx().add_kind_ex(ex);
+        self.ctx_mut().add_kind_ex(ex);
         (ex, Ty::ty_kind(Kind::new_ex(ex)))
     }
 
@@ -358,7 +362,7 @@ impl<'hir> Typecker<'hir> {
         }
 
         verbose!("Solve {} as {}", ex, sol);
-        self.ctx().solve_kind_ex(ex, sol);
+        self.ctx_mut().solve_kind_ex(ex, sol);
         sol
     }
 
@@ -372,17 +376,17 @@ impl<'hir> Typecker<'hir> {
 
     fn type_term(&mut self, name: Ident, ty: Ty) {
         verbose!("Type term {}: {}", name, ty);
-        self.ctx().type_term(name, ty)
+        self.ctx_mut().type_term(name, ty)
     }
 
     fn add_ex(&mut self, ex: Existential) {
         verbose!("Add ex {}", ex);
-        self.ctx().add_ex(ex);
+        self.ctx_mut().add_ex(ex);
     }
 
     fn add_var(&mut self, var: TyVarId) -> Ty {
         verbose!("Add var {}", var);
-        self.ctx().add_var(var);
+        self.ctx_mut().add_var(var);
         Ty::var(var)
     }
 
@@ -402,62 +406,6 @@ impl<'hir> Typecker<'hir> {
 
     fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
         self.ascend_ctx(|ctx: &InferCtx| ctx.get_term(name))
-    }
-
-    fn apply_ctx_on(&self, ty: Ty) -> Ty {
-        let res = self._apply_ctx_on(ty);
-        if ty != res {
-            verbose!("[APPLY CTX] {} => {}", ty, res);
-        }
-        res
-    }
-
-    fn _apply_ctx_on(&self, ty: Ty) -> Ty {
-        match ty.kind() {
-            TyKind::Error
-            | TyKind::Unit
-            | TyKind::Var(_)
-            | TyKind::Bool
-            | TyKind::Int(_)
-            | TyKind::Float(_)
-            | TyKind::Str => ty,
-
-            &TyKind::Existential(ex) => self
-                .get_solution(ex)
-                .map_or(ty, |ty| self._apply_ctx_on(ty)),
-
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
-                let params = params
-                    .iter()
-                    .copied()
-                    .map(|param| self._apply_ctx_on(param))
-                    .collect();
-                let body = self._apply_ctx_on(*body);
-                Ty::func(ty.func_def_id(), params, body)
-            },
-
-            &TyKind::Forall(ident, body) => {
-                let body = self._apply_ctx_on(body);
-                Ty::forall(ident, body)
-            },
-            &TyKind::Ref(inner) => Ty::ref_to(self._apply_ctx_on(inner)),
-            &TyKind::Kind(kind) => match kind.sort() {
-                &KindSort::Ty(ty) => self._apply_ctx_on(ty),
-                _ => Ty::ty_kind(self._apply_ctx_on_kind(kind)),
-            },
-        }
-    }
-
-    fn _apply_ctx_on_kind(&self, kind: Kind) -> Kind {
-        match kind.sort() {
-            &KindSort::Ty(_) => unreachable!(),
-            &KindSort::Abs(param, body) => Kind::new_abs(
-                self._apply_ctx_on_kind(param),
-                self._apply_ctx_on_kind(body),
-            ),
-            &KindSort::Ex(_) | &KindSort::Var(_) => kind,
-            &KindSort::Forall(var, body) => Kind::new_forall(var, self._apply_ctx_on_kind(body)),
-        }
     }
 
     pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
@@ -536,7 +484,7 @@ impl<'hir> Typecker<'hir> {
         let default_int = Ty::default_int();
         let default_float = Ty::default_float();
 
-        self.ctx().int_exes().iter().for_each(|&ex| {
+        self.ctx_mut().int_exes().iter().for_each(|&ex| {
             if let Some(_) = self.get_solution(ex) {
                 return;
             }
@@ -544,7 +492,7 @@ impl<'hir> Typecker<'hir> {
             self.solve(ex, default_int.mono());
         });
 
-        self.ctx().float_exes().iter().for_each(|&ex| {
+        self.ctx_mut().float_exes().iter().for_each(|&ex| {
             if let Some(_) = self.get_solution(ex) {
                 return;
             }
@@ -555,7 +503,7 @@ impl<'hir> Typecker<'hir> {
 
     /// Gets function type DefId applying context to substitute existentials.
     pub fn deep_func_def_id(&self, ty: Ty) -> Option<DefId> {
-        self.apply_ctx_on(ty).func_def_id()
+        ty.apply_ctx(self.ctx()).func_def_id()
     }
 
     // Conversion //
@@ -590,15 +538,23 @@ impl<'hir> Typecker<'hir> {
                 Builtin::I32 => Ty::int(IntKind::I32),
                 Builtin::Str => Ty::str(),
                 Builtin::RefTy => {
+                    let kind_var = Kind::next_kind_var_id();
+                    Ty::ty_kind(Kind::new_forall(
+                        kind_var,
+                        Kind::new_abs(
+                            Kind::new_var(kind_var),
+                            Kind::new_ty(Ty::ref_to(Ty::ty_kind(Kind::new_var(kind_var)))),
+                        ),
+                    ))
                     // FIXME: Remove and return constructor type. KINDS AAAAAAA
-                    MessageBuilder::error()
-                        .span(ty.span())
-                        .text(format!(
-                            "{} is a type constructor and cannot be used without parameter",
-                            bt
-                        ))
-                        .emit_single_label(self);
-                    Ty::error()
+                    // MessageBuilder::error()
+                    //     .span(ty.span())
+                    //     .text(format!(
+                    //         "{} is a type constructor and cannot be used without parameter",
+                    //         bt
+                    //     ))
+                    //     .emit_single_label(self);
+                    // Ty::error()
                 },
                 Builtin::RefCons | Builtin::AddInt | Builtin::SubInt | Builtin::UnitValue => {
                     unreachable!()
@@ -653,7 +609,7 @@ impl<'hir> Typecker<'hir> {
         }
 
         let &TyAlias { ty } = self.hir.item(ItemId::new(def.def_id.into())).ty_alias();
-        let ty = self.conv(ty);
+        let ty = self.conv(ty).apply_ctx(self.ctx());
         self.tyctx_mut().type_node(hir_id, ty);
         ty
     }

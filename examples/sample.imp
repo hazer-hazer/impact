@@ -1,6 +1,7 @@
 type () = builtin "UnitTy"
 type i32 = builtin "I32"
 type str = builtin "Str"
+type Ref = builtin "RefTy"
 
 () = builtin "UnitValue"
 
