@@ -36,9 +36,9 @@ impl WithSpan for StmtNode {
 
 #[derive(Debug)]
 pub struct Local {
+    pub id: HirId,
     pub name: Ident,
     pub value: Expr,
-    pub def_id: DefId,
     pub span: Span,
 }
 

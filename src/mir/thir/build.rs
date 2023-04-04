@@ -132,12 +132,12 @@ impl<'ctx> ThirBuilder<'ctx> {
     }
 
     fn local(&mut self, local: &hir::stmt::Local) -> Stmt {
-        let ty = self.tyctx.tyof(local.def_id.into());
+        let ty = self.tyctx.tyof(local.id);
         let pat = Pat {
             ty,
             kind: PatKind::Ident {
                 name: local.name,
-                var: LocalVar::new(local.def_id.into()),
+                var: LocalVar::new(local.id),
                 ty,
             },
             span: local.name.span(),

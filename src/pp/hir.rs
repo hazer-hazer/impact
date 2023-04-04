@@ -140,6 +140,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_extern_item(&mut self, name: Ident, extern_item: &ExternItem, id: ItemId, hir: &HIR) {
         self.pp.string(name);
         self.pp.item_id(id);
+        self.pp.ty_anno(id.hir_id());
         self.pp.str(": ");
         self.visit_ty(&extern_item.ty, hir);
     }

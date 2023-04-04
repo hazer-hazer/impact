@@ -3,15 +3,15 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::{Linkage, Module},
-    types::{AnyTypeEnum, BasicType, BasicTypeEnum, PointerType, StructType},
+    types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType, StructType},
     values::{BasicValueEnum, FunctionValue, PointerValue},
     AddressSpace,
 };
 
 use crate::{
-    hir::HIR,
+    hir::{BodyOwner, OwnerId, HIR},
     mir::{Ty, MIR},
-    resolve::def::DefId,
+    resolve::{builtin::Builtin, def::DefId},
     session::Session,
     typeck::{
         ty::{FloatKind, TyKind},
@@ -31,6 +31,16 @@ pub struct CodeGenCtx<'ink, 'ctx> {
 }
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
+    pub fn should_be_built(&self, body_owner: DefId) -> bool {
+        match self.sess.def_table.as_builtin(body_owner) {
+            Some(bt) => match bt {
+                Builtin::RefCons => false,
+                _ => true,
+            },
+            None => true,
+        }
+    }
+
     pub fn unit_ty(&self) -> StructType<'ink> {
         self.llvm_ctx.struct_type(&[], false)
     }
@@ -99,14 +109,14 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     pub fn simple_func(
         &self,
         name: &str,
-        ty: Ty,
+        ty: FunctionType<'ink>,
         body: impl Fn(&Builder<'ink>, &[BasicValueEnum<'ink>]) -> Option<BasicValueEnum<'ink>>,
     ) -> FunctionValue<'ink> {
-        assert!(ty.is_func_like());
-        let ll_ty = self.conv_ty(ty).into_function_type();
+        // assert!(ty.is_func_like());
+        // let ll_ty = self.conv_ty(ty).into_function_type();
         let func = self
             .llvm_module
-            .add_function(name, ll_ty, Some(Linkage::Internal));
+            .add_function(name, ty, Some(Linkage::Internal));
 
         let builder = self.llvm_ctx.create_builder();
         let entry_bb = self.llvm_ctx.append_basic_block(func, "entry");
@@ -196,6 +206,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         let global = self
             .llvm_module
             .add_global(str.get_type(), None, "string_slice");
+        global.set_constant(true);
         global.set_initializer(&str);
         global.as_pointer_value()
     }

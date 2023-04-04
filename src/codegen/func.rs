@@ -1,17 +1,26 @@
 use std::collections::HashMap;
 
-use inkwell::values::FunctionValue;
+use inkwell::{
+    types::BasicType,
+    values::{BasicValueEnum, CallableValue, FunctionValue},
+    AddressSpace,
+};
 
 use crate::{
+    cli::verbose,
     hir::{
         item::{ExternItem, ItemId},
         visitor::HirVisitor,
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
+    message::message::{MessageStorage, MessagesResult, MsgResult},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
     span::span::Ident,
-    typeck::{ty::TyMap, tyctx::InstantiatedTy},
+    typeck::{
+        ty::{IntKind, TyMap},
+        tyctx::InstantiatedTy,
+    },
     utils::macros::match_expected,
 };
 
@@ -34,14 +43,17 @@ impl<'ink> FuncInstance<'ink> {
 pub struct FunctionMap<'ink> {
     instances: DefMap<FuncInstance<'ink>>,
     infix_ops: HashMap<InfixOp, FunctionValue<'ink>>,
+    externals: DefMap<FunctionValue<'ink>>,
 }
 
 impl<'ink> FunctionMap<'ink> {
     pub fn expect_mono(&self, def_id: DefId) -> FunctionValue<'ink> {
         match self.instances.get_unwrap(def_id) {
-            &FuncInstance::Mono(_, mono) => mono,
+            &FuncInstance::Mono(_, mono) => Some(mono),
             FuncInstance::Poly(_) => panic!(),
         }
+        .or_else(|| self.externals.get_flat(def_id).copied())
+        .unwrap()
     }
 
     pub fn infix(&self, op: InfixOp) -> FunctionValue<'ink> {
@@ -50,14 +62,21 @@ impl<'ink> FunctionMap<'ink> {
 
     pub fn instance(&self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
         assert!(ty.is_instantiated());
-        match self.instances.get_unwrap(def_id) {
-            &FuncInstance::Mono(_, mono) => mono,
-            FuncInstance::Poly(poly) => poly.get_copied_unwrap(ty.id()).1,
+        if let Some(inst) = self.instances.get_flat(def_id) {
+            match inst {
+                &FuncInstance::Mono(_, mono) => mono,
+                FuncInstance::Poly(poly) => poly.get_copied_unwrap(ty.id()).1,
+            }
+        } else {
+            self.externals.get_copied_unwrap(def_id)
         }
     }
 
     fn insert_mono(&mut self, ty: Ty, value: FunctionValue<'ink>) {
-        assert!(ty.is_instantiated());
+        assert!(
+            ty.is_instantiated() && ty.func_def_id().is_some(),
+            "Cannot insert mono function type {ty} without DefId"
+        );
         assert!(self
             .instances
             .insert(ty.func_def_id().unwrap(), FuncInstance::Mono(ty, value))
@@ -73,19 +92,23 @@ impl<'ink> FunctionMap<'ink> {
             .add_poly(ty, value);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (DefId, &FuncInstance<'ink>)> + '_ {
+    pub fn iter_internal(&self) -> impl Iterator<Item = (DefId, &FuncInstance<'ink>)> + '_ {
         self.instances.iter_enumerated_flat()
     }
 }
 
 pub struct FunctionsCodeGen<'ink, 'ctx> {
     ctx: CodeGenCtx<'ink, 'ctx>,
-
     function_map: FunctionMap<'ink>,
+    msg: MessageStorage,
 }
 
 impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
     fn visit_body(&mut self, &_body: &BodyId, owner: BodyOwner, _hir: &HIR) {
+        if !self.ctx.should_be_built(owner.def_id) {
+            return;
+        }
+
         let def_id = owner.def_id;
 
         // Do not codegen `builtin` func
@@ -122,19 +145,15 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         };
     }
 
-    fn visit_extern_item(
-        &mut self,
-        name: Ident,
-        extern_item: &ExternItem,
-        item_id: ItemId,
-        hir: &HIR,
-    ) {
+    fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, _: &HIR) {
         let def_id = item_id.def_id();
         let ty = self.ctx.sess.tyctx.tyof(def_id.into());
 
+        verbose!("Ty of external item: {ty}");
+
         if ty.is_func_like() {
             let func = self.func_value(def_id, ty);
-            self.function_map.insert_mono(ty, func);
+            self.function_map.externals.insert(def_id, func);
         } else {
             todo!("Extern values")
         }
@@ -146,6 +165,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         Self {
             ctx,
             function_map: Default::default(),
+            msg: Default::default(),
         }
     }
 
@@ -153,9 +173,13 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         self.ctx.simple_func(
             op.name(),
             self.ctx
-                .sess
-                .tyctx
-                .tyof(self.ctx.sess.def_table.builtin(op.builtin()).into()),
+                .conv_ty(
+                    self.ctx
+                        .sess
+                        .tyctx
+                        .tyof(self.ctx.sess.def_table.builtin(op.builtin()).into()),
+                )
+                .into_function_type(),
             |builder, params| {
                 // verbose!(
                 //     "{}",
@@ -193,7 +217,50 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         )
     }
 
-    pub fn gen_functions(mut self) -> FunctionMap<'ink> {
+    pub fn gen_main(&mut self) {
+        let def_id = self.ctx.sess.def_table.expect_main_func();
+
+        let real_main_ty = self.ctx.llvm_ctx.i32_type().fn_type(
+            &[
+                self.ctx.llvm_ctx.i32_type().into(),
+                self.ctx
+                    .llvm_ctx
+                    .i8_type()
+                    .ptr_type(AddressSpace::default())
+                    .ptr_type(AddressSpace::default())
+                    .into(),
+            ],
+            false,
+        );
+
+        self.ctx.simple_func(
+            "main",
+            real_main_ty,
+            // Ty::func(Some(def_id), vec![], Ty::int(IntKind::I32)),
+            |builder, _params| {
+                let main_ty = self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id));
+                let main_func: CallableValue<'ink> = self
+                    .function_map
+                    .instance(def_id, main_ty)
+                    .as_global_value()
+                    .as_pointer_value()
+                    .try_into()
+                    .unwrap();
+                builder
+                    .build_call(
+                        main_func,
+                        &[self.ctx.unit_value().into()],
+                        &format!("main_func_call"),
+                    )
+                    .try_as_basic_value()
+                    .unwrap_left();
+
+                Some(self.ctx.llvm_ctx.i32_type().const_int(0, true).into())
+            },
+        );
+    }
+
+    pub fn gen_functions(mut self) -> MessagesResult<FunctionMap<'ink>> {
         self.visit_hir(self.ctx.hir);
 
         // Add infix operators functions
@@ -202,7 +269,9 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
             assert!(self.function_map.infix_ops.insert(op, func).is_none());
         });
 
-        self.function_map
+        self.gen_main();
+
+        self.msg.error_checked_result(self.function_map)
     }
 
     fn func_value(&mut self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {

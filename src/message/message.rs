@@ -1,5 +1,5 @@
 use core::fmt;
-use std::fmt::{Display};
+use std::fmt::Display;
 
 use crate::{
     cli::color::Color,
@@ -161,6 +161,9 @@ pub trait MessageHolder {
     fn save(&mut self, msg: Message);
 }
 
+// FIXME: Rename 'cause of MsgResult
+pub type MessagesResult<T> = Result<T, MessageStorage>;
+
 #[derive(Default)]
 pub struct MessageStorage {
     messages: Vec<Message>,
@@ -171,10 +174,24 @@ impl MessageStorage {
         self.messages.push(msg);
     }
 
+    pub fn merge(&mut self, other: MessageStorage) {
+        self.messages.extend(other.messages);
+    }
+
     pub fn extract(self) -> Vec<Message> {
         self.messages
     }
+
+    pub fn error_checked_result<T>(self, value: T) -> MessagesResult<T> {
+        if self.messages.iter().any(|msg| msg.is(MessageKind::Error)) {
+            Err(self)
+        } else {
+            Ok(value)
+        }
+    }
 }
+
+pub type MsgResult<T> = Result<T, MessageBuilder>;
 
 pub struct MessageBuilder {
     kind: MessageKind,

@@ -17,7 +17,7 @@ use crate::{
     dt::idx::{declare_idx, IndexVec},
     hir::BodyId,
     resolve::{builtin::Builtin, def::DefId},
-    span::span::Span,
+    span::span::{Ident, Span},
 };
 
 use self::scalar::Scalar;
@@ -338,12 +338,13 @@ pub struct BasicBlock {
 
 pub struct LocalInfo {
     pub ty: Ty,
+    pub name: Ident,
     pub span: Span,
 }
 
 impl LocalInfo {
-    pub fn new(ty: Ty, span: Span) -> Self {
-        Self { ty, span }
+    pub fn new(ty: Ty, name: Ident, span: Span) -> Self {
+        Self { ty, name, span }
     }
 }
 
@@ -366,6 +367,10 @@ impl Body {
     /// Get locals after return (0) and parameters
     pub fn inner_locals(&self) -> impl Iterator<Item = (Local, &LocalInfo)> {
         self.locals.iter_enumerated().skip(self.args + 1)
+    }
+
+    pub fn local_name(&self, local: Local) -> Ident {
+        self.locals.get(local).unwrap().name
     }
 
     // pub fn local_name(&self, local: Local) ->
@@ -457,6 +462,10 @@ impl BodyBuilder {
             self.args += 1;
         }
         self.locals.push(info)
+    }
+
+    pub fn next_local_name(&mut self) -> String {
+        format!("_{}", self.locals.len() + 1)
     }
 
     pub fn local_info(&mut self, local: Local) -> &LocalInfo {

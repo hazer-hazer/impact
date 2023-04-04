@@ -247,9 +247,9 @@ impl<'ast> Lower<'ast> {
                 let def = self.sess.def_table.get_def(def_id);
                 match def.kind() {
                     DefKind::Local => Some(Local {
+                        id: self.lower_node_id(item.id()),
                         name: lower_pr!(self, name, lower_ident),
                         value: lower_pr!(self, body, lower_expr),
-                        def_id,
                         span: item.span(),
                     }),
                     _ => None,

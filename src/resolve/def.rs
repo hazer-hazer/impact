@@ -479,4 +479,8 @@ impl DefTable {
                 .label(self.root_span(), format!("Define function 'main'"))),
         }
     }
+
+    pub fn expect_main_func(&self) -> DefId {
+        self.main_func.unwrap()
+    }
 }

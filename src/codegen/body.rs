@@ -9,10 +9,11 @@ use crate::{
     dt::idx::IndexVec,
     hir::BodyId,
     mir::{
-        Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator, TerminatorKind,
-        Ty, BB, START_BB,
+        self, Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator,
+        TerminatorKind, Ty, BB, START_BB,
     },
     resolve::def::DefId,
+    span::span::Ident,
     typeck::ty::{FloatKind, TyKind},
 };
 
@@ -75,8 +76,16 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         alloca_builder
     }
 
+    fn local_name(&self, local: Local) -> Ident {
+        self.body.local_name(local)
+    }
+
     // Generators //
     pub fn gen_body(&mut self) {
+        if !self.ctx.should_be_built(self.func_def_id) {
+            return;
+        }
+
         verbose!("Gen body of function{}: {}", self.func_def_id, self.func_ty);
 
         let body_bb = self.ctx.llvm_ctx.append_basic_block(self.func, "body");
@@ -84,20 +93,25 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
         let alloca_builder = self.new_alloca_builder();
         let return_local_ty = self.ctx.conv_basic_ty(self.func_ty.return_ty());
-        let return_local_value = alloca_builder.build_alloca(return_local_ty, "alloca");
+        let return_local_value = alloca_builder.build_alloca(return_local_ty, "return_value");
         self.add_local(Local::return_local(), return_local_value);
 
         self.body.params().for_each(|(local, _)| {
             let func_param = self.func.get_nth_param(local.inner()).unwrap();
-            let value = alloca_builder.build_alloca(func_param.get_type(), &local.formatted());
+            let value = alloca_builder.build_alloca(
+                func_param.get_type(),
+                &format!("alloca_{}", self.local_name(local)),
+            );
             alloca_builder.build_store(value, func_param);
             self.add_local(local, value);
         });
 
         self.body.inner_locals().for_each(|(local, info)| {
             // TODO: Add name to `LocalInfo` and use it here
-            let value =
-                alloca_builder.build_alloca(self.ctx.conv_basic_ty(info.ty), &local.formatted());
+            let value = alloca_builder.build_alloca(
+                self.ctx.conv_basic_ty(info.ty),
+                &format!("alloca_{}", self.local_name(local)),
+            );
             self.add_local(local, value);
         });
 
@@ -147,7 +161,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             TerminatorKind::Return => {
                 let return_local = self
                     .builder
-                    .build_load(self.local_value(Local::return_local()), "load_return_load");
+                    .build_load(self.local_value(Local::return_local()), "load_return_local");
                 self.builder.build_return(Some(&return_local));
             },
         }
@@ -219,10 +233,10 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         verbose!("Convert operand {} to BasicValue", operand);
 
         match operand {
-            Operand::LValue(lv) => {
-                // TODO: Useful info in name
-                self.builder.build_load(self.local_value(lv.local), "load")
-            },
+            Operand::LValue(lv) => self.builder.build_load(
+                self.local_value(lv.local),
+                &format!("load_{}", self.body.local_name(lv.local)),
+            ),
             Operand::Const(const_) => self.const_to_value(const_),
         }
     }
@@ -302,6 +316,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         let cast =
             self.builder
                 .build_pointer_cast(ptr, self.ctx.cstring_ptr_ty(), "string_slice_cast");
+
         cast.as_basic_value_enum()
     }
 

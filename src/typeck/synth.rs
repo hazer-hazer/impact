@@ -67,7 +67,9 @@ impl<'hir> Typecker<'hir> {
                 value_ty
             },
             ItemKind::ExternItem(extern_item) => {
-                let ty = self.conv(extern_item.ty);
+                let ty = self
+                    .conv(extern_item.ty)
+                    .maybe_add_func_def_id(item.def_id());
                 self.type_term(item.name(), ty);
                 ty
             },
@@ -108,7 +110,7 @@ impl<'hir> Typecker<'hir> {
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
         let local_ty = self.synth_expr(local.value)?.apply_ctx(self.ctx());
         self.type_term(local.name, local_ty);
-        self.tyctx_mut().type_node(local.def_id.into(), local_ty);
+        self.tyctx_mut().type_node(local.id, local_ty);
         Ok(Ty::unit())
     }
 

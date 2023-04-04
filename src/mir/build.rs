@@ -38,6 +38,15 @@ pub(super) struct MirBuilder<'ctx> {
 }
 
 impl<'ctx> MirBuilder<'ctx> {
+    fn should_be_built(sess: &'ctx Session, body_owner: OwnerId) -> bool {
+        match sess.def_table.as_builtin(body_owner.into()) {
+            Some(bt) => match bt {
+                Builtin::RefCons => false,
+                _ => true,
+            },
+            None => true,
+        }
+    }
 
     pub fn build(body_owner: OwnerId, hir: &'ctx HIR, sess: &'ctx Session) -> Option<Body> {
         if !Self::should_be_built(sess, body_owner) {

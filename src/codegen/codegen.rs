@@ -12,7 +12,7 @@ use inkwell::{
 use crate::{
     cli::{color::Colorize, verbose},
     hir::HIR,
-    message::message::{MessageHolder, MessageStorage},
+    message::message::{MessageHolder, MessageStorage, MessagesResult},
     mir::MIR,
     session::{Session, Stage, StageOutput},
 };
@@ -51,7 +51,13 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         }
     }
 
-    fn codegen(&mut self) -> Module<'ink> {
+    fn codegen(&mut self) -> MessagesResult<()> {
+        let _main_func = self
+            .sess
+            .def_table
+            .main_func()
+            .map_err(|err| err.emit(self));
+
         let llvm_module = self.llvm_ctx.create_module("kek");
         Target::initialize_all(&InitializationConfig::default());
         let target_triple = TargetMachine::get_default_triple();
@@ -66,10 +72,10 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             llvm_module: &llvm_module,
         };
 
-        let function_map = FunctionsCodeGen::new(ctx).gen_functions();
+        let function_map = FunctionsCodeGen::new(ctx).gen_functions()?;
         let value_map = ValueCodeGen::new(ctx, &function_map).gen_values();
 
-        for (def_id, inst) in function_map.iter() {
+        for (def_id, inst) in function_map.iter_internal() {
             match inst {
                 &FuncInstance::Mono(ty, func) => {
                     BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map).gen_body();
@@ -129,14 +135,17 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
 
         child.wait().unwrap();
 
-        llvm_module
+        Ok(())
     }
 }
 
-impl<'ink, 'ctx> Stage<Module<'ink>> for CodeGen<'ink, 'ctx> {
-    fn run(mut self) -> StageOutput<Module<'ink>> {
-        let module = self.codegen();
+impl<'ink, 'ctx> Stage<()> for CodeGen<'ink, 'ctx> {
+    fn run(mut self) -> StageOutput<()> {
+        let result = self.codegen();
+        if let Err(msgs) = result {
+            self.msg.merge(msgs);
+        }
         // FIXME: Rewrite stages to error propagation model
-        StageOutput::new(self.sess, module, self.msg)
+        StageOutput::new(self.sess, (), self.msg)
     }
 }

@@ -185,7 +185,7 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         if let Some(body) = self.mir.bodies.get(body) {
             self.print_body(body);
         } else {
-            self.pp.str("[NO BODY]");
+            self.pp.str("[NO BODY]").nl();
         }
     }
 }

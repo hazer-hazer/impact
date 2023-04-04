@@ -1,4 +1,4 @@
-use crate::span::span::Span;
+use crate::span::span::{Ident, Internable, Span};
 
 use super::{
     build::MirBuilder,
@@ -17,7 +17,10 @@ impl<'ctx> MirBuilder<'ctx> {
 
     pub(super) fn push_return_local(&mut self, ty: Ty, span: Span) {
         assert_eq!(
-            self.builder.push_local(false, LocalInfo::new(ty, span)),
+            self.builder.push_local(
+                false,
+                LocalInfo::new(ty, Ident::new(span, "return_local".intern()), span)
+            ),
             Local::return_local()
         );
     }
@@ -34,18 +37,19 @@ impl<'ctx> MirBuilder<'ctx> {
     pub fn declare_bindings(&mut self, pat: &Pat, is_param: bool) {
         match pat.kind {
             PatKind::Unit => {},
-            PatKind::Ident { var, ty, .. } => {
+            PatKind::Ident { var, ty, name } => {
                 let local = self
                     .builder
-                    .push_local(is_param, LocalInfo::new(ty, pat.span));
+                    .push_local(is_param, LocalInfo::new(ty, name, pat.span));
                 self.bind_local_var(var.into(), local);
             },
         }
     }
 
     pub(super) fn temp_lvalue(&mut self, ty: Ty, span: Span) -> LValue {
+        let local_sym = self.builder.next_local_name().intern();
         self.builder
-            .push_local(false, LocalInfo::new(ty, span))
+            .push_local(false, LocalInfo::new(ty, Ident::new(span, local_sym), span))
             .lvalue()
     }
 }

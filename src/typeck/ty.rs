@@ -487,6 +487,14 @@ impl Ty {
         }
     }
 
+    pub fn maybe_add_func_def_id(&self, def_id: DefId) -> Ty {
+        match self.kind() {
+            TyKind::FuncDef(_, _, _) => panic!("Function DefId cannot be set type FuncDef"),
+            TyKind::Func(params, body) => Ty::func(Some(def_id), params.clone(), *body),
+            _ => *self,
+        }
+    }
+
     pub fn substitute(&self, subst: Subst, with: Ty) -> Ty {
         verbose!("Substitute {} in {} with {}", subst, self, with);
 
@@ -534,7 +542,7 @@ impl Ty {
 
     pub fn apply_ctx(&self, ctx: &impl AlgoCtx) -> Ty {
         let ty = self._apply_ctx(ctx);
-        verbose!("Apply ctx on {} => {}", self, ty);
+        // verbose!("Apply ctx on {} => {}", self, ty);
         ty
     }
 
