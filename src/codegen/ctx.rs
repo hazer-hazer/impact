@@ -5,10 +5,11 @@ use inkwell::{
     module::{Linkage, Module},
     types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType, StructType},
     values::{BasicValueEnum, FunctionValue, PointerValue},
-    AddressSpace,
+    AddressSpace, GlobalVisibility,
 };
 
 use crate::{
+    cli::verbose,
     hir::{BodyOwner, OwnerId, HIR},
     mir::{Ty, MIR},
     resolve::{builtin::Builtin, def::DefId},
@@ -203,11 +204,14 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
 
     pub fn cstring_ptr_value(&self, bytes: &[u8]) -> PointerValue<'ink> {
         let str = self.llvm_ctx.const_string(bytes, true);
+        verbose!("str value: {str}");
         let global = self
             .llvm_module
             .add_global(str.get_type(), None, "string_slice");
         global.set_constant(true);
         global.set_initializer(&str);
+        global.set_visibility(GlobalVisibility::Default);
+        global.set_alignment(1);
         global.as_pointer_value()
     }
 }

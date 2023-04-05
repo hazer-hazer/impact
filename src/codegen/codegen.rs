@@ -1,12 +1,15 @@
 use std::{
+    fs::File,
+    io::Write,
     path::{Path, PathBuf},
     process::Command,
 };
 
 use inkwell::{
     context::Context,
+    data_layout::DataLayout,
     module::Module,
-    targets::{FileType, InitializationConfig, Target, TargetMachine},
+    targets::{FileType, InitializationConfig, Target, TargetData, TargetMachine},
 };
 
 use crate::{
@@ -134,6 +137,9 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             .unwrap();
 
         child.wait().unwrap();
+
+        let mut file = File::create(path.with_extension("ll")).unwrap();
+        file.write_all(llvm_module.to_string().as_bytes()).unwrap();
 
         Ok(())
     }

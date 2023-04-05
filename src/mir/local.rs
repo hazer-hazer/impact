@@ -19,7 +19,12 @@ impl<'ctx> MirBuilder<'ctx> {
         assert_eq!(
             self.builder.push_local(
                 false,
-                LocalInfo::new(ty, Ident::new(span, "return_local".intern()), span)
+                LocalInfo {
+                    ty,
+                    name: Ident::new(span, "return_local".intern()),
+                    span,
+                    user_defined: false,
+                }
             ),
             Local::return_local()
         );
@@ -38,9 +43,15 @@ impl<'ctx> MirBuilder<'ctx> {
         match pat.kind {
             PatKind::Unit => {},
             PatKind::Ident { var, ty, name } => {
-                let local = self
-                    .builder
-                    .push_local(is_param, LocalInfo::new(ty, name, pat.span));
+                let local = self.builder.push_local(
+                    is_param,
+                    LocalInfo {
+                        ty,
+                        name,
+                        user_defined: true,
+                        span: pat.span,
+                    },
+                );
                 self.bind_local_var(var.into(), local);
             },
         }
@@ -49,7 +60,15 @@ impl<'ctx> MirBuilder<'ctx> {
     pub(super) fn temp_lvalue(&mut self, ty: Ty, span: Span) -> LValue {
         let local_sym = self.builder.next_local_name().intern();
         self.builder
-            .push_local(false, LocalInfo::new(ty, Ident::new(span, local_sym), span))
+            .push_local(
+                false,
+                LocalInfo {
+                    ty,
+                    name: Ident::new(span, local_sym),
+                    span,
+                    user_defined: false,
+                },
+            )
             .lvalue()
     }
 }

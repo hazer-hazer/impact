@@ -218,14 +218,7 @@ impl Into<Builtin> for InfixOp {
 
 impl Display for InfixOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                InfixOp::AddInt => "+",
-                InfixOp::SubInt => "-",
-            }
-        )
+        self.name().fmt(f)
     }
 }
 
@@ -339,13 +332,8 @@ pub struct BasicBlock {
 pub struct LocalInfo {
     pub ty: Ty,
     pub name: Ident,
+    pub user_defined: bool,
     pub span: Span,
-}
-
-impl LocalInfo {
-    pub fn new(ty: Ty, name: Ident, span: Span) -> Self {
-        Self { ty, name, span }
-    }
 }
 
 pub struct Body {
@@ -370,7 +358,11 @@ impl Body {
     }
 
     pub fn local_name(&self, local: Local) -> Ident {
-        self.locals.get(local).unwrap().name
+        self.local_info(local).name
+    }
+
+    pub fn local_info(&self, local: Local) -> &LocalInfo {
+        self.locals.get(local).unwrap()
     }
 
     // pub fn local_name(&self, local: Local) ->

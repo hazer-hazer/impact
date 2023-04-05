@@ -12,7 +12,10 @@ use crate::{
         self, Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator,
         TerminatorKind, Ty, BB, START_BB,
     },
-    resolve::def::DefId,
+    resolve::{
+        builtin::Builtin,
+        def::{DefId, DefKind},
+    },
     span::span::Ident,
     typeck::ty::{FloatKind, TyKind},
 };
@@ -76,8 +79,35 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         alloca_builder
     }
 
-    fn local_name(&self, local: Local) -> Ident {
-        self.body.local_name(local)
+    fn local_name(&self, local: Local) -> String {
+        let name = self.body.local_name(local);
+        if self.body.local_info(local).user_defined {
+            format!("{}.{}", local.inner(), name)
+        } else {
+            format!("{}.tmp", local.inner())
+        }
+    }
+
+    fn def_name(&self, def_id: DefId) -> String {
+        if let Some(bt) = self.ctx.sess.def_table.as_builtin(def_id) {
+            return match bt {
+                Builtin::AddInt => "add_int",
+                Builtin::SubInt => "sub_int",
+                Builtin::UnitValue => "unit_value",
+                Builtin::RefCons => "ref_cons",
+                Builtin::UnitTy => "unit_ty",
+                Builtin::I32 => "i32",
+                Builtin::Str => "string",
+                Builtin::RefTy => "ref_ty",
+            }
+            .to_string();
+        }
+        self.ctx
+            .sess
+            .def_table
+            .get_def(def_id)
+            .name()
+            .original_string()
     }
 
     // Generators //
@@ -145,6 +175,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             StmtKind::Assign(lv, rv) => {
                 let ptr = self.local_value(lv.local);
                 let value = self.rvalue_to_value(rv);
+                verbose!("Build store {ptr} = {value}");
                 self.builder.build_store(ptr, value);
             },
         }
@@ -159,9 +190,10 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 self.builder.build_unconditional_branch(ll_bb);
             },
             TerminatorKind::Return => {
-                let return_local = self
-                    .builder
-                    .build_load(self.local_value(Local::return_local()), "load_return_local");
+                let return_local = self.builder.build_load(
+                    self.local_value(Local::return_local()),
+                    &format!("load_{}", self.local_name(Local::return_local())),
+                );
                 self.builder.build_return(Some(&return_local));
             },
         }
@@ -208,7 +240,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     &[self.ctx.unit_value().into()],
                     &format!(
                         "{}_val_init",
-                        self.ctx.sess.def_table.get_def(def_id).name()
+                        self.def_name(def_id)
                     ),
                 )
                 .try_as_basic_value()
@@ -235,7 +267,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         match operand {
             Operand::LValue(lv) => self.builder.build_load(
                 self.local_value(lv.local),
-                &format!("load_{}", self.body.local_name(lv.local)),
+                &format!("load_{}", self.local_name(lv.local)),
             ),
             Operand::Const(const_) => self.const_to_value(const_),
         }
