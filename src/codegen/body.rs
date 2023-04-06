@@ -238,10 +238,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 .build_call(
                     self.function_map.expect_mono(def_id),
                     &[self.ctx.unit_value().into()],
-                    &format!(
-                        "{}_val_init",
-                        self.def_name(def_id)
-                    ),
+                    &format!("{}_val_init", self.def_name(def_id)),
                 )
                 .try_as_basic_value()
                 .unwrap_left(),
