@@ -1,4 +1,5 @@
 use crate::{
+    cli::verbose,
     mir::{thir::Expr, InfixOp},
     resolve::{builtin::Builtin, def::DefKind},
     typeck::ty::{FloatKind, IntKind},
@@ -78,7 +79,6 @@ impl<'ctx> MirBuilder<'ctx> {
 
     pub(super) fn as_rvalue(&mut self, mut bb: BB, expr_id: ExprId) -> BBWith<RValue> {
         let expr = self.thir.expr(expr_id);
-        let expr_span = expr.span;
         match &expr.kind {
             ExprKind::Lit(_) => bb.with(self.as_const(bb, expr_id).operand().rvalue()),
 
@@ -95,27 +95,27 @@ impl<'ctx> MirBuilder<'ctx> {
 
                 bb.with(operand.rvalue())
             },
-            ExprKind::Call { func_ty, lhs, args } => {
-                // FIXME: Clone
-                let func_ty = *func_ty;
-                let args = args.clone();
-                let lhs = unpack!(bb = self.as_operand(bb, *lhs));
-                let args = args
-                    .iter()
-                    .map(|arg| unpack!(bb = self.as_operand(bb, *arg)))
-                    .collect();
+            // ExprKind::Call { func_ty, lhs, args } => {
+            //     // FIXME: Clone
+            //     let func_ty = *func_ty;
+            //     let args = args.clone();
+            //     let lhs = unpack!(bb = self.as_operand(bb, *lhs));
+            //     let args = args
+            //         .iter()
+            //         .map(|arg| unpack!(bb = self.as_operand(bb, *arg)))
+            //         .collect();
 
-                let dest = self.temp_lvalue(func_ty.return_ty(), expr_span);
+            //     let dest = self.temp_lvalue(func_ty.return_ty(), expr_span);
 
-                // let target = self.builder.begin_bb();
+            //     // let target = self.builder.begin_bb();
 
-                // FIXME: Calls should be terminators?
-                self.push_assign(bb, dest, RValue::Call { lhs, args });
+            //     // FIXME: Calls should be terminators?
+            //     self.push_assign(bb, dest, RValue::Call { lhs, args });
 
-                // self.builder.goto(bb, target);
+            //     // self.builder.goto(bb, target);
 
-                bb.with(dest.operand().rvalue())
-            },
+            //     bb.with(dest.operand().rvalue())
+            // },
             &ExprKind::Lambda { body_id, def_id } => {
                 self.builder.references_body(body_id);
                 bb.with(RValue::Closure(def_id))
@@ -159,7 +159,7 @@ impl<'ctx> MirBuilder<'ctx> {
                     panic!("Ref constructor used as a standalone expression and must not appear on MIR building stage as Builtin")
                 },
             },
-            ExprKind::Ref(_) => {
+            ExprKind::Call { .. } | ExprKind::Ref(_) => {
                 assert!(!matches!(
                     expr.categorize(),
                     ExprCategory::AsRValue | ExprCategory::Const
@@ -176,9 +176,7 @@ impl<'ctx> MirBuilder<'ctx> {
         let &Expr { ty, span, .. } = self.thir.expr(expr_id);
         let temp = self.temp_lvalue(ty, span);
 
-        unpack!(self.store_expr(bb, temp, expr_id));
-
-        bb.with(temp.local)
+        unpack!(self.store_expr(bb, temp, expr_id)).with(temp.local)
     }
 
     // Assigning expressions to ... //
@@ -186,6 +184,7 @@ impl<'ctx> MirBuilder<'ctx> {
     /// Assigns expression to lvalue
     pub(super) fn store_expr(&mut self, mut bb: BB, lvalue: LValue, expr_id: ExprId) -> BBWith<()> {
         let expr = self.thir.expr(expr_id);
+        verbose!("Store {lvalue} = {expr}");
         match &expr.kind {
             // FIXME
             &ExprKind::Ty(expr_id, _) => self.store_expr(bb, lvalue, expr_id),
@@ -193,8 +192,7 @@ impl<'ctx> MirBuilder<'ctx> {
             ExprKind::LocalRef(_) => {
                 assert_eq!(expr.categorize(), ExprCategory::LValue);
 
-                let lvalue = unpack!(bb = self.as_lvalue(bb, expr_id));
-                let rvalue = lvalue.operand().rvalue();
+                let rvalue = unpack!(bb = self.as_lvalue(bb, expr_id)).operand().rvalue();
 
                 self.push_assign(bb, lvalue, rvalue);
                 bb.unit()
@@ -256,6 +254,7 @@ impl<'ctx> MirBuilder<'ctx> {
             PatKind::Ident { var, .. } => {
                 let local = self.resolve_local_var(var);
                 let rvalue = unpack!(bb = self.as_rvalue(bb, expr_id));
+                verbose!("Store {local} = {rvalue}");
                 self.push_assign(bb, local.lvalue(), rvalue);
             },
         }

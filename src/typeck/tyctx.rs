@@ -1,5 +1,8 @@
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{
+        hash_map::{DefaultHasher, Entry},
+        HashMap, HashSet,
+    },
     hash::{Hash, Hasher},
 };
 
@@ -67,13 +70,18 @@ impl TyCtx {
 
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
         verbose!("Type node {} with {}", id, ty);
-        assert!(
-            self.typed.insert(id, ty).is_none(),
-            "{} is already typed with {}",
-            id,
-            ty
-        );
-        // self.typed.insert(id, ty).is_none();
+        // assert!(
+        //     self.typed.insert(id, ty).is_none(),
+        //     "{} is already typed with {}",
+        //     id,
+        //     ty
+        // );
+        match self.typed.entry(id) {
+            Entry::Occupied(_) => {},
+            Entry::Vacant(vacant) => {
+                vacant.insert(ty);
+            },
+        }
     }
 
     pub fn apply_ctx_on_typed_nodes(&mut self, ctx: &GlobalCtx) {

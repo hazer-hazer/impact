@@ -1,5 +1,7 @@
 pub mod build;
 
+use std::fmt::Display;
+
 use crate::{
     cli::color::Color,
     cli::color::Colorize,
@@ -34,12 +36,35 @@ pub enum Lit {
     String(Symbol),
 }
 
+impl Display for Lit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Lit::Bool(val) => write!(f, "\"{val}\""),
+            Lit::Int(val, kind) => write!(f, "{val}{kind}"),
+            Lit::Float(val, kind) => write!(f, "{val}{kind}"),
+            Lit::String(val) => write!(f, "{val}"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExprCategory {
     Const,
     LValue,
     StoreRValue,
     AsRValue,
+}
+
+impl Display for ExprCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprCategory::Const => "const",
+            ExprCategory::LValue => "lvalue",
+            ExprCategory::StoreRValue => "store_rvalue",
+            ExprCategory::AsRValue => "as_rvalue",
+        }
+        .fmt(f)
+    }
 }
 
 /**
@@ -70,16 +95,36 @@ pub enum ExprKind {
     Builtin(Builtin),
 }
 
+impl Display for ExprKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprKind::Lit(lit) => write!(f, "{lit}"),
+            ExprKind::LocalRef(local) => write!(f, "{local}"),
+            ExprKind::Def(def_id, ty) => write!(f, "{def_id}: {ty}"),
+            ExprKind::Block(block_id) => write!(f, "block_{block_id}"),
+            ExprKind::Ref(expr) => write!(f, "ref {expr}"),
+            ExprKind::Call { func_ty, lhs, args } => {
+                write!(
+                    f,
+                    "({lhs}: {func_ty})({args})",
+                    args = args
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            },
+            ExprKind::Lambda { def_id, body_id } => write!(f, "λ{def_id} {{{body_id}}}"),
+            ExprKind::Ty(expr, ty) => write!(f, "{expr}: {ty}"),
+            ExprKind::Builtin(bt) => write!(f, "{bt}"),
+        }
+    }
+}
+
 pub struct Expr {
     pub ty: Ty,
     pub kind: ExprKind,
     pub span: Span,
-}
-
-impl WithSpan for Expr {
-    fn span(&self) -> Span {
-        self.span
-    }
 }
 
 impl Expr {
@@ -98,6 +143,18 @@ impl Expr {
             // FIXME: Ascription is an lvalue or category of inner expression?
             ExprKind::Ty(_, _) => todo!(),
         }
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.kind.fmt(f)
+    }
+}
+
+impl WithSpan for Expr {
+    fn span(&self) -> Span {
+        self.span
     }
 }
 

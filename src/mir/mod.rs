@@ -4,7 +4,7 @@ mod expr;
 mod local;
 pub mod scalar;
 mod stmt;
-mod thir;
+pub mod thir;
 
 use std::{
     collections::{HashMap, HashSet},

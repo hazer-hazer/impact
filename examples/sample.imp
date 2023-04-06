@@ -13,7 +13,7 @@ ref = builtin "RefCons"
 extern
     puts: str -> i32
 
-foo () = 123: i32
+foo () = puts "lol"
 
 main () =
     foo ()

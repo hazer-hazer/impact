@@ -39,7 +39,7 @@ impl<'ctx> MirPrinter<'ctx> {
             // TODO: Print additional info such as span
             self.pp
                 .out_indent()
-                .string(format!("{}: {}", local, info.ty))
+                .string(format!("{}: {} // `{}`", local, info.ty, info.name))
                 .nl();
         }
 

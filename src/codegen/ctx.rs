@@ -117,7 +117,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         // let ll_ty = self.conv_ty(ty).into_function_type();
         let func = self
             .llvm_module
-            .add_function(name, ty, Some(Linkage::Internal));
+            .add_function(name, ty, Some(Linkage::External));
 
         let builder = self.llvm_ctx.create_builder();
         let entry_bb = self.llvm_ctx.append_basic_block(func, "entry");
@@ -210,8 +210,8 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
             .add_global(str.get_type(), None, "string_slice");
         global.set_constant(true);
         global.set_initializer(&str);
-        global.set_visibility(GlobalVisibility::Default);
-        global.set_alignment(1);
+        // global.set_visibility(GlobalVisibility::Default);
+        // global.set_alignment(1);
         global.as_pointer_value()
     }
 }

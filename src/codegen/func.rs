@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use inkwell::{
     types::BasicType,
-    values::{BasicValueEnum, CallableValue, FunctionValue},
+    values::{BasicValue, BasicValueEnum, CallableValue, FunctionValue},
     AddressSpace,
 };
 
@@ -284,6 +284,9 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
     }
 
     fn func_name(&self, def_id: DefId, _ty: Ty) -> String {
+        if def_id == self.ctx.sess.def_table.expect_main_func() {
+            return "_main".to_string();
+        }
         format!(
             "{}",
             self.ctx

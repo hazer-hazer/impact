@@ -12,6 +12,7 @@ pub mod ast;
 pub mod defs;
 pub mod hir;
 pub mod mir;
+pub mod thir;
 
 #[derive(PartialEq)]
 pub enum AstPPMode {

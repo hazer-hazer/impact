@@ -1,3 +1,5 @@
+use crate::cli::verbose;
+
 use super::{
     build::{unpack, MirBuilder},
     thir::{ExprId, ExprKind},
@@ -6,6 +8,7 @@ use super::{
 
 impl<'ctx> MirBuilder<'ctx> {
     pub(super) fn push_assign(&mut self, bb: BB, lvalue: LValue, rvalue: RValue) {
+        verbose!("Push assign {lvalue} = {rvalue}");
         self.builder
             .push_stmt(bb, super::Stmt::new(StmtKind::Assign(lvalue, rvalue)));
     }

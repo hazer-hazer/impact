@@ -28,6 +28,17 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    // /**
+    //  * Checks if expression is of type `ty`.
+    //  * If check is successful -- expression node is typed with the type.
+    //  */
+    // pub fn check_and_type(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
+    //     self.check(expr_id, ty).map(|ty| {
+    //         self.tyctx_mut().type_node(expr_id, ty);
+    //         ty
+    //     })
+    // }
+
     /**
      * Checks if expression is of type `ty`.
      * Reports `Type mismatch` error.
@@ -35,6 +46,7 @@ impl<'hir> Typecker<'hir> {
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
+                self.tyctx_mut().type_node(expr_id, ty);
                 verbose!("[+] Expr {} is of type {}", expr_id, ty);
                 Ok(ok.apply_ctx(self.ctx()))
             },

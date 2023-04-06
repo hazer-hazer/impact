@@ -1,8 +1,10 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{
+    cli::verbose,
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
     message::message::MessageStorage,
+    pp::thir::ThirPrinter,
     resolve::{builtin::Builtin, def::DefKind},
     session::{Session, Stage, StageOutput},
 };
@@ -55,6 +57,11 @@ impl<'ctx> MirBuilder<'ctx> {
 
         let (thir, thir_entry_expr) =
             ThirBuilder::new(hir, &sess.tyctx, body_owner).build_body_thir();
+
+        if false {
+            let pp = ThirPrinter::new(sess, &thir);
+            verbose!("{body_owner} body THIR:\n{}", pp.print(thir_entry_expr));
+        }
 
         let this = Self {
             thir_entry_expr,
