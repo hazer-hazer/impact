@@ -7,9 +7,7 @@ use std::{
 
 use inkwell::{
     context::Context,
-    data_layout::DataLayout,
-    module::Module,
-    targets::{FileType, InitializationConfig, Target, TargetData, TargetMachine},
+    targets::{FileType, InitializationConfig, Target, TargetMachine},
 };
 
 use crate::{

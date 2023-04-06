@@ -5,12 +5,12 @@ use inkwell::{
     module::{Linkage, Module},
     types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType, StructType},
     values::{BasicValueEnum, FunctionValue, PointerValue},
-    AddressSpace, GlobalVisibility,
+    AddressSpace,
 };
 
 use crate::{
     cli::verbose,
-    hir::{BodyOwner, OwnerId, HIR},
+    hir::{HIR},
     mir::{Ty, MIR},
     resolve::{builtin::Builtin, def::DefId},
     session::Session,

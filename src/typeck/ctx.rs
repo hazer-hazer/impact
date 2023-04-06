@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::{
-    cli::verbose,
     dt::idx::IndexVec,
     span::span::{Ident, Symbol},
 };
@@ -50,10 +49,8 @@ impl GlobalCtx {
             .enumerate()
             .for_each(|(index, &ex)| {
                 if let Some(sol) = ctx.get_solution(ex) {
-                    verbose!("Add ex to global ctx {} = {}", ex, sol);
                     assert!(self.solved.insert(ex.id(), sol).is_none());
                 } else {
-                    verbose!("Add ex to global ctx {}", ex);
                     assert!(self.existentials.insert(ex.id(), (depth, index)).is_none())
                 }
             });

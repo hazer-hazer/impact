@@ -5,7 +5,7 @@ use crate::{
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
     message::message::MessageStorage,
     pp::thir::ThirPrinter,
-    resolve::{builtin::Builtin, def::DefKind},
+    resolve::{builtin::Builtin},
     session::{Session, Stage, StageOutput},
 };
 

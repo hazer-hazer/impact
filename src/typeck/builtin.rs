@@ -36,10 +36,6 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
             ty!($($prior)+)
         };
 
-        // ([$def_id: expr] $param: tt -> $($body: tt)+) => {{
-        //     Ty::func(Some($def_id), ty!($param), ty!($($body)+))
-        // }};
-
         ($kind_var: lifetime -> $($ty: tt)+) => {{
             if kind_vars.contains_key(stringify!($kind_var)) {
                 kind_vars.clear();
@@ -65,29 +61,12 @@ pub fn builtins() -> HashMap<Builtin, Ty> {
         ($kind_var: lifetime) => {{
             Ty::ty_kind(Kind::new_var(kind_vars.get(stringify!($kind_var)).copied().unwrap()))
         }};
-
-        // (forall $alpha: lifetime. $($kind: tt)+) => {{
-        //     if kind_vars.contains_key(stringify!($alpha)) {
-        //         kind_vars.clear();
-        //     }
-        //     let kind_var = Kind::next_kind_var_id();
-        //     assert!(kind_vars.insert(stringify!($alpha), kind_var).is_none());
-        //     Kind::new_forall(kind_var, kind!($($kind)+))
-        // }};
     }
 
     let builtins = HashMap::from([
         // Values //
         (Builtin::UnitValue, ty!(())),
         // Operators //
-        // (
-        //     Builtin::AddInt,
-        //     ty!([sess.def_table.builtin(Builtin::AddInt)] i32 -> i32 -> i32),
-        // ),
-        // (
-        //     Builtin::SubInt,
-        //     ty!([sess.def_table.builtin(Builtin::SubInt)] i32 -> i32 -> i32),
-        // ),
         (Builtin::AddInt, ty!(i32 - i32 -> i32)),
         (Builtin::SubInt, ty!(i32 - i32 -> i32)),
         // FIXME: Must be a constructor?

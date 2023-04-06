@@ -9,14 +9,13 @@ use crate::{
     dt::idx::IndexVec,
     hir::BodyId,
     mir::{
-        self, Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator,
+        Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator,
         TerminatorKind, Ty, BB, START_BB,
     },
     resolve::{
         builtin::Builtin,
-        def::{DefId, DefKind},
+        def::{DefId},
     },
-    span::span::Ident,
     typeck::ty::{FloatKind, TyKind},
 };
 

@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell::{
-    types::BasicType,
-    values::{BasicValue, BasicValueEnum, CallableValue, FunctionValue},
+    values::{CallableValue, FunctionValue},
     AddressSpace,
 };
 
@@ -13,14 +12,11 @@ use crate::{
         visitor::HirVisitor,
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
-    message::message::{MessageStorage, MessagesResult, MsgResult},
+    message::message::{MessageStorage, MessagesResult},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
     span::span::Ident,
-    typeck::{
-        ty::{IntKind, TyMap},
-        tyctx::InstantiatedTy,
-    },
+    typeck::{ty::TyMap, tyctx::InstantiatedTy},
     utils::macros::match_expected,
 };
 

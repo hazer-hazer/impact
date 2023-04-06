@@ -1,7 +1,4 @@
-use crate::{
-    resolve::def::DefId,
-    span::span::{Ident, Span, WithSpan},
-};
+use crate::span::span::{Ident, Span, WithSpan};
 
 use super::{expr::Expr, item::ItemId, HirId, WithHirId};
 

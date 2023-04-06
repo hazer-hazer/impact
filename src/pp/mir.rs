@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, str::from_utf8};
+use std::{str::from_utf8};
 
 use crate::{
     hir::{
