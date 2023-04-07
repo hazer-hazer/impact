@@ -22,6 +22,9 @@ pub enum DefKind {
     Func,
     Value,
     Lambda,
+    Data,
+    Variant,
+    Ctor,
     External,
 
     Local,
@@ -36,6 +39,7 @@ impl DefKind {
             ItemKind::Mod(_, _) => DefKind::Mod,
             ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Value,
             ItemKind::Decl(_, _, _) => DefKind::Func,
+            ItemKind::Data(_, _) => DefKind::Data,
             ItemKind::Extern(_) => panic!(),
         }
     }
@@ -50,6 +54,9 @@ impl DefKind {
             DefKind::DeclareBuiltin => Namespace::Value,
             DefKind::Lambda => Namespace::Value,
             DefKind::External => Namespace::Value,
+            DefKind::Data => Namespace::Type,
+            DefKind::Variant => Namespace::Type,
+            DefKind::Ctor => Namespace::Value,
             DefKind::Local => unreachable!(),
         }
     }
@@ -70,6 +77,9 @@ impl Display for DefKind {
                 DefKind::Root => "[ROOT]",
                 DefKind::DeclareBuiltin => "[`builtin`]",
                 DefKind::Local => "local",
+                DefKind::Data => "data type",
+                DefKind::Variant => "variant",
+                DefKind::Ctor => "constructor",
             }
         )
     }

@@ -139,6 +139,9 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::Mod
             | DefKind::Func
             | DefKind::External
+            | DefKind::Data
+            | DefKind::Variant
+            | DefKind::Ctor
             | DefKind::Value => {
                 assert_eq!(def.kind().namespace(), target_ns);
                 return Res::def(def_id);
@@ -220,6 +223,7 @@ impl<'ast> NameResolver<'ast> {
                 // TODO: Alternatives
                 let def = self.sess.def_table.get_def(def_id);
                 match def.kind {
+                    DefKind::Data => todo!(),
                     DefKind::Mod => Some(ModuleId::Def(def_id)),
                     DefKind::TyAlias => {
                         MessageBuilder::error()
@@ -230,6 +234,8 @@ impl<'ast> NameResolver<'ast> {
                     },
                     // FIXME: Really unreachable?
                     DefKind::Root
+                    | DefKind::Variant
+                    | DefKind::Ctor
                     | DefKind::Func
                     | DefKind::Value
                     | DefKind::Lambda
@@ -349,6 +355,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id());
             },
+            ItemKind::Data(name, variants) => self.visit_data_item(name, variants, item.id()),
             ItemKind::Extern(_) => unreachable!(),
         }
 

@@ -15,6 +15,7 @@ use crate::{
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
+    span::span::{Ident, Symbol},
     utils::macros::match_expected,
 };
 
@@ -26,6 +27,7 @@ use super::{
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 declare_idx!(TyVarId, u32, "{}", Color::Cyan);
+declare_idx!(VariantIdx, u32, "{}", Color::White);
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ExKind {
@@ -629,6 +631,19 @@ impl std::fmt::Display for Ty {
 pub type FuncTy = (Ty, Ty);
 
 #[derive(Clone, Hash, PartialEq, Eq)]
+pub struct Field {
+    pub name: Option<Ident>,
+    pub ty: Ty,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct Variant {
+    pub def_id: DefId,
+    pub name: Ident,
+    pub fields: Vec<Field>,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
     Error,
 
@@ -644,6 +659,10 @@ pub enum TyKind {
 
     Func(Vec<Ty>, Ty),
 
+    Data {
+        def_id: DefId,
+        variants: IndexVec<VariantIdx, Variant>,
+    },
     Ref(Ty),
 
     Var(TyVarId),

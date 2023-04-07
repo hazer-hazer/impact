@@ -8,7 +8,7 @@ use crate::{
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
     resolve::{builtin::Builtin, def::DefId},
-    span::span::{Ident, Span, Symbol, WithSpan},
+    span::span::{Ident, Span, Symbol, WithSpan, impl_with_span},
     typeck::ty::{FloatKind, IntKind, Ty},
 };
 
@@ -152,11 +152,7 @@ impl Display for Expr {
     }
 }
 
-impl WithSpan for Expr {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Expr);
 
 #[derive(Clone, Copy)]
 pub enum PatKind {

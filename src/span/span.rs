@@ -21,6 +21,7 @@ pub enum Kw {
     In,
     Mod,
     Type,
+    Data,
     Extern,
 
     Underscore,
@@ -39,6 +40,7 @@ impl Kw {
             Kw::In => "in",
             Kw::Mod => "mod",
             Kw::Type => "type",
+            Kw::Data => "data",
             Kw::Extern => "extern",
             Kw::Underscore => "_",
             Kw::Unit => "()",
@@ -321,6 +323,18 @@ where
     }
 }
 
+macro_rules! impl_with_span {
+    ($ty: ty) => {
+        impl WithSpan for $ty {
+            fn span(&self) -> Span {
+                self.span
+            }
+        }
+    };
+}
+
+pub(crate) use impl_with_span;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Ident {
     span: Span,
@@ -425,8 +439,4 @@ impl Display for Ident {
     }
 }
 
-impl WithSpan for Ident {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Ident);

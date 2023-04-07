@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Expr, ExprKind},
-        item::{ExternItem, Item, ItemKind},
+        item::{ExternItem, Item, ItemKind, Variant},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
@@ -180,10 +180,20 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            ItemKind::Data(name, variants) => self.visit_data_item(name, variants, item.id()),
             ItemKind::Extern(_) => unreachable!(),
         }
 
         self.exit_module();
+    }
+
+    fn visit_variant(&mut self, variant: &'ast Variant) {
+        self.define(variant.id, DefKind::Variant, variant.name.as_ref().unwrap());
+        self.define(
+            variant.ctor_id,
+            DefKind::Ctor,
+            variant.name.as_ref().unwrap(),
+        );
     }
 
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {

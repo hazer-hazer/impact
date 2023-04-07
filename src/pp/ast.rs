@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
-        item::{ExternItem, Item, ItemKind},
+        item::{ExternItem, Field, Item, ItemKind, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -70,6 +70,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            ItemKind::Data(name, variants) => self.visit_data_item(name, variants, item.id()),
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
         self.node_id(item);
@@ -103,6 +104,32 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_each_pr_delim!(self, params, visit_pat, " ");
         self.str(" = ");
         walk_pr!(self, body, visit_expr);
+    }
+
+    fn visit_data_item(
+        &mut self,
+        name: &'ast PR<Ident>,
+        variants: &'ast [PR<Variant>],
+        id: NodeId,
+    ) {
+        self.kw(Kw::Data);
+        walk_pr!(self, name, name, id, true);
+        self.str(" = ");
+        walk_each_pr_delim!(self, variants, visit_variant, " | ");
+    }
+
+    fn visit_variant(&mut self, variant: &'ast Variant) {
+        walk_pr!(self, &variant.name, name, variant.id, true);
+        self.sp();
+        walk_each_pr_delim!(self, &variant.fields, visit_field, " ");
+    }
+
+    fn visit_field(&mut self, field: &'ast Field) {
+        field.name.as_ref().map(|name| {
+            walk_pr!(self, name, name, field.id, true);
+            self.str(": ");
+        });
+        walk_pr!(self, &field.ty, visit_ty);
     }
 
     fn visit_extern_block(&mut self, items: &'ast [PR<ExternItem>]) {

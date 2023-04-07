@@ -7,9 +7,9 @@ use crate::{
 };
 
 use super::{
-    item::{ExternItem, Item, ItemKind},
-    visitor::{walk_pr, AstVisitor},
-    ErrorNode, Path, WithNodeId, AST,
+    item::{ExternItem, Field, Item, ItemKind, Variant},
+    visitor::{walk_each_pr, walk_pr, AstVisitor},
+    ErrorNode, NodeId, Path, WithNodeId, AST, PR,
 };
 
 use convert_case::Case;
@@ -79,10 +79,14 @@ impl<'ast> AstValidator<'ast> {
 
     fn validate_name(&mut self, name: &Ident, kind: NameKind) {
         let solution = match kind {
-            NameKind::Var | NameKind::Func | NameKind::TypeVar => self.validate_varname(name, kind),
+            NameKind::Field | NameKind::Var | NameKind::Func | NameKind::TypeVar => {
+                self.validate_varname(name, kind)
+            },
             NameKind::Const => self.validate_const_name(name, kind),
             NameKind::File => self.validate_file_name(name, kind),
-            NameKind::Variant | NameKind::Type => self.validate_typename(name, kind),
+            NameKind::DataTy | NameKind::Variant | NameKind::Type => {
+                self.validate_typename(name, kind)
+            },
             NameKind::Mod => self.validate_mod_name(name, kind),
         };
 
@@ -209,6 +213,10 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.validate_name(name.as_ref().unwrap(), name_kind);
                 self.visit_decl_item(name, params, body, item.id());
             },
+            ItemKind::Data(name, variants) => {
+                self.validate_name(name.as_ref().unwrap(), NameKind::Type);
+                self.visit_data_item(name, variants, item.id());
+            },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }
@@ -216,6 +224,35 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {
         self.validate_name(item.name.as_ref().unwrap(), NameKind::Var);
         walk_pr!(self, &item.ty, visit_ty);
+    }
+
+    fn visit_data_item(&mut self, name: &'ast PR<Ident>, variants: &'ast [PR<Variant>], _: NodeId) {
+        self.validate_name(name.as_ref().unwrap(), NameKind::DataTy);
+        walk_each_pr!(self, variants, visit_variant);
+    }
+
+    fn visit_variant(&mut self, variant: &'ast Variant) {
+        self.validate_name(variant.name.as_ref().unwrap(), NameKind::Variant);
+        walk_each_pr!(self, &variant.fields, visit_field);
+
+        assert!(!variant.fields.is_empty());
+
+        let mut fields = variant.fields.iter().map(|field| field.as_ref().unwrap());
+
+        let with_name = fields.next().unwrap().name.is_some();
+        if !fields.all(|field| field.name.is_some() == with_name) {
+            MessageBuilder::error()
+                .text("All fields in variant must either all be named or unnamed".to_string())
+                .emit_single_label(self);
+        }
+    }
+
+    fn visit_field(&mut self, field: &'ast Field) {
+        field
+            .name
+            .as_ref()
+            .map(|name| self.validate_name(name.as_ref().unwrap(), NameKind::Field));
+        walk_pr!(self, &field.ty, visit_ty);
     }
 
     fn visit_path(&mut self, path: &'ast Path) {

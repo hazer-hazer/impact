@@ -10,7 +10,7 @@ use inkwell::{
 
 use crate::{
     cli::verbose,
-    hir::{HIR},
+    hir::HIR,
     mir::{Ty, MIR},
     resolve::{builtin::Builtin, def::DefId},
     session::Session,

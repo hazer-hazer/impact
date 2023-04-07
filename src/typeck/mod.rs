@@ -23,7 +23,8 @@ use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
     kind::{Kind, KindEx, KindExId, KindSort},
     ty::{
-        ExKind, ExPair, Existential, ExistentialId, FloatKind, IntKind, MonoTy, Ty, TyKind, TyVarId,
+        ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty, TyKind,
+        TyVarId, Variant,
     },
     tyctx::TyCtx,
 };
@@ -546,15 +547,6 @@ impl<'hir> Typecker<'hir> {
                             Kind::new_ty(Ty::ref_to(Ty::ty_kind(Kind::new_var(kind_var)))),
                         ),
                     ))
-                    // FIXME: Remove and return constructor type. KINDS AAAAAAA
-                    // MessageBuilder::error()
-                    //     .span(ty.span())
-                    //     .text(format!(
-                    //         "{} is a type constructor and cannot be used without parameter",
-                    //         bt
-                    //     ))
-                    //     .emit_single_label(self);
-                    // Ty::error()
                 },
                 Builtin::RefCons | Builtin::AddInt | Builtin::SubInt | Builtin::UnitValue => {
                     unreachable!()
@@ -574,6 +566,8 @@ impl<'hir> Typecker<'hir> {
                         self.conv_ty_alias(def_id)
                     },
 
+                    DefKind::Data => {},
+
                     // Non-type definitions from type namespace
                     DefKind::Root | DefKind::Mod => {
                         MessageBuilder::error()
@@ -588,6 +582,7 @@ impl<'hir> Typecker<'hir> {
 
                     // Definitions from value namespace
                     DefKind::External
+                    | DefKind::Ctor
                     | DefKind::Local
                     | DefKind::Lambda
                     | DefKind::Func
@@ -612,6 +607,29 @@ impl<'hir> Typecker<'hir> {
         let ty = self.conv(ty).apply_ctx(self.ctx());
         self.tyctx_mut().type_node(hir_id, ty);
         ty
+    }
+
+    fn conv_data_ty(&mut self, def_id: DefId) -> Ty {
+        let data = self.hir.item(ItemId::new(def_id.into())).data();
+    }
+
+    fn conv_variant(&mut self, variant: &hir::item::Variant) -> Variant {
+        Variant {
+            def_id: variant.def_id,
+            name: variant.name,
+            fields: variant
+                .fields
+                .iter()
+                .map(|field| self.conv_field(field))
+                .collect(),
+        }
+    }
+
+    fn conv_field(&mut self, field: &hir::item::Field) -> Field {
+        Field {
+            name: todo!(),
+            ty: todo!(),
+        }
     }
 
     fn conv_int(&mut self, kind: hir::expr::IntKind) -> Ty {

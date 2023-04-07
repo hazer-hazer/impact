@@ -3,7 +3,10 @@ use crate::{
     cli::color::{Color, Colorize},
     hir::{item::ItemId, HirId, WithHirId, WithNodeKind},
     parser::token::Punct,
-    resolve::res::{NamePath, ResKind},
+    resolve::{
+        def::DefId,
+        res::{NamePath, ResKind},
+    },
     session::Session,
     span::span::{Ident, Kw},
 };
@@ -82,6 +85,13 @@ impl<'a, D> AstLikePP<'a, D> {
     pub fn node_id(&mut self, with_node_id: &impl WithNodeId) -> &mut Self {
         if self.sess.config().pp_ast_ids() {
             self.string(with_node_id.id());
+        }
+        self
+    }
+
+    pub fn def_id(&mut self, def_id: &DefId) -> &mut Self {
+        if self.sess.config().pp_ast_ids() {
+            self.string(def_id);
         }
         self
     }
@@ -195,7 +205,7 @@ impl<'a, D> AstLikePP<'a, D> {
     fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
-            Kw::Extern | Kw::Type | Kw::Mod => ("", " "),
+            Kw::Data | Kw::Extern | Kw::Type | Kw::Mod => ("", " "),
             Kw::Unit | Kw::Underscore | Kw::Let | Kw::Root | Kw::Unknown => ("", ""),
         };
 

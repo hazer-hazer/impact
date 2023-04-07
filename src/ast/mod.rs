@@ -5,7 +5,7 @@ use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, IndexVec},
     parser::token::{Token, TokenKind},
-    span::span::{Ident, Span, Symbol, WithSpan},
+    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
 };
 
 use self::{
@@ -218,11 +218,7 @@ impl Display for PathSeg {
     }
 }
 
-impl WithSpan for PathSeg {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(PathSeg);
 
 #[derive(Debug, Clone)]
 pub struct Path {
@@ -307,11 +303,7 @@ impl WithNodeId for Path {
     }
 }
 
-impl WithSpan for Path {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Path);
 
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -441,6 +433,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             item::ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            item::ItemKind::Data(name, variants) => self.visit_data_item(name, variants, item.id()),
             item::ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }

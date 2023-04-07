@@ -1,12 +1,12 @@
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{ExternItem, ItemId, ItemKind, Mod, TyAlias, ROOT_ITEM_ID},
+        item::{Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, ROOT_ITEM_ID},
         pat::{Pat, PatKind},
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
-        BodyId, BodyOwner, Path, HIR,
+        BodyId, BodyOwner, HirId, OwnerId, Path, HIR,
     },
     parser::token::Punct,
     resolve::builtin::Builtin,
@@ -88,19 +88,19 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     // Items //
-    fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
-        let id = *id;
-        let item = hir.item(id);
-        match item.kind() {
-            ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
-            ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
-            ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
-            ItemKind::Func(value) => self.visit_func_item(item.name(), value, id, hir),
-            ItemKind::ExternItem(extern_item) => {
-                self.visit_extern_item(item.name(), extern_item, id, hir)
-            },
-        }
-    }
+    // fn visit_item(&mut self, id: &ItemId, hir: &HIR) {
+    //     let id = *id;
+    //     let item = hir.item(id);
+    //     match item.kind() {
+    //         ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
+    //         ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
+    //         ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
+    //         ItemKind::Func(value) => self.visit_func_item(item.name(), value, id, hir),
+    //         ItemKind::ExternItem(extern_item) => {
+    //             self.visit_extern_item(item.name(), extern_item, id, hir)
+    //         },
+    //     }
+    // }
 
     fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Type);
@@ -135,6 +135,30 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
         self.pp.str(" = ");
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
+    }
+
+    fn visit_data_item(&mut self, name: Ident, data: &Data, id: ItemId, hir: &HIR) {
+        self.pp.string(name.original_string());
+        self.pp.item_id(id);
+        self.pp.ty_anno(id.hir_id());
+        self.pp.sp();
+        walk_each_delim!(self, data.variants, visit_variant, " | ", hir);
+    }
+
+    fn visit_variant(&mut self, variant: &Variant, hir: &HIR) {
+        self.pp.string(variant.name);
+        self.pp.def_id(&variant.def_id);
+        self.pp.ty_anno(HirId::new_owner(variant.def_id));
+        self.pp.sp();
+        walk_each_delim!(self, &variant.fields, visit_field, " ", hir);
+    }
+
+    fn visit_field(&mut self, field: &Field, hir: &HIR) {
+        field.name.as_ref().map(|name| {
+            self.pp.string(name.original_string());
+            self.pp.str(": ");
+        });
+        self.visit_ty(&field.ty, hir);
     }
 
     fn visit_extern_item(&mut self, name: Ident, extern_item: &ExternItem, id: ItemId, hir: &HIR) {

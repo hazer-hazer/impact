@@ -1,4 +1,4 @@
-use crate::span::span::{Ident, Span, WithSpan};
+use crate::span::span::{Ident, Span, WithSpan, impl_with_span};
 
 use super::{HirId, WithHirId};
 
@@ -31,10 +31,6 @@ impl WithHirId for PatNode {
     }
 }
 
-impl WithSpan for PatNode {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(PatNode);
 
 pub type Pat = HirId;

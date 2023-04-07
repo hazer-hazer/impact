@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::span::span::{Ident, Span, WithSpan};
+use crate::span::span::{Ident, Span, WithSpan, impl_with_span};
 
 use super::{
     expr::Expr, is_block_ended, pat::Pat, pr_display, prs_display_join, ty::Ty, IsBlockEnded,
@@ -25,7 +25,10 @@ impl Item {
 
     pub fn name(&self) -> Option<&Ident> {
         match self.kind() {
-            ItemKind::Type(name, _) | ItemKind::Mod(name, _) | ItemKind::Decl(name, _, _) => {
+            ItemKind::Type(name, _)
+            | ItemKind::Mod(name, _)
+            | ItemKind::Decl(name, _, _)
+            | ItemKind::Data(name, _) => {
                 Some(name.as_ref().expect("Error Ident node in `Item::name`"))
             },
             ItemKind::Extern(_) => None,
@@ -52,11 +55,7 @@ impl WithNodeId for Item {
     }
 }
 
-impl WithSpan for Item {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Item);
 
 impl Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -90,11 +89,7 @@ impl WithNodeId for ExternItem {
     }
 }
 
-impl WithSpan for ExternItem {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(ExternItem);
 
 impl Display for ExternItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -103,17 +98,64 @@ impl Display for ExternItem {
 }
 
 #[derive(Debug)]
+pub struct Field {
+    pub id: NodeId,
+    pub name: Option<PR<Ident>>,
+    pub ty: PR<Ty>,
+    span: Span,
+}
+
+impl_with_span!(Field);
+
+impl Display for Field {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            self.name
+                .as_ref()
+                .map_or("".to_string(), |name| format!("{}: ", pr_display(name))),
+            pr_display(&self.ty)
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct Variant {
+    pub id: NodeId,
+    pub ctor_id: NodeId,
+    pub name: PR<Ident>,
+    pub fields: Vec<PR<Field>>,
+    span: Span,
+}
+
+impl_with_span!(Variant);
+
+impl Display for Variant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            pr_display(&self.name),
+            prs_display_join(&self.fields, " ")
+        )
+    }
+}
+
+#[derive(Debug)]
 pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
+    Data(PR<Ident>, Vec<PR<Variant>>),
     Extern(Vec<PR<ExternItem>>),
 }
 
 impl IsBlockEnded for ItemKind {
     fn is_block_ended(&self) -> bool {
         match self {
-            ItemKind::Type(_, _) => false, // FIXME: Always?
+            ItemKind::Type(_, _) => false, // FIXME: Not always
+            ItemKind::Data(_, _) => false, // FIXME: Not always
             ItemKind::Mod(_, _) | ItemKind::Extern(_) => true,
             ItemKind::Decl(_, _, body) => is_block_ended!(body),
         }
@@ -145,6 +187,14 @@ impl Display for ItemKind {
                     .join(" "),
                 pr_display(body)
             ),
+            ItemKind::Data(name, variants) => {
+                write!(
+                    f,
+                    "data {} = {}",
+                    pr_display(name),
+                    prs_display_join(variants, " | ")
+                )
+            },
             ItemKind::Extern(items) => write!(f, "extern {{{}}}", prs_display_join(items, ", ")),
         }
     }
@@ -156,6 +206,7 @@ impl NodeKindStr for ItemKind {
             ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
             ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
             ItemKind::Decl(name, _, _) => format!("{} declaration", pr_display(name)),
+            ItemKind::Data(name, _) => format!("{} data type", pr_display(name)),
             ItemKind::Extern(_) => format!("extern block"),
         }
     }

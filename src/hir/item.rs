@@ -3,7 +3,7 @@ use crate::{
     cli::color::Colorize,
     dt::idx::declare_idx,
     resolve::def::DefId,
-    span::span::{Ident, Span, WithSpan},
+    span::span::{impl_with_span, Ident, Span, WithSpan},
 };
 
 use super::{ty::Ty, BodyId, HirId, OwnerId, ROOT_OWNER_ID};
@@ -37,6 +37,31 @@ pub struct Func {
 }
 
 #[derive(Debug)]
+pub struct Field {
+    pub name: Option<Ident>,
+    pub ty: Ty,
+    span: Span,
+}
+
+impl_with_span!(Field);
+
+#[derive(Debug)]
+pub struct Variant {
+    pub def_id: DefId,
+    pub ctor_def_id: DefId,
+    pub name: Ident,
+    pub fields: Vec<Field>,
+    span: Span,
+}
+
+impl_with_span!(Variant);
+
+#[derive(Debug)]
+pub struct Data {
+    pub variants: Vec<Variant>,
+}
+
+#[derive(Debug)]
 pub struct ExternItem {
     pub ty: Ty,
 }
@@ -47,6 +72,7 @@ pub enum ItemKind {
     Mod(Mod),
     Value(BodyId),
     Func(BodyId),
+    Data(Data),
     ExternItem(ExternItem),
 }
 
@@ -85,11 +111,7 @@ impl ItemNode {
     }
 }
 
-impl WithSpan for ItemNode {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(ItemNode);
 
 macro_rules! specific_item_nodes {
     ($($variant: ident $method_name: ident $($ty: ty),+;)*) => {
@@ -112,5 +134,6 @@ specific_item_nodes!(
     Mod mod_ Mod;
     Value value BodyId;
     Func func BodyId;
+    Data data Data;
     ExternItem extern_item ExternItem;
 );

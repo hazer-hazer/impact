@@ -1,4 +1,4 @@
-use crate::span::span::{Ident, Span, WithSpan};
+use crate::span::span::{Ident, Span, WithSpan, impl_with_span};
 
 use super::{expr::Expr, item::ItemId, HirId, WithHirId};
 
@@ -25,11 +25,7 @@ impl WithHirId for StmtNode {
     }
 }
 
-impl WithSpan for StmtNode {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(StmtNode);
 
 #[derive(Debug)]
 pub struct Local {

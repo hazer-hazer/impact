@@ -1,7 +1,7 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
-use crate::span::span::{Kw, Span, SpanLen, Symbol, WithSpan};
+use crate::span::span::{impl_with_span, Kw, Span, SpanLen, Symbol, WithSpan};
 
 use super::lexer::LexerCharCheck;
 
@@ -379,11 +379,7 @@ impl Debug for Token {
     }
 }
 
-impl WithSpan for Token {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Token);
 
 #[derive(Default, Debug)]
 pub struct TokenStream(pub Vec<Token>);

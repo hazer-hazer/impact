@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::span::span::{Span, WithSpan};
+use crate::span::span::{Span, WithSpan, impl_with_span};
 
 use super::{
     expr::Expr, item::Item, pr_display, pr_node_kind_str, NodeId, NodeKindStr, WithNodeId, N, PR,
@@ -41,11 +41,7 @@ impl NodeKindStr for Stmt {
     }
 }
 
-impl WithSpan for Stmt {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Stmt);
 
 #[derive(Debug)]
 pub enum StmtKind {

@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     ast::prs_display_join,
     parser::token::{FloatKind, IntKind},
-    span::span::{Span, Symbol, WithSpan},
+    span::span::{impl_with_span, Span, Symbol, WithSpan},
 };
 
 use super::{
@@ -46,11 +46,7 @@ impl Display for Expr {
     }
 }
 
-impl WithSpan for Expr {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Expr);
 
 impl NodeKindStr for Expr {
     fn kind_str(&self) -> String {
@@ -119,11 +115,7 @@ impl WithNodeId for Block {
     }
 }
 
-impl WithSpan for Block {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Block);
 
 impl Display for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

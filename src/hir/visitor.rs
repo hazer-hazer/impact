@@ -2,7 +2,7 @@ use crate::{resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{ExternItem, ItemId, ItemKind, Mod, TyAlias},
+    item::{Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant},
     pat::{Pat, PatKind},
     stmt::{Local, Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -53,6 +53,7 @@ pub trait HirVisitor {
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
             ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(body) => self.visit_func_item(item.name(), body, id, hir),
+            ItemKind::Data(data) => self.visit_data_item(item.name(), data, id, hir),
             ItemKind::ExternItem(extern_item) => {
                 self.visit_extern_item(item.name(), extern_item, id, hir)
             },
@@ -77,6 +78,21 @@ pub trait HirVisitor {
     fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
+    }
+
+    fn visit_data_item(&mut self, name: Ident, data: &Data, id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        walk_each!(self, data.variants, visit_variant, hir);
+    }
+
+    fn visit_variant(&mut self, variant: &Variant, hir: &HIR) {
+        self.visit_ident(&variant.name, hir);
+        walk_each!(self, variant.fields, visit_field, hir);
+    }
+
+    fn visit_field(&mut self, field: &Field, hir: &HIR) {
+        field.name.as_ref().map(|name| self.visit_ident(name, hir));
+        self.visit_ty(&field.ty, hir);
     }
 
     fn visit_extern_item(&mut self, name: Ident, extern_item: &ExternItem, _id: ItemId, hir: &HIR) {

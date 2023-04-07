@@ -11,7 +11,7 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
     },
-    span::span::{Ident, Span, Symbol, WithSpan},
+    span::span::{Ident, Span, Symbol, WithSpan, impl_with_span},
 };
 
 use self::{
@@ -637,10 +637,6 @@ impl Display for PathNode {
     }
 }
 
-impl WithSpan for PathNode {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(PathNode);
 
 pub type Path = HirId;

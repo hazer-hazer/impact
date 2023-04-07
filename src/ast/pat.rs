@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::span::span::{Ident, Span, WithSpan};
+use crate::span::span::{Ident, Span, WithSpan, impl_with_span};
 
 use super::{pr_display, NodeId, WithNodeId, PR};
 
@@ -39,11 +39,7 @@ impl Pat {
     }
 }
 
-impl WithSpan for Pat {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Pat);
 
 impl WithNodeId for Pat {
     fn id(&self) -> NodeId {

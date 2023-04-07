@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
-        item::{ExternItem, Item, ItemKind},
+        item::{ExternItem, Field, Item, ItemKind, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
@@ -10,7 +10,7 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        item::{ItemId, ItemNode, Mod, TyAlias},
+        item::{Data, ItemId, ItemNode, Mod, TyAlias},
         stmt::Local,
         Body, BodyId, HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
         OWNER_SELF_CHILD_ID,
@@ -275,6 +275,7 @@ impl<'ast> Lower<'ast> {
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
                 },
+                ItemKind::Data(name, variants) => this.lower_data_item(name, variants),
                 ItemKind::Extern(_) => unreachable!(),
             };
 
@@ -339,6 +340,33 @@ impl<'ast> Lower<'ast> {
             // }
 
             hir::item::ItemKind::Func(self.body(params, value))
+        }
+    }
+
+    fn lower_data_item(&mut self, _: &PR<Ident>, variants: &[PR<Variant>]) -> hir::item::ItemKind {
+        hir::item::ItemKind::Data(Data {
+            variants: lower_each_pr!(self, variants, lower_variant),
+        })
+    }
+
+    fn lower_variant(&mut self, variant: &Variant) -> hir::item::Variant {
+        hir::item::Variant {
+            def_id: self.sess.def_table.get_def_id(variant.id).unwrap(),
+            ctor_def_id: self.sess.def_table.get_def_id(variant.ctor_id).unwrap(),
+            name: lower_pr!(self, &variant.name, lower_ident),
+            fields: lower_each_pr!(self, &variant.fields, lower_field),
+            span: variant.span(),
+        }
+    }
+
+    fn lower_field(&mut self, field: &Field) -> hir::item::Field {
+        hir::item::Field {
+            name: field
+                .name
+                .as_ref()
+                .map(|name| lower_pr!(self, name, lower_ident)),
+            ty: lower_pr!(self, &field.ty, lower_ty),
+            span: field.span(),
         }
     }
 

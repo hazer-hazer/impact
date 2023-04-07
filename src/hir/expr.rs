@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     resolve::{builtin::Builtin, def::DefId},
-    span::span::{Span, Symbol, WithSpan},
+    span::span::{Span, Symbol, WithSpan, impl_with_span},
 };
 
 use super::{stmt::Stmt, ty::Ty, BodyId, HirId, Path, WithHirId};
@@ -182,10 +182,6 @@ impl WithHirId for ExprNode {
     }
 }
 
-impl WithSpan for ExprNode {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(ExprNode);
 
 pub type Expr = HirId;

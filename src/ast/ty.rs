@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::span::span::{Span, WithSpan};
+use crate::span::span::{Span, WithSpan, impl_with_span};
 
 use super::{
     expr::Expr, pr_display, pr_node_kind_str, prs_display_join, NodeId, NodeKindStr, Path,
@@ -36,11 +36,7 @@ impl Display for Ty {
     }
 }
 
-impl WithSpan for Ty {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(Ty);
 
 impl NodeKindStr for Ty {
     fn kind_str(&self) -> String {

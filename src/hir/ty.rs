@@ -1,6 +1,6 @@
 use crate::{
     resolve::builtin::Builtin,
-    span::span::{Span, WithSpan},
+    span::span::{Span, WithSpan, impl_with_span},
 };
 
 use super::{HirId, Path, WithHirId};
@@ -28,11 +28,7 @@ impl WithHirId for TyNode {
     }
 }
 
-impl WithSpan for TyNode {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
+impl_with_span!(TyNode);
 
 #[derive(Debug)]
 pub struct TyPath(pub Path);

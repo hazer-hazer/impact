@@ -2,7 +2,7 @@ use crate::span::span::Ident;
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
-    item::{ExternItem, Item, ItemKind},
+    item::{ExternItem, Field, Item, ItemKind, Variant},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -74,6 +74,7 @@ pub trait AstVisitor<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
+            ItemKind::Data(name, variants) => self.visit_data_item(name, variants, item.id()),
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }
@@ -95,13 +96,31 @@ pub trait AstVisitor<'ast> {
     fn visit_decl_item(
         &mut self,
         name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<Pat>>,
+        params: &'ast Vec<PR<Pat>>, // FIXME: Replace with slice
         body: &'ast PR<N<Expr>>,
         _: NodeId,
     ) {
         walk_pr!(self, name, visit_ident);
         walk_each_pr!(self, params, visit_pat);
         walk_pr!(self, body, visit_expr);
+    }
+
+    fn visit_data_item(&mut self, name: &'ast PR<Ident>, variants: &'ast [PR<Variant>], _: NodeId) {
+        walk_pr!(self, name, visit_ident);
+        walk_each_pr!(self, variants, visit_variant);
+    }
+
+    fn visit_variant(&mut self, variant: &'ast Variant) {
+        walk_pr!(self, &variant.name, visit_ident);
+        walk_each_pr!(self, &variant.fields, visit_field);
+    }
+
+    fn visit_field(&mut self, field: &'ast Field) {
+        field
+            .name
+            .as_ref()
+            .map(|name| walk_pr!(self, name, visit_ident));
+        walk_pr!(self, &field.ty, visit_ty);
     }
 
     fn visit_extern_block(&mut self, items: &'ast [PR<ExternItem>]) {
