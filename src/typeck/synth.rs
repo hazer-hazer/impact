@@ -73,6 +73,7 @@ impl<'hir> Typecker<'hir> {
                 self.type_term(item.name(), ty);
                 ty
             },
+            ItemKind::Data(_) => todo!(),
             // ItemKind::ExternBlock(items) => {
             //     items.iter().for_each(|item| {
             //         let ty = self.conv(item.ty);

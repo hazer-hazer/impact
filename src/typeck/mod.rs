@@ -437,7 +437,7 @@ impl<'hir> Typecker<'hir> {
                 })?;
                 self.ty_wf(*body)
             },
-            TyKind::Data(_) => {
+            TyKind::Data(def_id, variants) => {
                 variants.iter().try_for_each(|v| {
                     v.fields.iter().try_for_each(|f| {
                         self.ty_wf(f.ty)?;
@@ -456,6 +456,7 @@ impl<'hir> Typecker<'hir> {
                 &KindSort::Ty(ty) => self.ty_wf(ty),
                 _ => Ok(Ty::ty_kind(self.kind_wf(kind)?)),
             },
+            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 

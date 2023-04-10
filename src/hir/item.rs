@@ -40,7 +40,7 @@ pub struct Func {
 pub struct Field {
     pub name: Option<Ident>,
     pub ty: Ty,
-    span: Span,
+    pub span: Span,
 }
 
 impl_with_span!(Field);
@@ -49,12 +49,12 @@ pub type Variant = HirId;
 
 #[derive(Debug)]
 pub struct VariantNode {
-    id: HirId,
+    pub id: HirId,
     pub def_id: DefId,
     pub ctor_def_id: DefId,
     pub name: Ident,
     pub fields: Vec<Field>,
-    span: Span,
+    pub span: Span,
 }
 
 impl WithHirId for VariantNode {

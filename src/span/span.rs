@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 
 use crate::{
+    dt::maps::enum_str_map,
     parser::{
         lexer::LexerCharCheck,
         token::{Token, TokenKind},
@@ -15,44 +16,23 @@ use std::{
 
 static INTERNER: Lazy<RwLock<Interner>> = Lazy::new(|| Default::default());
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Kw {
-    Let = 0,
-    In,
-    Mod,
-    Type,
-    Data,
-    Extern,
+enum_str_map! {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub Kw {
+        Let: "let" = 0,
+        In: "in",
+        Mod: "mod",
+        Type: "type",
+        Data: "data",
+        Extern: "extern",
 
-    Underscore,
-    Unit, // `()`, allowed is type or expression
+        Underscore: "_",
+        Unit: "()", // `()`, allowed is type or expression
 
-    // Reserved for name resolution //
-    Root,
+        // Reserved for name resolution //
+        Root: "[ROOT]",
 
-    Unknown,
-}
-
-impl Kw {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Kw::Let => "let",
-            Kw::In => "in",
-            Kw::Mod => "mod",
-            Kw::Type => "type",
-            Kw::Data => "data",
-            Kw::Extern => "extern",
-            Kw::Underscore => "_",
-            Kw::Unit => "()",
-            Kw::Root => "[root]",
-            Kw::Unknown => "[UNKNOWN]",
-        }
-    }
-}
-
-impl Display for Kw {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
+        Unknown: "[UNKNOWN]",
     }
 }
 
@@ -66,7 +46,7 @@ impl Symbol {
     //  because we treat all constructed symbols as valid, i.e. interned.
 
     pub fn from_kw(kw: Kw) -> Symbol {
-        Self::try_from(kw).expect("Failed to make a symbol from keyword")
+        kw.as_str().intern()
     }
 
     pub fn intern(str: &str) -> Symbol {
@@ -115,30 +95,6 @@ impl Display for Symbol {
 impl std::fmt::Debug for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Symbol({};`{}`)", self.0, self.as_str())
-    }
-}
-
-impl TryInto<Kw> for Symbol {
-    type Error = ();
-
-    fn try_into(self) -> Result<Kw, Self::Error> {
-        match self.as_str() {
-            "let" => Ok(Kw::Let),
-            "in" => Ok(Kw::In),
-            "mod" => Ok(Kw::Mod),
-            "type" => Ok(Kw::Type),
-            "extern" => Ok(Kw::Extern),
-            "[root]" => Ok(Kw::Root),
-            _ => Err(()),
-        }
-    }
-}
-
-impl TryFrom<Kw> for Symbol {
-    type Error = ();
-
-    fn try_from(kw: Kw) -> Result<Self, Self::Error> {
-        Ok(Self::intern(kw.as_str()))
     }
 }
 

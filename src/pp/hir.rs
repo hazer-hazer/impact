@@ -9,7 +9,7 @@ use crate::{
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
-        BodyId, BodyOwner, HirId, OwnerId, Path, HIR,
+        BodyId, BodyOwner, HirId, Path, HIR,
     },
     parser::token::Punct,
     resolve::builtin::Builtin,

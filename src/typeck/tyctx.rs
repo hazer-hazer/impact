@@ -19,7 +19,7 @@ use crate::{
 use super::{
     builtin::builtins,
     ctx::GlobalCtx,
-    ty::{Subst, Ty, TyKind, TyVarId},
+    ty::{Subst, Ty, TyKind, TyVarId, Variant, VariantId},
 };
 
 #[derive(Debug, Default, PartialEq, Eq, Hash)]
@@ -56,8 +56,7 @@ pub struct TyCtx {
     expr_ty_bindings: HashMap<Expr, TyBindings>,
 
     def_ty_bindings: DefMap<HashSet<Expr>>,
-
-    adt_data: DefMap<IndexVec<VariantId, Variant>>,
+    // adt_data: DefMap<IndexVec<VariantId, Variant>>,
 }
 
 impl TyCtx {
@@ -67,6 +66,7 @@ impl TyCtx {
             typed: Default::default(),
             expr_ty_bindings: Default::default(),
             def_ty_bindings: Default::default(),
+            // adt_data: Default::default(),
         }
     }
 
@@ -139,6 +139,7 @@ impl TyCtx {
             },
             &TyKind::Ref(inner) => self._instantiated_ty(expr, inner),
             TyKind::Kind(_) => todo!(),
+            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 

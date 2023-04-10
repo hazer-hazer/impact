@@ -9,13 +9,10 @@ use crate::{
     dt::idx::IndexVec,
     hir::BodyId,
     mir::{
-        Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator,
-        TerminatorKind, Ty, BB, START_BB,
+        Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator, TerminatorKind,
+        Ty, BB, START_BB,
     },
-    resolve::{
-        builtin::Builtin,
-        def::{DefId},
-    },
+    resolve::{builtin::Builtin, def::DefId},
     typeck::ty::{FloatKind, TyKind},
 };
 
@@ -320,6 +317,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     unreachable!()
                 },
                 TyKind::Kind(_) => todo!(),
+                TyKind::Data(def_id, variants) => todo!(),
             },
             ConstKind::ZeroSized => match const_.ty.kind() {
                 TyKind::Unit => self.ctx.unit_value(),
@@ -334,6 +332,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     unreachable!()
                 },
                 TyKind::Kind(_) => todo!(),
+                TyKind::Data(def_id, variants) => todo!(),
             },
             ConstKind::Slice { data } => self.build_cstring_value(data),
         }
