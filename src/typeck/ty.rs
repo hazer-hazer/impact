@@ -27,7 +27,7 @@ use super::{
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
 declare_idx!(TyVarId, u32, "{}", Color::Cyan);
-declare_idx!(VariantIdx, u32, "{}", Color::White);
+declare_idx!(VariantId, u32, "{}", Color::White);
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ExKind {
@@ -287,6 +287,10 @@ impl Ty {
         })
     }
 
+    pub fn data(def_id: DefId, variants: IndexVec<VariantId, Variant>) -> Ty {
+        Self::new(TyKind::Data(def_id, variants))
+    }
+
     pub fn ref_to(ty: Ty) -> Ty {
         // assert!(ty.is_mono());
         Self::new(TyKind::Ref(ty))
@@ -353,8 +357,9 @@ impl Ty {
             | TyKind::Int(_)
             | TyKind::Float(_)
             | TyKind::Str
-            | TyKind::FuncDef(_, _, _)
+            | TyKind::FuncDef(..)
             | TyKind::Func(_, _)
+            | TyKind::Data {.. }
             | TyKind::Ref(_)
             // TODO: Can existentials and vars be higher-kinded?
             | TyKind::Var(_)
@@ -385,6 +390,9 @@ impl Ty {
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_mono) && body.is_mono()
             },
+            TyKind::Data(_, variants) => variants
+                .iter()
+                .all(|v| v.fields.iter().all(|field| field.ty.is_mono())),
             TyKind::Forall(_, _) => false,
             TyKind::Ref(ty) => ty.is_mono(),
             TyKind::Kind(_) => false,
@@ -403,6 +411,9 @@ impl Ty {
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
+            TyKind::Data(_, variants) => variants
+                .iter()
+                .all(|v| v.fields.iter().all(|field| field.ty.is_instantiated())),
             TyKind::Ref(ty) => ty.is_instantiated(),
             TyKind::Kind(_) => false,
         }
@@ -415,6 +426,9 @@ impl Ty {
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_solved) && body.is_solved()
             },
+            TyKind::Data(_, variants) => variants
+                .iter()
+                .all(|v| v.fields.iter().all(|field| field.ty.is_solved())),
             // TODO: Check that var is bound in ty_bindings?
             TyKind::Var(_) => true,
             TyKind::Existential(_) => false,
@@ -659,10 +673,7 @@ pub enum TyKind {
 
     Func(Vec<Ty>, Ty),
 
-    Data {
-        def_id: DefId,
-        variants: IndexVec<VariantIdx, Variant>,
-    },
+    Data(DefId),
     Ref(Ty),
 
     Var(TyVarId),
@@ -707,6 +718,7 @@ impl std::fmt::Display for TyKind {
                     def_id
                 )
             },
+            TyKind::Data(def_id, variants) => write!(f, "data{def_id}"),
             TyKind::Ref(ty) => write!(f, "ref {ty}"),
             TyKind::Var(name) => write!(f, "{name}"),
             TyKind::Existential(ex) => write!(f, "{ex}"),

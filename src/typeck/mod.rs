@@ -2,11 +2,12 @@ use std::fmt::Display;
 
 use crate::{
     cli::verbose,
+    dt::idx::IndexVec,
     hir::{
         self,
         item::{ItemId, TyAlias},
         ty::TyPath,
-        HirId, Path, Res, HIR,
+        HirId, Path, Res, WithHirId, HIR,
     },
     interface::writer::outln,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -24,7 +25,7 @@ use self::{
     kind::{Kind, KindEx, KindExId, KindSort},
     ty::{
         ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty, TyKind,
-        TyVarId, Variant,
+        TyVarId, Variant, VariantId,
     },
     tyctx::TyCtx,
 };
@@ -436,6 +437,16 @@ impl<'hir> Typecker<'hir> {
                 })?;
                 self.ty_wf(*body)
             },
+            TyKind::Data(_) => {
+                variants.iter().try_for_each(|v| {
+                    v.fields.iter().try_for_each(|f| {
+                        self.ty_wf(f.ty)?;
+                        Ok(())
+                    })?;
+                    Ok(())
+                })?;
+                Ok(ty)
+            },
             &TyKind::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
                 // let open_forall = this.open_forall(body, alpha);
                 this.ty_wf(body)
@@ -566,7 +577,11 @@ impl<'hir> Typecker<'hir> {
                         self.conv_ty_alias(def_id)
                     },
 
-                    DefKind::Data => {},
+                    DefKind::Data => self.conv_data_ty(def_id),
+
+                    DefKind::Variant => {
+                        self.conv_data_ty(self.hir.variant(def_id.into()).id().owner().into())
+                    },
 
                     // Non-type definitions from type namespace
                     DefKind::Root | DefKind::Mod => {
@@ -611,9 +626,12 @@ impl<'hir> Typecker<'hir> {
 
     fn conv_data_ty(&mut self, def_id: DefId) -> Ty {
         let data = self.hir.item(ItemId::new(def_id.into())).data();
+        let variants = data.variants.iter().map(|v| self.conv_variant(v)).collect();
+        Ty::data(def_id, variants)
     }
 
-    fn conv_variant(&mut self, variant: &hir::item::Variant) -> Variant {
+    fn conv_variant(&mut self, &variant: &hir::item::Variant) -> Variant {
+        let variant = self.hir.variant(variant);
         Variant {
             def_id: variant.def_id,
             name: variant.name,
@@ -627,8 +645,8 @@ impl<'hir> Typecker<'hir> {
 
     fn conv_field(&mut self, field: &hir::item::Field) -> Field {
         Field {
-            name: todo!(),
-            ty: todo!(),
+            name: field.name,
+            ty: self.conv(field.ty),
         }
     }
 

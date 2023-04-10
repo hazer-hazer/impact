@@ -1,7 +1,10 @@
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, ROOT_ITEM_ID},
+        item::{
+            Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode,
+            ROOT_ITEM_ID,
+        },
         pat::{Pat, PatKind},
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -145,7 +148,8 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_each_delim!(self, data.variants, visit_variant, " | ", hir);
     }
 
-    fn visit_variant(&mut self, variant: &Variant, hir: &HIR) {
+    fn visit_variant(&mut self, &variant: &Variant, hir: &HIR) {
+        let variant = hir.variant(variant);
         self.pp.string(variant.name);
         self.pp.def_id(&variant.def_id);
         self.pp.ty_anno(HirId::new_owner(variant.def_id));

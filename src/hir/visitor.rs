@@ -2,7 +2,7 @@ use crate::{resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant},
+    item::{Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode},
     pat::{Pat, PatKind},
     stmt::{Local, Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -85,7 +85,8 @@ pub trait HirVisitor {
         walk_each!(self, data.variants, visit_variant, hir);
     }
 
-    fn visit_variant(&mut self, variant: &Variant, hir: &HIR) {
+    fn visit_variant(&mut self, &variant: &Variant, hir: &HIR) {
+        let variant = hir.variant(variant);
         self.visit_ident(&variant.name, hir);
         walk_each!(self, variant.fields, visit_field, hir);
     }

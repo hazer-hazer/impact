@@ -135,9 +135,12 @@ impl<'ctx> MirBuilder<'ctx> {
                         assert!(ty.is_instantiated());
                         RValue::ClosureRef(def_id)
                     },
+                    DefKind::Ctor => todo!(),
                     DefKind::Local
                     | DefKind::Root
                     | DefKind::TyAlias
+                    | DefKind::Data
+                    | DefKind::Variant
                     | DefKind::Mod
                     | DefKind::DeclareBuiltin => {
                         unreachable!()

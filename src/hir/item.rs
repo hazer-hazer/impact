@@ -6,7 +6,7 @@ use crate::{
     span::span::{impl_with_span, Ident, Span, WithSpan},
 };
 
-use super::{ty::Ty, BodyId, HirId, OwnerId, ROOT_OWNER_ID};
+use super::{ty::Ty, BodyId, HirId, OwnerId, WithHirId, ROOT_OWNER_ID};
 
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 pub const ROOT_ITEM_ID: ItemId = ItemId(ROOT_OWNER_ID);
@@ -45,8 +45,11 @@ pub struct Field {
 
 impl_with_span!(Field);
 
+pub type Variant = HirId;
+
 #[derive(Debug)]
-pub struct Variant {
+pub struct VariantNode {
+    id: HirId,
     pub def_id: DefId,
     pub ctor_def_id: DefId,
     pub name: Ident,
@@ -54,7 +57,13 @@ pub struct Variant {
     span: Span,
 }
 
-impl_with_span!(Variant);
+impl WithHirId for VariantNode {
+    fn id(&self) -> HirId {
+        self.id
+    }
+}
+
+impl_with_span!(VariantNode);
 
 #[derive(Debug)]
 pub struct Data {

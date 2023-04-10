@@ -65,10 +65,16 @@ impl<'ctx> ThirBuilder<'ctx> {
                         ExprKind::Def(def_id, self.tyctx.tyof(expr_id))
                     },
                     DefKind::Lambda => unreachable!("Lambda cannot be resolved by path"),
-                    DefKind::TyAlias | DefKind::DeclareBuiltin | DefKind::Root | DefKind::Mod => {
+                    DefKind::Data
+                    | DefKind::Variant
+                    | DefKind::TyAlias
+                    | DefKind::DeclareBuiltin
+                    | DefKind::Root
+                    | DefKind::Mod => {
                         unreachable!("Expression path cannot point to such definition kinds")
                     },
                     DefKind::Local => unreachable!("Locals must be resolved as Res::Local"),
+                    DefKind::Ctor => todo!(),
                 },
                 &hir::Res::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
                 hir::Res::Builtin(_) | hir::Res::DeclareBuiltin | hir::Res::Error => unreachable!(),

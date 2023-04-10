@@ -350,13 +350,17 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_variant(&mut self, variant: &Variant) -> hir::item::Variant {
-        hir::item::Variant {
+        let id = self.lower_node_id(variant.id);
+        let name = lower_pr!(self, &variant.name, lower_ident);
+        let fields = lower_each_pr!(self, &variant.fields, lower_field);
+        self.add_node(hir::Node::VariantNode(hir::item::VariantNode {
+            id,
             def_id: self.sess.def_table.get_def_id(variant.id).unwrap(),
             ctor_def_id: self.sess.def_table.get_def_id(variant.ctor_id).unwrap(),
-            name: lower_pr!(self, &variant.name, lower_ident),
-            fields: lower_each_pr!(self, &variant.fields, lower_field),
+            name,
+            fields,
             span: variant.span(),
-        }
+        }))
     }
 
     fn lower_field(&mut self, field: &Field) -> hir::item::Field {

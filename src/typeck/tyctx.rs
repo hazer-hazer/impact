@@ -56,6 +56,8 @@ pub struct TyCtx {
     expr_ty_bindings: HashMap<Expr, TyBindings>,
 
     def_ty_bindings: DefMap<HashSet<Expr>>,
+
+    adt_data: DefMap<IndexVec<VariantId, Variant>>,
 }
 
 impl TyCtx {

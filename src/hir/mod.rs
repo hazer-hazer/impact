@@ -11,12 +11,12 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
     },
-    span::span::{Ident, Span, Symbol, WithSpan, impl_with_span},
+    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
 };
 
 use self::{
     expr::{Block, BlockNode, Expr, ExprKind, ExprNode, Lambda},
-    item::{ItemId, ItemKind, ItemNode, Mod},
+    item::{ItemId, ItemKind, ItemNode, Mod, VariantNode},
     pat::{Pat, PatNode},
     stmt::StmtNode,
     ty::TyNode,
@@ -178,6 +178,7 @@ hir_nodes!(
     block BlockNode,
     ty TyNode,
     path PathNode,
+    variant VariantNode,
     /
     item ItemNode,
     root Mod,
@@ -193,6 +194,7 @@ pub enum NodeKind {
     Block,
     Ty,
     Path,
+    Variant,
     Item,
     Root,
     Error,
@@ -207,6 +209,7 @@ impl Display for NodeKind {
             NodeKind::Block => "block",
             NodeKind::Ty => "ty",
             NodeKind::Path => "path",
+            NodeKind::Variant => "variant",
             NodeKind::Item => "item",
             NodeKind::Root => "root",
             NodeKind::Error => "[ERROR]",
@@ -240,6 +243,7 @@ impl_with_node_kind!(
     BlockNode: NodeKind::Block,
     TyNode: NodeKind::Ty,
     PathNode: NodeKind::Path,
+    VariantNode: NodeKind::Variant,
     ItemNode: NodeKind::Item,
     Mod: NodeKind::Root,
     ErrorNode: NodeKind::Error
@@ -262,6 +266,7 @@ impl Node {
             Node::BlockNode(block) => block.id(),
             Node::TyNode(ty) => ty.id(),
             Node::PathNode(path) => path.id(),
+            Node::VariantNode(variant) => variant.id(),
             Node::ItemNode(item) => HirId::new_owner(item.def_id()),
             Node::Mod(_root) => HirId::new_owner(ROOT_DEF_ID),
             Node::ErrorNode(error) => error.id,
@@ -276,6 +281,7 @@ impl Node {
             Node::BlockNode(_) => NodeKind::Block,
             Node::TyNode(_) => NodeKind::Ty,
             Node::PathNode(_) => NodeKind::Path,
+            Node::VariantNode(_) => NodeKind::Variant,
             Node::ItemNode(_) => NodeKind::Item,
             Node::Mod(_) => NodeKind::Root,
             Node::ErrorNode(_) => NodeKind::Error,
