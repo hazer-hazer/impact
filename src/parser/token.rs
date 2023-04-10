@@ -1,7 +1,7 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
-use crate::span::span::{impl_with_span, Kw, Span, SpanLen, Symbol, WithSpan};
+use crate::{span::span::{impl_with_span, Kw, Span, SpanLen, Symbol, WithSpan}, dt::maps::enum_str_map};
 
 use super::lexer::LexerCharCheck;
 
@@ -30,71 +30,27 @@ use super::lexer::LexerCharCheck;
 //     }
 // }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Op {
-    Assign,
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    Mod,
-}
-
-impl Op {
-    pub fn try_from_sym(sym: Symbol) -> Option<Self> {
-        match sym.as_str() {
-            "=" => Some(Self::Assign),
-            "+" => Some(Self::Plus),
-            "-" => Some(Self::Minus),
-            "*" => Some(Self::Mul),
-            "/" => Some(Self::Div),
-            "%" => Some(Self::Mod),
-            _ => None,
-        }
+enum_str_map! {
+    #[derive(PartialEq, Debug, Clone, Copy)]
+    pub Op {
+        Assign: "=",
+        Plus: "+",
+        Minus: "-",
+        Mul: "*",
+        Div: "/",
+        Mod: "%",
     }
 }
 
-impl Display for Op {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Op::Assign => "=",
-                Op::Plus => "+",
-                Op::Minus => "-",
-                Op::Mul => "*",
-                Op::Div => "/",
-                Op::Mod => "%",
-            }
-        )
-    }
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Punct {
-    Backslash,
-    Arrow,
-    Colon,
-    Dot,
-    LParen,
-    RParen,
-}
-
-impl Display for Punct {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Punct::Backslash => "\\",
-                Punct::Arrow => "->",
-                Punct::Colon => ":",
-                Punct::Dot => ".",
-                Punct::LParen => "(",
-                Punct::RParen => ")",
-            }
-        )
+enum_str_map! {
+    #[derive(PartialEq, Debug, Clone, Copy)]
+    pub Punct {
+        Backslash: "\\",
+        Arrow: "->",
+        Colon: ":",
+        Dot: ".",
+        LParen: "(",
+        RParen: ")",
     }
 }
 

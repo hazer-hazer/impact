@@ -11,7 +11,7 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
     },
-    span::span::{Ident, Span, Symbol, WithSpan, impl_with_span},
+    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
 };
 
 use self::{
@@ -32,7 +32,7 @@ pub mod visitor;
 type N<T> = Box<T>;
 
 declare_idx!(OwnerId, DefId, "{}", Color::BrightCyan);
-declare_idx!(wrapper BodyId, HirId, "body{}", Color::Green);
+declare_idx!(wrapper BodyId, HirId, "body{}");
 declare_idx!(OwnerChildId, u32, "#{}", Color::Cyan);
 
 pub const ROOT_OWNER_ID: OwnerId = OwnerId(ROOT_DEF_ID);

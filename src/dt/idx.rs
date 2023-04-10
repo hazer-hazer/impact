@@ -381,8 +381,8 @@ macro_rules! declare_idx {
         }
     };
 
-    (wrapper $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
-        declare_idx!(@inner $name, $inner_ty, $format, $color);
+    (wrapper $name: ident, $inner_ty: ty, $format: expr) => {
+        declare_idx!(@inner $name, $inner_ty, $format, None);
 
         impl From<$name> for $inner_ty {
             fn from(value: $name) -> $inner_ty {
@@ -392,7 +392,7 @@ macro_rules! declare_idx {
     };
 
     (new_type $name: ident, $inner_ty: ty, $format: expr, $color: expr) => {
-        declare_idx!(@inner $name, $inner_ty, $format, $color);
+        declare_idx!(@inner $name, $inner_ty, $format, Some($color));
 
         impl crate::dt::idx::Idx for $name {
             type Inner = $inner_ty;
@@ -456,7 +456,12 @@ macro_rules! declare_idx {
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", format!($format, self.0.to_string()).fg_color($color))
+                let s = format!($format, self.0.to_string());
+                if let Some(color) = $color {
+                    s.fg_color(color).fmt(f)
+                } else {
+                    s.fmt(f)
+                }
             }
         }
     };

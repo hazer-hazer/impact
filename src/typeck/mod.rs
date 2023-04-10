@@ -445,6 +445,10 @@ impl<'hir> Typecker<'hir> {
                 &KindSort::Ty(ty) => self.ty_wf(ty),
                 _ => Ok(Ty::ty_kind(self.kind_wf(kind)?)),
             },
+            TyKind::Data {
+                def_id: _,
+                variants: _,
+            } => todo!(),
         }
     }
 
@@ -566,7 +570,8 @@ impl<'hir> Typecker<'hir> {
                         self.conv_ty_alias(def_id)
                     },
 
-                    DefKind::Data => {},
+                    DefKind::Data => todo!(),
+                    DefKind::Variant => todo!(),
 
                     // Non-type definitions from type namespace
                     DefKind::Root | DefKind::Mod => {
@@ -610,7 +615,9 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn conv_data_ty(&mut self, def_id: DefId) -> Ty {
-        let data = self.hir.item(ItemId::new(def_id.into())).data();
+        let _data = self.hir.item(ItemId::new(def_id.into())).data();
+
+        todo!()
     }
 
     fn conv_variant(&mut self, variant: &hir::item::Variant) -> Variant {
@@ -625,7 +632,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn conv_field(&mut self, field: &hir::item::Field) -> Field {
+    fn conv_field(&mut self, _field: &hir::item::Field) -> Field {
         Field {
             name: todo!(),
             ty: todo!(),

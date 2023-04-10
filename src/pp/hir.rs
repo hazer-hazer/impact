@@ -1,12 +1,12 @@
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, ROOT_ITEM_ID},
+        item::{Data, ExternItem, Field, ItemId, Mod, TyAlias, Variant, ROOT_ITEM_ID},
         pat::{Pat, PatKind},
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
-        BodyId, BodyOwner, HirId, OwnerId, Path, HIR,
+        BodyId, BodyOwner, HirId, Path, HIR,
     },
     parser::token::Punct,
     resolve::builtin::Builtin,

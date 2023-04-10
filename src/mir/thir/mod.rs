@@ -8,7 +8,7 @@ use crate::{
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
     resolve::{builtin::Builtin, def::DefId},
-    span::span::{Ident, Span, Symbol, WithSpan, impl_with_span},
+    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
     typeck::ty::{FloatKind, IntKind, Ty},
 };
 
@@ -16,7 +16,7 @@ declare_idx!(ExprId, u32, "{}", Color::Green);
 declare_idx!(BlockId, u32, "{}", Color::Blue);
 declare_idx!(StmtId, u32, "{}", Color::Yellow);
 declare_idx!(ParamId, u32, "{}", Color::White);
-declare_idx!(wrapper LocalVar, HirId, "{}", Color::White);
+declare_idx!(wrapper LocalVar, HirId, "{}");
 
 pub enum Stmt {
     Expr(ExprId),

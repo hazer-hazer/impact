@@ -137,6 +137,7 @@ impl TyCtx {
             },
             &TyKind::Ref(inner) => self._instantiated_ty(expr, inner),
             TyKind::Kind(_) => todo!(),
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 

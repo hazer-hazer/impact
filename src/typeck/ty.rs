@@ -15,7 +15,7 @@ use crate::{
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
-    span::span::{Ident, Symbol},
+    span::span::{Ident},
     utils::macros::match_expected,
 };
 
@@ -361,6 +361,7 @@ impl Ty {
             | TyKind::Existential(_)
             | TyKind::Forall(_, _) => true,
             TyKind::Kind(_) => false,
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -388,6 +389,7 @@ impl Ty {
             TyKind::Forall(_, _) => false,
             TyKind::Ref(ty) => ty.is_mono(),
             TyKind::Kind(_) => false,
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -405,6 +407,7 @@ impl Ty {
             },
             TyKind::Ref(ty) => ty.is_instantiated(),
             TyKind::Kind(_) => false,
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -421,6 +424,7 @@ impl Ty {
             TyKind::Forall(_, ty) => ty.is_solved(),
             TyKind::Ref(ty) => ty.is_solved(),
             TyKind::Kind(kind) => kind.is_solved(),
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -447,6 +451,7 @@ impl Ty {
             },
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
             TyKind::Kind(_) => None,
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }?;
 
         Some(MonoTy { sort, ty: *self })
@@ -468,6 +473,7 @@ impl Ty {
             &TyKind::Forall(_, body) => body.contains_ex(ex),
             &TyKind::Ref(inner) => inner.contains_ex(ex),
             TyKind::Kind(kind) => kind.contains_ty_ex(ex),
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -539,6 +545,7 @@ impl Ty {
                 }
             },
             TyKind::Kind(_) => todo!(),
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -580,6 +587,7 @@ impl Ty {
                     _ => Ty::ty_kind(kind),
                 }
             },
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -712,6 +720,7 @@ impl std::fmt::Display for TyKind {
             TyKind::Existential(ex) => write!(f, "{ex}"),
             TyKind::Forall(alpha, ty) => write!(f, "(∀{alpha}. {ty})"),
             TyKind::Kind(kind) => write!(f, "{kind}"),
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 }

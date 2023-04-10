@@ -80,7 +80,7 @@ pub trait HirVisitor {
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_data_item(&mut self, name: Ident, data: &Data, id: ItemId, hir: &HIR) {
+    fn visit_data_item(&mut self, name: Ident, data: &Data, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         walk_each!(self, data.variants, visit_variant, hir);
     }

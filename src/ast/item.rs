@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::span::span::{Ident, Span, WithSpan, impl_with_span};
+use crate::span::span::{impl_with_span, Ident, Span, WithSpan};
 
 use super::{
     expr::Expr, is_block_ended, pat::Pat, pr_display, prs_display_join, ty::Ty, IsBlockEnded,

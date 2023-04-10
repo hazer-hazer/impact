@@ -430,6 +430,7 @@ impl<'hir> Typecker<'hir> {
                 })
             }),
             TyKind::Kind(_) => unreachable!(),
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 
@@ -493,6 +494,7 @@ impl<'hir> Typecker<'hir> {
                 })
             }),
             TyKind::Kind(_) => unreachable!(),
+            TyKind::Data { def_id: _, variants: _ } => todo!(),
         }
     }
 }

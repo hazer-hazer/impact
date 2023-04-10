@@ -142,6 +142,9 @@ impl<'ctx> MirBuilder<'ctx> {
                     | DefKind::DeclareBuiltin => {
                         unreachable!()
                     },
+                    DefKind::Data => todo!(),
+                    DefKind::Variant => todo!(),
+                    DefKind::Ctor => todo!(),
                 };
                 bb.with(rvalue)
             },
