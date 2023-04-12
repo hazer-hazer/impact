@@ -317,7 +317,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     unreachable!()
                 },
                 TyKind::Kind(_) => todo!(),
-                TyKind::Data(def_id, variants) => todo!(),
+                TyKind::Adt(adt) => todo!(),
             },
             ConstKind::ZeroSized => match const_.ty.kind() {
                 TyKind::Unit => self.ctx.unit_value(),
@@ -332,7 +332,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     unreachable!()
                 },
                 TyKind::Kind(_) => todo!(),
-                TyKind::Data(def_id, variants) => todo!(),
+                TyKind::Adt(adt) => todo!(),
             },
             ConstKind::Slice { data } => self.build_cstring_value(data),
         }

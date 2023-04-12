@@ -8,18 +8,16 @@ use crate::{
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
-        ErrorNode, IsBlockEnded, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
+        ErrorNode, IdentNode, IsBlockEnded, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
     },
-    cli::{
-        color::{Color, Colorize},
-    },
+    cli::color::{Color, Colorize},
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
     span::span::{Ident, Kw, Span, WithSpan},
 };
 
-use super::token::{Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
+use super::token::{IdentIntoTokenErr, Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
 
 macro_rules! pr_call {
     ($error: expr, $pr: expr, $method: ident $(,$args: expr)*) => {
@@ -389,15 +387,36 @@ impl Parser {
     }
 
     fn parse_ident(&mut self, expected: &str) -> PR<Ident> {
-        let skip = self.skip(TokenCmp::Ident).map(|tok| Ident::from_token(tok));
+        let skip = self
+            .skip(TokenCmp::Ident)
+            .map(|tok| Ident::try_from(tok).unwrap());
         self.expected(skip, expected)
     }
 
     fn parse_ident_decl_name(&mut self, expected: &str) -> PR<Ident> {
         let skip = self
             .skip_any(&[TokenCmp::DeclName])
-            .map(|tok| Ident::from_token(tok));
+            .map(|tok| Ident::try_from(tok).unwrap());
         self.expected(skip, expected)
+    }
+
+    fn parse_field_name(&mut self) -> PR<Ident> {
+        let name = self.skip_any(&[TokenCmp::Ident, TokenCmp::Int]);
+        let name = self.expected(name, "Field name")?;
+
+        Ident::try_from(name).map_err(|err| match err {
+            IdentIntoTokenErr::IntWithKind => {
+                MessageBuilder::error()
+                    .span(name.span())
+                    .text(format!(
+                        "Specifically typed int literal `{}` cannot be used as field name",
+                        name
+                    ))
+                    .emit_single_label(self);
+                ErrorNode::new(name.span())
+            },
+            IdentIntoTokenErr::Unreachable => unreachable!(),
+        })
     }
 
     // Statements //
@@ -766,7 +785,7 @@ impl Parser {
     fn parse_postfix(&mut self) -> Option<PR<N<Expr>>> {
         let lo = self.span();
 
-        let lhs = self.parse_primary();
+        let lhs = self.parse_member_access();
 
         if let Some(mut lhs) = lhs {
             // FIXME: Ok precedence?
@@ -780,12 +799,12 @@ impl Parser {
                 ))));
             }
 
-            if let Some(arg) = self.parse_primary() {
+            if let Some(arg) = self.parse_member_access() {
                 self.mark_late_check("function call");
 
                 let mut args = vec![arg];
 
-                while let Some(arg) = self.parse_primary() {
+                while let Some(arg) = self.parse_member_access() {
                     args.push(arg);
                 }
 
@@ -805,6 +824,32 @@ impl Parser {
         // while let Some(expr) = self.parse_primary() {
         //     args.push(expr);
         // }
+    }
+
+    fn parse_member_access(&mut self) -> Option<PR<N<Expr>>> {
+        let lo = self.span();
+
+        let lhs = self.parse_primary();
+
+        if let Some(mut lhs) = lhs {
+            while self.skip(TokenCmp::Punct(Punct::Dot)).is_some() {
+                let pe = self.enter_entity(ParseEntryKind::ExpectToken, "member access");
+                let field = self.parse_ident("field name");
+                lhs = Ok(Box::new(Expr::new(
+                    self.next_node_id(),
+                    ExprKind::DotOp(
+                        lhs,
+                        field.map(|ident| IdentNode::new(self.next_node_id(), ident)),
+                    ),
+                    self.close_span(lo),
+                )));
+                self.exit_entity(pe, &lhs);
+            }
+
+            Some(lhs)
+        } else {
+            lhs
+        }
     }
 
     fn parse_primary(&mut self) -> Option<PR<N<Expr>>> {
@@ -836,11 +881,10 @@ impl Parser {
             (Some(Ok(ExprKind::Paren(expr))), false)
         } else {
             match kind {
-                TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val)))), true),
+                TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val.into())))), true),
                 TokenKind::Int(val, kind) => (Some(Ok(ExprKind::Lit(Lit::Int(val, kind)))), true),
                 TokenKind::String(sym) => (Some(Ok(ExprKind::Lit(Lit::String(sym)))), true),
 
-                // FIXME: Add TokenCmp::PathFirst
                 tok if tok == TokenCmp::DeclName => (
                     Some(Ok(ExprKind::Path(PathExpr(
                         self.parse_path("[BUG] First identifier in path expression"),
@@ -878,7 +922,9 @@ impl Parser {
 
         // If no first identifier present then it's "expected path" error, not "expected identifier"
         let mut segments = vec![self.parse_path_seg()];
-        while self.skip(TokenCmp::Punct(Punct::Dot)).is_some() {
+        while segments.last().unwrap().is_from_ty_ns()
+            && self.skip(TokenCmp::Punct(Punct::Dot)).is_some()
+        {
             segments.push(self.parse_path_seg());
         }
 

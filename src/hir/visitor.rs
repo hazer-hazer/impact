@@ -2,7 +2,7 @@ use crate::{resolve::builtin::Builtin, span::span::Ident};
 
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode},
+    item::{Adt, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode},
     pat::{Pat, PatKind},
     stmt::{Local, Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -53,7 +53,7 @@ pub trait HirVisitor {
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
             ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(body) => self.visit_func_item(item.name(), body, id, hir),
-            ItemKind::Data(data) => self.visit_data_item(item.name(), data, id, hir),
+            ItemKind::Adt(data) => self.visit_data_item(item.name(), data, id, hir),
             ItemKind::ExternItem(extern_item) => {
                 self.visit_extern_item(item.name(), extern_item, id, hir)
             },
@@ -80,7 +80,7 @@ pub trait HirVisitor {
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_data_item(&mut self, name: Ident, data: &Data, _id: ItemId, hir: &HIR) {
+    fn visit_data_item(&mut self, name: Ident, data: &Adt, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
         walk_each!(self, data.variants, visit_variant, hir);
     }
@@ -133,6 +133,7 @@ pub trait HirVisitor {
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
+            ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
             ExprKind::BuiltinExpr(bt) => self.visit_builtin_expr(bt),
         }
     }
@@ -163,6 +164,11 @@ pub trait HirVisitor {
     fn visit_type_expr(&mut self, ty_expr: &TyExpr, hir: &HIR) {
         self.visit_expr(&ty_expr.expr, hir);
         self.visit_ty(&ty_expr.ty, hir);
+    }
+
+    fn visit_field_access_expr(&mut self, lhs: &Expr, field: &Ident, hir: &HIR) {
+        self.visit_expr(lhs, hir);
+        self.visit_ident(field, hir);
     }
 
     fn visit_builtin_expr(&mut self, _bt: &Builtin) {}

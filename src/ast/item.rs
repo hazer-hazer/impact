@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::span::span::{impl_with_span, Ident, Span, WithSpan};
+use crate::span::span::{impl_with_span, Ident, Internable, Span, WithSpan};
 
 use super::{
     expr::Expr, is_block_ended, pat::Pat, pr_display, prs_display_join, ty::Ty, IsBlockEnded,
@@ -100,12 +100,26 @@ impl Display for ExternItem {
 #[derive(Debug)]
 pub struct Field {
     pub id: NodeId,
+    pub index: usize,
     pub name: Option<PR<Ident>>,
     pub ty: PR<Ty>,
     span: Span,
 }
 
 impl_with_span!(Field);
+
+impl Field {
+    /// Get accessor function name.
+    /// For named field it is its name.
+    /// For unnamed field name is its index.
+    /// Note: Panics on error node
+    pub fn accessor_name(&self) -> Ident {
+        self.name
+            .as_ref()
+            .map(|name| name.clone().unwrap())
+            .unwrap_or_else(|| Ident::new(self.span(), self.index.to_string().intern()))
+    }
+}
 
 impl Display for Field {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

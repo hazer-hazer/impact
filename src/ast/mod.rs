@@ -180,6 +180,30 @@ impl WithNodeId for ErrorNode {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct IdentNode {
+    pub id: NodeId,
+    pub ident: Ident,
+}
+
+impl IdentNode {
+    pub fn new(id: NodeId, ident: Ident) -> Self {
+        Self { id, ident }
+    }
+}
+
+impl WithNodeId for IdentNode {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
+impl Display for IdentNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.ident.fmt(f)
+    }
+}
+
 /// Give some pretty name for node-like structure in errors 😺
 pub trait NodeKindStr {
     fn kind_str(&self) -> String;
@@ -209,6 +233,10 @@ impl PathSeg {
         self.name
             .as_ref()
             .expect("Error PathSeg::name in `PathSeg::expect_name`")
+    }
+
+    pub fn is_from_ty_ns(&self) -> bool {
+        self.name.as_ref().map_or(false, |name| name.is_ty())
     }
 }
 
@@ -458,6 +486,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
+            ExprKind::DotOp(expr, field) => self.visit_dot_op_expr(expr, field),
         }
     }
 

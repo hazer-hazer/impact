@@ -1,34 +1,12 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
-use crate::{span::span::{impl_with_span, Kw, Span, SpanLen, Symbol, WithSpan}, dt::maps::enum_str_map};
+use crate::{
+    dt::maps::enum_str_map,
+    span::span::{impl_with_span, Ident, Internable, Kw, Span, SpanLen, Symbol, WithSpan},
+};
 
 use super::lexer::LexerCharCheck;
-
-// #[derive(PartialEq, Debug, Clone, Copy)]
-// pub enum Infix {
-//     Plus,
-//     Minus,
-//     Mul,
-//     Div,
-//     Mod,
-// }
-
-// impl Display for Infix {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(
-//             f,
-//             "{}",
-//             match self {
-//                 Infix::Plus => "+",
-//                 Infix::Minus => "-",
-//                 Infix::Mul => "*",
-//                 Infix::Div => "/",
-//                 Infix::Mod => "%",
-//             }
-//         )
-//     }
-// }
 
 enum_str_map! {
     #[derive(PartialEq, Debug, Clone, Copy)]
@@ -117,6 +95,23 @@ impl Display for FloatKind {
     }
 }
 
+enum_str_map! {
+    #[derive(Clone, Copy, PartialEq, Debug)]
+    pub Bool {
+        True: "true",
+        False: "false",
+    }
+}
+
+impl Into<bool> for Bool {
+    fn into(self) -> bool {
+        match self {
+            Bool::True => true,
+            Bool::False => false,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TokenKind {
     Eof,
@@ -124,7 +119,7 @@ pub enum TokenKind {
     BlockStart,
     BlockEnd,
 
-    Bool(bool),
+    Bool(Bool),
     Int(u64, IntKind),
     Float(f64, FloatKind),
     String(Symbol),
@@ -146,6 +141,41 @@ pub enum TokenKind {
     Error(Symbol),
 }
 
+impl Into<TokenKind> for Bool {
+    fn into(self) -> TokenKind {
+        TokenKind::Bool(self)
+    }
+}
+
+impl Into<TokenKind> for Kw {
+    fn into(self) -> TokenKind {
+        TokenKind::Kw(self)
+    }
+}
+
+#[derive(Debug)]
+pub enum IdentIntoTokenErr {
+    IntWithKind,
+    Unreachable,
+}
+
+impl TryFrom<Token> for Ident {
+    type Error = IdentIntoTokenErr;
+
+    fn try_from(tok: Token) -> Result<Ident, Self::Error> {
+        Ok(Ident::new(
+            tok.span,
+            match tok.kind {
+                TokenKind::Kw(Kw::Unit) => "()".intern(),
+                TokenKind::OpIdent(sym) | TokenKind::Ident(sym) => sym,
+                TokenKind::Int(val, kind) if kind == IntKind::Unknown => val.to_string().intern(),
+                TokenKind::Int(_, _) => return Err(IdentIntoTokenErr::IntWithKind),
+                _ => return Err(IdentIntoTokenErr::Unreachable),
+            },
+        ))
+    }
+}
+
 impl Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -158,7 +188,7 @@ impl Display for TokenKind {
                 write!(f, "{}", val)
             },
             TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),
-            TokenKind::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
+            &TokenKind::Bool(val) => write!(f, "{}", if val.into() { "true" } else { "false" }),
             TokenKind::Kw(kw) => write!(f, "{}", kw),
             TokenKind::BlockStart => write!(f, "{}", "[BLOCK START]"),
             TokenKind::BlockEnd => write!(f, "{}", "[BLOCK END]"),
@@ -184,17 +214,10 @@ pub enum ComplexSymbol {
 
 impl TokenKind {
     pub fn try_from_reserved_sym(sym: Symbol) -> Option<Self> {
-        match sym.as_str() {
-            "true" => Some(TokenKind::Bool(true)),
-            "false" => Some(TokenKind::Bool(false)),
-            "let" => Some(TokenKind::Kw(Kw::Let)),
-            "in" => Some(TokenKind::Kw(Kw::In)),
-            "mod" => Some(TokenKind::Kw(Kw::Mod)),
-            "type" => Some(TokenKind::Kw(Kw::Type)),
-            "extern" => Some(TokenKind::Kw(Kw::Extern)),
-            "_" => Some(TokenKind::Kw(Kw::Underscore)),
-            _ => None,
-        }
+        Kw::try_from(sym.as_str())
+            .map(Into::into)
+            .or_else(|str| Bool::try_from(str).map(Into::into))
+            .ok()
     }
 
     pub fn try_from_chars(char1: char, char2: Option<char>) -> ComplexSymbol {
@@ -246,6 +269,7 @@ pub enum TokenCmp {
     Ident,
     OpIdent,
     DeclName,
+    // PathFirst,
     Op(Op),
     InfixOp,
     Kw(Kw),
@@ -268,6 +292,7 @@ impl Display for TokenCmp {
                 TokenCmp::Ident => "ident".to_string(),
                 TokenCmp::OpIdent => "operator ident".to_string(),
                 TokenCmp::DeclName => "declaration name".to_string(),
+                // TokenCmp::PathFirst => "path first segment".to_string(),
                 TokenCmp::Op(op) => format!("operator `{}`", op),
                 TokenCmp::InfixOp => "some infix operator".to_string(),
                 TokenCmp::Kw(kw) => format!("{} keyword", kw),
@@ -277,6 +302,12 @@ impl Display for TokenCmp {
                 TokenCmp::Error => "[ERROR]".to_string(),
             }
         )
+    }
+}
+
+impl std::cmp::PartialEq<TokenKind> for [TokenCmp] {
+    fn eq(&self, other: &TokenKind) -> bool {
+        self.iter().all(|cmp| cmp == other)
     }
 }
 
@@ -303,6 +334,7 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
                 TokenCmp::InfixOp,
             )
             | (TokenKind::Error(_), TokenCmp::Error) => true,
+            // (TokenKind::Ident(name), TokenCmp::PathFirst) if name.is_ty() => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,
             (TokenKind::Kw(kw1), TokenCmp::Kw(kw2)) => kw1 == kw2,
             (TokenKind::Op(op1), TokenCmp::Op(op2)) => op1 == op2,

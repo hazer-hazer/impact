@@ -7,7 +7,7 @@ use crate::{
         ty::{Ty, TyKind},
         visitor::walk_pr,
         visitor::AstVisitor,
-        ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
+        ErrorNode, IdentNode, NodeId, Path, WithNodeId, AST, N, PR,
     },
     parser::token::Punct,
     span::span::{Ident, Kw},
@@ -174,6 +174,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
+            ExprKind::DotOp(expr, field) => self.visit_dot_op_expr(expr, field),
         }
         self.node_id(expr);
     }
@@ -212,6 +213,12 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_pr!(self, &ty_expr.expr, visit_expr);
         self.punct(Punct::Colon);
         walk_pr!(self, &ty_expr.ty, visit_ty);
+    }
+
+    fn visit_dot_op_expr(&mut self, expr: &'ast PR<Box<Expr>>, field: &'ast PR<IdentNode>) {
+        walk_pr!(self, expr, visit_expr);
+        self.punct(Punct::Dot);
+        walk_pr!(self, field, visit_ident_node);
     }
 
     // Types //

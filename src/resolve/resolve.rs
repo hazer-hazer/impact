@@ -7,7 +7,7 @@ use crate::{
         pat::{Pat, PatKind},
         ty::TyPath,
         visitor::{walk_each_pr, walk_pr, AstVisitor},
-        ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST, N, PR,
+        ErrorNode, IdentNode, NodeId, NodeMap, Path, WithNodeId, AST, N, PR,
     },
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
@@ -142,6 +142,7 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::Data
             | DefKind::Variant
             | DefKind::Ctor
+            | DefKind::FieldAccessor
             | DefKind::Value => {
                 assert_eq!(def.kind().namespace(), target_ns);
                 return Res::def(def_id);
@@ -224,7 +225,8 @@ impl<'ast> NameResolver<'ast> {
                 let def = self.sess.def_table.get_def(def_id);
                 match def.kind {
                     DefKind::Data => todo!(),
-                    DefKind::Mod => Some(ModuleId::Def(def_id)),
+                    // TODO: Review Variant as module
+                    DefKind::Variant | DefKind::Mod => Some(ModuleId::Def(def_id)),
                     DefKind::TyAlias => {
                         MessageBuilder::error()
                             .span(path.span())
@@ -234,8 +236,8 @@ impl<'ast> NameResolver<'ast> {
                     },
                     // FIXME: Really unreachable?
                     DefKind::Root
-                    | DefKind::Variant
                     | DefKind::Ctor
+                    | DefKind::FieldAccessor
                     | DefKind::Func
                     | DefKind::Value
                     | DefKind::Lambda
@@ -255,6 +257,10 @@ impl<'ast> NameResolver<'ast> {
         } else {
             self.resolve_path_absolute(target_ns, path)
         }
+    }
+
+    fn resolve_member(&mut self, field: &Ident) -> Res {
+        self.resolve_relative(Namespace::Value, field)
     }
 
     /// Relatively find definition of first segment then go by modules rest segments point to
@@ -407,6 +413,13 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         let res = self.resolve_path(Namespace::Type, path);
 
         self.sess.res.set(NamePath::new(path.id()), res);
+    }
+
+    fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast PR<IdentNode>) {
+        walk_pr!(self, lhs, visit_expr);
+        let field = field.as_ref().unwrap();
+        let res = self.resolve_member(&field.ident);
+        self.sess.res.set(NamePath::new(field.id()), res);
     }
 
     fn visit_path(&mut self, _: &'ast Path) {

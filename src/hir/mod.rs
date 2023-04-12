@@ -432,6 +432,7 @@ impl HIR {
             | ExprKind::Lambda(_)
             | ExprKind::Call(_)
             | ExprKind::BuiltinExpr(_)
+            | ExprKind::FieldAccess(_, _)
             | ExprKind::Ty(_) => expr.span(),
             &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
         }

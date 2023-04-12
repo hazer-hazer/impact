@@ -53,7 +53,11 @@ impl<'a> ThirPrinter<'a> {
                 self.pp.str("ref ");
                 self.expr(expr);
             },
-            ExprKind::Call { func_ty: _, lhs, args } => {
+            ExprKind::Call {
+                func_ty: _,
+                lhs,
+                args,
+            } => {
                 self.expr(*lhs);
                 self.pp.str("(");
                 args.iter().copied().for_each(|arg| self.expr(arg));
@@ -70,6 +74,10 @@ impl<'a> ThirPrinter<'a> {
             ExprKind::Builtin(bt) => {
                 self.pp.string(bt);
             },
+            &ExprKind::FieldAccess(lhs, field, _) => {
+                self.expr(lhs);
+                self.pp.string(format!(".{field}"));
+            },
         }
     }
 
@@ -78,7 +86,11 @@ impl<'a> ThirPrinter<'a> {
             PatKind::Unit => {
                 self.pp.str("()");
             },
-            PatKind::Ident { name, var: _, ty: _ } => {
+            PatKind::Ident {
+                name,
+                var: _,
+                ty: _,
+            } => {
                 self.pp.string(name);
             },
         }

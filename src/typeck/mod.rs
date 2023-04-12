@@ -16,16 +16,15 @@ use crate::{
         def::{DefId, DefKind},
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, WithSpan},
-    typeck::ty::Subst,
+    span::span::{Ident, Internable, WithSpan},
 };
 
 use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
     kind::{Kind, KindEx, KindExId, KindSort},
     ty::{
-        ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty, TyKind,
-        TyVarId, Variant, VariantId,
+        Adt, ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty,
+        TyKind, TyVarId, Variant, VariantId,
     },
     tyctx::TyCtx,
 };
@@ -368,14 +367,6 @@ impl<'hir> Typecker<'hir> {
         sol
     }
 
-    fn add_func_param_sol(&mut self, ex: Existential, sol: MonoTy) -> Ty {
-        let sol = sol.ty;
-        verbose!("Add {} func param solution {}", ex, sol);
-        self._ascend_ctx_mut(|ctx| ctx.add_func_param_sol(ex, sol))
-            .map_or_else(|| todo!("Global ctx func param exes"), |(ty, _)| Some(ty))
-            .unwrap()
-    }
-
     fn type_term(&mut self, name: Ident, ty: Ty) {
         verbose!("Type term {}: {}", name, ty);
         self.ctx_mut().type_term(name, ty)
@@ -437,12 +428,9 @@ impl<'hir> Typecker<'hir> {
                 })?;
                 self.ty_wf(*body)
             },
-            TyKind::Data(def_id, variants) => {
-                variants.iter().try_for_each(|v| {
-                    v.fields.iter().try_for_each(|f| {
-                        self.ty_wf(f.ty)?;
-                        Ok(())
-                    })?;
+            TyKind::Adt(adt) => {
+                adt.walk_tys().try_for_each(|ty| {
+                    self.ty_wf(ty)?;
                     Ok(())
                 })?;
                 Ok(ty)
@@ -456,7 +444,6 @@ impl<'hir> Typecker<'hir> {
                 &KindSort::Ty(ty) => self.ty_wf(ty),
                 _ => Ok(Ty::ty_kind(self.kind_wf(kind)?)),
             },
-            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 
@@ -484,7 +471,7 @@ impl<'hir> Typecker<'hir> {
     /// Substitute all occurrences of universally quantified type inside it body
     pub fn open_forall(&mut self, ty: Ty, _subst: Ty) -> Ty {
         match ty.kind() {
-            &TyKind::Forall(alpha, body) => ty.substitute(Subst::Var(alpha), body),
+            &TyKind::Forall(alpha, body) => ty.substitute(alpha, body),
             _ => unreachable!(),
         }
     }
@@ -578,10 +565,10 @@ impl<'hir> Typecker<'hir> {
                         self.conv_ty_alias(def_id)
                     },
 
-                    DefKind::Data => self.conv_data_ty(def_id),
+                    DefKind::Data => self.conv_adt(def_id),
 
                     DefKind::Variant => {
-                        self.conv_data_ty(self.hir.variant(def_id.into()).id().owner().into())
+                        self.conv_adt(self.hir.variant(def_id.into()).id().owner().into())
                     },
 
                     // Non-type definitions from type namespace
@@ -599,6 +586,7 @@ impl<'hir> Typecker<'hir> {
                     // Definitions from value namespace
                     DefKind::External
                     | DefKind::Ctor
+                    | DefKind::FieldAccessor
                     | DefKind::Local
                     | DefKind::Lambda
                     | DefKind::Func
@@ -625,10 +613,10 @@ impl<'hir> Typecker<'hir> {
         ty
     }
 
-    fn conv_data_ty(&mut self, def_id: DefId) -> Ty {
-        let data = self.hir.item(ItemId::new(def_id.into())).data();
-        let variants = data.variants.iter().map(|v| self.conv_variant(v)).collect();
-        Ty::data(def_id, variants)
+    fn conv_adt(&mut self, def_id: DefId) -> Ty {
+        let adt = self.hir.item(ItemId::new(def_id.into())).adt();
+        let variants = adt.variants.iter().map(|v| self.conv_variant(v)).collect();
+        Ty::adt(Adt { def_id, variants })
     }
 
     fn conv_variant(&mut self, &variant: &hir::item::Variant) -> Variant {
@@ -639,14 +627,17 @@ impl<'hir> Typecker<'hir> {
             fields: variant
                 .fields
                 .iter()
-                .map(|field| self.conv_field(field))
+                .enumerate()
+                .map(|(index, field)| self.conv_field(index, field))
                 .collect(),
         }
     }
 
-    fn conv_field(&mut self, field: &hir::item::Field) -> Field {
+    fn conv_field(&mut self, index: usize, field: &hir::item::Field) -> Field {
         Field {
-            name: field.name,
+            name: field
+                .name
+                .unwrap_or_else(|| Ident::new(field.span(), index.to_string().intern())),
             ty: self.conv(field.ty),
         }
     }

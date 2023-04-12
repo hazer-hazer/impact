@@ -4,7 +4,7 @@ use crate::{
     dt::maps::enum_str_map,
     parser::{
         lexer::LexerCharCheck,
-        token::{Token, TokenKind},
+        token::{IntKind, Token, TokenKind},
     },
     session::{SourceId, DUMMY_SOURCE_ID},
 };
@@ -65,12 +65,7 @@ impl Symbol {
         self.0 as usize
     }
 
-    pub fn is_op(&self) -> bool {
-        let str = self.as_str();
-        !str.is_empty() && str.chars().all(|ch| ch.is_custom_op())
-    }
-
-    pub fn looks_like(&self) -> String {
+    pub fn original_string(&self) -> String {
         if self.is_op() {
             format!("({})", self)
         } else {
@@ -83,6 +78,34 @@ impl Symbol {
         self.as_str()
             .chars()
             .all(|ch| ch == '_' || ch.is_alphanumeric())
+    }
+
+    pub fn kind(&self) -> Option<IdentKind> {
+        match self.as_str().chars().nth(0) {
+            Some(first) if first.is_uppercase() => Some(IdentKind::Ty),
+            Some(first) if first.is_lowercase() => Some(IdentKind::Var),
+            Some(first) if first.is_custom_op() => Some(IdentKind::Op),
+            _ => None,
+        }
+    }
+
+    pub fn is_var(&self) -> bool {
+        match self.kind() {
+            Some(IdentKind::Var) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_ty(&self) -> bool {
+        match self.kind() {
+            Some(IdentKind::Ty) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_op(&self) -> bool {
+        let str = self.as_str();
+        !str.is_empty() && str.chars().all(|ch| ch.is_custom_op())
     }
 }
 
@@ -309,17 +332,6 @@ impl Ident {
         Self { span, sym }
     }
 
-    pub fn from_token(tok: Token) -> Self {
-        Ident {
-            span: tok.span,
-            sym: match tok.kind {
-                TokenKind::Kw(Kw::Unit) => "()".intern(),
-                TokenKind::OpIdent(sym) | TokenKind::Ident(sym) => sym,
-                _ => unreachable!(),
-            },
-        }
-    }
-
     pub fn synthetic(sym: Symbol) -> Self {
         Self {
             span: Span::new_error(),
@@ -347,41 +359,23 @@ impl Ident {
     }
 
     pub fn kind(&self) -> Option<IdentKind> {
-        match self.sym().to_string().chars().nth(0) {
-            Some(first) if first.is_uppercase() => Some(IdentKind::Ty),
-            Some(first) if first.is_lowercase() => Some(IdentKind::Var),
-            Some(first) if first.is_custom_op() => Some(IdentKind::Op),
-            _ => None,
-        }
+        self.sym().kind()
     }
 
     pub fn is_var(&self) -> bool {
-        match self.kind() {
-            Some(IdentKind::Var) => true,
-            _ => false,
-        }
+        self.sym().is_var()
     }
 
     pub fn is_ty(&self) -> bool {
-        match self.kind() {
-            Some(IdentKind::Ty) => true,
-            _ => false,
-        }
+        self.sym().is_ty()
     }
 
     pub fn is_op(&self) -> bool {
-        match self.kind() {
-            Some(IdentKind::Op) => true,
-            _ => false,
-        }
+        self.sym().is_op()
     }
 
     pub fn original_string(&self) -> String {
-        if self.is_op() {
-            format!("({})", self)
-        } else {
-            self.to_string()
-        }
+        self.sym().original_string()
     }
 }
 

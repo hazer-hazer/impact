@@ -2,7 +2,7 @@ use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{
-            Data, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode,
+            Adt, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode,
             ROOT_ITEM_ID,
         },
         pat::{Pat, PatKind},
@@ -140,7 +140,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_data_item(&mut self, name: Ident, data: &Data, id: ItemId, hir: &HIR) {
+    fn visit_data_item(&mut self, name: Ident, data: &Adt, id: ItemId, hir: &HIR) {
         self.pp.string(name.original_string());
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
@@ -191,6 +191,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
+            ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
             ExprKind::BuiltinExpr(bt) => self.visit_builtin_expr(bt),
         }
         self.pp.ty_anno(expr_id);
@@ -224,6 +225,12 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_expr(&ty_expr.expr, hir);
         self.pp.punct(Punct::Colon);
         self.visit_ty(&ty_expr.ty, hir);
+    }
+
+    fn visit_field_access_expr(&mut self, lhs: &Expr, field: &Ident, hir: &HIR) {
+        self.visit_expr(lhs, hir);
+        self.pp.punct(Punct::Dot);
+        self.visit_ident(field, hir);
     }
 
     fn visit_builtin_expr(&mut self, bt: &Builtin) {

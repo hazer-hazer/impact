@@ -22,10 +22,10 @@ macro_rules! enum_str_map {
         }
 
         impl<'a> TryFrom<&'a str> for $name {
-            type Error = ();
+            type Error = &'a str;
 
             fn try_from(val: &'a str) -> Result<Self, Self::Error> {
-                Self::try_from_str(val).ok_or(())
+                Self::try_from_str(val).ok_or(val)
             }
         }
 

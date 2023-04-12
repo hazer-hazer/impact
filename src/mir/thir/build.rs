@@ -2,7 +2,7 @@ use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
     resolve::{builtin::Builtin, def::DefKind},
     span::span::WithSpan,
-    typeck::tyctx::TyCtx,
+    typeck::{ty::VariantId, tyctx::TyCtx},
 };
 
 use super::{
@@ -75,6 +75,7 @@ impl<'ctx> ThirBuilder<'ctx> {
                     },
                     DefKind::Local => unreachable!("Locals must be resolved as Res::Local"),
                     DefKind::Ctor => todo!(),
+                    DefKind::FieldAccessor => todo!(),
                 },
                 &hir::Res::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
                 hir::Res::Builtin(_) | hir::Res::DeclareBuiltin | hir::Res::Error => unreachable!(),
@@ -91,6 +92,14 @@ impl<'ctx> ThirBuilder<'ctx> {
             &hir::expr::ExprKind::Let(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Ty(hir::expr::TyExpr { expr, ty: _ }) => {
                 ExprKind::Ty(self.expr(expr), self.tyctx.tyof(expr_id))
+            },
+            &hir::expr::ExprKind::FieldAccess(lhs, _) => {
+                // TODO: Maybe add field name?
+                ExprKind::FieldAccess(
+                    self.expr(lhs),
+                    self.tyctx.field_index(expr_id).unwrap(),
+                    VariantId::new(0),
+                )
             },
             &hir::expr::ExprKind::BuiltinExpr(bt) => ExprKind::Builtin(bt),
         };

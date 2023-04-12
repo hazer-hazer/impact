@@ -63,6 +63,10 @@ impl<'ctx> MirBuilder<'ctx> {
         let expr = self.thir.expr(expr_id);
         match &expr.kind {
             &ExprKind::LocalRef(var) => bb.with(self.resolve_local_var(var).lvalue()),
+            &ExprKind::FieldAccess(expr, field, variant_id) => {
+                let lhs = unpack!(bb = self.as_lvalue(bb, expr));
+                todo!()
+            },
             ExprKind::Lit(_)
             | ExprKind::Block(_)
             | ExprKind::Call { .. }
@@ -85,7 +89,7 @@ impl<'ctx> MirBuilder<'ctx> {
             // FIXME: We need to gen cast from ascription?
             &ExprKind::Ty(expr_id, _) => self.as_rvalue(bb, expr_id),
 
-            ExprKind::Block(_) | ExprKind::LocalRef(_) => {
+            ExprKind::FieldAccess(_, _, _) | ExprKind::Block(_) | ExprKind::LocalRef(_) => {
                 assert!(!matches!(
                     expr.categorize(),
                     ExprCategory::AsRValue | ExprCategory::Const
@@ -148,6 +152,7 @@ impl<'ctx> MirBuilder<'ctx> {
                     DefKind::Data => todo!(),
                     DefKind::Variant => todo!(),
                     DefKind::Ctor => todo!(),
+                    DefKind::FieldAccessor => todo!(),
                 };
                 bb.with(rvalue)
             },
@@ -237,6 +242,7 @@ impl<'ctx> MirBuilder<'ctx> {
             ExprKind::Lit(_)
             | ExprKind::Def(_, _)
             | ExprKind::Lambda { .. }
+            | ExprKind::FieldAccess(_, _, _)
             | ExprKind::Builtin(_) => {
                 assert!(!matches!(
                     expr.categorize(),

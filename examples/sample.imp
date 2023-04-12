@@ -16,10 +16,8 @@ extern
 foo () = puts "lol"
 
 main () =
-    foo ()
-
     str = "asd"
 
-    puts str
+    a = ().foo
 
     ()

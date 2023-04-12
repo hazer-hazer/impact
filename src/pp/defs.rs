@@ -47,7 +47,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
         for ns in module.namespaces().iter() {
             for (sym, def_id) in ns {
                 self.out_indent();
-                self.string(sym.looks_like());
+                self.string(sym.original_string());
                 self.string(def_id);
                 self.punct(Punct::Colon);
 
@@ -56,7 +56,8 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                 self.string(def.kind());
 
                 match def.kind() {
-                    DefKind::Data | DefKind::Root | DefKind::Mod => {
+                    // TODO: Review Variant as module
+                    DefKind::Variant | DefKind::Data | DefKind::Root | DefKind::Mod => {
                         self.nl();
                         self.indent();
                         self.pp_mod(ModuleId::Def(def.def_id()));
@@ -69,7 +70,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                     | DefKind::Local
                     | DefKind::External
                     | DefKind::Ctor
-                    | DefKind::Variant
+                    | DefKind::FieldAccessor
                     | DefKind::Func => {
                         self.nl();
                     },

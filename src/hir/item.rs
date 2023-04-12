@@ -66,7 +66,7 @@ impl WithHirId for VariantNode {
 impl_with_span!(VariantNode);
 
 #[derive(Debug)]
-pub struct Data {
+pub struct Adt {
     pub variants: Vec<Variant>,
 }
 
@@ -81,7 +81,7 @@ pub enum ItemKind {
     Mod(Mod),
     Value(BodyId),
     Func(BodyId),
-    Data(Data),
+    Adt(Adt),
     ExternItem(ExternItem),
 }
 
@@ -143,6 +143,6 @@ specific_item_nodes!(
     Mod mod_ Mod;
     Value value BodyId;
     Func func BodyId;
-    Data data Data;
+    Adt adt Adt;
     ExternItem extern_item ExternItem;
 );

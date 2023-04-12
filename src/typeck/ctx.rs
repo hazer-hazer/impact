@@ -133,9 +133,6 @@ pub struct InferCtx {
     //  We need to enter new "try to"-context under which we do not violate upper context.
     solved: IndexVec<ExistentialId, Option<Ty>>,
 
-    // FIXME: Unused?
-    func_param_solutions: IndexVec<ExistentialId, Option<Vec<Ty>>>,
-
     /// Type variables defined in current context. Do not leak to global context.
     /// Actually only used for well-formedness checks.
     vars: Vec<TyVarId>,
@@ -310,29 +307,6 @@ impl InferCtx {
     pub fn solve_kind_ex(&mut self, ex: KindEx, sol: Kind) {
         // TODO: Can existentials out of context be solved here?
         assert!(self.kind_exes_sol.insert(ex.id(), sol).is_none());
-    }
-
-    pub fn add_func_param_sol(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
-        if self.has_ex(ex) {
-            // FIXME: Can function parameter existential be other than Common?
-            match ex.kind() {
-                ExKind::Common => {},
-                _ => panic!(),
-            }
-
-            if !self.func_param_solutions.has(ex.id()) {
-                self.func_param_solutions.insert(ex.id(), vec![]);
-            } else {
-                // FIXME: Should we panic?
-                assert!(!self.func_param_solutions.get_unwrap(ex.id()).contains(&sol));
-            }
-
-            self.func_param_solutions.get_mut_unwrap(ex.id()).push(sol);
-
-            Some(sol)
-        } else {
-            None
-        }
     }
 
     // Getters //

@@ -11,11 +11,11 @@ use crate::{
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
     span::span::{Ident, Spanned, WithSpan},
-    typeck::{kind::Kind, ty::Subst},
+    typeck::kind::Kind,
 };
 
 use super::{
-    ty::{Ty, TyKind},
+    ty::{Ty, TyKind, VariantId},
     TyResult, TypeckErr, Typed,
 };
 
@@ -73,15 +73,7 @@ impl<'hir> Typecker<'hir> {
                 self.type_term(item.name(), ty);
                 ty
             },
-            ItemKind::Data(_) => todo!(),
-            // ItemKind::ExternBlock(items) => {
-            //     items.iter().for_each(|item| {
-            //         let ty = self.conv(item.ty);
-            //         self.type_term(item.name, ty);
-            //         self.tyctx_mut().type_node(item.id, ty)
-            //     });
-            //     Ty::unit()
-            // },
+            ItemKind::Adt(_) => self.conv_adt(item.def_id()),
         };
 
         let ty = ty.apply_ctx(self.ctx());
@@ -126,6 +118,7 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Call(call) => self.synth_call(&call, expr_id),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
+            &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field, expr_id),
             &ExprKind::BuiltinExpr(bt) => {
                 assert!(bt.is_value());
                 Ok(self.tyctx().builtin(bt))
@@ -169,14 +162,58 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
+    fn synth_field_access_expr(
+        &mut self,
+        lhs: Expr,
+        field_name: Ident,
+        expr_id: Expr,
+    ) -> TyResult<Ty> {
+        let lhs_ty = self.synth_expr(lhs)?;
+
+        // FIXME: Really bug if not data?
+        let adt = lhs_ty.as_data().unwrap();
+        let variants = &adt.variants;
+
+        assert!(!variants.is_empty());
+
+        if variants.len() > 1 {
+            // TODO: Better message
+            MessageBuilder::error()
+                .span(field_name.span())
+                .text("Cannot get field from enum".to_string())
+                .emit_single_label(self);
+        }
+
+        let variant_id = VariantId::new(0);
+        let variant = &variants[variant_id];
+        let field = variant
+            .fields
+            .iter_enumerated()
+            .find(|(_, field)| field.name == field_name);
+
+        if let Some(field) = field {
+            self.tyctx_mut().set_field_index(expr_id, field.0);
+            Ok(field.1.ty)
+        } else {
+            MessageBuilder::error()
+                .span(self.hir.expr(expr_id).span())
+                .text(format!(
+                    "Data type {} does not have field {}",
+                    self.tyctx().ty_name(lhs_ty).unwrap(),
+                    field_name
+                ))
+                .emit_single_label(self);
+            Err(TypeckErr::Reported)
+        }
+    }
+
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
         let block = self.hir.block(block);
 
         self.under_new_ctx(|this| {
-            block.stmts().iter().try_for_each(|&stmt| {
-                this.synth_stmt(stmt)?;
-                Ok(())
-            })?;
+            block.stmts().iter().for_each(|&stmt| {
+                let _ignore_stmt_typeck_err = this.synth_stmt(stmt);
+            });
 
             let res_ty = block
                 .expr()
@@ -382,18 +419,6 @@ impl<'hir> Typecker<'hir> {
                 })
             },
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
-                // TODO?: Let arguments go first
-                // if let Some(param_ex) = param.as_ex() {
-                //     todo!();
-                //     let arg = self.synth_expr(arg)?;
-                //     self.add_func_param_sol(param_ex, arg);
-                // } else {
-                //     self.check_discard_err(arg, param);
-                // }
-                // self.check(arg, param)?;
-
-                // FIXME: Multiple args
-
                 args.iter()
                     .copied()
                     .zip(params.iter().copied())
@@ -406,7 +431,7 @@ impl<'hir> Typecker<'hir> {
             },
             &TyKind::Forall(alpha, ty) => {
                 let alpha_ex = self.add_fresh_common_ex();
-                let substituted_ty = ty.substitute(Subst::Var(alpha), alpha_ex.1);
+                let substituted_ty = ty.substitute(alpha, alpha_ex.1);
                 let body_ty = self._synth_call(
                     Spanned::new(span, Typed::new(lhs_expr, substituted_ty)),
                     args,

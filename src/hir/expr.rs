@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     resolve::{builtin::Builtin, def::DefId},
-    span::span::{Span, Symbol, WithSpan, impl_with_span},
+    span::span::{impl_with_span, Span, Symbol, WithSpan, Ident},
 };
 
 use super::{stmt::Stmt, ty::Ty, BodyId, HirId, Path, WithHirId};
@@ -152,6 +152,7 @@ pub enum ExprKind {
     Call(Call),
     Let(Block),
     Ty(TyExpr),
+    FieldAccess(Expr, Ident),
     BuiltinExpr(Builtin),
 }
 

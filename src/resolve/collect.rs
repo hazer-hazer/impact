@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Expr, ExprKind},
-        item::{ExternItem, Item, ItemKind, Variant},
+        item::{ExternItem, Field, Item, ItemKind, Variant},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
@@ -188,12 +188,20 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
     }
 
     fn visit_variant(&mut self, variant: &'ast Variant) {
-        self.define(variant.id, DefKind::Variant, variant.name.as_ref().unwrap());
+        let def_id = self.define(variant.id, DefKind::Variant, variant.name.as_ref().unwrap());
         self.define(
             variant.ctor_id,
             DefKind::Ctor,
             variant.name.as_ref().unwrap(),
         );
+
+        self.enter_def_module(def_id);
+        walk_each_pr!(self, &variant.fields, visit_field);
+        self.exit_module();
+    }
+
+    fn visit_field(&mut self, field: &'ast Field) {
+        self.define(field.id, DefKind::FieldAccessor, &field.accessor_name());
     }
 
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {
@@ -224,6 +232,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
                 );
                 self.visit_lambda_expr(lambda);
             },
+            ExprKind::DotOp(expr, field) => self.visit_dot_op_expr(expr, field),
         }
     }
 }

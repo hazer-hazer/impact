@@ -5,12 +5,13 @@ use crate::{
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
-        NodeId, NodeMap, Path, PathSeg, ReservedNodeId, WithNodeId, AST, N, PR, ROOT_NODE_ID,
+        IdentNode, NodeId, NodeMap, Path, PathSeg, ReservedNodeId, WithNodeId, AST, N, PR,
+        ROOT_NODE_ID,
     },
     cli::verbose,
     hir::{
         self,
-        item::{Data, ItemId, ItemNode, Mod, TyAlias},
+        item::{Adt, ItemId, ItemNode, Mod, TyAlias},
         stmt::Local,
         Body, BodyId, HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
         OWNER_SELF_CHILD_ID,
@@ -344,7 +345,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_data_item(&mut self, _: &PR<Ident>, variants: &[PR<Variant>]) -> hir::item::ItemKind {
-        hir::item::ItemKind::Data(Data {
+        hir::item::ItemKind::Adt(Adt {
             variants: lower_each_pr!(self, variants, lower_variant),
         })
     }
@@ -426,6 +427,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Call(call) => self.lower_call_expr(call),
             ExprKind::Let(block) => self.lower_let_expr(block),
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
+            ExprKind::DotOp(lhs, field) => self.lower_dot_op_expr(lhs, field),
         };
 
         let id = self.lower_node_id(expr.id());
@@ -580,6 +582,26 @@ impl<'ast> Lower<'ast> {
         })
     }
 
+    fn lower_dot_op_expr(
+        &mut self,
+        lhs: &PR<N<Expr>>,
+        field: &PR<IdentNode>,
+    ) -> hir::expr::ExprKind {
+        let lhs = lower_pr!(self, lhs, lower_expr);
+        let field = lower_pr!(self, field, lower_ident_node);
+        let field_node = self.get_current_owner_node(field).path();
+
+        if let Res::Def(DefKind::FieldAccessor, _) = field_node.res() {
+            assert!(field_node.segments().len() == 1);
+            hir::expr::ExprKind::FieldAccess(lhs, field_node.target_name())
+        } else {
+            hir::expr::ExprKind::Call(hir::expr::Call {
+                lhs: self.expr_path(field_node.span(), field),
+                args: vec![lhs],
+            })
+        }
+    }
+
     // Types //
     fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
         let kind = match ty.kind() {
@@ -664,6 +686,17 @@ impl<'ast> Lower<'ast> {
     // Fragments //
     fn lower_ident(&mut self, ident: &Ident) -> Ident {
         *ident
+    }
+
+    fn lower_ident_node(&mut self, ident: &IdentNode) -> hir::Path {
+        let id = self.lower_node_id(ident.id());
+        let res = self.lower_res(self.sess.res.get(NamePath::new(ident.id())).unwrap());
+        self.add_node(Node::PathNode(hir::PathNode::new(
+            id,
+            res,
+            vec![hir::PathSeg::new(ident.ident, ident.ident.span())],
+            ident.ident.span(),
+        )))
     }
 
     fn lower_res(&mut self, res: res::Res) -> Res {

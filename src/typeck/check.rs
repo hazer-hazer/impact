@@ -1,17 +1,36 @@
 use crate::{
+    dt::idx::IndexVec,
     hir::expr::{Expr, ExprKind, Lambda, Lit},
     message::message::MessageBuilder,
     span::span::{Ident, Spanned, WithSpan},
-    typeck::{ty::Subst, TypeckErr},
+    typeck::{
+        ty::{Adt, ExPair, Field, FieldId, Variant, VariantId},
+        TypeckErr,
+    },
 };
 
 use super::{
     ctx::InferCtx,
-    ty::{ExKind, Existential, FloatKind, IntKind, Ty, TyKind},
+    ty::{ExKind, Existential, FloatKind, IntKind, MapTy, Ty, TyKind},
     TyResult,
 };
 
 use super::Typecker;
+
+#[derive(Clone, Copy)]
+enum InstantiateDir {
+    Left,
+    Right,
+}
+
+impl InstantiateDir {
+    fn alternate(&self) -> InstantiateDir {
+        match self {
+            InstantiateDir::Left => InstantiateDir::Right,
+            InstantiateDir::Right => InstantiateDir::Left,
+        }
+    }
+}
 
 impl<'hir> Typecker<'hir> {
     /**
@@ -287,7 +306,7 @@ impl<'hir> Typecker<'hir> {
             (&TyKind::Forall(alpha, body), _) => {
                 let ex = self.fresh_ex(ExKind::Common);
                 let ex_ty = Ty::existential(ex);
-                let with_substituted_alpha = body.substitute(Subst::Var(alpha), ex_ty);
+                let with_substituted_alpha = body.substitute(alpha, ex_ty);
 
                 self.under_ctx(InferCtx::new_with_ex(ex), |this| {
                     this._subtype(with_substituted_alpha, r_ty)
@@ -298,6 +317,8 @@ impl<'hir> Typecker<'hir> {
                 .under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this._subtype(l_ty, body)
                 }),
+
+            (TyKind::Adt(adt), TyKind::Adt(adt_)) if adt.def_id == adt_.def_id => Ok(r_ty),
 
             (&TyKind::Existential(ex), _) if ex.is_common() => {
                 if !r_ty.contains_ex(ex) {
@@ -400,37 +421,18 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Ref(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self.try_to(|this| {
-                let range_ex = this.add_fresh_common_ex();
-                let domain_exes = this.add_fresh_common_ex_list(params.len());
-
-                let func_ty = Ty::func(
-                    r_ty.func_def_id(),
-                    domain_exes.iter().copied().map(|(_, ty)| ty).collect(),
-                    range_ex.1,
-                );
-
-                this.solve(ex, func_ty.mono());
-
-                params
-                    .iter()
-                    .copied()
-                    .enumerate()
-                    .try_for_each(|(index, param)| {
-                        this.instantiate_r(param, domain_exes[index].0)?;
-                        Ok(())
-                    })?;
-
-                let range_ty = body.apply_ctx(this.ctx());
-                this.instantiate_l(range_ex.0, range_ty)
-            }),
+            TyKind::Func(..) | TyKind::FuncDef(..) => {
+                self.instantiate_func(InstantiateDir::Left, r_ty, ex)
+            },
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 this.under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this.instantiate_l(ex, body)
                 })
             }),
+
+            TyKind::Adt(_) => self.instantiate_adt(InstantiateDir::Left, r_ty, ex),
+
             TyKind::Kind(_) => unreachable!(),
-            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 
@@ -460,41 +462,105 @@ impl<'hir> Typecker<'hir> {
             | TyKind::Ref(_) => {
                 unreachable!("Unchecked monotype in `instantiate_l`")
             },
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => self.try_to(|this| {
-                let range_ex = this.add_fresh_common_ex();
-                let domain_exes = this.add_fresh_common_ex_list(params.len());
-
-                let func_ty = Ty::func(
-                    l_ty.func_def_id(),
-                    domain_exes.iter().copied().map(|(_, ty)| ty).collect(),
-                    range_ex.1,
-                );
-
-                this.solve(ex, func_ty.mono());
-
-                params
-                    .iter()
-                    .copied()
-                    .enumerate()
-                    .try_for_each(|(index, param)| {
-                        this.instantiate_l(domain_exes[index].0, param)?;
-                        Ok(())
-                    })?;
-
-                let range_ty = body.apply_ctx(this.ctx());
-                this.instantiate_r(range_ty, range_ex.0)
-            }),
+            TyKind::Func(..) | TyKind::FuncDef(..) => {
+                self.instantiate_func(InstantiateDir::Right, l_ty, ex)
+            },
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 let alpha_ex = this.fresh_ex(ExKind::Common);
 
                 this.under_ctx(InferCtx::new_with_ex(alpha_ex), |this| {
                     let alpha_ex_ty = Ty::existential(alpha_ex);
-                    let body_ty = body.substitute(Subst::Var(alpha), alpha_ex_ty);
+                    let body_ty = body.substitute(alpha, alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)
                 })
             }),
+
+            TyKind::Adt(_) => self.instantiate_adt(InstantiateDir::Right, l_ty, ex),
+
             TyKind::Kind(_) => unreachable!(),
-            TyKind::Data(def_id, variants) => todo!(),
         }
+    }
+
+    fn instantiate(&mut self, dir: InstantiateDir, ty: Ty, ex: Existential) -> TyResult<Ty> {
+        match dir {
+            InstantiateDir::Left => self.instantiate_l(ex, ty),
+            InstantiateDir::Right => self.instantiate_r(ty, ex),
+        }
+    }
+
+    fn instantiate_func(&mut self, dir: InstantiateDir, ty: Ty, ex: Existential) -> TyResult<Ty> {
+        let (params, body) = ty.as_func_like();
+
+        self.try_to(|this| {
+            let range_ex = this.add_fresh_common_ex();
+            let domain_exes = this.add_fresh_common_ex_list(params.len());
+
+            let func_ty = Ty::func(
+                ty.func_def_id(),
+                domain_exes.iter().copied().map(|(_, ty)| ty).collect(),
+                range_ex.1,
+            );
+
+            this.solve(ex, func_ty.mono());
+
+            params
+                .iter()
+                .copied()
+                .zip(domain_exes)
+                .try_for_each(|(param, param_ex)| {
+                    this.instantiate(dir.alternate(), param, param_ex.0)?;
+                    Ok(())
+                })?;
+
+            let range_ty = body.apply_ctx(this.ctx());
+            this.instantiate(dir, range_ty, range_ex.0)
+        })
+    }
+
+    fn instantiate_adt(&mut self, dir: InstantiateDir, ty: Ty, ex: Existential) -> TyResult<Ty> {
+        let adt = ty.as_adt();
+
+        self.try_to(|this| {
+            let variant_exes = adt
+                .variants
+                .iter()
+                .map(|v| {
+                    (
+                        v,
+                        v.fields
+                            .iter()
+                            .map(|&f| (f, this.add_fresh_common_ex()))
+                            .collect::<IndexVec<FieldId, (Field, ExPair)>>(),
+                    )
+                })
+                .collect::<IndexVec<VariantId, _>>();
+
+            let adt_ex = Ty::adt(Adt {
+                def_id: adt.def_id,
+                variants: variant_exes
+                    .iter()
+                    .map(|(v, fields)| Variant {
+                        def_id: v.def_id,
+                        name: v.name,
+                        fields: fields
+                            .iter()
+                            .map(|(field, (_, ex_ty))| field.map_ty_pure(&mut |_| Ok(*ex_ty)))
+                            .collect::<IndexVec<FieldId, _>>(),
+                    })
+                    .collect(),
+            });
+
+            this.solve(ex, adt_ex.mono());
+
+            adt.variants.iter_enumerated().try_for_each(|(vid, v)| {
+                v.fields.iter_enumerated().try_for_each(|(fid, f)| {
+                    this.instantiate(dir.alternate(), f.ty, variant_exes[vid].1[fid].1 .0)?;
+                    Ok(())
+                })?;
+                Ok(())
+            })?;
+
+            Ok(ty)
+        })
     }
 }

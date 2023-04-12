@@ -6,7 +6,7 @@ use super::{
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
-    ErrorNode, NodeId, Path, WithNodeId, AST, N, PR,
+    ErrorNode, IdentNode, NodeId, Path, WithNodeId, AST, N, PR,
 };
 
 macro_rules! walk_pr {
@@ -158,6 +158,7 @@ pub trait AstVisitor<'ast> {
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
+            ExprKind::DotOp(lhs, field) => self.visit_dot_op_expr(lhs, field),
         }
     }
 
@@ -198,6 +199,11 @@ pub trait AstVisitor<'ast> {
         walk_pr!(self, &ty_expr.ty, visit_ty);
     }
 
+    fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast PR<IdentNode>) {
+        walk_pr!(self, lhs, visit_expr);
+        walk_pr!(self, field, visit_ident_node);
+    }
+
     // Types //
     fn visit_ty(&mut self, ty: &'ast Ty) {
         match ty.kind() {
@@ -236,6 +242,8 @@ pub trait AstVisitor<'ast> {
 
     // Fragments //
     fn visit_ident(&mut self, _: &'ast Ident) {}
+
+    fn visit_ident_node(&mut self, _: &'ast IdentNode) {}
 
     fn visit_path(&mut self, _: &'ast Path) {}
 

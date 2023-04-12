@@ -23,6 +23,17 @@ impl<I: Idx + From<usize>, T> FromIterator<T> for IndexVec<I, T> {
     }
 }
 
+// impl<I: Idx, T> FromIterator<(I, T)> for IndexVec<I, T> {
+//     fn from_iter<V: IntoIterator<Item = (I, T)>>(iter: V) -> Self {
+//         let mut index_vec = IndexVec::<I, T>::default();
+//         for (i, v) in iter {
+//             assert_eq!(i.into(), index_vec.len());
+//             index_vec.push(v);
+//         }
+//         index_vec
+//     }
+// }
+
 impl<I: Idx, T> FromIterator<(I, Option<T>)> for IndexVec<I, Option<T>> {
     fn from_iter<V: IntoIterator<Item = (I, Option<T>)>>(iter: V) -> Self {
         let mut index_vec = IndexVec::<I, Option<T>>::default();
@@ -95,6 +106,11 @@ impl<I: Idx, T> IndexVec<I, T> {
     #[inline]
     pub fn len(&self) -> usize {
         self.vec.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     #[inline]

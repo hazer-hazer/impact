@@ -228,6 +228,238 @@ impl std::fmt::Display for FloatKind {
 
 pub type TyMap<T> = IndexVec<TyId, Option<T>>;
 
+pub type FuncTy = (Ty, Ty);
+
+declare_idx!(FieldId, u32, "{}", Color::White);
+
+/// The trait which is used in complex type structures, like ADT.
+// No b̶i̶t̶c̶h̶e̶s̶  HKT
+pub trait MapTy<To, S> {
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<S, E>
+    where
+        F: FnMut(Ty) -> Result<To, E>;
+
+    fn map_ty_pure<F>(&self, f: &mut F) -> S
+    where
+        F: FnMut(Ty) -> Result<To, ()>,
+    {
+        self.map_ty(f).unwrap()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct Field<T = Ty> {
+    pub name: Ident,
+    pub ty: T,
+}
+
+impl<To> MapTy<To, Field<To>> for Field {
+    fn map_ty<E, F>(&self, mut f: &mut F) -> Result<Field<To>, E>
+    where
+        F: FnMut(Ty) -> Result<To, E>,
+    {
+        let ty = f(self.ty)?;
+
+        Ok(Field {
+            name: self.name,
+            ty,
+        })
+    }
+}
+
+// impl Field {
+//     pub fn map_ty<To>(&self, f: &mut impl FnMut(Ty) -> To) -> Field<To> {
+//         Field {
+//             name: self.name,
+//             ty: f(self.ty),
+//         }
+//     }
+// }
+
+impl std::fmt::Display for Field {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.name, self.ty)
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Variant<T = Ty> {
+    pub def_id: DefId,
+    pub name: Ident,
+    pub fields: IndexVec<FieldId, Field<T>>,
+}
+
+// impl Variant {
+//     pub fn map_ty<To>(&self, f: &mut impl FnMut(Ty) -> To) -> Variant<To> {
+//         Variant {
+//             def_id: self.def_id,
+//             name: self.name,
+//             fields: self.fields.iter().map(|field| field.map_ty(f)).collect(),
+//         }
+//     }
+// }
+
+impl<To> MapTy<To, Variant<To>> for Variant {
+    fn map_ty<E, F>(&self, mut f: &mut F) -> Result<Variant<To>, E>
+    where
+        F: FnMut(Ty) -> Result<To, E>,
+    {
+        let fields = self
+            .fields
+            .iter()
+            .map(|field| field.map_ty(f))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Variant {
+            def_id: self.def_id,
+            name: self.name,
+            fields,
+        })
+    }
+}
+
+impl std::fmt::Display for Variant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            self.name,
+            self.fields
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Adt<T = Ty> {
+    pub def_id: DefId,
+    pub variants: IndexVec<VariantId, Variant<T>>,
+}
+
+impl Adt {
+    pub fn walk_tys<'a>(&'a self) -> impl Iterator<Item = Ty> + 'a {
+        self.variants
+            .iter()
+            .map(|v| v.fields.iter().map(|f| f.ty))
+            .flatten()
+    }
+
+    // pub fn map_ty<To, E>(&self, f: &mut impl FnMut(Ty) -> To) -> Adt<To> {
+    //     Adt {
+    //         def_id: self.def_id,
+    //         variants: self.variants.iter().map(|v| v.map_ty(f)).collect(),
+    //     }
+    // }
+}
+
+impl<To> MapTy<To, Adt<To>> for Adt {
+    fn map_ty<E, F>(&self, mut f: &mut F) -> Result<Adt<To>, E>
+    where
+        F: FnMut(Ty) -> Result<To, E>,
+    {
+        let variants = self
+            .variants
+            .iter()
+            .map(|variant| variant.map_ty(f))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Adt {
+            def_id: self.def_id,
+            variants,
+        })
+    }
+}
+
+impl std::fmt::Display for Adt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "data {} = {}",
+            self.def_id,
+            self.variants
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" | ")
+        )
+    }
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub enum TyKind {
+    Error,
+
+    Unit,
+    Bool,
+    Int(IntKind),
+    Float(FloatKind),
+
+    Str,
+
+    /// Type of function or lambda
+    FuncDef(DefId, Vec<Ty>, Ty),
+
+    Func(Vec<Ty>, Ty),
+
+    // TODO: IndexVec smallvec of 1 optimization
+    Adt(Adt),
+    Ref(Ty),
+
+    Var(TyVarId),
+    Existential(Existential),
+    Forall(TyVarId, Ty),
+
+    /// Type kind.
+    /// This might seem strange, but `Kind` is inside `TyKind` to simplify typeck code,
+    /// as we always work with `Ty`
+    Kind(Kind),
+}
+
+impl std::fmt::Display for TyKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TyKind::Error => write!(f, "[ERROR]"),
+            TyKind::Unit => write!(f, "()"),
+            TyKind::Bool => write!(f, "bool"),
+            TyKind::Int(kind) => write!(f, "{}", kind),
+            TyKind::Float(kind) => write!(f, "{}", kind),
+            TyKind::Str => write!(f, "{}", "string"),
+            TyKind::Func(params, body) => write!(
+                f,
+                "({} -> {})",
+                params
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" - "),
+                body
+            ),
+            TyKind::FuncDef(def_id, params, body) => {
+                write!(
+                    f,
+                    "({} -> {}){}",
+                    params
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    body,
+                    def_id
+                )
+            },
+            TyKind::Adt(adt) => adt.fmt(f),
+            TyKind::Ref(ty) => write!(f, "ref {ty}"),
+            TyKind::Var(name) => write!(f, "{name}"),
+            TyKind::Existential(ex) => write!(f, "{ex}"),
+            TyKind::Forall(alpha, ty) => write!(f, "(∀{alpha}. {ty})"),
+            TyKind::Kind(kind) => write!(f, "{kind}"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Ty(TyId);
 
@@ -287,8 +519,8 @@ impl Ty {
         })
     }
 
-    pub fn data(def_id: DefId, variants: IndexVec<VariantId, Variant>) -> Ty {
-        Self::new(TyKind::Data(def_id, variants))
+    pub fn adt(adt: Adt) -> Ty {
+        Self::new(TyKind::Adt(adt))
     }
 
     pub fn ref_to(ty: Ty) -> Ty {
@@ -359,14 +591,13 @@ impl Ty {
             | TyKind::Str
             | TyKind::FuncDef(..)
             | TyKind::Func(_, _)
-            | TyKind::Data {.. }
+            | TyKind::Adt(..)
             | TyKind::Ref(_)
             // TODO: Can existentials and vars be higher-kinded?
             | TyKind::Var(_)
             | TyKind::Existential(_)
             | TyKind::Forall(_, _) => true,
             TyKind::Kind(_) => false,
-            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 
@@ -391,18 +622,26 @@ impl Ty {
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_mono) && body.is_mono()
             },
-            TyKind::Data(_, variants) => variants
-                .iter()
-                .all(|v| v.fields.iter().all(|field| field.ty.is_mono())),
+            TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_mono()),
             TyKind::Forall(_, _) => false,
             TyKind::Ref(ty) => ty.is_mono(),
             TyKind::Kind(_) => false,
-            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 
     pub fn is_func_like(&self) -> bool {
         matches!(self.kind(), TyKind::Func(..) | TyKind::FuncDef(..))
+    }
+
+    pub fn is_data(&self) -> bool {
+        matches!(self.kind(), TyKind::Adt(..))
+    }
+
+    pub fn as_data(&self) -> Option<&Adt> {
+        match self.kind() {
+            TyKind::Adt(adt) => Some(adt),
+            _ => None,
+        }
     }
 
     pub fn is_instantiated(&self) -> bool {
@@ -413,12 +652,9 @@ impl Ty {
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
-            TyKind::Data(_, variants) => variants
-                .iter()
-                .all(|v| v.fields.iter().all(|field| field.ty.is_instantiated())),
+            TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_instantiated()),
             TyKind::Ref(ty) => ty.is_instantiated(),
             TyKind::Kind(_) => false,
-            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 
@@ -429,16 +665,13 @@ impl Ty {
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_solved) && body.is_solved()
             },
-            TyKind::Data(_, variants) => variants
-                .iter()
-                .all(|v| v.fields.iter().all(|field| field.ty.is_solved())),
+            TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_solved()),
             // TODO: Check that var is bound in ty_bindings?
             TyKind::Var(_) => true,
             TyKind::Existential(_) => false,
             TyKind::Forall(_, ty) => ty.is_solved(),
             TyKind::Ref(ty) => ty.is_solved(),
             TyKind::Kind(kind) => kind.is_solved(),
-            TyKind::Data(def_id, variants) => todo!(),
         }
     }
 
@@ -450,6 +683,7 @@ impl Ty {
             &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
             &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
             TyKind::Str => Some(MonoTyKind::String),
+            // FIXME: Unwrap
             TyKind::Ref(ty) => Some(MonoTyKind::Ref(Box::new(ty.as_mono().unwrap()))),
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let params = params
@@ -463,9 +697,12 @@ impl Ty {
                 let body = body.as_mono()?;
                 Some(MonoTyKind::Func(params, Box::new(body)))
             },
+            // FIXME: Unwrap
+            TyKind::Adt(adt) => Some(MonoTyKind::Adt(
+                adt.map_ty(&mut |ty| ty.as_mono().ok_or(())).ok()?,
+            )),
             TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
             TyKind::Kind(_) => None,
-            TyKind::Data(def_id, variants) => todo!(),
         }?;
 
         Some(MonoTy { sort, ty: *self })
@@ -487,7 +724,7 @@ impl Ty {
             &TyKind::Forall(_, body) => body.contains_ex(ex),
             &TyKind::Ref(inner) => inner.contains_ex(ex),
             TyKind::Kind(kind) => kind.contains_ty_ex(ex),
-            TyKind::Data(def_id, variants) => todo!(),
+            TyKind::Adt(adt) => adt.walk_tys().any(|ty| ty.contains_ex(ex)),
         }
     }
 
@@ -517,7 +754,7 @@ impl Ty {
         }
     }
 
-    pub fn substitute(&self, subst: Subst, with: Ty) -> Ty {
+    pub fn substitute(&self, subst: TyVarId, with: Ty) -> Ty {
         verbose!("Substitute {} in {} with {}", subst, self, with);
 
         match self.kind() {
@@ -534,13 +771,7 @@ impl Ty {
                     *self
                 }
             },
-            &TyKind::Existential(ex) => {
-                if subst == ex {
-                    with
-                } else {
-                    *self
-                }
-            },
+            &TyKind::Existential(ex) => todo!(),
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let param = params
                     .iter()
@@ -558,8 +789,8 @@ impl Ty {
                     Ty::forall(ident, subst)
                 }
             },
-            TyKind::Kind(_) => todo!(),
-            TyKind::Data(def_id, variants) => todo!(),
+            TyKind::Kind(kind) => Ty::ty_kind(kind.substitute_ty(subst, Kind::new_ty(with))),
+            TyKind::Adt(adt) => Ty::adt(adt.map_ty_pure(&mut |ty| Ok(ty.substitute(subst, with)))),
         }
     }
 
@@ -601,7 +832,7 @@ impl Ty {
                     _ => Ty::ty_kind(kind),
                 }
             },
-            TyKind::Data(def_id, variants) => todo!(),
+            TyKind::Adt(adt) => Ty::adt(adt.map_ty_pure(&mut |ty| Ok(ty._apply_ctx(ctx)))),
         }
     }
 
@@ -620,6 +851,10 @@ impl Ty {
 
     pub fn as_func_like(&self) -> (&[Ty], Ty) {
         match_expected!(self.kind(), TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => (params.as_ref(), *body))
+    }
+
+    pub fn as_adt(&self) -> &Adt {
+        match_expected!(self.kind(), TyKind::Adt(adt) => adt)
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -647,93 +882,6 @@ impl std::fmt::Debug for Ty {
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.kind())
-    }
-}
-
-pub type FuncTy = (Ty, Ty);
-
-#[derive(Clone, Hash, PartialEq, Eq)]
-pub struct Field {
-    pub name: Option<Ident>,
-    pub ty: Ty,
-}
-
-#[derive(Clone, Hash, PartialEq, Eq)]
-pub struct Variant {
-    pub def_id: DefId,
-    pub name: Ident,
-    pub fields: Vec<Field>,
-}
-
-#[derive(Clone, Hash, PartialEq, Eq)]
-pub enum TyKind {
-    Error,
-
-    Unit,
-    Bool,
-    Int(IntKind),
-    Float(FloatKind),
-
-    Str,
-
-    /// Type of function or lambda
-    FuncDef(DefId, Vec<Ty>, Ty),
-
-    Func(Vec<Ty>, Ty),
-
-    Data(DefId, IndexVec<VariantId, Variant>),
-    Ref(Ty),
-
-    Var(TyVarId),
-    Existential(Existential),
-    Forall(TyVarId, Ty),
-
-    /// Type kind.
-    /// This might seem strange, but `Kind` is inside `TyKind` to simplify typeck code,
-    /// as we always work with `Ty`
-    Kind(Kind),
-}
-
-impl std::fmt::Display for TyKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TyKind::Error => write!(f, "[ERROR]"),
-            TyKind::Unit => write!(f, "()"),
-            TyKind::Bool => write!(f, "bool"),
-            TyKind::Int(kind) => write!(f, "{}", kind),
-            TyKind::Float(kind) => write!(f, "{}", kind),
-            TyKind::Str => write!(f, "{}", "string"),
-            TyKind::Func(params, body) => write!(
-                f,
-                "({} -> {})",
-                params
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" - "),
-                body
-            ),
-            TyKind::FuncDef(def_id, params, body) => {
-                write!(
-                    f,
-                    "({} -> {}){}",
-                    params
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                    body,
-                    def_id
-                )
-            },
-            TyKind::Data(def_id, variants) => write!(f, "data{def_id}"),
-            TyKind::Ref(ty) => write!(f, "ref {ty}"),
-            TyKind::Var(name) => write!(f, "{name}"),
-            TyKind::Existential(ex) => write!(f, "{ex}"),
-            TyKind::Forall(alpha, ty) => write!(f, "(∀{alpha}. {ty})"),
-            TyKind::Kind(kind) => write!(f, "{kind}"),
-            TyKind::Data(def_id, variants) => todo!(),
-        }
     }
 }
 
@@ -810,38 +958,38 @@ impl TyInterner {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Subst {
-    Existential(Existential),
-    Var(TyVarId),
-}
+// #[derive(Clone, Copy, Debug)]
+// pub enum Subst {
+//     Existential(Existential),
+//     Var(TyVarId),
+// }
 
-impl std::fmt::Display for Subst {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Subst::Existential(ex) => ex.fmt(f),
-            Subst::Var(var) => var.fmt(f),
-        }
-    }
-}
+// impl std::fmt::Display for Subst {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Subst::Existential(ex) => ex.fmt(f),
+//             Subst::Var(var) => var.fmt(f),
+//         }
+//     }
+// }
 
-impl PartialEq<TyVarId> for Subst {
-    fn eq(&self, other: &TyVarId) -> bool {
-        match (self, other) {
-            (Self::Var(var), other) => var == other,
-            _ => false,
-        }
-    }
-}
+// impl PartialEq<TyVarId> for Subst {
+//     fn eq(&self, other: &TyVarId) -> bool {
+//         match (self, other) {
+//             (Self::Var(var), other) => var == other,
+//             _ => false,
+//         }
+//     }
+// }
 
-impl PartialEq<Existential> for Subst {
-    fn eq(&self, other: &Existential) -> bool {
-        match (self, other) {
-            (Self::Existential(ex), other) => ex.id() == other.id(),
-            _ => false,
-        }
-    }
-}
+// impl PartialEq<Existential> for Subst {
+//     fn eq(&self, other: &Existential) -> bool {
+//         match (self, other) {
+//             (Self::Existential(ex), other) => ex.id() == other.id(),
+//             _ => false,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MonoTyKind {
@@ -853,6 +1001,7 @@ pub enum MonoTyKind {
     String,
     Func(Vec<Box<MonoTy>>, Box<MonoTy>),
     Ref(Box<MonoTy>),
+    Adt(Adt<MonoTy>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

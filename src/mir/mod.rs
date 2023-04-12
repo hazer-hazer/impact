@@ -18,6 +18,7 @@ use crate::{
     hir::BodyId,
     resolve::{builtin::Builtin, def::DefId},
     span::span::{Ident, Span},
+    typeck::ty::VariantId,
 };
 
 use self::scalar::Scalar;
@@ -29,7 +30,7 @@ declare_idx!(BB, u32, "bb{}", Color::White);
 
 impl Local {
     pub fn lvalue(&self) -> LValue {
-        LValue::new(*self)
+        LValue::new(*self, None)
     }
 
     pub fn return_local() -> Local {
@@ -58,13 +59,25 @@ impl BB {
 }
 
 #[derive(Clone, Copy)]
+pub enum ProjectionKind {
+    Field(u32, VariantId),
+}
+
+#[derive(Clone, Copy)]
+pub struct Projection {
+    pub ty: Ty,
+    pub kind: ProjectionKind,
+}
+
+#[derive(Clone, Copy)]
 pub struct LValue {
     pub local: Local,
+    pub proj: Option<Projection>,
 }
 
 impl LValue {
-    pub fn new(local: Local) -> Self {
-        Self { local }
+    pub fn new(local: Local, proj: Option<Projection>) -> Self {
+        Self { local, proj }
     }
 
     pub fn operand(&self) -> Operand {
@@ -74,6 +87,7 @@ impl LValue {
     pub fn return_lvalue() -> Self {
         Self {
             local: Local::return_local(),
+            proj: None,
         }
     }
 }

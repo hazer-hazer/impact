@@ -3,12 +3,12 @@ use std::fmt::Display;
 use crate::{
     ast::prs_display_join,
     parser::token::{FloatKind, IntKind},
-    span::span::{impl_with_span, Span, Symbol, WithSpan},
+    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
 };
 
 use super::{
-    is_block_ended, pat::Pat, pr_display, stmt::Stmt, ty::Ty, IsBlockEnded, NodeId, NodeKindStr,
-    Path, WithNodeId, N, PR,
+    is_block_ended, pat::Pat, pr_display, stmt::Stmt, ty::Ty, IdentNode, IsBlockEnded, NodeId,
+    NodeKindStr, Path, WithNodeId, N, PR,
 };
 
 #[derive(Debug)]
@@ -181,7 +181,7 @@ impl Display for TyExpr {
 #[derive(Debug)]
 pub enum ExprKind {
     Lit(Lit),
-    Paren(PR<Box<Expr>>),
+    Paren(PR<N<Expr>>),
     Path(PathExpr),
     Block(PR<Block>),
     Infix(Infix),
@@ -189,12 +189,15 @@ pub enum ExprKind {
     Call(Call),
     Let(PR<Block>),
     Ty(TyExpr),
+    DotOp(PR<N<Expr>>, PR<IdentNode>),
 }
 
 impl IsBlockEnded for ExprKind {
     fn is_block_ended(&self) -> bool {
         match self {
-            Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => false,
+            Self::DotOp(_, _) | Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => {
+                false
+            },
             Self::Block(_) | Self::Let(_) => true,
             Self::Infix(infix) => is_block_ended!(infix.rhs),
             Self::Lambda(lambda) => is_block_ended!(lambda.body),
@@ -215,6 +218,9 @@ impl Display for ExprKind {
             Self::Call(call) => write!(f, "{}", call),
             Self::Let(block) => write!(f, "{}", pr_display(block)),
             Self::Ty(ty_expr) => write!(f, "{}", ty_expr),
+            Self::DotOp(expr, field) => {
+                write!(f, "{}.{}", pr_display(expr), pr_display(field))
+            },
         }
     }
 }
@@ -231,6 +237,7 @@ impl NodeKindStr for ExprKind {
             Self::Let(_) => "let expression",
             Self::Ty(_) => "type ascription",
             Self::Infix(_) => "infix expression",
+            Self::DotOp(_, _) => "member access",
         }
         .to_string()
     }

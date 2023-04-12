@@ -9,7 +9,7 @@ use crate::{
     hir::{BodyId, HirId, OwnerId},
     resolve::{builtin::Builtin, def::DefId},
     span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
-    typeck::ty::{FloatKind, IntKind, Ty},
+    typeck::ty::{FieldId, FloatKind, IntKind, Ty, VariantId},
 };
 
 declare_idx!(ExprId, u32, "{}", Color::Green);
@@ -92,6 +92,7 @@ pub enum ExprKind {
         body_id: BodyId,
     },
     Ty(ExprId, Ty),
+    FieldAccess(ExprId, FieldId, VariantId),
     Builtin(Builtin),
 }
 
@@ -116,6 +117,9 @@ impl Display for ExprKind {
             },
             ExprKind::Lambda { def_id, body_id } => write!(f, "λ{def_id} {{{body_id}}}"),
             ExprKind::Ty(expr, ty) => write!(f, "{expr}: {ty}"),
+            ExprKind::FieldAccess(lhs, field, variant_id) => {
+                write!(f, "{lhs}.{variant_id}.{field}")
+            },
             ExprKind::Builtin(bt) => write!(f, "{bt}"),
         }
     }
@@ -131,7 +135,7 @@ impl Expr {
     pub fn categorize(&self) -> ExprCategory {
         match self.kind {
             ExprKind::Lit(_) => ExprCategory::Const,
-            ExprKind::LocalRef(_) => ExprCategory::LValue,
+            ExprKind::FieldAccess(_, _, _) | ExprKind::LocalRef(_) => ExprCategory::LValue,
 
             ExprKind::Ref(_) | ExprKind::Call { .. } | ExprKind::Block(_) => {
                 ExprCategory::StoreRValue

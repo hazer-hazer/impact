@@ -9,17 +9,18 @@ use std::{
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::{expr::Expr, HirId},
+    hir::{expr::Expr, HirId, HirMap},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefMap},
     },
+    span::span::Ident,
 };
 
 use super::{
     builtin::builtins,
     ctx::GlobalCtx,
-    ty::{Subst, Ty, TyKind, TyVarId, Variant, VariantId},
+    ty::{FieldId, MapTy, Ty, TyKind, TyMap, TyVarId, Variant, VariantId},
 };
 
 #[derive(Debug, Default, PartialEq, Eq, Hash)]
@@ -57,6 +58,11 @@ pub struct TyCtx {
 
     def_ty_bindings: DefMap<HashSet<Expr>>,
     // adt_data: DefMap<IndexVec<VariantId, Variant>>,
+    /// Mapping HirId of field access expression such as `data.field` to FieldId
+    field_indices: HirMap<FieldId>,
+
+    // Metadata //
+    ty_names: TyMap<Ident>,
 }
 
 impl TyCtx {
@@ -67,6 +73,8 @@ impl TyCtx {
             expr_ty_bindings: Default::default(),
             def_ty_bindings: Default::default(),
             // adt_data: Default::default(),
+            field_indices: Default::default(),
+            ty_names: Default::default(),
         }
     }
 
@@ -103,6 +111,18 @@ impl TyCtx {
         self.typed.get(&id).copied()
     }
 
+    pub fn ty_name(&self, ty: Ty) -> Option<Ident> {
+        self.ty_names.get_flat(ty.id()).copied()
+    }
+
+    pub fn set_field_index(&mut self, expr: Expr, id: FieldId) {
+        assert!(self.field_indices.insert(expr, id).is_none());
+    }
+
+    pub fn field_index(&self, expr: Expr) -> Option<FieldId> {
+        self.field_indices.get(&expr).copied()
+    }
+
     /// Unwrap-version of `node_type` with a short name.
     pub fn tyof(&self, id: HirId) -> Ty {
         self.node_type(id)
@@ -135,11 +155,13 @@ impl TyCtx {
             )),
             &TyKind::Forall(alpha, body) => {
                 let alpha_ty = self.instantiated_expr_ty_var(expr, alpha)?;
-                Ok(body.substitute(Subst::Var(alpha), alpha_ty))
+                Ok(body.substitute(alpha, alpha_ty))
             },
             &TyKind::Ref(inner) => self._instantiated_ty(expr, inner),
             TyKind::Kind(_) => todo!(),
-            TyKind::Data(def_id, variants) => todo!(),
+            TyKind::Adt(adt) => Ok(Ty::adt(
+                adt.map_ty(&mut |ty| self._instantiated_ty(expr, ty))?,
+            )),
         }
     }
 

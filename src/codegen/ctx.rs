@@ -78,7 +78,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                 unreachable!("Type {} must not exist on codegen stage", ty)
             },
             TyKind::Kind(_) => todo!(),
-            TyKind::Data(def_id, variants) => todo!(),
+            TyKind::Adt(adt) => todo!(),
         }
     }
 
