@@ -1,11 +1,14 @@
-use crate::message::message::{Message, MessageBuilder, MessageHolder, MessageStorage};
-use crate::parser::token::{Punct, Token, TokenKind, TokenStream};
-use crate::session::SourceId;
-use crate::session::{Session, Stage, StageOutput};
-
-use crate::span::span::{Kw, Span, SpanLen, SpanPos, Symbol};
-
 use super::token::{ComplexSymbol, IntKind};
+use crate::{
+    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    parser::token::{Punct, Token, TokenKind, TokenStream},
+    session::{Session, Stage, StageOutput},
+    span::{
+        source::SourceId,
+        sym::{Kw, Symbol},
+        Span, SpanLen, SpanPos,
+    },
+};
 
 pub enum TokenStartMatch {
     Ident,

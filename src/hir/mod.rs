@@ -1,18 +1,7 @@
-/*!
- * HIR is nothing more than just an unwrapped version of AST, i.e. freed of parse results.
- */
+//! HIR is nothing more than just an unwrapped version of AST, i.e. freed of
+//! parse results.
 use core::panic;
 use std::{collections::HashMap, fmt::Display};
-
-use crate::{
-    cli::color::{Color, Colorize},
-    dt::idx::{declare_idx, Idx, IndexVec},
-    resolve::{
-        builtin::Builtin,
-        def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
-    },
-    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
-};
 
 use self::{
     expr::{Block, BlockNode, Expr, ExprKind, ExprNode, Lambda},
@@ -20,6 +9,19 @@ use self::{
     pat::{Pat, PatNode},
     stmt::StmtNode,
     ty::TyNode,
+};
+use crate::{
+    cli::color::{Color, Colorize},
+    dt::idx::{declare_idx, Idx, IndexVec},
+    resolve::{
+        builtin::Builtin,
+        def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
+    },
+    span::{
+        impl_with_span,
+        sym::{Ident, Symbol},
+        Span, WithSpan,
+    },
 };
 
 pub mod expr;
@@ -432,7 +434,7 @@ impl HIR {
             | ExprKind::Lambda(_)
             | ExprKind::Call(_)
             | ExprKind::BuiltinExpr(_)
-            | ExprKind::FieldAccess(_, _)
+            | ExprKind::FieldAccess(..)
             | ExprKind::Ty(_) => expr.span(),
             &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
         }

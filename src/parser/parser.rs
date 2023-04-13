@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display};
 
+use super::token::{IdentIntoTokenErr, Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
@@ -14,10 +15,11 @@ use crate::{
     interface::writer::{out, outln},
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Kw, Span, WithSpan},
+    span::{
+        sym::{Ident, Kw},
+        Span, WithSpan,
+    },
 };
-
-use super::token::{IdentIntoTokenErr, Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
 
 macro_rules! pr_call {
     ($error: expr, $pr: expr, $method: ident $(,$args: expr)*) => {
@@ -328,7 +330,8 @@ impl Parser {
     }
 
     // Sadly, cause of problems with exclusive borrowing,
-    // it is simpler to make predicate implicitly check for peek in implementation points
+    // it is simpler to make predicate implicitly check for peek in implementation
+    // points
     fn skip_if<F>(&mut self, pred: F) -> Option<Token>
     where
         F: Fn(TokenKind) -> bool,
@@ -920,7 +923,8 @@ impl Parser {
 
         let pe = self.enter_entity(ParseEntryKind::Expect, "path");
 
-        // If no first identifier present then it's "expected path" error, not "expected identifier"
+        // If no first identifier present then it's "expected path" error, not "expected
+        // identifier"
         let mut segments = vec![self.parse_path_seg()];
         while segments.last().unwrap().is_from_ty_ns()
             && self.skip(TokenCmp::Punct(Punct::Dot)).is_some()
@@ -1106,12 +1110,14 @@ impl Parser {
                     None => {
                         return None;
 
-                        // Note: Unit type as path is handled in lexer with Kw::Unit,
-                        //  so here we just failed to parse a type
+                        // Note: Unit type as path is handled in lexer with
+                        // Kw::Unit,  so here we just
+                        // failed to parse a type
                         // let span = self.close_span(lo);
                         // TyKind::Path(TyPath(Ok(Path::new(
                         //     self.next_node_id(),
-                        //     vec![PathSeg::new(Ok(Ident::new(span, "()".intern())), span)],
+                        //     vec![PathSeg::new(Ok(Ident::new(span,
+                        // "()".intern())), span)],
                         //     span,
                         // ))))
                     },

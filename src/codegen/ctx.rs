@@ -74,11 +74,11 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                     false,
                 )
                 .into(),
-            TyKind::Existential(_) | TyKind::Forall(_, _) | TyKind::Error | TyKind::Var(_) => {
+            TyKind::Existential(_) | TyKind::Forall(..) | TyKind::Error | TyKind::Var(_) => {
                 unreachable!("Type {} must not exist on codegen stage", ty)
             },
             TyKind::Kind(_) => todo!(),
-            TyKind::Adt(adt) => todo!(),
+            TyKind::Adt(_adt) => todo!(),
         }
     }
 
@@ -139,8 +139,8 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     //     &self,
     //     ty: Ty,
     //     deep_func_modifier: impl Fn(FunctionValue<'ink>),
-    //     body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
-    // ) -> FunctionValue<'ink> {
+    //     body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) ->
+    // BasicValueEnum<'ink>, ) -> FunctionValue<'ink> {
     //     assert!(ty.is_func_like());
     //     self._simple_func(Vec::new(), ty, deep_func_modifier, body)
     //         .0
@@ -151,10 +151,10 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     //     mut params: Vec<BasicValueEnum<'ink>>,
     //     ty: Ty,
     //     deep_func_modifier: impl Fn(FunctionValue<'ink>),
-    //     body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) -> BasicValueEnum<'ink>,
-    // ) -> (FunctionValue<'ink>, Option<BasicValueEnum<'ink>>) {
-    //     let ll_ty = self.conv_ty(ty).into_function_type();
-    //     let func = self
+    //     body: impl Fn(&Builder<'ink>, Vec<BasicValueEnum<'ink>>) ->
+    // BasicValueEnum<'ink>, ) -> (FunctionValue<'ink>,
+    // Option<BasicValueEnum<'ink>>) {     let ll_ty =
+    // self.conv_ty(ty).into_function_type();     let func = self
     //         .llvm_module
     //         .add_function("anon", ll_ty, Some(Linkage::Internal));
 
@@ -168,8 +168,8 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
 
     //     let (func, result) = if ty.return_ty().is_func_like() {
     //         (
-    //             self._simple_func(params, ty.return_ty(), deep_func_modifier, body)
-    //                 .0,
+    //             self._simple_func(params, ty.return_ty(), deep_func_modifier,
+    // body)                 .0,
     //             None,
     //         )
     //     } else {

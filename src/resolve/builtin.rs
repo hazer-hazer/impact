@@ -1,8 +1,7 @@
 use std::fmt::Display;
 
-use crate::span::span::{Ident, Internable, Symbol};
-
 use super::def::{DefId, Namespace};
+use crate::span::sym::{Ident, Internable, Symbol};
 
 #[derive(Clone, Copy)]
 pub struct DeclareBuiltin {

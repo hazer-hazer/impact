@@ -1,11 +1,14 @@
 use std::fmt::Display;
 
+use super::{stmt::Stmt, ty::Ty, BodyId, HirId, Path, WithHirId};
 use crate::{
     resolve::{builtin::Builtin, def::DefId},
-    span::span::{impl_with_span, Span, Symbol, WithSpan, Ident},
+    span::{
+        impl_with_span,
+        sym::{Ident, Symbol},
+        Span, WithSpan,
+    },
 };
-
-use super::{stmt::Stmt, ty::Ty, BodyId, HirId, Path, WithHirId};
 
 /// Get span of expression result. Used in typeck.
 /// Example: Last expression-statement in block

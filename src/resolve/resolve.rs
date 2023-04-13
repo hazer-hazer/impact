@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use super::{
+    def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
+    res::{NamePath, Res},
+};
 use crate::{
     ast::{
         expr::{Block, Expr, PathExpr},
@@ -13,12 +17,10 @@ use crate::{
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::def::DefKind,
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Span, Symbol, WithSpan},
-};
-
-use super::{
-    def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
-    res::{NamePath, Res},
+    span::{
+        sym::{Ident, Symbol},
+        Span, WithSpan,
+    },
 };
 
 #[derive(Debug)]
@@ -263,7 +265,8 @@ impl<'ast> NameResolver<'ast> {
         self.resolve_relative(Namespace::Value, field)
     }
 
-    /// Relatively find definition of first segment then go by modules rest segments point to
+    /// Relatively find definition of first segment then go by modules rest
+    /// segments point to
     fn resolve_path_absolute(&mut self, target_ns: Namespace, path: &Path) -> Res {
         let search_mod =
             self.resolve_module_relative(path.segments().first().unwrap().expect_name(), path);
@@ -289,8 +292,8 @@ impl<'ast> NameResolver<'ast> {
                 //     .text(format!("Invalid path `{}`", path))
                 //     .label(
                 //         seg.span(),
-                //         format!("{} must be a type or module name", seg_name),
-                //     )
+                //         format!("{} must be a type or module name",
+                // seg_name),     )
                 //     .emit(self);
                 // return Res::error();
             }

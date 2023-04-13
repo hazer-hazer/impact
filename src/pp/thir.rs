@@ -1,9 +1,8 @@
+use super::{AstLikePP, AstPPMode};
 use crate::{
     mir::thir::{BlockId, ExprId, ExprKind, Pat, PatKind, Stmt, StmtId, THIR},
     session::Session,
 };
-
-use super::{AstLikePP, AstPPMode};
 
 pub struct ThirPrinter<'a> {
     pp: AstLikePP<'a>,

@@ -1,10 +1,9 @@
+use self::message::Message;
 use crate::{
     cli::verbose,
     interface::interface::InterruptionReason,
     session::{Session, StageOutput, StageResult},
 };
-
-use self::message::Message;
 
 pub mod debug_emitter;
 pub mod message;

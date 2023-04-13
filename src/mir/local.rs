@@ -1,9 +1,11 @@
-use crate::span::span::{Ident, Internable, Span};
-
 use super::{
     build::MirBuilder,
     thir::{LocalVar, ParamId, Pat, PatKind},
     LValue, Local, LocalInfo, Ty,
+};
+use crate::span::{
+    sym::{Ident, Internable},
+    Span,
 };
 
 impl<'ctx> MirBuilder<'ctx> {

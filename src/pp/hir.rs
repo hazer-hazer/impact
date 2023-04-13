@@ -1,10 +1,8 @@
+use super::{AstLikePP, AstPPMode};
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{
-            Adt, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode,
-            ROOT_ITEM_ID,
-        },
+        item::{Adt, ExternItem, Field, ItemId, Mod, TyAlias, Variant, ROOT_ITEM_ID},
         pat::{Pat, PatKind},
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -14,10 +12,8 @@ use crate::{
     parser::token::Punct,
     resolve::builtin::Builtin,
     session::Session,
-    span::span::{Ident, Kw},
+    span::sym::{Ident, Kw},
 };
-
-use super::{AstLikePP, AstPPMode};
 
 macro_rules! walk_block {
     ($self: ident, $nodes: expr, $visitor: ident, $hir: expr) => {{
@@ -95,11 +91,12 @@ impl<'a> HirVisitor for HirPP<'a> {
     //     let id = *id;
     //     let item = hir.item(id);
     //     match item.kind() {
-    //         ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id, hir),
-    //         ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
-    //         ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
-    //         ItemKind::Func(value) => self.visit_func_item(item.name(), value, id, hir),
-    //         ItemKind::ExternItem(extern_item) => {
+    //         ItemKind::TyAlias(ty) => self.visit_type_item(item.name(), ty, id,
+    // hir),         ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id,
+    // hir),         ItemKind::Value(value) =>
+    // self.visit_value_item(item.name(), value, id, hir),
+    //         ItemKind::Func(value) => self.visit_func_item(item.name(), value, id,
+    // hir),         ItemKind::ExternItem(extern_item) => {
     //             self.visit_extern_item(item.name(), extern_item, id, hir)
     //         },
     //     }

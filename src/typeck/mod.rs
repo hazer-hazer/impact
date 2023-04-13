@@ -1,8 +1,16 @@
 use std::fmt::Display;
 
+use self::{
+    ctx::{AlgoCtx, GlobalCtx, InferCtx},
+    kind::{Kind, KindEx, KindExId, KindSort},
+    ty::{
+        Adt, ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty,
+        TyKind, TyVarId, Variant,
+    },
+    tyctx::TyCtx,
+};
 use crate::{
     cli::verbose,
-    dt::idx::IndexVec,
     hir::{
         self,
         item::{ItemId, TyAlias},
@@ -16,17 +24,10 @@ use crate::{
         def::{DefId, DefKind},
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Internable, WithSpan},
-};
-
-use self::{
-    ctx::{AlgoCtx, GlobalCtx, InferCtx},
-    kind::{Kind, KindEx, KindExId, KindSort},
-    ty::{
-        Adt, ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty,
-        TyKind, TyVarId, Variant, VariantId,
+    span::{
+        sym::{Ident, Internable},
+        WithSpan,
     },
-    tyctx::TyCtx,
 };
 
 pub mod builtin;
@@ -176,7 +177,8 @@ impl<'hir> Typecker<'hir> {
         self.global_ctx.add(depth, self.ctx_stack.pop().unwrap());
     }
 
-    /// Returns try mode flag and context depth before try mode to restore to them
+    /// Returns try mode flag and context depth before try mode to restore to
+    /// them
     fn enter_try_mode(&mut self) -> (bool, usize) {
         let restore = (self.try_mode, self.ctx_depth());
 
@@ -223,9 +225,9 @@ impl<'hir> Typecker<'hir> {
         self.exit_try_mode(res, restore)
     }
 
-    /// Goes up from current context to the root looking for something in each scope
-    /// Returns result of the callback (if some returned) and depth of context scope
-    /// where callback returned result
+    /// Goes up from current context to the root looking for something in each
+    /// scope Returns result of the callback (if some returned) and depth of
+    /// context scope where callback returned result
     fn _ascend_ctx<T>(&self, mut f: impl FnMut(&InferCtx) -> Option<T>) -> Option<(T, usize)> {
         let mut ctx_depth = self.ctx_depth() - 1;
 
@@ -560,8 +562,9 @@ impl<'hir> Typecker<'hir> {
             &Res::Def(def_kind, def_id) => {
                 match def_kind {
                     DefKind::TyAlias => {
-                        // Path conversion is done linearly, i.e. we get type alias from HIR and convert its type, caching it
-                        // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
+                        // Path conversion is done linearly, i.e. we get type alias from HIR and
+                        // convert its type, caching it FIXME: Type alias
+                        // item gotten two times: one here, one in `conv_ty_alias`
                         self.conv_ty_alias(def_id)
                     },
 
@@ -802,8 +805,8 @@ impl<'hir> Stage<()> for Typecker<'hir> {
 //     }
 
 //     // fn get_typecker<'a>(hir: &'a HIR) -> Typecker<'hir> {
-//     //     Typecker<'hir>::new(Session::new(ConfigBuilder::new().emit()), hir)
-//     // }
+//     //     Typecker<'hir>::new(Session::new(ConfigBuilder::new().emit()),
+// hir)     // }
 
 //     mod substitution {
 

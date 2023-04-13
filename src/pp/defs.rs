@@ -1,9 +1,8 @@
+use super::AstLikePP;
 use crate::{
     parser::token::Punct,
     resolve::def::{Def, DefKind, Module, ModuleId, ROOT_MODULE_ID},
 };
-
-use super::AstLikePP;
 
 pub trait DefPrinter {
     fn pp_defs(&mut self);

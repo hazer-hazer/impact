@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-
-use clap::{arg, command, ValueEnum};
-use clap::{Parser};
+use clap::{arg, command, Parser, ValueEnum};
 
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, ValueEnum)]
 pub enum StageName {

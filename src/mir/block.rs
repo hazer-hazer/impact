@@ -1,10 +1,9 @@
-use crate::mir::build::unpack;
-
 use super::{
     build::MirBuilder,
     thir::{BlockId, Stmt},
     BBWith, LValue, BB,
 };
+use crate::mir::build::unpack;
 
 impl<'ctx> MirBuilder<'ctx> {
     pub(super) fn block(&mut self, mut bb: BB, block_id: BlockId, dest: LValue) -> BBWith<()> {

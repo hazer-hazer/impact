@@ -225,8 +225,8 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
 }
 
 impl<I: Idx, T> IntoIterator for IndexVec<I, T> {
-    type Item = T;
     type IntoIter = vec::IntoIter<T>;
+    type Item = T;
 
     #[inline]
     fn into_iter(self) -> vec::IntoIter<T> {
@@ -235,8 +235,8 @@ impl<I: Idx, T> IntoIterator for IndexVec<I, T> {
 }
 
 impl<'a, I: Idx, T> IntoIterator for &'a IndexVec<I, T> {
-    type Item = &'a T;
     type IntoIter = slice::Iter<'a, T>;
+    type Item = &'a T;
 
     #[inline]
     fn into_iter(self) -> slice::Iter<'a, T> {
@@ -245,8 +245,8 @@ impl<'a, I: Idx, T> IntoIterator for &'a IndexVec<I, T> {
 }
 
 impl<'a, I: Idx, T> IntoIterator for &'a mut IndexVec<I, T> {
-    type Item = &'a mut T;
     type IntoIter = slice::IterMut<'a, T>;
+    type Item = &'a mut T;
 
     #[inline]
     fn into_iter(self) -> slice::IterMut<'a, T> {
@@ -495,9 +495,8 @@ pub(crate) use declare_idx;
 mod tests {
     use std::{collections::HashMap, time::Instant};
 
-    use crate::cli::color::{Color, Colorize};
-
     use super::*;
+    use crate::cli::color::{Color, Colorize};
 
     declare_idx!(BenchIdx, u32, "BenchIdx#{}", Color::Black);
 

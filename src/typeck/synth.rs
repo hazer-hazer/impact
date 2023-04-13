@@ -1,3 +1,7 @@
+use super::{
+    ty::{Ty, TyKind, VariantId},
+    TyResult, TypeckErr, Typecker, Typed,
+};
 use crate::{
     cli::verbose,
     hir::{
@@ -10,16 +14,9 @@ use crate::{
     },
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
-    span::span::{Ident, Spanned, WithSpan},
+    span::{sym::Ident, Spanned, WithSpan},
     typeck::kind::Kind,
 };
-
-use super::{
-    ty::{Ty, TyKind, VariantId},
-    TyResult, TypeckErr, Typed,
-};
-
-use super::Typecker;
 impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         let hir_id = HirId::new_owner(item.def_id());
@@ -54,8 +51,9 @@ impl<'hir> Typecker<'hir> {
                 Ty::unit()
             },
             // Note: Actually, declaration type is a unit type, but we save it
-            // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to TyCtx::typed) which will check if definition CAN have a type
-            // TODO: Merge these branches?
+            // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to
+            // TyCtx::typed) which will check if definition CAN have a type TODO: Merge
+            // these branches?
             &ItemKind::Value(value) => {
                 let value_ty = self.synth_body(item.def_id(), value)?;
                 self.type_term(item.name(), value_ty);
@@ -233,7 +231,8 @@ impl<'hir> Typecker<'hir> {
     //     }
     // }
 
-    /// Get pattern type based on pattern, e.g. unit pattern `()` definitely is of unit type.
+    /// Get pattern type based on pattern, e.g. unit pattern `()` definitely is
+    /// of unit type.
     // fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
     //     match self.hir.pat(pat).kind() {
     //         hir::pat::PatKind::Unit => Some(Ty::unit()),
@@ -301,11 +300,11 @@ impl<'hir> Typecker<'hir> {
                 .map(|param| this.get_typed_pat(param))
                 .collect::<Vec<_>>();
 
-            // If we know of which type function parameter is -- check inferred one against it
-            // FIXME: Kinda useless
+            // If we know of which type function parameter is -- check inferred one against
+            // it FIXME: Kinda useless
             // let param_ty = if let Some(early) = early_param_ty {
-            //     this.check_ty_discard_err(Spanned::new(this.hir.pat(param).span(), param_ty), early)
-            // } else {
+            //     this.check_ty_discard_err(Spanned::new(this.hir.pat(param).span(),
+            // param_ty), early) } else {
             //     param_ty
             // };
 
@@ -344,10 +343,10 @@ impl<'hir> Typecker<'hir> {
 
     //     let param_names = self.get_pat_names(lambda.param);
 
-    //     let param_exes = param_names.iter().fold(HashMap::new(), |mut exes, &name| {
-    //         // FIXME: Should sub-pattern names existentials be defined outside this context?
-    //         let ex = self.add_fresh_common_ex();
-    //         self.type_term(name, ex.1);
+    //     let param_exes = param_names.iter().fold(HashMap::new(), |mut exes,
+    // &name| {         // FIXME: Should sub-pattern names existentials be
+    // defined outside this context?         let ex =
+    // self.add_fresh_common_ex();         self.type_term(name, ex.1);
 
     //         assert!(exes.insert(name, ex).is_none());
     //         exes
@@ -358,11 +357,12 @@ impl<'hir> Typecker<'hir> {
     //     self.under_new_ctx(|this| {
     //         // FIXME: Optimize fold moves of vec
     //         param_exes.iter().for_each(|(&name, &ex)| {
-    //             // FIXME: Should sub-pattern names existentials be defined outside this context?
-    //             this.type_term(name, ex.1);
+    //             // FIXME: Should sub-pattern names existentials be defined
+    // outside this context?             this.type_term(name, ex.1);
     //         });
 
-    //         let body_ty = this.check(self.hir.body_value(lambda.body), body_ex.1)?;
+    //         let body_ty = this.check(self.hir.body_value(lambda.body),
+    // body_ex.1)?;
 
     //         let param_ty = this.get_typed_pat(lambda.param);
 

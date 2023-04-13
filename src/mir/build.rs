@@ -1,17 +1,16 @@
 use std::collections::{hash_map::Entry, HashMap};
 
+use super::{
+    thir::{build::ThirBuilder, ExprId, LocalVar, ParamId, THIR},
+    BBWith, Body, BodyBuilder, LValue, Local, MIR,
+};
 use crate::{
     cli::verbose,
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, OwnerId, HIR},
     message::message::MessageStorage,
     pp::thir::ThirPrinter,
-    resolve::{builtin::Builtin},
+    resolve::builtin::Builtin,
     session::{Session, Stage, StageOutput},
-};
-
-use super::{
-    thir::{build::ThirBuilder, ExprId, LocalVar, ParamId, THIR},
-    BBWith, Body, BodyBuilder, LValue, Local, MIR,
 };
 
 macro_rules! unpack {
@@ -139,7 +138,7 @@ impl<'ctx> BuildFullMir<'ctx> {
 impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
     fn visit_func_item(
         &mut self,
-        _name: crate::span::span::Ident,
+        _name: crate::span::sym::Ident,
         body: &hir::BodyId,
         id: hir::item::ItemId,
         _hir: &HIR,
@@ -156,7 +155,7 @@ impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
 
     fn visit_value_item(
         &mut self,
-        _name: crate::span::span::Ident,
+        _name: crate::span::sym::Ident,
         value: &BodyId,
         id: hir::item::ItemId,
         _hir: &HIR,

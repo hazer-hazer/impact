@@ -1,6 +1,7 @@
 # Impact programming language
 
 This is a toy programming language meant to practice some new topics for me:
+
 - Implementing programming language in Rust from scratch
 - Bidirectional type checking
 - Algebraic effects
@@ -16,23 +17,23 @@ Comparing with my primary project -- [_Jacy_](https://github.com/jacylang/jacy) 
 This list contains all reference I used to implement different stages and features.
 
 Of course, I've needed Rust documentation along with `rustc` internals (rust is the best large programming language which source code I can read and even understand something)
+
 - [Rust std documentation 😸](https://doc.rust-lang.org/std/)
 - [`rustc` documentation and source](https://doc.rust-lang.org/stable/nightly-rustc/)
 - [`rustc` book](https://doc.rust-lang.org/rustc/index.html)
 
-
 #### Type checking
 
 - ["Complete and Easy Bidirectional Typechecking
-for Higher-Rank Polymorphism" (PDF)](https://arxiv.org/pdf/1306.6032.pdf) and its implementations
+  for Higher-Rank Polymorphism" (PDF)](https://arxiv.org/pdf/1306.6032.pdf) and its implementations
   - [**JS/TS version** multiple implementations](https://github.com/atennapel/bidirectional.js) by [Albert ten Napel / atennapel](https://github.com/atennapel)
-  -  [**Rust version**](https://github.com/JDemler/BidirectionalTypechecking) by [Jakob Demler
- / JDemler](https://github.com/JDemler)
+  - [**Rust version**](https://github.com/JDemler/BidirectionalTypechecking) by [Jakob Demler
+    / JDemler](https://github.com/JDemler)
   - [**Rust version**](https://github.com/nikomatsakis/bidir-type-infer) by [Niko Matsakis
- / nikomatsakis](https://github.com/nikomatsakis) nico nico nii
+    / nikomatsakis](https://github.com/nikomatsakis) nico nico nii
   - [**Lean4 version**](https://github.com/gabriel-fallen/bidirectional-demo) by [Alexander Chichigin
- / gabriel-fallen](https://github.com/gabriel-fallen)
- - [**Haskell version**](https://github.com/zehaochen19/vanilla-lang/tree/master) by [Zehao Chen / zehaochen19](https://github.com/zehaochen19). Pretty implementation of basic programming language with bidir as typeck algorithm.
+    / gabriel-fallen](https://github.com/gabriel-fallen)
+- [**Haskell version**](https://github.com/zehaochen19/vanilla-lang/tree/master) by [Zehao Chen / zehaochen19](https://github.com/zehaochen19). Pretty implementation of basic programming language with bidir as typeck algorithm.
 
 #### Syntax
 
@@ -45,3 +46,9 @@ for Higher-Rank Polymorphism" (PDF)](https://arxiv.org/pdf/1306.6032.pdf) and it
 I began this project with one main point in development -- KISS, but no external tools were used which would help me with, for example, parsing.
 The reason is that I wanted to try Rust as a replacement for C++ that I used in _Jacy_.
 Right now, writing this, I'm implementing type check, parser stage is mostly done and the only thing I want to say about using Rust as a programming language for compiler development is that it's freaking amazing. Really, I feel so good with it, I would rewrite _Jacy_ in it.
+
+## For developers
+
+### rustfmt
+
+Nightly is used for cool features support, be careful/.

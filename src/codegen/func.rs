@@ -5,6 +5,7 @@ use inkwell::{
     AddressSpace,
 };
 
+use super::ctx::CodeGenCtx;
 use crate::{
     cli::verbose,
     hir::{
@@ -15,12 +16,10 @@ use crate::{
     message::message::{MessageStorage, MessagesResult},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
-    span::span::Ident,
+    span::sym::Ident,
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
     utils::macros::match_expected,
 };
-
-use super::ctx::CodeGenCtx;
 
 // TODO: Rename `FunctionsCodeGen` to `BodyOwnersCodeGen`?
 
@@ -115,8 +114,9 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             return;
         }
 
-        // For Func or Lambda owner we get its type (possibly polymorphic, in which case we monomorphize it).
-        // For value we'll generate anonymous function of type `() -> ValueType` and then immediately call it.
+        // For Func or Lambda owner we get its type (possibly polymorphic, in which case
+        // we monomorphize it). For value we'll generate anonymous function of
+        // type `() -> ValueType` and then immediately call it.
         let func_ty = match owner.kind {
             BodyOwnerKind::Value => InstantiatedTy::Mono(Ty::func(
                 Some(def_id),

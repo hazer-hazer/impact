@@ -11,19 +11,16 @@ use std::{
     fmt::Display,
 };
 
+use self::scalar::Scalar;
+pub use crate::typeck::ty::Ty;
 use crate::{
-    cli::color::Color,
-    cli::color::Colorize,
+    cli::color::{Color, Colorize},
     dt::idx::{declare_idx, IndexVec},
     hir::BodyId,
     resolve::{builtin::Builtin, def::DefId},
-    span::span::{Ident, Span},
+    span::{sym::Ident, Span},
     typeck::ty::VariantId,
 };
-
-use self::scalar::Scalar;
-
-pub use crate::typeck::ty::Ty;
 
 declare_idx!(Local, u32, "_{}", Color::White);
 declare_idx!(BB, u32, "bb{}", Color::White);

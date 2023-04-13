@@ -1,12 +1,15 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
+use super::lexer::LexerCharCheck;
 use crate::{
     dt::maps::enum_str_map,
-    span::span::{impl_with_span, Ident, Internable, Kw, Span, SpanLen, Symbol, WithSpan},
+    span::{
+        impl_with_span,
+        sym::{Ident, Internable, Kw, Symbol},
+        Span, SpanLen, WithSpan,
+    },
 };
-
-use super::lexer::LexerCharCheck;
 
 enum_str_map! {
     #[derive(PartialEq, Debug, Clone, Copy)]
@@ -169,7 +172,7 @@ impl TryFrom<Token> for Ident {
                 TokenKind::Kw(Kw::Unit) => "()".intern(),
                 TokenKind::OpIdent(sym) | TokenKind::Ident(sym) => sym,
                 TokenKind::Int(val, kind) if kind == IntKind::Unknown => val.to_string().intern(),
-                TokenKind::Int(_, _) => return Err(IdentIntoTokenErr::IntWithKind),
+                TokenKind::Int(..) => return Err(IdentIntoTokenErr::IntWithKind),
                 _ => return Err(IdentIntoTokenErr::Unreachable),
             },
         ))
@@ -317,8 +320,8 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
             (TokenKind::Eof, TokenCmp::Eof)
             | (TokenKind::Nl, TokenCmp::Nl)
             | (TokenKind::Bool(_), TokenCmp::Bool)
-            | (TokenKind::Int(_, _), TokenCmp::Int)
-            | (TokenKind::Float(_, _), TokenCmp::Float)
+            | (TokenKind::Int(..), TokenCmp::Int)
+            | (TokenKind::Float(..), TokenCmp::Float)
             | (TokenKind::String(_), TokenCmp::String)
             | (TokenKind::Ident(_), TokenCmp::Ident)
             | (TokenKind::OpIdent(_), TokenCmp::OpIdent)

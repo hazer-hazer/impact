@@ -1,5 +1,6 @@
-use std::{str::from_utf8};
+use std::str::from_utf8;
 
+use super::{hir::walk_each_delim, AstLikePP};
 use crate::{
     hir::{
         expr::Lambda,
@@ -13,10 +14,8 @@ use crate::{
         TerminatorKind, MIR,
     },
     session::Session,
-    span::span::Ident,
+    span::sym::Ident,
 };
-
-use super::{hir::walk_each_delim, AstLikePP};
 
 pub struct MirPrinter<'ctx> {
     pub pp: AstLikePP<'ctx>,

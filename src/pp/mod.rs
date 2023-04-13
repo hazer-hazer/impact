@@ -8,7 +8,7 @@ use crate::{
         res::{NamePath, ResKind},
     },
     session::Session,
-    span::span::{Ident, Kw},
+    span::sym::{Ident, Kw},
 };
 
 pub mod ast;

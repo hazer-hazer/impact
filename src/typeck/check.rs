@@ -1,21 +1,18 @@
+use super::{
+    ctx::InferCtx,
+    ty::{ExKind, Existential, FloatKind, IntKind, MapTy, Ty, TyKind},
+    TyResult, Typecker,
+};
 use crate::{
     dt::idx::IndexVec,
     hir::expr::{Expr, ExprKind, Lambda, Lit},
     message::message::MessageBuilder,
-    span::span::{Ident, Spanned, WithSpan},
+    span::{sym::Ident, Spanned, WithSpan},
     typeck::{
         ty::{Adt, ExPair, Field, FieldId, Variant, VariantId},
         TypeckErr,
     },
 };
-
-use super::{
-    ctx::InferCtx,
-    ty::{ExKind, Existential, FloatKind, IntKind, MapTy, Ty, TyKind},
-    TyResult,
-};
-
-use super::Typecker;
 
 #[derive(Clone, Copy)]
 enum InstantiateDir {
@@ -33,9 +30,8 @@ impl InstantiateDir {
 }
 
 impl<'hir> Typecker<'hir> {
-    /**
-     * Checks if expression is of type `ty` assuming that returned error is reported.
-     */
+    /// Checks if expression is of type `ty` assuming that returned error is
+    /// reported.
     pub fn check_discard_err(&mut self, expr_id: Expr, ty: Ty) -> Ty {
         match self.check(expr_id, ty) {
             Ok(ok) => ok,
@@ -57,10 +53,8 @@ impl<'hir> Typecker<'hir> {
     //     })
     // }
 
-    /**
-     * Checks if expression is of type `ty`.
-     * Reports `Type mismatch` error.
-     */
+    /// Checks if expression is of type `ty`.
+    /// Reports `Type mismatch` error.
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
@@ -89,9 +83,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    /**
-     * Type check logic starts here.
-     */
+    /// Type check logic starts here.
     fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr = self.hir.expr(expr_id);
 
@@ -160,9 +152,8 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    /**
-     * Checks if `l_ty` is a subtype of `r_ty` assuming that returned error is reported.
-     */
+    /// Checks if `l_ty` is a subtype of `r_ty` assuming that returned error is
+    /// reported.
     pub fn check_ty_discard_err(&mut self, l_ty: Spanned<Ty>, ty: Ty) -> Ty {
         match self.check_ty(l_ty, ty) {
             Ok(ok) => ok,
@@ -173,10 +164,8 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    /**
-     * Checks if `l_ty` is a subtype of `r_ty`.
-     * Reports `Type mismatch` error.
-     */
+    /// Checks if `l_ty` is a subtype of `r_ty`.
+    /// Reports `Type mismatch` error.
     pub fn check_ty(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
         match self.subtype(l_ty, r_ty) {
             Ok(ok) => Ok(ok),
@@ -196,9 +185,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     // Subtyping //
-    /**
-     * Checks if expression's type is a subtype of `ty`.
-     */
+    /// Checks if expression's type is a subtype of `ty`.
     fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr_ty = self.synth_expr(expr_id)?;
 
@@ -209,12 +196,10 @@ impl<'hir> Typecker<'hir> {
         self.subtype(Spanned::new(span, l), r)
     }
 
-    /**
-     * Checks if `l_ty` is a subtype of `r_ty`.
-     *
-     * If we've got an error and `l_ty` is an existential, it is solved as an error.
-     * This logic might be invalid and should be verified.
-     */
+    /// Checks if `l_ty` is a subtype of `r_ty`.
+    ///
+    /// If we've got an error and `l_ty` is an existential, it is solved as an
+    /// error. This logic might be invalid and should be verified.
     fn subtype(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
         match self._subtype(*l_ty.node(), r_ty) {
             Ok(ty) => Ok(ty.apply_ctx(self.ctx())),
@@ -242,9 +227,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    /**
-     * Subtype logic starts here.
-     */
+    /// Subtype logic starts here.
     pub fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         assert!(self.ty_wf(l_ty).is_ok());
         assert!(self.ty_wf(r_ty).is_ok());
@@ -360,10 +343,8 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    /**
-     * This function is a attempt to generalize logic of left and right instantiations.
-     * It should be rewritten carefully and used.
-     */
+    /// This function is a attempt to generalize logic of left and right
+    /// instantiations. It should be rewritten carefully and used.
     #[deprecated]
     fn try_instantiate_common(&mut self, ex: Existential, ty: Ty) -> TyResult<Ty> {
         // Inst(L|R)Reach
@@ -395,9 +376,7 @@ impl<'hir> Typecker<'hir> {
         Err(TypeckErr::Check)
     }
 
-    /**
-     * InstantiateL
-     */
+    /// InstantiateL
     fn instantiate_l(&mut self, ex: Existential, r_ty: Ty) -> TyResult<Ty> {
         if let &TyKind::Existential(beta_ex) = r_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
@@ -436,9 +415,7 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    /**
-     * InstantiateR
-     */
+    /// InstantiateR
     fn instantiate_r(&mut self, l_ty: Ty, ex: Existential) -> TyResult<Ty> {
         if let &TyKind::Existential(beta_ex) = l_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {

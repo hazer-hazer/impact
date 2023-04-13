@@ -1,3 +1,4 @@
+use super::AstLikePP;
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
@@ -5,15 +6,12 @@ use crate::{
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
-        visitor::walk_pr,
-        visitor::AstVisitor,
+        visitor::{walk_pr, AstVisitor},
         ErrorNode, IdentNode, NodeId, Path, WithNodeId, AST, N, PR,
     },
     parser::token::Punct,
-    span::span::{Ident, Kw},
+    span::sym::{Ident, Kw},
 };
-
-use super::AstLikePP;
 
 macro_rules! walk_block {
     ($self: ident, $prs: expr, $ok_visitor: ident) => {{

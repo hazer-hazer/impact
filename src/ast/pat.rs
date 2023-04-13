@@ -1,8 +1,7 @@
 use std::fmt::Display;
 
-use crate::span::span::{Ident, Span, WithSpan, impl_with_span};
-
 use super::{pr_display, NodeId, WithNodeId, PR};
+use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 
 #[derive(Debug)]
 pub enum PatKind {

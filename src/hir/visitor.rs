@@ -1,13 +1,12 @@
-use crate::{resolve::builtin::Builtin, span::span::Ident};
-
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{Adt, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant, VariantNode},
+    item::{Adt, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant},
     pat::{Pat, PatKind},
     stmt::{Local, Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
     BodyId, BodyOwner, Path, HIR,
 };
+use crate::{resolve::builtin::Builtin, span::sym::Ident};
 
 macro_rules! walk_each {
     ($self: ident, $els: expr, $visitor: ident, $hir: expr) => {

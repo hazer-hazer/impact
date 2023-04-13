@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
+use super::ty::{IntKind, Ty};
 use crate::{
     resolve::builtin::Builtin,
-    typeck::{kind::Kind, kind::KindVarId, ty::TyVarId},
+    typeck::{
+        kind::{Kind, KindVarId},
+        ty::TyVarId,
+    },
 };
-
-use super::ty::{IntKind, Ty};
 
 pub fn builtins() -> HashMap<Builtin, Ty> {
     let mut ty_vars = HashMap::<&str, TyVarId>::new();

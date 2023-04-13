@@ -1,15 +1,14 @@
-use crate::{
-    cli::verbose,
-    mir::{thir::Expr, InfixOp},
-    resolve::{builtin::Builtin, def::DefKind},
-    typeck::ty::{FloatKind, IntKind},
-};
-
 use super::{
     build::{unpack, MirBuilder},
     scalar::Scalar,
     thir::{ExprCategory, ExprId, ExprKind, Lit, Pat, PatKind},
     BBWith, Const, LValue, Local, Operand, RValue, Ty, BB,
+};
+use crate::{
+    cli::verbose,
+    mir::{thir::Expr, InfixOp},
+    resolve::{builtin::Builtin, def::DefKind},
+    typeck::ty::{FloatKind, IntKind},
 };
 
 impl<'ctx> MirBuilder<'ctx> {
@@ -63,16 +62,16 @@ impl<'ctx> MirBuilder<'ctx> {
         let expr = self.thir.expr(expr_id);
         match &expr.kind {
             &ExprKind::LocalRef(var) => bb.with(self.resolve_local_var(var).lvalue()),
-            &ExprKind::FieldAccess(expr, field, variant_id) => {
-                let lhs = unpack!(bb = self.as_lvalue(bb, expr));
+            &ExprKind::FieldAccess(expr, _field, _variant_id) => {
+                let _lhs = unpack!(bb = self.as_lvalue(bb, expr));
                 todo!()
             },
             ExprKind::Lit(_)
             | ExprKind::Block(_)
             | ExprKind::Call { .. }
             | ExprKind::Lambda { .. }
-            | ExprKind::Ty(_, _)
-            | ExprKind::Def(_, _)
+            | ExprKind::Ty(..)
+            | ExprKind::Def(..)
             | ExprKind::Ref(_)
             | ExprKind::Builtin(_) => {
                 let temp = unpack!(bb = self.as_temp(bb, expr_id));
@@ -89,7 +88,7 @@ impl<'ctx> MirBuilder<'ctx> {
             // FIXME: We need to gen cast from ascription?
             &ExprKind::Ty(expr_id, _) => self.as_rvalue(bb, expr_id),
 
-            ExprKind::FieldAccess(_, _, _) | ExprKind::Block(_) | ExprKind::LocalRef(_) => {
+            ExprKind::FieldAccess(..) | ExprKind::Block(_) | ExprKind::LocalRef(_) => {
                 assert!(!matches!(
                     expr.categorize(),
                     ExprCategory::AsRValue | ExprCategory::Const
@@ -161,7 +160,8 @@ impl<'ctx> MirBuilder<'ctx> {
                 Builtin::UnitValue => bb.with(self.unit_const().operand().rvalue()),
                 Builtin::AddInt | Builtin::SubInt => {
                     bb.with(RValue::Infix(InfixOp::try_from(bt).unwrap()))
-                    // unreachable!("builtin {} must not appear as a standalone expression", bt)
+                    // unreachable!("builtin {} must not appear as a standalone
+                    // expression", bt)
                 },
                 Builtin::RefTy | Builtin::Str | Builtin::UnitTy | Builtin::I32 => {
                     unreachable!("builtin {} is not an expression", bt)
@@ -181,7 +181,8 @@ impl<'ctx> MirBuilder<'ctx> {
         }
     }
 
-    // fn call_as_rvalue(&mut self, bb: BB, func_ty: &Ty, lhs: &ExprId, args: &[ExprId]) -> BBWith<RValue> {}
+    // fn call_as_rvalue(&mut self, bb: BB, func_ty: &Ty, lhs: &ExprId, args:
+    // &[ExprId]) -> BBWith<RValue> {}
 
     pub(super) fn as_temp(&mut self, bb: BB, expr_id: ExprId) -> BBWith<Local> {
         let &Expr { ty, span, .. } = self.thir.expr(expr_id);
@@ -240,9 +241,9 @@ impl<'ctx> MirBuilder<'ctx> {
             },
 
             ExprKind::Lit(_)
-            | ExprKind::Def(_, _)
+            | ExprKind::Def(..)
             | ExprKind::Lambda { .. }
-            | ExprKind::FieldAccess(_, _, _)
+            | ExprKind::FieldAccess(..)
             | ExprKind::Builtin(_) => {
                 assert!(!matches!(
                     expr.categorize(),

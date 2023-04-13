@@ -1,74 +1,14 @@
 use std::fmt::Display;
 
-use crate::span::span::{impl_with_span, Ident, Internable, Span, WithSpan};
-
 use super::{
     expr::Expr, is_block_ended, pat::Pat, pr_display, prs_display_join, ty::Ty, IsBlockEnded,
     NodeId, NodeKindStr, WithNodeId, N, PR,
 };
-
-#[derive(Debug)]
-pub struct Item {
-    id: NodeId,
-    kind: ItemKind,
-    span: Span,
-}
-
-impl Item {
-    pub fn new(id: NodeId, kind: ItemKind, span: Span) -> Self {
-        Self { id, kind, span }
-    }
-
-    pub fn kind(&self) -> &ItemKind {
-        &self.kind
-    }
-
-    pub fn name(&self) -> Option<&Ident> {
-        match self.kind() {
-            ItemKind::Type(name, _)
-            | ItemKind::Mod(name, _)
-            | ItemKind::Decl(name, _, _)
-            | ItemKind::Data(name, _) => {
-                Some(name.as_ref().expect("Error Ident node in `Item::name`"))
-            },
-            ItemKind::Extern(_) => None,
-        }
-    }
-
-    pub fn is_var(&self) -> bool {
-        match self.kind() {
-            ItemKind::Decl(_, params, _) => params.is_empty(),
-            _ => false,
-        }
-    }
-}
-
-impl IsBlockEnded for Item {
-    fn is_block_ended(&self) -> bool {
-        self.kind.is_block_ended()
-    }
-}
-
-impl WithNodeId for Item {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
-impl_with_span!(Item);
-
-impl Display for Item {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind())
-    }
-}
-
-impl NodeKindStr for Item {
-    fn kind_str(&self) -> String {
-        self.kind().kind_str()
-    }
-}
-
+use crate::span::{
+    impl_with_span,
+    sym::{Ident, Internable},
+    Span, WithSpan,
+};
 #[derive(Debug)]
 pub struct ExternItem {
     id: NodeId,
@@ -168,9 +108,9 @@ pub enum ItemKind {
 impl IsBlockEnded for ItemKind {
     fn is_block_ended(&self) -> bool {
         match self {
-            ItemKind::Type(_, _) => false, // FIXME: Not always
-            ItemKind::Data(_, _) => false, // FIXME: Not always
-            ItemKind::Mod(_, _) | ItemKind::Extern(_) => true,
+            ItemKind::Type(..) => false, // FIXME: Not always
+            ItemKind::Data(..) => false, // FIXME: Not always
+            ItemKind::Mod(..) | ItemKind::Extern(_) => true,
             ItemKind::Decl(_, _, body) => is_block_ended!(body),
         }
     }
@@ -219,9 +159,71 @@ impl NodeKindStr for ItemKind {
         match self {
             ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
             ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
-            ItemKind::Decl(name, _, _) => format!("{} declaration", pr_display(name)),
+            ItemKind::Decl(name, ..) => format!("{} declaration", pr_display(name)),
             ItemKind::Data(name, _) => format!("{} data type", pr_display(name)),
             ItemKind::Extern(_) => format!("extern block"),
         }
     }
 }
+
+#[derive(Debug)]
+pub struct Item {
+    id: NodeId,
+    kind: ItemKind,
+    span: Span,
+}
+
+impl Item {
+    pub fn new(id: NodeId, kind: ItemKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &ItemKind {
+        &self.kind
+    }
+
+    pub fn name(&self) -> Option<&Ident> {
+        match self.kind() {
+            ItemKind::Type(name, _)
+            | ItemKind::Mod(name, _)
+            | ItemKind::Decl(name, ..)
+            | ItemKind::Data(name, _) => {
+                Some(name.as_ref().expect("Error Ident node in `Item::name`"))
+            },
+            ItemKind::Extern(_) => None,
+        }
+    }
+
+    pub fn is_var(&self) -> bool {
+        match self.kind() {
+            ItemKind::Decl(_, params, _) => params.is_empty(),
+            _ => false,
+        }
+    }
+}
+
+impl IsBlockEnded for Item {
+    fn is_block_ended(&self) -> bool {
+        self.kind.is_block_ended()
+    }
+}
+
+impl WithNodeId for Item {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
+impl Display for Item {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind())
+    }
+}
+
+impl NodeKindStr for Item {
+    fn kind_str(&self) -> String {
+        self.kind().kind_str()
+    }
+}
+
+impl_with_span!(Item);

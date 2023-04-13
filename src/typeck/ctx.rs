@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{
-    dt::idx::IndexVec,
-    span::span::{Ident, Symbol},
-};
-
 use super::{
     kind::{Kind, KindEx, KindExId, KindVarId},
     ty::{ExKind, Existential, ExistentialId, Ty, TyVarId},
+};
+use crate::{
+    dt::idx::IndexVec,
+    span::sym::{Ident, Symbol},
 };
 
 pub trait AlgoCtx {
@@ -37,12 +36,10 @@ impl AlgoCtx for GlobalCtx {
 }
 
 impl GlobalCtx {
-    /**
-     * Add context, mostly after popping it from stack.
-     * When we exit context, all existentials need to be saved
-     * because we need them to get a solution for solved types
-     * having either successfully inferred type or a typeck error.
-     */
+    /// Add context, mostly after popping it from stack.
+    /// When we exit context, all existentials need to be saved
+    /// because we need them to get a solution for solved types
+    /// having either successfully inferred type or a typeck error.
     pub fn add(&mut self, depth: usize, ctx: InferCtx) {
         ctx.existentials()
             .iter()
@@ -116,39 +113,41 @@ impl GlobalCtx {
     }
 }
 
-/**
- * InferCtx is a common abstraction similar to algorithmic context
- * from CaEBTC.
- *
- * TODO: Possible optimization is to split `InferCtx` to two kinds: `KindInferCtx` and `TyInferCtx`.
- * TODO:  Because kind existentials and variables do not exists on the same context frame at one moment.
- */
+/// InferCtx is a common abstraction similar to algorithmic context
+/// from CaEBTC.
+///
+/// TODO: Possible optimization is to split `InferCtx` to two kinds:
+/// `KindInferCtx` and `TyInferCtx`. TODO:  Because kind existentials and
+/// variables do not exists on the same context frame at one moment.
 #[derive(Default, Clone, Debug)]
 pub struct InferCtx {
     /// Existentials defined in current context
     existentials: Vec<Existential>,
 
     /// Existentials solved in current context. Leak to global context.
-    // Note: I end up with storing `solved` and unsolved existentials separately due to `try` logic.
-    //  We need to enter new "try to"-context under which we do not violate upper context.
+    // Note: I end up with storing `solved` and unsolved existentials separately due to `try`
+    // logic.  We need to enter new "try to"-context under which we do not violate upper
+    // context.
     solved: IndexVec<ExistentialId, Option<Ty>>,
 
-    /// Type variables defined in current context. Do not leak to global context.
-    /// Actually only used for well-formedness checks.
+    /// Type variables defined in current context. Do not leak to global
+    /// context. Actually only used for well-formedness checks.
     vars: Vec<TyVarId>,
 
     /// Typed terms. Do not leak to global context
-    /// FIXME: Possibly get rid of this. Could be replaced with `HirId -> Ty` bindings globally.
+    /// FIXME: Possibly get rid of this. Could be replaced with `HirId -> Ty`
+    /// bindings globally.
     terms: HashMap<Symbol, Ty>,
 
-    /// Kind variables defined in current context. Do not leak to global context.
-    /// As type variables only used for well-formedness checks.
+    /// Kind variables defined in current context. Do not leak to global
+    /// context. As type variables only used for well-formedness checks.
     kind_vars: Vec<KindVarId>,
 
     /// Kind existentials defined in current context.
     kind_exes: Vec<KindEx>,
 
-    /// Kind existentials solved in current context. Have same properties as `solved`.
+    /// Kind existentials solved in current context. Have same properties as
+    /// `solved`.
     kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
 }
 

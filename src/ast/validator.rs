@@ -1,20 +1,19 @@
-use crate::{
-    message::message::{
-        Message, MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution, SolutionKind,
-    },
-    session::{Session, Stage, StageOutput},
-    span::span::{Ident, Symbol},
-};
+use convert_case::Case;
+use lazy_static::lazy_static;
+use regex::Regex;
 
 use super::{
     item::{ExternItem, Field, Item, ItemKind, Variant},
     visitor::{walk_each_pr, walk_pr, AstVisitor},
     ErrorNode, NodeId, Path, WithNodeId, AST, PR,
 };
-
-use convert_case::Case;
-use lazy_static::lazy_static;
-use regex::Regex;
+use crate::{
+    message::message::{
+        Message, MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution, SolutionKind,
+    },
+    session::{Session, Stage, StageOutput},
+    span::sym::{Ident, Symbol},
+};
 
 lazy_static! {
     static ref TYPENAME_REGEX: Regex = Regex::new(r"^[A-Z][A-z\d]*$").unwrap();
@@ -99,11 +98,9 @@ impl<'ast> AstValidator<'ast> {
         }
     }
 
-    /**
-     * Typename is PascalCase name, i.e.:
-     * - All words start with an uppercase letter, even words after digits
-     * - It does not contain underscore
-     */
+    /// Typename is PascalCase name, i.e.:
+    /// - All words start with an uppercase letter, even words after digits
+    /// - It does not contain underscore
     fn validate_typename(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
         let name = *name;
         let sym = name.sym();
@@ -117,12 +114,10 @@ impl<'ast> AstValidator<'ast> {
         None
     }
 
-    /**
-     * Varname is camelCase name, i.e.:
-     * - First word starts with a lowercase letter
-     * - All subsequent words start with an uppercase letter
-     * - It does not contain underscore
-     */
+    /// Varname is camelCase name, i.e.:
+    /// - First word starts with a lowercase letter
+    /// - All subsequent words start with an uppercase letter
+    /// - It does not contain underscore
     fn validate_varname(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
         let name = *name;
         let sym = name.sym();
@@ -136,11 +131,9 @@ impl<'ast> AstValidator<'ast> {
         None
     }
 
-    /**
-     * Module name is snake_case (or one word) name i.e.:
-     * - All letters are lowercase
-     * - Words are delimited with underscores
-     */
+    /// Module name is snake_case (or one word) name i.e.:
+    /// - All letters are lowercase
+    /// - Words are delimited with underscores
     fn validate_mod_name(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
         let name = *name;
         let sym = name.sym();
@@ -154,11 +147,9 @@ impl<'ast> AstValidator<'ast> {
         None
     }
 
-    /**
-     * Constant name is SCREAMING_SNAKE_CASE (or one uppercase word) name i.e.:
-     * - All letters are uppercase
-     * - Words are delimited with underscores
-     */
+    /// Constant name is SCREAMING_SNAKE_CASE (or one uppercase word) name i.e.:
+    /// - All letters are uppercase
+    /// - Words are delimited with underscores
     fn validate_const_name(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
         let name = *name;
         let sym = name.sym();
@@ -172,9 +163,7 @@ impl<'ast> AstValidator<'ast> {
         None
     }
 
-    /**
-     * File name is either snake_case or kebab-case
-     */
+    /// File name is either snake_case or kebab-case
     fn validate_file_name(&self, name: &Ident, kind: NameKind) -> Option<Solution> {
         let name = *name;
         let sym = name.sym();

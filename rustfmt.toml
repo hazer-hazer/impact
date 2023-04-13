@@ -2,3 +2,16 @@ match_block_trailing_comma = true
 newline_style = "Unix"
 use_field_init_shorthand = true
 use_try_shorthand = true
+tab_spaces = 4
+match_arm_leading_pipes = "Never"
+
+
+unstable_features = true
+wrap_comments = true
+group_imports = "StdExternalCrate"
+reorder_impl_items = true
+normalize_comments = true
+imports_granularity = "Crate"
+format_macro_bodies = true
+condense_wildcard_suffixes = true
+format_code_in_doc_comments = true

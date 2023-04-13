@@ -24,7 +24,10 @@ use crate::{
         res::{self, NamePath},
     },
     session::{Session, Stage, StageOutput},
-    span::span::{Ident, Internable, Kw, Span, WithSpan},
+    span::{
+        sym::{Ident, Internable, Kw},
+        Span, WithSpan,
+    },
 };
 
 macro_rules! lower_pr {

@@ -1,8 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
+use super::def::DefId;
 use crate::ast::NodeId;
-
-use super::{def::DefId};
 
 // #[derive(Debug, Clone, Copy)]
 // pub struct NodeId(NodeId);
@@ -15,10 +14,8 @@ pub enum ResKind {
     Error,
 }
 
-/**
- * The unit of name resolution.
- * Created for each name in source code after items are defined.
- */
+/// The unit of name resolution.
+/// Created for each name in source code after items are defined.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Res {
     kind: ResKind,

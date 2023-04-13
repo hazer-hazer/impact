@@ -6,6 +6,11 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use super::{
+    builtin::builtins,
+    ctx::GlobalCtx,
+    ty::{FieldId, MapTy, Ty, TyKind, TyMap, TyVarId},
+};
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
@@ -14,13 +19,7 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefMap},
     },
-    span::span::Ident,
-};
-
-use super::{
-    builtin::builtins,
-    ctx::GlobalCtx,
-    ty::{FieldId, MapTy, Ty, TyKind, TyMap, TyVarId, Variant, VariantId},
+    span::sym::Ident,
 };
 
 #[derive(Debug, Default, PartialEq, Eq, Hash)]
@@ -221,11 +220,12 @@ impl TyCtx {
     }
 
     /// Get list of expressions with unique types bound in definition.
-    /// I.e., having function `id :: forall x. x` and two calls `id 1` and `id 2`,
-    /// we'll get list with expression id of one of this calls, because `x` is bound only to some int.
-    /// Then, we can get substitutions for this definitions from `expr_ty_bindings`.
-    /// We have `Expr -> (TyVarId -> Ty)[]` and `DefId -> set Expr` mapping.
-    /// The result must be a list of expressions with unique substitutions of definition type variables.
+    /// I.e., having function `id :: forall x. x` and two calls `id 1` and `id
+    /// 2`, we'll get list with expression id of one of this calls, because
+    /// `x` is bound only to some int. Then, we can get substitutions for
+    /// this definitions from `expr_ty_bindings`. We have `Expr -> (TyVarId
+    /// -> Ty)[]` and `DefId -> set Expr` mapping. The result must be a list
+    /// of expressions with unique substitutions of definition type variables.
     pub fn unique_def_bound_usages(&self, def_id: DefId) -> Vec<Expr> {
         let mut unique_bindings = HashSet::<u64>::new();
         self.def_ty_bindings.get_unwrap(def_id).iter().fold(

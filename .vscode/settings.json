@@ -49,5 +49,6 @@
     "Upvars",
     "Uvar"
   ],
-  "rust-analyzer.trace.extension": true
+  "rust-analyzer.trace.extension": true,
+  "rust-analyzer.rustfmt.extraArgs": ["+nightly"]
 }

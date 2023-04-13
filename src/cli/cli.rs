@@ -1,10 +1,7 @@
-use clap::error::ErrorKind;
-
-use clap::{ArgMatches, Error, Parser};
-
-use crate::config::config::{Config, ConfigBuilder};
+use clap::{error::ErrorKind, ArgMatches, Error, Parser};
 
 use super::command::{Args, PPStages, StageName};
+use crate::config::config::{Config, ConfigBuilder};
 
 impl TryFrom<ArgMatches> for PPStages {
     type Error = Error;

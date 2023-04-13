@@ -3,7 +3,12 @@ use std::fmt::Display;
 use inkwell::context::Context;
 
 use crate::{
-    ast::{validator::AstValidator, visitor::AstVisitor, AstMapFiller, MappedAst, NodeId},
+    ast::{
+        map::{AstMapFiller, MappedAst},
+        validator::AstValidator,
+        visitor::AstVisitor,
+        NodeId,
+    },
     cli::{command::StageName, verbose},
     codegen::codegen::CodeGen,
     config::config::Config,
@@ -18,7 +23,8 @@ use crate::{
         def::{DefId, ModuleId},
         resolve::NameResolver,
     },
-    session::{Session, Source, Stage},
+    session::{Session, Stage},
+    span::source::Source,
     typeck::Typecker,
 };
 

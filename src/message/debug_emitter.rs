@@ -1,6 +1,5 @@
-use crate::session::Session;
-
 use super::{message::Message, MessageEmitter};
+use crate::session::Session;
 
 pub struct DebugEmitter {}
 

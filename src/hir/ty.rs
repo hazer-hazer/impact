@@ -1,9 +1,8 @@
+use super::{HirId, Path, WithHirId};
 use crate::{
     resolve::builtin::Builtin,
-    span::span::{Span, WithSpan, impl_with_span},
+    span::{impl_with_span, Span, WithSpan},
 };
-
-use super::{HirId, Path, WithHirId};
 
 #[derive(Debug)]
 pub struct TyNode {

@@ -1,5 +1,3 @@
-use crate::span::span::Ident;
-
 use super::{
     expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
     item::{ExternItem, Field, Item, ItemKind, Variant},
@@ -8,6 +6,7 @@ use super::{
     ty::{Ty, TyKind, TyPath},
     ErrorNode, IdentNode, NodeId, Path, WithNodeId, AST, N, PR,
 };
+use crate::span::sym::Ident;
 
 macro_rules! walk_pr {
     ($self: ident, $pr: expr, $ok_visitor: ident) => {
@@ -37,11 +36,11 @@ macro_rules! walk_each_pr {
 
 pub(crate) use walk_each_pr;
 
-/// This might be not a right solution, but AstVisitor as HirVisitor is a walker by default,
-///  i.e it walks through all nodes as if visitors return unit type.
-/// It may cause silent non-implemented problem in visitors with non-unit return type, but it allows
-///  me to use visitors both for PP and walking in some stages where we don't need to implement visitor
-///  for all nodes.
+/// This might be not a right solution, but AstVisitor as HirVisitor is a walker
+/// by default,  i.e it walks through all nodes as if visitors return unit type.
+/// It may cause silent non-implemented problem in visitors with non-unit return
+/// type, but it allows  me to use visitors both for PP and walking in some
+/// stages where we don't need to implement visitor  for all nodes.
 /// So keep in mind implementing all visitors you need or
 pub trait AstVisitor<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode);

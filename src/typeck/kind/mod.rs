@@ -9,15 +9,14 @@ use std::{
 
 use once_cell::sync::Lazy;
 
+use super::{
+    ctx::AlgoCtx,
+    ty::{Existential, TyVarId},
+};
 use crate::{
     cli::color::{Color, Colorize},
     dt::idx::{declare_idx, Idx},
     typeck::ty::{Ty, TyKind},
-};
-
-use super::{
-    ctx::AlgoCtx,
-    ty::{Existential, TyVarId},
 };
 
 declare_idx!(KindId, u32, "{}", Color::White);

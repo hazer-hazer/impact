@@ -1,5 +1,6 @@
 use std::{array, collections::HashMap, fmt::Display};
 
+use super::builtin::{Builtin, DeclareBuiltin};
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::{
@@ -8,11 +9,12 @@ use crate::{
     },
     dt::idx::{declare_idx, Idx, IndexVec},
     message::message::MessageBuilder,
-    session::SourceId,
-    span::span::{Ident, IdentKind, Internable, Kw, Span, Symbol},
+    span::{
+        source::SourceId,
+        sym::{Ident, IdentKind, Internable, Kw, Symbol},
+        Span,
+    },
 };
-
-use super::builtin::{Builtin, DeclareBuiltin};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DefKind {
@@ -36,11 +38,11 @@ pub enum DefKind {
 impl DefKind {
     pub fn from_item_kind(kind: &ItemKind) -> DefKind {
         match kind {
-            ItemKind::Type(_, _) => DefKind::TyAlias,
-            ItemKind::Mod(_, _) => DefKind::Mod,
+            ItemKind::Type(..) => DefKind::TyAlias,
+            ItemKind::Mod(..) => DefKind::Mod,
             ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Value,
-            ItemKind::Decl(_, _, _) => DefKind::Func,
-            ItemKind::Data(_, _) => DefKind::Data,
+            ItemKind::Decl(..) => DefKind::Func,
+            ItemKind::Data(..) => DefKind::Data,
             ItemKind::Extern(_) => panic!(),
         }
     }
@@ -94,9 +96,7 @@ pub const ROOT_DEF_ID: DefId = DefId(0);
 
 pub type DefMap<T> = IndexVec<DefId, Option<T>>;
 
-/**
- * Definition of item, e.g. type
- */
+/// Definition of item, e.g. type
 #[derive(Debug, Clone)]
 pub struct Def {
     pub def_id: DefId,
@@ -246,9 +246,7 @@ impl Display for ModuleId {
 
 type ModuleNamespace = HashMap<Symbol, DefId>;
 
-/**
- * Module is a scope where items defined.
- */
+/// Module is a scope where items defined.
 #[derive(Debug)]
 pub struct Module {
     parent: Option<ModuleId>,

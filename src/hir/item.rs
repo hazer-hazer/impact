@@ -1,12 +1,10 @@
+use super::{ty::Ty, BodyId, HirId, OwnerId, WithHirId, ROOT_OWNER_ID};
 use crate::{
-    cli::color::Color,
-    cli::color::Colorize,
+    cli::color::{Color, Colorize},
     dt::idx::declare_idx,
     resolve::def::DefId,
-    span::span::{impl_with_span, Ident, Span, WithSpan},
+    span::{impl_with_span, sym::Ident, Span, WithSpan},
 };
-
-use super::{ty::Ty, BodyId, HirId, OwnerId, WithHirId, ROOT_OWNER_ID};
 
 declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
 pub const ROOT_ITEM_ID: ItemId = ItemId(ROOT_OWNER_ID);

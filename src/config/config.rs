@@ -1,8 +1,9 @@
-use crate::cli::command::{StageName, PPStages};
-use crate::interface::interface::InterruptionReason;
-
-
 use std::fmt::Display;
+
+use crate::{
+    cli::command::{PPStages, StageName},
+    interface::interface::InterruptionReason,
+};
 
 #[derive(Clone)]
 pub struct Config {

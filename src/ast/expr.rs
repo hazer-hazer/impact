@@ -1,56 +1,75 @@
 use std::fmt::Display;
 
-use crate::{
-    ast::prs_display_join,
-    parser::token::{FloatKind, IntKind},
-    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
-};
-
 use super::{
     is_block_ended, pat::Pat, pr_display, stmt::Stmt, ty::Ty, IdentNode, IsBlockEnded, NodeId,
     NodeKindStr, Path, WithNodeId, N, PR,
 };
+use crate::{
+    ast::prs_display_join,
+    parser::token::{FloatKind, IntKind},
+    span::{impl_with_span, sym::Symbol, Span, WithSpan},
+};
 
 #[derive(Debug)]
-pub struct Expr {
-    id: NodeId,
-    kind: ExprKind,
-    span: Span,
+pub enum ExprKind {
+    Lit(Lit),
+    Paren(PR<N<Expr>>),
+    Path(PathExpr),
+    Block(PR<Block>),
+    Infix(Infix),
+    Lambda(Lambda),
+    Call(Call),
+    Let(PR<Block>),
+    Ty(TyExpr),
+    DotOp(PR<N<Expr>>, PR<IdentNode>),
 }
 
-impl Expr {
-    pub fn new(id: NodeId, kind: ExprKind, span: Span) -> Self {
-        Self { id, kind, span }
-    }
-
-    pub fn kind(&self) -> &ExprKind {
-        &self.kind
-    }
-}
-
-impl IsBlockEnded for Expr {
+impl IsBlockEnded for ExprKind {
     fn is_block_ended(&self) -> bool {
-        self.kind.is_block_ended()
+        match self {
+            Self::DotOp(..) | Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => false,
+            Self::Block(_) | Self::Let(_) => true,
+            Self::Infix(infix) => is_block_ended!(infix.rhs),
+            Self::Lambda(lambda) => is_block_ended!(lambda.body),
+            Self::Call(call) => call.args.iter().any(|arg| is_block_ended!(arg)),
+        }
     }
 }
 
-impl WithNodeId for Expr {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
-impl Display for Expr {
+impl Display for ExprKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind())
+        match self {
+            Self::Lit(lit) => write!(f, "{}", lit),
+            Self::Paren(expr) => write!(f, "({})", pr_display(expr)),
+            Self::Path(path) => write!(f, "{}", path),
+            Self::Block(block) => write!(f, "{}", pr_display(block)),
+            Self::Infix(infix) => write!(f, "{}", infix),
+            Self::Lambda(lambda) => write!(f, "{}", lambda),
+            Self::Call(call) => write!(f, "{}", call),
+            Self::Let(block) => write!(f, "{}", pr_display(block)),
+            Self::Ty(ty_expr) => write!(f, "{}", ty_expr),
+            Self::DotOp(expr, field) => {
+                write!(f, "{}.{}", pr_display(expr), pr_display(field))
+            },
+        }
     }
 }
 
-impl_with_span!(Expr);
-
-impl NodeKindStr for Expr {
+impl NodeKindStr for ExprKind {
     fn kind_str(&self) -> String {
-        self.kind().kind_str()
+        match self {
+            Self::Lit(_) => "literal",
+            Self::Paren(_) => "parenthesized expression", // FIXME: Inner expression `kind_str`
+            Self::Block(_) => "block expression",
+            Self::Path(_) => "path",
+            Self::Lambda(_) => "lambda",
+            Self::Call(_) => "function call",
+            Self::Let(_) => "let expression",
+            Self::Ty(_) => "type ascription",
+            Self::Infix(_) => "infix expression",
+            Self::DotOp(..) => "member access",
+        }
+        .to_string()
     }
 }
 
@@ -179,66 +198,44 @@ impl Display for TyExpr {
 }
 
 #[derive(Debug)]
-pub enum ExprKind {
-    Lit(Lit),
-    Paren(PR<N<Expr>>),
-    Path(PathExpr),
-    Block(PR<Block>),
-    Infix(Infix),
-    Lambda(Lambda),
-    Call(Call),
-    Let(PR<Block>),
-    Ty(TyExpr),
-    DotOp(PR<N<Expr>>, PR<IdentNode>),
+pub struct Expr {
+    id: NodeId,
+    kind: ExprKind,
+    span: Span,
 }
 
-impl IsBlockEnded for ExprKind {
+impl Expr {
+    pub fn new(id: NodeId, kind: ExprKind, span: Span) -> Self {
+        Self { id, kind, span }
+    }
+
+    pub fn kind(&self) -> &ExprKind {
+        &self.kind
+    }
+}
+
+impl IsBlockEnded for Expr {
     fn is_block_ended(&self) -> bool {
-        match self {
-            Self::DotOp(_, _) | Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => {
-                false
-            },
-            Self::Block(_) | Self::Let(_) => true,
-            Self::Infix(infix) => is_block_ended!(infix.rhs),
-            Self::Lambda(lambda) => is_block_ended!(lambda.body),
-            Self::Call(call) => call.args.iter().any(|arg| is_block_ended!(arg)),
-        }
+        self.kind.is_block_ended()
     }
 }
 
-impl Display for ExprKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Lit(lit) => write!(f, "{}", lit),
-            Self::Paren(expr) => write!(f, "({})", pr_display(expr)),
-            Self::Path(path) => write!(f, "{}", path),
-            Self::Block(block) => write!(f, "{}", pr_display(block)),
-            Self::Infix(infix) => write!(f, "{}", infix),
-            Self::Lambda(lambda) => write!(f, "{}", lambda),
-            Self::Call(call) => write!(f, "{}", call),
-            Self::Let(block) => write!(f, "{}", pr_display(block)),
-            Self::Ty(ty_expr) => write!(f, "{}", ty_expr),
-            Self::DotOp(expr, field) => {
-                write!(f, "{}.{}", pr_display(expr), pr_display(field))
-            },
-        }
+impl WithNodeId for Expr {
+    fn id(&self) -> NodeId {
+        self.id
     }
 }
 
-impl NodeKindStr for ExprKind {
+impl NodeKindStr for Expr {
     fn kind_str(&self) -> String {
-        match self {
-            Self::Lit(_) => "literal",
-            Self::Paren(_) => "parenthesized expression", // FIXME: Inner expression `kind_str`
-            Self::Block(_) => "block expression",
-            Self::Path(_) => "path",
-            Self::Lambda(_) => "lambda",
-            Self::Call(_) => "function call",
-            Self::Let(_) => "let expression",
-            Self::Ty(_) => "type ascription",
-            Self::Infix(_) => "infix expression",
-            Self::DotOp(_, _) => "member access",
-        }
-        .to_string()
+        self.kind().kind_str()
     }
 }
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind())
+    }
+}
+
+impl_with_span!(Expr);

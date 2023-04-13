@@ -10,19 +10,18 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
 };
 
+use super::{
+    body::BodyCodeGen,
+    ctx::CodeGenCtx,
+    func::{FuncInstance, FunctionsCodeGen},
+    value::ValueCodeGen,
+};
 use crate::{
     cli::{color::Colorize, verbose},
     hir::HIR,
     message::message::{MessageHolder, MessageStorage, MessagesResult},
     mir::MIR,
     session::{Session, Stage, StageOutput},
-};
-
-use super::{
-    body::BodyCodeGen,
-    ctx::CodeGenCtx,
-    func::{FuncInstance, FunctionsCodeGen},
-    value::ValueCodeGen,
 };
 
 pub struct CodeGen<'ink, 'ctx> {

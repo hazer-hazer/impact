@@ -4,6 +4,7 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, CallableValue, FunctionValue, PointerValue},
 };
 
+use super::{ctx::CodeGenCtx, func::FunctionMap, value::ValueMap};
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
@@ -16,8 +17,6 @@ use crate::{
     typeck::ty::{FloatKind, TyKind},
 };
 
-use super::{ctx::CodeGenCtx, func::FunctionMap, value::ValueMap};
-
 pub struct BodyCodeGen<'ink, 'ctx, 'a> {
     ctx: CodeGenCtx<'ink, 'ctx>,
 
@@ -28,7 +27,8 @@ pub struct BodyCodeGen<'ink, 'ctx, 'a> {
     func_ty: Ty,
     func: FunctionValue<'ink>,
     builder: Builder<'ink>,
-    /// Mapping locals to alloca pointers. Created as a decent IndexVec for optimization reasons and avoiding IndexVec<_, Option<_>>.
+    /// Mapping locals to alloca pointers. Created as a decent IndexVec for
+    /// optimization reasons and avoiding IndexVec<_, Option<_>>.
     locals_values: IndexVec<Local, Option<PointerValue<'ink>>>,
     function_map: &'a FunctionMap<'ink>,
     value_map: &'a ValueMap<'ink>,
@@ -266,8 +266,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         }
     }
 
-    // fn operand_to_func_value(&mut self, operand: &Operand) -> FunctionValue<'ink> {
-    //     match operand {
+    // fn operand_to_func_value(&mut self, operand: &Operand) -> FunctionValue<'ink>
+    // {     match operand {
     //         Operand::LValue(lv) => {
     //             self.builder.build_load(self.local_ptr(lv.local), "load_func")
     //         },
@@ -311,13 +311,13 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 TyKind::Func(..) | TyKind::FuncDef(..) | TyKind::Unit => todo!(),
                 TyKind::Ref(_)
                 | TyKind::Existential(_)
-                | TyKind::Forall(_, _)
+                | TyKind::Forall(..)
                 | TyKind::Error
                 | TyKind::Var(_) => {
                     unreachable!()
                 },
                 TyKind::Kind(_) => todo!(),
-                TyKind::Adt(adt) => todo!(),
+                TyKind::Adt(_adt) => todo!(),
             },
             ConstKind::ZeroSized => match const_.ty.kind() {
                 TyKind::Unit => self.ctx.unit_value(),
@@ -328,11 +328,11 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 TyKind::FuncDef(..) => todo!(),
                 TyKind::Func(..) => todo!(),
                 TyKind::Ref(_) => todo!(),
-                TyKind::Error | TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => {
+                TyKind::Error | TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(..) => {
                     unreachable!()
                 },
                 TyKind::Kind(_) => todo!(),
-                TyKind::Adt(adt) => todo!(),
+                TyKind::Adt(_adt) => todo!(),
             },
             ConstKind::Slice { data } => self.build_cstring_value(data),
         }

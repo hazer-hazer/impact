@@ -1,9 +1,8 @@
+use super::{super::ty::TyKind, Kind, KindEx, KindSort, Ty};
 use crate::{
     typeck::{ctx::InferCtx, TyResult, TypeckErr, Typecker},
     utils::macros::match_expected,
 };
-
-use super::{super::ty::TyKind, Kind, KindEx, KindSort, Ty};
 
 impl<'hir> Typecker<'hir> {
     pub fn subtype_kind(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {

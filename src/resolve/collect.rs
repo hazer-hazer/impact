@@ -1,3 +1,4 @@
+use super::def::{DefId, DefKind, Module, ModuleId, ModuleKind, ROOT_DEF_ID};
 use crate::{
     ast::{
         expr::{Block, Expr, ExprKind},
@@ -8,11 +9,12 @@ use crate::{
     cli::verbose,
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{builtin::DeclareBuiltin, def::Namespace},
-    session::{Session, SourceId, Stage, StageOutput},
-    span::span::{Ident, Internable},
+    session::{Session, Stage, StageOutput},
+    span::{
+        source::SourceId,
+        sym::{Ident, Internable},
+    },
 };
-
-use super::def::{DefId, DefKind, Module, ModuleId, ModuleKind, ROOT_DEF_ID};
 
 pub struct DefCollector<'ast> {
     sess: Session,
@@ -125,8 +127,8 @@ impl<'ast> DefCollector<'ast> {
     //     }
 
     //     match expr.kind() {
-    //         ExprKind::Path(PathExpr(path)) => Self::check_path_is_declare_builtin(path),
-    //         _ => false,
+    //         ExprKind::Path(PathExpr(path)) =>
+    // Self::check_path_is_declare_builtin(path),         _ => false,
     //     }
     // }
 
@@ -136,8 +138,8 @@ impl<'ast> DefCollector<'ast> {
     //     }
 
     //     match ty.kind() {
-    //         TyKind::Path(TyPath(path)) => Self::check_path_is_declare_builtin(path),
-    //         _ => false,
+    //         TyKind::Path(TyPath(path)) =>
+    // Self::check_path_is_declare_builtin(path),         _ => false,
     //     }
     // }
 }
@@ -176,7 +178,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ItemKind::Mod(name, items) => {
                 self.visit_mod_item(name, items, item.id());
             },
-            ItemKind::Type(_, _) => {},
+            ItemKind::Type(..) => {},
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },

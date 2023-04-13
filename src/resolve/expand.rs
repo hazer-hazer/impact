@@ -6,7 +6,7 @@
 //     },
 //     message::message::{Message, MessageHolder, MessageStorage},
 //     session::{Session, Stage, StageOutput},
-//     span::span::Ident,
+//     span::sym::Ident,
 // };
 
 // use super::res::{NamePath, ResKind};
@@ -25,9 +25,9 @@
 //     pub fn expand_ty_alias(&mut self, ty: Ty, node_id: NodeId) -> Ty {
 //         match ty.kind() {
 //             TyKind::Path(path) => {
-//                 let res = self.sess.res.get(NamePath::new(path.id())).unwrap();
-//                 match res.kind() {
-//                     ResKind::Local(_) => unreachable!(),
+//                 let res =
+// self.sess.res.get(NamePath::new(path.id())).unwrap();                 match
+// res.kind() {                     ResKind::Local(_) => unreachable!(),
 //                     ResKind::Error => unreachable!(),
 //                     ResKind::Def(def_id) => {},
 //                 }
@@ -51,8 +51,8 @@
 //         panic!("Error node on Expander stage");
 //     }
 
-//     fn visit_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>, node_id: NodeId) {
-//         todo!()
+//     fn visit_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>, node_id:
+// NodeId) {         todo!()
 //     }
 // }
 

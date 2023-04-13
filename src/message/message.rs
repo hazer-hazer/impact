@@ -3,7 +3,7 @@ use std::fmt::Display;
 
 use crate::{
     cli::color::Color,
-    span::span::{Ident, Span},
+    span::{sym::Ident, Span},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -277,7 +277,8 @@ impl MessageBuilder {
     }
 
     /// If no label were supplied, we use message's span
-    ///  and text for the single label to actually point user to some place in the code
+    ///  and text for the single label to actually point user to some place in
+    /// the code
     pub fn emit_single_label(self, holder: &mut impl MessageHolder) {
         assert!(self.labels.is_empty());
         let span = self.checked_span();

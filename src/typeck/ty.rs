@@ -1,5 +1,3 @@
-use once_cell::sync::Lazy;
-
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::Formatter,
@@ -7,6 +5,12 @@ use std::{
     sync::RwLock,
 };
 
+use once_cell::sync::Lazy;
+
+use super::{
+    ctx::AlgoCtx,
+    kind::{Kind, KindEx, KindSort},
+};
 use crate::{
     cli::{
         color::{Color, Colorize},
@@ -15,13 +19,8 @@ use crate::{
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
-    span::span::Ident,
+    span::sym::Ident,
     utils::macros::match_expected,
-};
-
-use super::{
-    ctx::AlgoCtx,
-    kind::{Kind, KindEx, KindSort},
 };
 
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
@@ -254,7 +253,7 @@ pub struct Field<T = Ty> {
 }
 
 impl<To> MapTy<To, Field<To>> for Field {
-    fn map_ty<E, F>(&self, mut f: &mut F) -> Result<Field<To>, E>
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<Field<To>, E>
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
@@ -294,13 +293,13 @@ pub struct Variant<T = Ty> {
 //         Variant {
 //             def_id: self.def_id,
 //             name: self.name,
-//             fields: self.fields.iter().map(|field| field.map_ty(f)).collect(),
-//         }
+//             fields: self.fields.iter().map(|field|
+// field.map_ty(f)).collect(),         }
 //     }
 // }
 
 impl<To> MapTy<To, Variant<To>> for Variant {
-    fn map_ty<E, F>(&self, mut f: &mut F) -> Result<Variant<To>, E>
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<Variant<To>, E>
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
@@ -356,7 +355,7 @@ impl Adt {
 }
 
 impl<To> MapTy<To, Adt<To>> for Adt {
-    fn map_ty<E, F>(&self, mut f: &mut F) -> Result<Adt<To>, E>
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<Adt<To>, E>
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
@@ -413,8 +412,8 @@ pub enum TyKind {
     Forall(TyVarId, Ty),
 
     /// Type kind.
-    /// This might seem strange, but `Kind` is inside `TyKind` to simplify typeck code,
-    /// as we always work with `Ty`
+    /// This might seem strange, but `Kind` is inside `TyKind` to simplify
+    /// typeck code, as we always work with `Ty`
     Kind(Kind),
 }
 
@@ -623,7 +622,7 @@ impl Ty {
                 params.iter().all(Ty::is_mono) && body.is_mono()
             },
             TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_mono()),
-            TyKind::Forall(_, _) => false,
+            TyKind::Forall(..) => false,
             TyKind::Ref(ty) => ty.is_mono(),
             TyKind::Kind(_) => false,
         }
@@ -648,7 +647,7 @@ impl Ty {
         match self.kind() {
             TyKind::Error => todo!(),
             TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => true,
-            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => false,
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(..) => false,
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
@@ -701,7 +700,7 @@ impl Ty {
             TyKind::Adt(adt) => Some(MonoTyKind::Adt(
                 adt.map_ty(&mut |ty| ty.as_mono().ok_or(())).ok()?,
             )),
-            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(_, _) => None,
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(..) => None,
             TyKind::Kind(_) => None,
         }?;
 
@@ -748,7 +747,7 @@ impl Ty {
 
     pub fn maybe_add_func_def_id(&self, def_id: DefId) -> Ty {
         match self.kind() {
-            TyKind::FuncDef(_, _, _) => panic!("Function DefId cannot be set type FuncDef"),
+            TyKind::FuncDef(..) => panic!("Function DefId cannot be set type FuncDef"),
             TyKind::Func(params, body) => Ty::func(Some(def_id), params.clone(), *body),
             _ => *self,
         }
@@ -771,7 +770,7 @@ impl Ty {
                     *self
                 }
             },
-            &TyKind::Existential(ex) => todo!(),
+            &TyKind::Existential(_ex) => todo!(),
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 let param = params
                     .iter()
@@ -1012,9 +1011,9 @@ pub struct MonoTy {
 
 #[cfg(test)]
 mod tests {
-    use crate::session::SourceId;
+    // use crate::session::SourceId;
 
-    const SOME_SOURCE_ID: SourceId = SourceId::new(123);
+    // const SOME_SOURCE_ID: SourceId = SourceId::new(123);
 
     // #[test]
     // fn same_ident_subst_eq() {
@@ -1025,17 +1024,17 @@ mod tests {
     // #[test]
     // fn diff_idents_subst_eq() {
     //     assert_eq!(
-    //         Subst::Var(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
-    //         Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "a".intern())
-    //     )
+    //         Subst::Var(Ident::new(Span::new(0, 1, SOME_SOURCE_ID),
+    // "a".intern())),         Ident::new(Span::new(123, 10,
+    // SOME_SOURCE_ID), "a".intern())     )
     // }
 
     // #[test]
     // fn diff_idents_subst_ne() {
     //     assert_ne!(
-    //         Subst::Var(Ident::new(Span::new(0, 1, SOME_SOURCE_ID), "a".intern())),
-    //         Ident::new(Span::new(123, 10, SOME_SOURCE_ID), "b".intern())
-    //     )
+    //         Subst::Var(Ident::new(Span::new(0, 1, SOME_SOURCE_ID),
+    // "a".intern())),         Ident::new(Span::new(123, 10,
+    // SOME_SOURCE_ID), "b".intern())     )
     // }
 
     // #[test]

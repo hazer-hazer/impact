@@ -1,11 +1,10 @@
 use std::fmt::Display;
 
-use crate::span::span::{Span, WithSpan, impl_with_span};
-
 use super::{
     expr::Expr, pr_display, pr_node_kind_str, prs_display_join, NodeId, NodeKindStr, Path,
     WithNodeId, N, PR,
 };
+use crate::span::{impl_with_span, Span, WithSpan};
 
 #[derive(Debug)]
 pub struct Ty {
@@ -85,7 +84,7 @@ impl NodeKindStr for TyKind {
     fn kind_str(&self) -> String {
         match &self {
             TyKind::Path(path) => format!("type {}", pr_display(&path.0)),
-            TyKind::Func(_, _) => "function type".to_string(),
+            TyKind::Func(..) => "function type".to_string(),
 
             // I just thought this format would look funny 😐
             TyKind::Paren(inner) => format!("{{{}}}", pr_node_kind_str(inner)),

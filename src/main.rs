@@ -1,15 +1,15 @@
 #![deny(unconditional_recursion)]
 #![allow(dead_code)]
 
-use cli::color::Colorize;
 use std::fs::read_to_string;
 
+use cli::color::Colorize;
 use interface::interface::{Interface, InterruptionReason};
 
-use session::Source;
-
-use crate::cli::cli::CLI;
-use crate::cli::verbose;
+use crate::{
+    cli::{cli::CLI, verbose},
+    span::source::Source,
+};
 
 mod ast;
 mod cli;

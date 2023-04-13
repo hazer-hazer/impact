@@ -1,11 +1,11 @@
-use crate::{
-    cli::{color::Colorize},
-    session::{LineInfo, Session, SpanSourceInfo},
-};
-
 use super::{
     message::{Label, Message, Solution, SolutionKind},
     MessageEmitter,
+};
+use crate::{
+    cli::color::Colorize,
+    session::Session,
+    span::source::{LineInfo, SpanSourceInfo},
 };
 
 pub struct TermEmitter {
@@ -27,8 +27,8 @@ impl TermEmitter {
     //         let line_num = i + 1;
     //         println!(
     //             "{}{} | {}",
-    //             " ".repeat(line_num.to_string().len() - last_line_num.to_string().len()),
-    //             line_num,
+    //             " ".repeat(line_num.to_string().len() -
+    // last_line_num.to_string().len()),             line_num,
     //             line
     //         );
     //     }

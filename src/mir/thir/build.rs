@@ -1,13 +1,12 @@
-use crate::{
-    hir::{self, OwnerId, WithHirId, HIR},
-    resolve::{builtin::Builtin, def::DefKind},
-    span::span::WithSpan,
-    typeck::{ty::VariantId, tyctx::TyCtx},
-};
-
 use super::{
     Block, BlockId, Expr, ExprId, ExprKind, Lit, LocalVar, Param, ParamId, Pat, PatKind, Stmt,
     StmtId, THIR,
+};
+use crate::{
+    hir::{self, OwnerId, WithHirId, HIR},
+    resolve::{builtin::Builtin, def::DefKind},
+    span::WithSpan,
+    typeck::{ty::VariantId, tyctx::TyCtx},
 };
 
 pub struct ThirBuilder<'ctx> {

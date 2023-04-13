@@ -3,12 +3,15 @@ pub mod build;
 use std::fmt::Display;
 
 use crate::{
-    cli::color::Color,
-    cli::color::Colorize,
+    cli::color::{Color, Colorize},
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
     resolve::{builtin::Builtin, def::DefId},
-    span::span::{impl_with_span, Ident, Span, Symbol, WithSpan},
+    span::{
+        impl_with_span,
+        sym::{Ident, Symbol},
+        Span, WithSpan,
+    },
     typeck::ty::{FieldId, FloatKind, IntKind, Ty, VariantId},
 };
 
@@ -67,9 +70,7 @@ impl Display for ExprCategory {
     }
 }
 
-/**
- * Non-overloaded infix operators, e.g. `1 + 1`
- */
+/// Non-overloaded infix operators, e.g. `1 + 1`
 // #[derive(Clone, Copy)]
 // pub enum InfixOp {
 //     AddInt,
@@ -135,7 +136,7 @@ impl Expr {
     pub fn categorize(&self) -> ExprCategory {
         match self.kind {
             ExprKind::Lit(_) => ExprCategory::Const,
-            ExprKind::FieldAccess(_, _, _) | ExprKind::LocalRef(_) => ExprCategory::LValue,
+            ExprKind::FieldAccess(..) | ExprKind::LocalRef(_) => ExprCategory::LValue,
 
             ExprKind::Ref(_) | ExprKind::Call { .. } | ExprKind::Block(_) => {
                 ExprCategory::StoreRValue
@@ -145,7 +146,7 @@ impl Expr {
             },
 
             // FIXME: Ascription is an lvalue or category of inner expression?
-            ExprKind::Ty(_, _) => todo!(),
+            ExprKind::Ty(..) => todo!(),
         }
     }
 }

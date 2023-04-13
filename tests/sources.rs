@@ -6,10 +6,13 @@ use std::{
 };
 
 use impact::{
-    cli::{color::{Color, Colorize}, command::{PPStages, StageName}},
+    cli::{
+        color::{Color, Colorize},
+        command::{PPStages, StageName},
+    },
     config::config::{Config, ConfigBuilder},
     interface::interface::{Interface, InterruptionReason},
-    session::Source,
+    span::source::Source,
 };
 use similar::{ChangeTag, TextDiff};
 
