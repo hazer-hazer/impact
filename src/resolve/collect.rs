@@ -182,7 +182,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            ItemKind::Data(name, variants) => self.visit_data_item(name, variants, item.id()),
+            ItemKind::Adt(name, variants) => self.visit_data_item(name, variants, item.id()),
             ItemKind::Extern(_) => unreachable!(),
         }
 

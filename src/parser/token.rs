@@ -20,6 +20,7 @@ enum_str_map! {
         Mul: "*",
         Div: "/",
         Mod: "%",
+        BitOr: "|",
     }
 }
 
@@ -32,6 +33,7 @@ enum_str_map! {
         Dot: ".",
         LParen: "(",
         RParen: ")",
+        Comma: ",",
     }
 }
 
@@ -238,6 +240,7 @@ impl TokenKind {
             ('.', _) => ComplexSymbol::Punct(Punct::Dot, 1),
             ('(', _) => ComplexSymbol::Punct(Punct::LParen, 1),
             (')', _) => ComplexSymbol::Punct(Punct::RParen, 1),
+            (',', _) => ComplexSymbol::Punct(Punct::Comma, 1),
 
             ('-', Some('>')) => ComplexSymbol::Punct(Punct::Arrow, 2),
 

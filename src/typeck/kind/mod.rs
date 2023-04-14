@@ -104,7 +104,7 @@ impl Kind {
     //
     pub fn substitute(&self, subst: KindVarId, with: Kind) -> Self {
         match self.sort() {
-            KindSort::Ty(_) => *self,
+            KindSort::Ex(_) | KindSort::Ty(_) => *self,
             KindSort::Abs(param, body) => {
                 Kind::new_abs(param.substitute(subst, with), body.substitute(subst, with))
             },
@@ -115,7 +115,6 @@ impl Kind {
                     *self
                 }
             },
-            KindSort::Ex(_) => todo!(),
             &KindSort::Forall(var, body) => {
                 if subst == var {
                     Kind::new_forall(var, with)
@@ -128,12 +127,11 @@ impl Kind {
 
     pub fn substitute_ty(&self, subst: TyVarId, with: Kind) -> Self {
         match self.sort() {
-            &KindSort::Var(_) | KindSort::Ty(_) => *self,
+            KindSort::Ex(_) | &KindSort::Var(_) | KindSort::Ty(_) => *self,
             KindSort::Abs(param, body) => Kind::new_abs(
                 param.substitute_ty(subst, with),
                 body.substitute_ty(subst, with),
             ),
-            KindSort::Ex(_) => todo!(),
             &KindSort::Forall(var, body) => Kind::new_forall(var, body.substitute_ty(subst, with)),
         }
     }

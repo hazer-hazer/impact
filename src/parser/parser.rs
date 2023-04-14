@@ -5,7 +5,7 @@ use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         is_block_ended,
-        item::{ExternItem, Item, ItemKind},
+        item::{ExternItem, Field, Item, ItemKind, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
@@ -595,6 +595,80 @@ impl Parser {
             ItemKind::Decl(name, params, body),
             self.close_span(lo),
         )))
+    }
+
+    fn parse_adt_item(&mut self) -> PR<N<Item>> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "adt");
+
+        let lo = self.span();
+
+        self.expect_kw(Kw::Data).unwrap();
+        let name = self.parse_ident_decl_name("data type name");
+
+        // TODO: Type parameters
+
+        self.expect_op(Op::Assign)?;
+    }
+
+    fn parse_variant(&mut self) -> PR<Variant> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "variant");
+
+        let lo = self.span();
+
+        let name = self.parse_ident_decl_name("variant name");
+
+        let end: &[TokenCmp] = if self.skip(TokenCmp::BlockStart).is_some() {
+            &[TokenCmp::BlockEnd]
+        } else {
+            &[TokenCmp::Nl, TokenCmp::Op(Op::BitOr)]
+        };
+
+        let field_index = 0;
+        let mut fields = vec![];
+        while !self.eof() {
+            if self.skip_any(end).is_some() {
+                break;
+            }
+            fields.push(self.parse_field(field_index));
+            if !self
+                .skip_any(&[TokenCmp::Punct(Punct::Comma), TokenCmp::Nl])
+                .is_some()
+            {
+                break;
+            }
+        }
+
+        Ok(Variant::new(
+            self.next_node_id(),
+            self.next_node_id(),
+            name,
+            fields,
+            self.close_span(lo),
+        ))
+    }
+
+    fn parse_field(&mut self, index: usize) -> PR<Field> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "field");
+
+        let lo = self.span();
+
+        let name = if self.is(TokenCmp::Ident) && self.next_is(TokenCmp::Punct(Punct::Colon)) {
+            let name = self.parse_ident("[BUG] field name");
+            self.just_skip(TokenCmp::Punct(Punct::Colon));
+            Some(name)
+        } else {
+            None
+        };
+
+        let ty = self.parse_ty();
+
+        Ok(Field::new(
+            self.next_node_id(),
+            index,
+            name,
+            ty,
+            self.close_span(lo),
+        ))
     }
 
     fn parse_extern_block(&mut self) -> PR<N<Item>> {

@@ -108,7 +108,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             item::ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            item::ItemKind::Data(name, variants) => self.visit_data_item(name, variants, item.id()),
+            item::ItemKind::Adt(name, variants) => self.visit_data_item(name, variants, item.id()),
             item::ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }

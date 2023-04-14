@@ -42,13 +42,29 @@ pub struct Field {
     pub id: NodeId,
     pub index: usize,
     pub name: Option<PR<Ident>>,
-    pub ty: PR<Ty>,
+    pub ty: PR<N<Ty>>,
     span: Span,
 }
 
 impl_with_span!(Field);
 
 impl Field {
+    pub fn new(
+        id: NodeId,
+        index: usize,
+        name: Option<PR<Ident>>,
+        ty: PR<N<Ty>>,
+        span: Span,
+    ) -> Self {
+        Self {
+            id,
+            index,
+            name,
+            ty,
+            span,
+        }
+    }
+
     /// Get accessor function name.
     /// For named field it is its name.
     /// For unnamed field name is its index.
@@ -83,6 +99,24 @@ pub struct Variant {
     span: Span,
 }
 
+impl Variant {
+    pub fn new(
+        id: NodeId,
+        ctor_id: NodeId,
+        name: PR<Ident>,
+        fields: Vec<PR<Field>>,
+        span: Span,
+    ) -> Self {
+        Self {
+            id,
+            ctor_id,
+            name,
+            fields,
+            span,
+        }
+    }
+}
+
 impl_with_span!(Variant);
 
 impl Display for Variant {
@@ -101,7 +135,7 @@ pub enum ItemKind {
     Type(PR<Ident>, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
-    Data(PR<Ident>, Vec<PR<Variant>>),
+    Adt(PR<Ident>, Vec<PR<Variant>>),
     Extern(Vec<PR<ExternItem>>),
 }
 
@@ -109,7 +143,7 @@ impl IsBlockEnded for ItemKind {
     fn is_block_ended(&self) -> bool {
         match self {
             ItemKind::Type(..) => false, // FIXME: Not always
-            ItemKind::Data(..) => false, // FIXME: Not always
+            ItemKind::Adt(..) => false,  // FIXME: Not always
             ItemKind::Mod(..) | ItemKind::Extern(_) => true,
             ItemKind::Decl(_, _, body) => is_block_ended!(body),
         }
@@ -141,7 +175,7 @@ impl Display for ItemKind {
                     .join(" "),
                 pr_display(body)
             ),
-            ItemKind::Data(name, variants) => {
+            ItemKind::Adt(name, variants) => {
                 write!(
                     f,
                     "data {} = {}",
@@ -160,7 +194,7 @@ impl NodeKindStr for ItemKind {
             ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
             ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
             ItemKind::Decl(name, ..) => format!("{} declaration", pr_display(name)),
-            ItemKind::Data(name, _) => format!("{} data type", pr_display(name)),
+            ItemKind::Adt(name, _) => format!("{} data type", pr_display(name)),
             ItemKind::Extern(_) => format!("extern block"),
         }
     }
@@ -187,7 +221,7 @@ impl Item {
             ItemKind::Type(name, _)
             | ItemKind::Mod(name, _)
             | ItemKind::Decl(name, ..)
-            | ItemKind::Data(name, _) => {
+            | ItemKind::Adt(name, _) => {
                 Some(name.as_ref().expect("Error Ident node in `Item::name`"))
             },
             ItemKind::Extern(_) => None,

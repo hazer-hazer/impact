@@ -266,15 +266,6 @@ impl<To> MapTy<To, Field<To>> for Field {
     }
 }
 
-// impl Field {
-//     pub fn map_ty<To>(&self, f: &mut impl FnMut(Ty) -> To) -> Field<To> {
-//         Field {
-//             name: self.name,
-//             ty: f(self.ty),
-//         }
-//     }
-// }
-
 impl std::fmt::Display for Field {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.name, self.ty)
@@ -287,16 +278,6 @@ pub struct Variant<T = Ty> {
     pub name: Ident,
     pub fields: IndexVec<FieldId, Field<T>>,
 }
-
-// impl Variant {
-//     pub fn map_ty<To>(&self, f: &mut impl FnMut(Ty) -> To) -> Variant<To> {
-//         Variant {
-//             def_id: self.def_id,
-//             name: self.name,
-//             fields: self.fields.iter().map(|field|
-// field.map_ty(f)).collect(),         }
-//     }
-// }
 
 impl<To> MapTy<To, Variant<To>> for Variant {
     fn map_ty<E, F>(&self, f: &mut F) -> Result<Variant<To>, E>
@@ -345,13 +326,6 @@ impl Adt {
             .map(|v| v.fields.iter().map(|f| f.ty))
             .flatten()
     }
-
-    // pub fn map_ty<To, E>(&self, f: &mut impl FnMut(Ty) -> To) -> Adt<To> {
-    //     Adt {
-    //         def_id: self.def_id,
-    //         variants: self.variants.iter().map(|v| v.map_ty(f)).collect(),
-    //     }
-    // }
 }
 
 impl<To> MapTy<To, Adt<To>> for Adt {

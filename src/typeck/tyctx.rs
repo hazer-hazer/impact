@@ -56,7 +56,6 @@ pub struct TyCtx {
     expr_ty_bindings: HashMap<Expr, TyBindings>,
 
     def_ty_bindings: DefMap<HashSet<Expr>>,
-    // adt_data: DefMap<IndexVec<VariantId, Variant>>,
     /// Mapping HirId of field access expression such as `data.field` to FieldId
     field_indices: HirMap<FieldId>,
 
@@ -71,7 +70,6 @@ impl TyCtx {
             typed: Default::default(),
             expr_ty_bindings: Default::default(),
             def_ty_bindings: Default::default(),
-            // adt_data: Default::default(),
             field_indices: Default::default(),
             ty_names: Default::default(),
         }

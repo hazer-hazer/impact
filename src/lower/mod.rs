@@ -279,7 +279,7 @@ impl<'ast> Lower<'ast> {
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
                 },
-                ItemKind::Data(name, variants) => this.lower_data_item(name, variants),
+                ItemKind::Adt(name, variants) => this.lower_data_item(name, variants),
                 ItemKind::Extern(_) => unreachable!(),
             };
 

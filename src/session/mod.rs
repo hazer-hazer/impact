@@ -3,7 +3,6 @@
 use crate::{
     ast::{AstMetadata, NodeId},
     config::config::Config,
-    dt::idx::Idx,
     hir::HIR,
     interface::{interface::InterruptionReason, writer::Writer},
     message::{

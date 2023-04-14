@@ -202,7 +202,7 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.validate_name(name.as_ref().unwrap(), name_kind);
                 self.visit_decl_item(name, params, body, item.id());
             },
-            ItemKind::Data(name, variants) => {
+            ItemKind::Adt(name, variants) => {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Type);
                 self.visit_data_item(name, variants, item.id());
             },

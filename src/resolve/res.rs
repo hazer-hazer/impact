@@ -3,9 +3,6 @@ use std::{collections::HashMap, fmt::Display};
 use super::def::DefId;
 use crate::ast::NodeId;
 
-// #[derive(Debug, Clone, Copy)]
-// pub struct NodeId(NodeId);
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ResKind {
     Local(NodeId),

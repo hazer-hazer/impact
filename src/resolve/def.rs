@@ -42,7 +42,7 @@ impl DefKind {
             ItemKind::Mod(..) => DefKind::Mod,
             ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Value,
             ItemKind::Decl(..) => DefKind::Func,
-            ItemKind::Data(..) => DefKind::Data,
+            ItemKind::Adt(..) => DefKind::Data,
             ItemKind::Extern(_) => panic!(),
         }
     }

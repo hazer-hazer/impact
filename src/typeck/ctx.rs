@@ -254,14 +254,6 @@ impl InferCtx {
         }
     }
 
-    // pub fn get_unsolved(&self) -> Vec<ExistentialId> {
-    //     self.existentials
-    //         .clone()
-    //         .into_iter()
-    //         .filter(|ex| self.get_solution(ex.id()).is_some())
-    //         .collect::<Vec<_>>()
-    // }
-
     // Setters //
     pub fn add_var(&mut self, var: TyVarId) {
         assert!(!self.vars.contains(&var));
