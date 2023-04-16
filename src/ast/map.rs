@@ -103,12 +103,16 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
     fn visit_item(&mut self, item: &'ast Item) {
         self.map.map.insert(item.id(), AstNode::Item(item));
         match item.kind() {
-            item::ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
+            item::ItemKind::Type(name, generics, ty) => {
+                self.visit_type_item(name, generics, ty, item.id())
+            },
             item::ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
             item::ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            item::ItemKind::Adt(name, variants) => self.visit_data_item(name, variants, item.id()),
+            item::ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
             item::ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }

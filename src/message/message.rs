@@ -241,6 +241,12 @@ impl MessageBuilder {
         self
     }
 
+    pub fn label_iter<I: IntoIterator<Item = (Span, String)>>(mut self, iter: I) -> Self {
+        self.labels
+            .extend(iter.into_iter().map(|(span, text)| Label { span, text }));
+        self
+    }
+
     pub fn solution(mut self, solution: Solution) -> Self {
         self.solution = Some(solution);
         self

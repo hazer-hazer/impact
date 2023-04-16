@@ -5,11 +5,12 @@ use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         is_block_ended,
-        item::{ExternItem, Field, Item, ItemKind, Variant},
+        item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
-        ErrorNode, IdentNode, IsBlockEnded, NodeId, NodeKindStr, Path, PathSeg, AST, N, PR,
+        ErrorNode, IdentNode, IsBlockEnded, NodeId, NodeKindStr, NodeMap, Path, PathSeg, AST, N,
+        PR,
     },
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
@@ -96,6 +97,7 @@ pub struct Parser {
     msg: MessageStorage,
     parse_entries: Vec<ParseEntry>,
     parse_entry: Option<usize>,
+    block_ended: NodeMap<bool>,
 }
 
 impl<'ast> MessageHolder for Parser {
@@ -131,6 +133,7 @@ impl Parser {
             msg: MessageStorage::default(),
             parse_entries: Vec::new(),
             parse_entry: None,
+            block_ended: Default::default(),
         }
     }
 
@@ -176,6 +179,10 @@ impl Parser {
 
     fn is(&self, cmp: TokenCmp) -> bool {
         cmp == self.peek()
+    }
+
+    fn is_any(&self, cmp: &[TokenCmp]) -> bool {
+        cmp.iter().copied().any(|cmp| self.is(cmp))
     }
 
     fn next_is(&self, cmp: TokenCmp) -> bool {
@@ -264,7 +271,8 @@ impl Parser {
     fn expect_semis(&mut self, after: &str) -> PR<()> {
         // If we encountered EOF don't skip it
         // Note: Keep order
-        if self.eof() || self.is(TokenCmp::BlockEnd) || self.skip_opt_nls() {
+        // FIXME: Check BlockEnd as semi and unskipped
+        if self.eof() || self.is(TokenCmp::BlockEnd) || self.skip_many(TokenCmp::Semi) {
             Ok(())
         } else {
             self.expected_error(&format!("semi after {}", after), self.peek())
@@ -494,6 +502,8 @@ impl Parser {
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
         let pe = self.enter_entity(ParseEntryKind::Opt, "item");
 
+        // Rewrite item parsers to ItemKind return type?
+
         if self.is(TokenCmp::Kw(Kw::Mod)) {
             let mod_item = self.parse_mod_item();
 
@@ -518,11 +528,32 @@ impl Parser {
             self.exit_entity(pe, &extern_block);
 
             Some(extern_block)
+        } else if self.is(TokenCmp::Kw(Kw::Data)) {
+            let adt = self.parse_adt_item();
+            self.exit_entity(pe, &adt);
+            Some(adt)
         } else {
             self.exit_parsed_entity(pe);
 
             None
         }
+    }
+
+    fn parse_generic_params(&mut self) -> GenericParams {
+        let mut type_params = vec![];
+        while !self.eof() {
+            if self.is(TokenCmp::Op(Op::Assign)) {
+                break;
+            }
+            type_params.push(self.parse_type_param());
+        }
+
+        GenericParams::new(type_params)
+    }
+
+    fn parse_type_param(&mut self) -> PR<TyParam> {
+        let name = self.parse_ident("type parameter")?;
+        Ok(TyParam::new(self.next_node_id(), Ok(name)))
     }
 
     fn parse_mod_item(&mut self) -> PR<N<Item>> {
@@ -542,6 +573,7 @@ impl Parser {
             self.next_node_id(),
             ItemKind::Mod(name, items),
             self.close_span(lo),
+            true,
         )))
     }
 
@@ -555,16 +587,21 @@ impl Parser {
         // Note: `parse_ident_in_path` is used to allow `type () = ()`
         let name = self.parse_ident_decl_name("type name");
 
+        let generics = self.parse_generic_params();
+
         self.expect_op(Op::Assign)?;
 
         let ty = self.parse_ty();
 
         self.exit_parsed_entity(pe);
 
+        let is_block_ended = ty.as_ref().map_or(false, |ty| ty.is_block_ended());
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
-            ItemKind::Type(name, ty),
+            ItemKind::Type(name, generics, ty),
             self.close_span(lo),
+            is_block_ended,
         )))
     }
 
@@ -590,10 +627,13 @@ impl Parser {
 
         self.exit_parsed_entity(pe);
 
+        let is_block_ended = body.as_ref().map_or(false, |expr| expr.is_block_ended());
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Decl(name, params, body),
             self.close_span(lo),
+            is_block_ended,
         )))
     }
 
@@ -605,9 +645,61 @@ impl Parser {
         self.expect_kw(Kw::Data).unwrap();
         let name = self.parse_ident_decl_name("data type name");
 
-        // TODO: Type parameters
+        let generics = self.parse_generic_params();
 
         self.expect_op(Op::Assign)?;
+
+        let leading_pipe = self.skip(TokenCmp::Op(Op::BitOr));
+
+        let mut is_block_ended = false;
+        let end: TokenCmp = if self.skip(TokenCmp::BlockStart).is_some() {
+            is_block_ended = true;
+            if let Some(leading_pipe) = leading_pipe {
+                // Case when user writes:
+                // data AB = |
+                //     A | B
+                MessageBuilder::warn()
+                    .span(leading_pipe.span())
+                    .text("`|` delimiter should be placed on next line".to_string())
+                    .label(leading_pipe.span(), format!("Move `|`"))
+                    .label(self.span().point_before_lo(), "here".to_string())
+                    .emit(self);
+            } else {
+                self.skip(TokenCmp::Op(Op::BitOr));
+            }
+            TokenCmp::BlockEnd
+        } else {
+            TokenCmp::Semi
+        };
+
+        let mut variants = vec![self.parse_variant()];
+
+        while !self.eof() {
+            if self.is(end) {
+                break;
+            }
+
+            if is_block_ended {
+                self.skip_opt_nls();
+            }
+
+            if !self.skip(TokenCmp::Op(Op::BitOr)).is_some() {
+                break;
+            }
+
+            variants.push(self.parse_variant());
+        }
+
+        self.expect(end)?;
+
+        self.exit_parsed_entity(pe);
+
+        Ok(Box::new(Item::new(
+            self.next_node_id(),
+            ItemKind::Adt(name, generics, variants),
+            self.close_span(lo),
+            is_block_ended,
+        )))
     }
 
     fn parse_variant(&mut self) -> PR<Variant> {
@@ -617,26 +709,32 @@ impl Parser {
 
         let name = self.parse_ident_decl_name("variant name");
 
-        let end: &[TokenCmp] = if self.skip(TokenCmp::BlockStart).is_some() {
-            &[TokenCmp::BlockEnd]
-        } else {
-            &[TokenCmp::Nl, TokenCmp::Op(Op::BitOr)]
-        };
+        let (end, field_delim): (&[TokenCmp], &[TokenCmp]) =
+            if self.skip(TokenCmp::BlockStart).is_some() {
+                (
+                    &[TokenCmp::BlockEnd, TokenCmp::Semi],
+                    &[TokenCmp::Nl, TokenCmp::Punct(Punct::Comma)],
+                )
+            } else {
+                (
+                    &[TokenCmp::BlockEnd, TokenCmp::Semi, TokenCmp::Op(Op::BitOr)],
+                    &[TokenCmp::Punct(Punct::Comma)],
+                )
+            };
 
         let field_index = 0;
         let mut fields = vec![];
         while !self.eof() {
-            if self.skip_any(end).is_some() {
+            if self.is_any(end) {
                 break;
             }
             fields.push(self.parse_field(field_index));
-            if !self
-                .skip_any(&[TokenCmp::Punct(Punct::Comma), TokenCmp::Nl])
-                .is_some()
-            {
+            if !self.skip_any(field_delim).is_some() {
                 break;
             }
         }
+
+        self.exit_parsed_entity(pe);
 
         Ok(Variant::new(
             self.next_node_id(),
@@ -662,6 +760,8 @@ impl Parser {
 
         let ty = self.parse_ty();
 
+        self.exit_parsed_entity(pe);
+
         Ok(Field::new(
             self.next_node_id(),
             index,
@@ -686,6 +786,7 @@ impl Parser {
             self.next_node_id(),
             ItemKind::Extern(items),
             self.close_span(lo),
+            true,
         )))
     }
 
@@ -1110,10 +1211,13 @@ impl Parser {
         if self.skip_punct(Punct::Arrow).is_some() {
             let return_ty = self.parse_ty();
 
+            let is_block_ended = return_ty.as_ref().map_or(false, |ty| ty.is_block_ended());
+
             Some(Ok(Box::new(Ty::new(
                 self.next_node_id(),
                 TyKind::Func(params, return_ty),
                 self.close_span(lo),
+                is_block_ended,
             ))))
         } else if params.len() > 1 {
             self.expect(TokenCmp::Punct(Punct::Arrow)).ok()?;
@@ -1141,6 +1245,7 @@ impl Parser {
                         self.next_node_id(),
                         TyKind::App(lhs, args),
                         self.close_span(lo),
+                        false,
                     )));
                 } else if let Some(arg) = self.parse_primary() {
                     let mut args = vec![arg];
@@ -1152,6 +1257,7 @@ impl Parser {
                         self.next_node_id(),
                         TyKind::AppExpr(lhs, args),
                         self.close_span(lo),
+                        false,
                     )));
                 } else {
                     break;
@@ -1212,6 +1318,7 @@ impl Parser {
             self.next_node_id(),
             kind,
             self.close_span(lo),
+            false,
         ))))
     }
 

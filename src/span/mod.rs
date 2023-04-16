@@ -64,6 +64,14 @@ impl Span {
         Span::new(lo, hi - lo, self.source())
     }
 
+    pub fn point_before_lo(&self) -> Self {
+        Self {
+            pos: self.lo() - 1,
+            len: 1,
+            source: self.source(),
+        }
+    }
+
     pub fn point_after_hi(&self) -> Self {
         Self {
             pos: self.hi(),

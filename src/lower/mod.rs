@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
-        item::{ExternItem, Field, Item, ItemKind, Variant},
+        item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
@@ -274,12 +274,14 @@ impl<'ast> Lower<'ast> {
             let def_id = this.sess.def_table.get_def_id(item.id()).unwrap();
 
             let kind = match item.kind() {
-                ItemKind::Type(name, ty) => this.lower_type_item(name, ty),
+                ItemKind::Type(name, generics, ty) => this.lower_type_item(name, generics, ty),
                 ItemKind::Mod(name, items) => this.lower_mod_item(name, items),
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
                 },
-                ItemKind::Adt(name, variants) => this.lower_data_item(name, variants),
+                ItemKind::Adt(name, generics, variants) => {
+                    this.lower_data_item(name, generics, variants)
+                },
                 ItemKind::Extern(_) => unreachable!(),
             };
 
@@ -294,8 +296,28 @@ impl<'ast> Lower<'ast> {
         vec![ItemId::new(owner_id)]
     }
 
-    fn lower_type_item(&mut self, _: &PR<Ident>, ty: &PR<N<Ty>>) -> hir::item::ItemKind {
+    fn lower_generic_params(&mut self, generics: &GenericParams) -> hir::item::GenericParams {
+        hir::item::GenericParams {
+            ty_params: lower_each_pr!(self, &generics.ty_params, lower_ty_param),
+        }
+    }
+
+    fn lower_ty_param(&mut self, ty_param: &TyParam) -> hir::item::TyParam {
+        hir::item::TyParam {
+            id: self.lower_node_id(ty_param.id()),
+            def_id: self.sess.def_table.get_def_id(ty_param.id()).unwrap(),
+            name: lower_pr!(self, &ty_param.name, lower_ident),
+        }
+    }
+
+    fn lower_type_item(
+        &mut self,
+        _: &PR<Ident>,
+        generics: &GenericParams,
+        ty: &PR<N<Ty>>,
+    ) -> hir::item::ItemKind {
         hir::item::ItemKind::TyAlias(TyAlias {
+            generics: self.lower_generic_params(generics),
             ty: lower_pr!(self, ty, lower_ty),
         })
     }
@@ -347,8 +369,14 @@ impl<'ast> Lower<'ast> {
         }
     }
 
-    fn lower_data_item(&mut self, _: &PR<Ident>, variants: &[PR<Variant>]) -> hir::item::ItemKind {
+    fn lower_data_item(
+        &mut self,
+        _: &PR<Ident>,
+        generics: &GenericParams,
+        variants: &[PR<Variant>],
+    ) -> hir::item::ItemKind {
         hir::item::ItemKind::Adt(Adt {
+            generics: self.lower_generic_params(generics),
             variants: lower_each_pr!(self, variants, lower_variant),
         })
     }

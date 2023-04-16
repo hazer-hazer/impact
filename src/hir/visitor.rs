@@ -1,6 +1,8 @@
 use super::{
     expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{Adt, ExternItem, Field, ItemId, ItemKind, Mod, TyAlias, Variant},
+    item::{
+        Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, TyAlias, TyParam, Variant,
+    },
     pat::{Pat, PatKind},
     stmt::{Local, Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -52,15 +54,24 @@ pub trait HirVisitor {
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
             ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(body) => self.visit_func_item(item.name(), body, id, hir),
-            ItemKind::Adt(data) => self.visit_data_item(item.name(), data, id, hir),
+            ItemKind::Adt(data) => self.visit_adt_item(item.name(), data, id, hir),
             ItemKind::ExternItem(extern_item) => {
                 self.visit_extern_item(item.name(), extern_item, id, hir)
             },
         }
     }
 
+    fn visit_generic_params(&mut self, generics: &GenericParams, hir: &HIR) {
+        walk_each!(self, &generics.ty_params, visit_ty_param, hir);
+    }
+
+    fn visit_ty_param(&mut self, ty_param: &TyParam, hir: &HIR) {
+        self.visit_ident(&ty_param.name, hir)
+    }
+
     fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
+        self.visit_generic_params(&ty_item.generics, hir);
         self.visit_ty(&ty_item.ty, hir);
     }
 
@@ -79,9 +90,10 @@ pub trait HirVisitor {
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_data_item(&mut self, name: Ident, data: &Adt, _id: ItemId, hir: &HIR) {
+    fn visit_adt_item(&mut self, name: Ident, adt: &Adt, _id: ItemId, hir: &HIR) {
         self.visit_ident(&name, hir);
-        walk_each!(self, data.variants, visit_variant, hir);
+        self.visit_generic_params(&adt.generics, hir);
+        walk_each!(self, adt.variants, visit_variant, hir);
     }
 
     fn visit_variant(&mut self, &variant: &Variant, hir: &HIR) {

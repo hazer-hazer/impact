@@ -2,7 +2,7 @@ use super::def::{DefId, DefKind, Module, ModuleId, ModuleKind, ROOT_DEF_ID};
 use crate::{
     ast::{
         expr::{Block, Expr, ExprKind},
-        item::{ExternItem, Field, Item, ItemKind, Variant},
+        item::{ExternItem, Field, Item, ItemKind, TyParam, Variant},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
@@ -178,15 +178,27 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ItemKind::Mod(name, items) => {
                 self.visit_mod_item(name, items, item.id());
             },
-            ItemKind::Type(..) => {},
+            ItemKind::Type(name, generics, ty) => {
+                self.visit_type_item(name, generics, ty, item.id())
+            },
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            ItemKind::Adt(name, variants) => self.visit_data_item(name, variants, item.id()),
+            ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
             ItemKind::Extern(_) => unreachable!(),
         }
 
         self.exit_module();
+    }
+
+    fn visit_ty_param(&mut self, ty_param: &'ast TyParam) {
+        self.define(
+            ty_param.id(),
+            DefKind::TyParam,
+            ty_param.name.as_ref().unwrap(),
+        );
     }
 
     fn visit_variant(&mut self, variant: &'ast Variant) {

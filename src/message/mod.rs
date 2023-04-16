@@ -8,6 +8,7 @@ use crate::{
 pub mod debug_emitter;
 pub mod message;
 pub mod term_emitter;
+pub mod human_lang;
 
 pub trait MessageEmitter {
     fn emit<'ast, T>(&mut self, output: StageOutput<T>, stop_on_error: bool) -> StageResult<T> {

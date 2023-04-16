@@ -22,6 +22,7 @@
     "lvalue",
     "monomorphize",
     "Monomorphizer",
+    "multispan",
     "nanos",
     "outl",
     "outln",
@@ -45,6 +46,7 @@
     "Typecker",
     "uncurried",
     "Uninit",
+    "unskipped",
     "unsubstituted",
     "Upvars",
     "Uvar"

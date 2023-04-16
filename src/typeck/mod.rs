@@ -13,7 +13,7 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        item::{ItemId, TyAlias},
+        item::{GenericParams, ItemId, TyAlias},
         ty::TyPath,
         HirId, Path, Res, WithHirId, HIR,
     },
@@ -21,7 +21,7 @@ use crate::{
     message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
         builtin::Builtin,
-        def::{DefId, DefKind},
+        def::{DefId, DefKind, DefMap},
     },
     session::{Session, Stage, StageOutput},
     span::{
@@ -92,6 +92,7 @@ pub struct Typecker<'hir> {
     ctx_stack: Vec<InferCtx>,
     existential: ExistentialId,
     kind_ex: KindExId,
+    ty_params: DefMap<TyVarId>,
     try_mode: bool,
 
     hir: &'hir HIR,
@@ -114,6 +115,7 @@ impl<'hir> Typecker<'hir> {
             ctx_stack: Default::default(),
             existential: ExistentialId::new(0),
             kind_ex: KindExId::new(0),
+            ty_params: Default::default(),
             try_mode: false,
 
             hir,
@@ -568,6 +570,8 @@ impl<'hir> Typecker<'hir> {
                         self.conv_ty_alias(def_id)
                     },
 
+                    DefKind::TyParam => self.conv_ty_param(def_id),
+
                     DefKind::Data => self.conv_adt(def_id),
 
                     DefKind::Variant => {
@@ -603,6 +607,27 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
+    fn generalize_ty(
+        &mut self,
+        generics: &GenericParams,
+        mut make_ty: impl FnMut(&mut Self) -> Ty,
+    ) -> Ty {
+        let ty_params = generics
+            .ty_params
+            .iter()
+            .map(|ty_param| {
+                let ty_var_id = Ty::next_ty_var_id();
+                assert!(self.ty_params.insert(ty_param.def_id, ty_var_id).is_none());
+                ty_var_id
+            })
+            .collect::<Vec<_>>();
+        let ty = make_ty(self);
+        ty_params
+            .iter()
+            .copied()
+            .fold(ty, |ty, ty_param| Ty::forall(ty_param, ty))
+    }
+
     fn conv_ty_alias(&mut self, ty_alias_def_id: DefId) -> Ty {
         let hir_id = HirId::new_owner(ty_alias_def_id);
         let def = self.sess.def_table.get_def(ty_alias_def_id);
@@ -610,16 +635,26 @@ impl<'hir> Typecker<'hir> {
             return def_ty;
         }
 
-        let &TyAlias { ty } = self.hir.item(ItemId::new(def.def_id.into())).ty_alias();
-        let ty = self.conv(ty).apply_ctx(self.ctx());
-        self.tyctx_mut().type_node(hir_id, ty);
-        ty
+        let &TyAlias { ty, ref generics } =
+            self.hir.item(ItemId::new(def.def_id.into())).ty_alias();
+
+        self.generalize_ty(generics, |this| {
+            let ty = this.conv(ty).apply_ctx(this.ctx());
+            this.tyctx_mut().type_node(hir_id, ty);
+            ty
+        })
+    }
+
+    fn conv_ty_param(&mut self, ty_param_def_id: DefId) -> Ty {
+        Ty::var(self.ty_params.get_copied_unwrap(ty_param_def_id))
     }
 
     fn conv_adt(&mut self, def_id: DefId) -> Ty {
         let adt = self.hir.item(ItemId::new(def_id.into())).adt();
-        let variants = adt.variants.iter().map(|v| self.conv_variant(v)).collect();
-        Ty::adt(Adt { def_id, variants })
+        self.generalize_ty(&adt.generics, |this| {
+            let variants = adt.variants.iter().map(|v| this.conv_variant(v)).collect();
+            Ty::adt(Adt { def_id, variants })
+        })
     }
 
     fn conv_variant(&mut self, &variant: &hir::item::Variant) -> Variant {

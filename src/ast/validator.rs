@@ -3,16 +3,23 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use super::{
-    item::{ExternItem, Field, Item, ItemKind, Variant},
+    item::{ExternItem, Field, Item, ItemKind, TyParam, Variant},
     visitor::{walk_each_pr, walk_pr, AstVisitor},
     ErrorNode, NodeId, Path, WithNodeId, AST, PR,
 };
 use crate::{
-    message::message::{
-        Message, MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution, SolutionKind,
+    message::{
+        human_lang::items_are,
+        message::{
+            Message, MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution,
+            SolutionKind,
+        },
     },
     session::{Session, Stage, StageOutput},
-    span::sym::{Ident, Symbol},
+    span::{
+        sym::{Ident, Symbol},
+        WithSpan,
+    },
 };
 
 lazy_static! {
@@ -185,9 +192,9 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
 
     fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
-            ItemKind::Type(name, ty) => {
+            ItemKind::Type(name, generics, ty) => {
                 self.validate_typename(name.as_ref().unwrap(), NameKind::Type);
-                self.visit_type_item(name, ty, item.id());
+                self.visit_type_item(name, generics, ty, item.id());
             },
             ItemKind::Mod(name, items) => {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Mod);
@@ -202,12 +209,16 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.validate_name(name.as_ref().unwrap(), name_kind);
                 self.visit_decl_item(name, params, body, item.id());
             },
-            ItemKind::Adt(name, variants) => {
+            ItemKind::Adt(name, generics, variants) => {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Type);
-                self.visit_data_item(name, variants, item.id());
+                self.visit_adt_item(name, generics, variants, item.id());
             },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
+    }
+
+    fn visit_ty_param(&mut self, type_param: &'ast TyParam) {
+        self.validate_name(type_param.name.as_ref().unwrap(), NameKind::TypeVar);
     }
 
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {
@@ -215,8 +226,19 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
         walk_pr!(self, &item.ty, visit_ty);
     }
 
-    fn visit_data_item(&mut self, name: &'ast PR<Ident>, variants: &'ast [PR<Variant>], _: NodeId) {
+    fn visit_adt_item(
+        &mut self,
+        name: &'ast PR<Ident>,
+        generics: &'ast super::item::GenericParams,
+        variants: &'ast [PR<Variant>],
+        _: NodeId,
+    ) {
         self.validate_name(name.as_ref().unwrap(), NameKind::DataTy);
+
+        self.visit_generic_params(generics);
+
+        assert!(!variants.is_empty());
+
         walk_each_pr!(self, variants, visit_variant);
     }
 
@@ -224,15 +246,40 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
         self.validate_name(variant.name.as_ref().unwrap(), NameKind::Variant);
         walk_each_pr!(self, &variant.fields, visit_field);
 
-        assert!(!variant.fields.is_empty());
+        // Two groups of fields: (unnamed, named)
+        let groups = variant.fields.iter().enumerate().fold(
+            (vec![], vec![]),
+            |mut groups, (index, field)| {
+                let field = field.as_ref().unwrap();
+                if let Some(name) = &field.name {
+                    groups.1.push((name.as_ref().unwrap(), field.span()));
+                } else {
+                    groups.0.push((index, field.span()));
+                }
+                groups
+            },
+        );
 
-        let mut fields = variant.fields.iter().map(|field| field.as_ref().unwrap());
-
-        let with_name = fields.next().unwrap().name.is_some();
-        if !fields.all(|field| field.name.is_some() == with_name) {
+        // FIXME: Replace with fields as multi-spans
+        if !groups.0.is_empty() && !groups.1.is_empty() {
             MessageBuilder::error()
-                .text("All fields in variant must either all be named or unnamed".to_string())
-                .emit_single_label(self);
+                .span(variant.span())
+                .text("Fields in variant must either all be named or unnamed".to_string())
+                .label(
+                    variant.span(),
+                    format!(
+                        "{} unnamed",
+                        items_are("field", groups.0.iter().map(|(index, _)| index))
+                    ),
+                )
+                .label(
+                    variant.span(),
+                    format!(
+                        "but {} named",
+                        items_are("field", groups.1.iter().map(|(name, _)| name))
+                    ),
+                )
+                .emit(self);
         }
     }
 

@@ -28,6 +28,7 @@ pub enum DefKind {
     Variant,
     Ctor,
     FieldAccessor,
+    TyParam,
     External,
 
     Local,
@@ -61,6 +62,7 @@ impl DefKind {
             DefKind::Variant => Namespace::Type,
             DefKind::Ctor => Namespace::Value,
             DefKind::FieldAccessor => Namespace::Value,
+            DefKind::TyParam => Namespace::Type,
             DefKind::Local => unreachable!(),
         }
     }
@@ -85,6 +87,7 @@ impl Display for DefKind {
                 DefKind::Variant => "variant",
                 DefKind::Ctor => "constructor",
                 DefKind::FieldAccessor => "field accessor",
+                DefKind::TyParam => "type parameter",
             }
         )
     }

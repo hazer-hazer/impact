@@ -232,7 +232,7 @@ pub type FuncTy = (Ty, Ty);
 declare_idx!(FieldId, u32, "{}", Color::White);
 
 /// The trait which is used in complex type structures, like ADT.
-// No b̶i̶t̶c̶h̶e̶s̶  HKT
+// No ~~bitches~~ HKT
 pub trait MapTy<To, S> {
     fn map_ty<E, F>(&self, f: &mut F) -> Result<S, E>
     where

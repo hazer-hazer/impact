@@ -34,6 +34,7 @@ enum_str_map! {
         LParen: "(",
         RParen: ")",
         Comma: ",",
+        Semi: ";",
     }
 }
 
@@ -241,6 +242,7 @@ impl TokenKind {
             ('(', _) => ComplexSymbol::Punct(Punct::LParen, 1),
             (')', _) => ComplexSymbol::Punct(Punct::RParen, 1),
             (',', _) => ComplexSymbol::Punct(Punct::Comma, 1),
+            (';', _) => ComplexSymbol::Punct(Punct::Semi, 1),
 
             ('-', Some('>')) => ComplexSymbol::Punct(Punct::Arrow, 2),
 
@@ -250,6 +252,7 @@ impl TokenKind {
             ('*', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Mul, 1),
             ('/', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Div, 1),
             ('%', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Mod, 1),
+            ('|', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::BitOr, 1),
 
             _ => ComplexSymbol::None,
         }
@@ -280,6 +283,7 @@ pub enum TokenCmp {
     InfixOp,
     Kw(Kw),
     Punct(Punct),
+    Semi,
     Error,
 }
 
@@ -305,6 +309,7 @@ impl Display for TokenCmp {
                 TokenCmp::Punct(punct) => format!("{} punctuation", punct),
                 TokenCmp::BlockStart => "[BLOCK START]".to_string(),
                 TokenCmp::BlockEnd => "[BLOCK END]".to_string(),
+                TokenCmp::Semi => "semi".to_string(),
                 TokenCmp::Error => "[ERROR]".to_string(),
             }
         )
@@ -339,6 +344,7 @@ impl std::cmp::PartialEq<TokenKind> for TokenCmp {
                 | TokenKind::CustomOp(_),
                 TokenCmp::InfixOp,
             )
+            | (TokenKind::Punct(Punct::Semi) | TokenKind::Nl, TokenCmp::Semi)
             | (TokenKind::Error(_), TokenCmp::Error) => true,
             // (TokenKind::Ident(name), TokenCmp::PathFirst) if name.is_ty() => true,
             (TokenKind::Punct(punct1), TokenCmp::Punct(punct2)) => punct1 == punct2,

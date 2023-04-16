@@ -1,8 +1,10 @@
+use std::ops::Not;
+
 use super::AstLikePP;
 use crate::{
     ast::{
         expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
-        item::{ExternItem, Field, Item, ItemKind, Variant},
+        item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -63,20 +65,42 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     // Items //
     fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
-            ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
+            ItemKind::Type(name, generics, ty) => {
+                self.visit_type_item(name, generics, ty, item.id())
+            },
             ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            ItemKind::Adt(name, variants) => self.visit_data_item(name, variants, item.id()),
+            ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
         self.node_id(item);
     }
 
-    fn visit_type_item(&mut self, name: &'ast PR<Ident>, ty: &'ast PR<N<Ty>>, id: NodeId) {
+    fn visit_generic_params(&mut self, generics: &'ast GenericParams) {
+        if !generics.ty_params.is_empty() {
+            self.sp();
+        }
+        walk_each_pr_delim!(self, &generics.ty_params, visit_ty_param, " ");
+    }
+
+    fn visit_ty_param(&mut self, ty_param: &'ast TyParam) {
+        walk_pr!(self, &ty_param.name, name, ty_param.id(), true);
+    }
+
+    fn visit_type_item(
+        &mut self,
+        name: &'ast PR<Ident>,
+        generics: &'ast GenericParams,
+        ty: &'ast PR<N<Ty>>,
+        id: NodeId,
+    ) {
         self.kw(Kw::Type);
         walk_pr!(self, name, name, id, true);
+        self.visit_generic_params(generics);
         self.str(" = ");
         walk_pr!(self, ty, visit_ty);
     }
@@ -104,14 +128,16 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_pr!(self, body, visit_expr);
     }
 
-    fn visit_data_item(
+    fn visit_adt_item(
         &mut self,
         name: &'ast PR<Ident>,
+        generics: &'ast GenericParams,
         variants: &'ast [PR<Variant>],
         id: NodeId,
     ) {
         self.kw(Kw::Data);
         walk_pr!(self, name, name, id, true);
+        self.visit_generic_params(generics);
         self.str(" = ");
         walk_each_pr_delim!(self, variants, visit_variant, " | ");
     }

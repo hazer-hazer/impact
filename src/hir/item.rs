@@ -20,7 +20,26 @@ impl ItemId {
 }
 
 #[derive(Debug)]
+pub struct TyParam {
+    pub id: HirId,
+    pub def_id: DefId,
+    pub name: Ident,
+}
+
+impl WithHirId for TyParam {
+    fn id(&self) -> HirId {
+        self.id
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericParams {
+    pub ty_params: Vec<TyParam>,
+}
+
+#[derive(Debug)]
 pub struct TyAlias {
+    pub generics: GenericParams,
     pub ty: Ty,
 }
 
@@ -65,6 +84,7 @@ impl_with_span!(VariantNode);
 
 #[derive(Debug)]
 pub struct Adt {
+    pub generics: GenericParams,
     pub variants: Vec<Variant>,
 }
 

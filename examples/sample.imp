@@ -13,6 +13,10 @@ ref = builtin "RefCons"
 extern
     puts: str -> i32
 
+data Option a =
+    | Some a
+    | None
+
 foo () = puts "lol"
 
 main () =

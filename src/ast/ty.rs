@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
 use super::{
-    expr::Expr, pr_display, pr_node_kind_str, prs_display_join, NodeId, NodeKindStr, Path,
-    WithNodeId, N, PR,
+    expr::Expr, is_block_ended, pr_display, pr_node_kind_str, prs_display_join, IsBlockEnded,
+    NodeId, NodeKindStr, Path, WithNodeId, N, PR,
 };
 use crate::span::{impl_with_span, Span, WithSpan};
 
@@ -11,15 +11,27 @@ pub struct Ty {
     id: NodeId,
     kind: TyKind,
     span: Span,
+    is_block_ended: bool,
 }
 
 impl Ty {
-    pub fn new(id: NodeId, kind: TyKind, span: Span) -> Self {
-        Self { id, kind, span }
+    pub fn new(id: NodeId, kind: TyKind, span: Span, is_block_ended: bool) -> Self {
+        Self {
+            id,
+            kind,
+            span,
+            is_block_ended,
+        }
     }
 
     pub fn kind(&self) -> &TyKind {
         &self.kind
+    }
+}
+
+impl IsBlockEnded for Ty {
+    fn is_block_ended(&self) -> bool {
+        self.is_block_ended
     }
 }
 

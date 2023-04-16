@@ -2,7 +2,10 @@ use super::{AstLikePP, AstPPMode};
 use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{Adt, ExternItem, Field, ItemId, Mod, TyAlias, Variant, ROOT_ITEM_ID},
+        item::{
+            Adt, ExternItem, Field, GenericParams, ItemId, Mod, TyAlias, TyParam, Variant,
+            ROOT_ITEM_ID,
+        },
         pat::{Pat, PatKind},
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -102,6 +105,13 @@ impl<'a> HirVisitor for HirPP<'a> {
     //     }
     // }
 
+    fn visit_generic_params(&mut self, generics: &GenericParams, hir: &HIR) {
+        if !generics.ty_params.is_empty() {
+            self.pp.sp();
+        }
+        walk_each_delim!(self, &generics.ty_params, visit_ty_param, " ", hir);
+    }
+
     fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
         self.pp.kw(Kw::Type);
         self.pp.item_id(id);
@@ -137,11 +147,12 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_data_item(&mut self, name: Ident, data: &Adt, id: ItemId, hir: &HIR) {
+    fn visit_adt_item(&mut self, name: Ident, data: &Adt, id: ItemId, hir: &HIR) {
+        self.pp.kw(Kw::Data);
         self.pp.string(name.original_string());
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
-        self.pp.sp();
+        self.pp.str(" = ");
         walk_each_delim!(self, data.variants, visit_variant, " | ", hir);
     }
 

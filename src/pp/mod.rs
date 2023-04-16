@@ -218,7 +218,12 @@ impl<'a, D> AstLikePP<'a, D> {
         let (pre, post) = match punct {
             Punct::Arrow => (" ", " "),
             Punct::Colon => ("", " "),
-            Punct::Dot | Punct::LParen | Punct::RParen | Punct::Backslash => ("", ""),
+            Punct::Comma
+            | Punct::Semi
+            | Punct::Dot
+            | Punct::LParen
+            | Punct::RParen
+            | Punct::Backslash => ("", ""),
         };
 
         self.str(pre);

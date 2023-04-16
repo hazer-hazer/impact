@@ -70,6 +70,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
                     | DefKind::External
                     | DefKind::Ctor
                     | DefKind::FieldAccessor
+                    | DefKind::TyParam
                     | DefKind::Func => {
                         self.nl();
                     },

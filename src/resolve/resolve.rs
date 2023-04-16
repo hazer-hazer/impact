@@ -146,7 +146,8 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::Variant
             | DefKind::Ctor
             | DefKind::FieldAccessor
-            | DefKind::Value => {
+            | DefKind::Value
+            | DefKind::TyParam => {
                 assert_eq!(def.kind().namespace(), target_ns);
                 return Res::def(def_id);
             },
@@ -246,6 +247,7 @@ impl<'ast> NameResolver<'ast> {
                     | DefKind::Lambda
                     | DefKind::Local
                     | DefKind::External
+                    | DefKind::TyParam
                     | DefKind::DeclareBuiltin => unreachable!(),
                 }
             })
@@ -361,11 +363,15 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 self.nearest_mod_item = ModuleId::Def(def_id);
                 self.visit_mod_item(name, items, item.id());
             },
-            ItemKind::Type(name, ty) => self.visit_type_item(name, ty, item.id()),
+            ItemKind::Type(name, generics, ty) => {
+                self.visit_type_item(name, generics, ty, item.id())
+            },
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id());
             },
-            ItemKind::Adt(name, variants) => self.visit_data_item(name, variants, item.id()),
+            ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
             ItemKind::Extern(_) => unreachable!(),
         }
 

@@ -132,28 +132,25 @@ impl Display for Variant {
 
 #[derive(Debug)]
 pub enum ItemKind {
-    Type(PR<Ident>, PR<N<Ty>>),
+    Type(PR<Ident>, GenericParams, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
-    Adt(PR<Ident>, Vec<PR<Variant>>),
+    Adt(PR<Ident>, GenericParams, Vec<PR<Variant>>),
     Extern(Vec<PR<ExternItem>>),
-}
-
-impl IsBlockEnded for ItemKind {
-    fn is_block_ended(&self) -> bool {
-        match self {
-            ItemKind::Type(..) => false, // FIXME: Not always
-            ItemKind::Adt(..) => false,  // FIXME: Not always
-            ItemKind::Mod(..) | ItemKind::Extern(_) => true,
-            ItemKind::Decl(_, _, body) => is_block_ended!(body),
-        }
-    }
 }
 
 impl Display for ItemKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ItemKind::Type(name, ty) => write!(f, "type {} = {}", pr_display(name), pr_display(ty)),
+            ItemKind::Type(name, generics, ty) => {
+                write!(
+                    f,
+                    "type {} {} = {}",
+                    pr_display(name),
+                    generics,
+                    pr_display(ty)
+                )
+            },
             ItemKind::Mod(name, items) => write!(
                 f,
                 "mod {} {{{}}}",
@@ -175,11 +172,12 @@ impl Display for ItemKind {
                     .join(" "),
                 pr_display(body)
             ),
-            ItemKind::Adt(name, variants) => {
+            ItemKind::Adt(name, generics, variants) => {
                 write!(
                     f,
-                    "data {} = {}",
+                    "data {} {} = {}",
                     pr_display(name),
+                    generics,
                     prs_display_join(variants, " | ")
                 )
             },
@@ -191,12 +189,61 @@ impl Display for ItemKind {
 impl NodeKindStr for ItemKind {
     fn kind_str(&self) -> String {
         match self {
-            ItemKind::Type(name, _) => format!("type alias {}", pr_display(name)),
-            ItemKind::Mod(name, _) => format!("module {}", pr_display(name)),
-            ItemKind::Decl(name, ..) => format!("{} declaration", pr_display(name)),
-            ItemKind::Adt(name, _) => format!("{} data type", pr_display(name)),
+            ItemKind::Type(name, ..) => format!("type alias `{}`", pr_display(name)),
+            ItemKind::Mod(name, _) => format!("module `{}`", pr_display(name)),
+            ItemKind::Decl(name, params, _) if params.is_empty() => {
+                format!("value `{}`", pr_display(name))
+            },
+            ItemKind::Decl(name, ..) => format!("function `{}`", pr_display(name)),
+            ItemKind::Adt(name, ..) => format!("data type `{}`", pr_display(name)),
             ItemKind::Extern(_) => format!("extern block"),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct TyParam {
+    id: NodeId,
+    pub name: PR<Ident>,
+}
+
+impl TyParam {
+    pub fn new(id: NodeId, name: PR<Ident>) -> Self {
+        Self { id, name }
+    }
+}
+
+impl WithNodeId for TyParam {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
+impl Display for TyParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", pr_display(&self.name))
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericParams {
+    pub ty_params: Vec<PR<TyParam>>,
+}
+
+impl GenericParams {
+    pub fn new(ty_params: Vec<PR<TyParam>>) -> Self {
+        Self { ty_params }
+    }
+}
+
+impl Display for GenericParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.ty_params
+            .iter()
+            .map(pr_display)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .fmt(f)
     }
 }
 
@@ -205,11 +252,17 @@ pub struct Item {
     id: NodeId,
     kind: ItemKind,
     span: Span,
+    is_block_ended: bool,
 }
 
 impl Item {
-    pub fn new(id: NodeId, kind: ItemKind, span: Span) -> Self {
-        Self { id, kind, span }
+    pub fn new(id: NodeId, kind: ItemKind, span: Span, is_block_ended: bool) -> Self {
+        Self {
+            id,
+            kind,
+            span,
+            is_block_ended,
+        }
     }
 
     pub fn kind(&self) -> &ItemKind {
@@ -218,10 +271,10 @@ impl Item {
 
     pub fn name(&self) -> Option<&Ident> {
         match self.kind() {
-            ItemKind::Type(name, _)
+            ItemKind::Type(name, ..)
             | ItemKind::Mod(name, _)
             | ItemKind::Decl(name, ..)
-            | ItemKind::Adt(name, _) => {
+            | ItemKind::Adt(name, ..) => {
                 Some(name.as_ref().expect("Error Ident node in `Item::name`"))
             },
             ItemKind::Extern(_) => None,
@@ -238,7 +291,13 @@ impl Item {
 
 impl IsBlockEnded for Item {
     fn is_block_ended(&self) -> bool {
-        self.kind.is_block_ended()
+        self.is_block_ended
+            || match &self.kind {
+                ItemKind::Type(..) => false,
+                ItemKind::Adt(..) => false,
+                ItemKind::Mod(..) | ItemKind::Extern(_) => true,
+                ItemKind::Decl(_, _, body) => is_block_ended!(body),
+            }
     }
 }
 
