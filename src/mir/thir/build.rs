@@ -93,14 +93,14 @@ impl<'ctx> ThirBuilder<'ctx> {
             &hir::expr::ExprKind::Ty(hir::expr::TyExpr { expr, ty: _ }) => {
                 ExprKind::Ty(self.expr(expr), self.tyctx.tyof(expr_id))
             },
-            &hir::expr::ExprKind::FieldAccess(lhs, _) => {
-                // TODO: Maybe add field name?
-                ExprKind::FieldAccess(
-                    self.expr(lhs),
-                    self.tyctx.field_index(expr_id).unwrap(),
-                    VariantId::new(0),
-                )
-            },
+            // &hir::expr::ExprKind::FieldAccess(lhs, _) => {
+            //     // TODO: Maybe add field name?
+            //     ExprKind::FieldAccess(
+            //         self.expr(lhs),
+            //         self.tyctx.field_index(expr_id).unwrap(),
+            //         VariantId::new(0),
+            //     )
+            // },
             &hir::expr::ExprKind::BuiltinExpr(bt) => ExprKind::Builtin(bt),
         };
 

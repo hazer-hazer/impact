@@ -155,7 +155,7 @@ pub enum ExprKind {
     Call(Call),
     Let(Block),
     Ty(TyExpr),
-    FieldAccess(Expr, Ident),
+    // FieldAccess(Expr, Ident),
     BuiltinExpr(Builtin),
 }
 

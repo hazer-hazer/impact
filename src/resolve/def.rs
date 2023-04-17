@@ -4,7 +4,7 @@ use super::builtin::{Builtin, DeclareBuiltin};
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::{
-        color::{Color, Colorize},
+        color::{Color, ColorizedStruct},
         verbose,
     },
     dt::idx::{declare_idx, Idx, IndexVec},

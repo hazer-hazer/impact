@@ -14,7 +14,7 @@ use super::{
     ty::{Existential, TyVarId},
 };
 use crate::{
-    cli::color::{Color, Colorize},
+    cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, Idx},
     typeck::ty::{Ty, TyKind},
 };

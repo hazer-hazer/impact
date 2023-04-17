@@ -11,7 +11,7 @@ use self::{
     ty::TyNode,
 };
 use crate::{
-    cli::color::{Color, Colorize},
+    cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, Idx, IndexVec},
     resolve::{
         builtin::Builtin,
@@ -434,7 +434,7 @@ impl HIR {
             | ExprKind::Lambda(_)
             | ExprKind::Call(_)
             | ExprKind::BuiltinExpr(_)
-            | ExprKind::FieldAccess(..)
+            // | ExprKind::FieldAccess(..)
             | ExprKind::Ty(_) => expr.span(),
             &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
         }

@@ -3,7 +3,7 @@ pub mod build;
 use std::fmt::Display;
 
 use crate::{
-    cli::color::{Color, Colorize},
+    cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
     resolve::{builtin::Builtin, def::DefId},

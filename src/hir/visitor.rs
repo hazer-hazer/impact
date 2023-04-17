@@ -144,7 +144,7 @@ pub trait HirVisitor {
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
-            ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
+            // ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
             ExprKind::BuiltinExpr(bt) => self.visit_builtin_expr(bt),
         }
     }

@@ -1,6 +1,6 @@
 use crate::{
     ast::{NodeId, NodeMap, Path, WithNodeId},
-    cli::color::{Color, Colorize},
+    cli::color::{Color, Colorize, ColorizedStruct},
     hir::{item::ItemId, HirId, WithHirId, WithNodeKind},
     parser::token::Punct,
     resolve::{
@@ -163,6 +163,10 @@ impl<'a, D> AstLikePP<'a, D> {
     {
         self.str(&value.to_string());
         self
+    }
+
+    fn colorized<T: ColorizedStruct>(&mut self, value: T) -> &mut Self {
+        self.string(value.colorized())
     }
 
     fn join<T>(&mut self, values: impl Iterator<Item = T>, sep: &str) -> &mut Self

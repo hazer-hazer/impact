@@ -3,14 +3,13 @@ use crate::{
     hir::{
         expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
         item::{
-            Adt, ExternItem, Field, GenericParams, ItemId, Mod, TyAlias, TyParam, Variant,
-            ROOT_ITEM_ID,
+            Adt, ExternItem, Field, GenericParams, ItemId, Mod, TyAlias, Variant, ROOT_ITEM_ID,
         },
         pat::{Pat, PatKind},
         stmt::{Local, Stmt, StmtKind},
         ty::{Ty, TyKind},
         visitor::HirVisitor,
-        BodyId, BodyOwner, HirId, Path, HIR,
+        BodyId, BodyOwner, Path, HIR,
     },
     parser::token::Punct,
     resolve::builtin::Builtin,
@@ -160,7 +159,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         let variant = hir.variant(variant);
         self.pp.string(variant.name);
         self.pp.def_id(&variant.def_id);
-        self.pp.ty_anno(HirId::new_owner(variant.def_id));
+        self.pp.ty_anno(variant.id);
         self.pp.sp();
         walk_each_delim!(self, &variant.fields, visit_field, " ", hir);
     }
@@ -171,6 +170,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             self.pp.str(": ");
         });
         self.visit_ty(&field.ty, hir);
+        self.pp.ty_anno(field.id);
     }
 
     fn visit_extern_item(&mut self, name: Ident, extern_item: &ExternItem, id: ItemId, hir: &HIR) {
@@ -199,7 +199,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
-            ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
+            // ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
             ExprKind::BuiltinExpr(bt) => self.visit_builtin_expr(bt),
         }
         self.pp.ty_anno(expr_id);

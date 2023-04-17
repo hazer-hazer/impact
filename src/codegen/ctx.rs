@@ -10,12 +10,12 @@ use inkwell::{
 
 use crate::{
     cli::verbose,
-    hir::HIR,
+    hir::{item::Variant, HIR},
     mir::{Ty, MIR},
     resolve::{builtin::Builtin, def::DefId},
     session::Session,
     typeck::{
-        ty::{FloatKind, TyKind},
+        ty::{self, FloatKind, TyKind, VariantId},
         tyctx::InstantiatedTy,
     },
 };
@@ -78,8 +78,38 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                 unreachable!("Type {} must not exist on codegen stage", ty)
             },
             TyKind::Kind(_) => todo!(),
-            TyKind::Adt(_adt) => todo!(),
+            TyKind::Adt(adt) => self.conv_adt_ty(adt),
         }
+    }
+
+    pub fn conv_adt_ty(&self, adt_ty: &ty::Adt) -> AnyTypeEnum<'ink> {
+        assert!(!adt_ty.variants.is_empty());
+
+        if adt_ty.variants.len() == 1 {
+            self.llvm_ctx
+                .struct_type(
+                    &self.conv_variant_fields_tys(adt_ty, VariantId::new(0)),
+                    false,
+                )
+                .into()
+        } else {
+            todo!()
+        }
+    }
+
+    pub fn conv_variant_fields_tys(
+        &self,
+        adt_ty: &ty::Adt,
+        vid: VariantId,
+    ) -> Vec<BasicTypeEnum<'ink>> {
+        adt_ty
+            .variants
+            .get(vid)
+            .unwrap()
+            .fields
+            .iter()
+            .map(|field| self.conv_basic_ty(field.ty))
+            .collect()
     }
 
     pub fn conv_basic_ty(&self, ty: Ty) -> BasicTypeEnum<'ink> {

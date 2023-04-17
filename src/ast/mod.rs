@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use self::item::Item;
 use crate::{
-    cli::color::{Color, Colorize},
+    cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, IndexVec},
     parser::token::{Token, TokenKind},
     span::{

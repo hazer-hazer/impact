@@ -14,7 +14,7 @@ use std::{
 use self::scalar::Scalar;
 pub use crate::typeck::ty::Ty;
 use crate::{
-    cli::color::{Color, Colorize},
+    cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, IndexVec},
     hir::BodyId,
     resolve::{builtin::Builtin, def::DefId},

@@ -1,6 +1,6 @@
 use super::{ty::Ty, BodyId, HirId, OwnerId, WithHirId, ROOT_OWNER_ID};
 use crate::{
-    cli::color::{Color, Colorize},
+    cli::color::{Color, ColorizedStruct},
     dt::idx::declare_idx,
     resolve::def::DefId,
     span::{impl_with_span, sym::Ident, Span, WithSpan},
@@ -55,9 +55,16 @@ pub struct Func {
 
 #[derive(Debug)]
 pub struct Field {
+    pub id: HirId,
     pub name: Option<Ident>,
     pub ty: Ty,
     pub span: Span,
+}
+
+impl WithHirId for Field {
+    fn id(&self) -> HirId {
+        self.id
+    }
 }
 
 impl_with_span!(Field);

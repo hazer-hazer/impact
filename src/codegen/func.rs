@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use inkwell::{
     values::{CallableValue, FunctionValue},
-    AddressSpace,
+    AddressSpace, types::BasicType,
 };
 
 use super::ctx::CodeGenCtx;
 use crate::{
     cli::verbose,
     hir::{
-        item::{ExternItem, ItemId},
+        item::{Adt, ExternItem, ItemId, Variant},
         visitor::HirVisitor,
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
@@ -153,6 +153,13 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         } else {
             todo!("Extern values")
         }
+    }
+
+    fn visit_variant(&mut self, &variant: &Variant, hir: &HIR) {
+        let adt_hir_id = variant.owner().inner().into();
+        let adt_ty = self.ctx.conv_basic_ty(self.ctx.sess.tyctx.tyof(adt_hir_id));
+
+        self.ctx.simple_func("ctor", adt_ty.fn_type(&self.ctx.conv_variant_fields_tys(adt_ty, vid), is_var_args), body)
     }
 }
 

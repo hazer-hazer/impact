@@ -84,6 +84,14 @@ impl ColorizedString {
             self.fg.as_ref().map(|fg| fg.fg_code_str()).unwrap_or("")
         )
     }
+
+    pub fn uncolorize(self) -> Self {
+        Self {
+            string: self.string,
+            bg: None,
+            fg: None,
+        }
+    }
 }
 
 impl Display for ColorizedString {
@@ -227,6 +235,24 @@ impl Colorize for String {
             string: self,
             bg: Some(color),
             fg: None,
+        }
+    }
+}
+
+pub trait ColorizedStruct: ToString {
+    fn fg_color() -> Option<Color> {
+        None
+    }
+
+    fn bg_color() -> Option<Color> {
+        None
+    }
+
+    fn colorized(&self) -> ColorizedString {
+        ColorizedString {
+            string: self.to_string(),
+            bg: Self::bg_color(),
+            fg: Self::fg_color(),
         }
     }
 }

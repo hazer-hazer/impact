@@ -397,6 +397,7 @@ impl<'ast> Lower<'ast> {
 
     fn lower_field(&mut self, field: &Field) -> hir::item::Field {
         hir::item::Field {
+            id: self.lower_node_id(field.id),
             name: field
                 .name
                 .as_ref()
@@ -618,19 +619,23 @@ impl<'ast> Lower<'ast> {
         lhs: &PR<N<Expr>>,
         field: &PR<IdentNode>,
     ) -> hir::expr::ExprKind {
-        let lhs = lower_pr!(self, lhs, lower_expr);
-        let field = lower_pr!(self, field, lower_ident_node);
-        let field_node = self.get_current_owner_node(field).path();
+        hir::expr::ExprKind::Call(hir::expr::Call {
+            lhs: lower_pr!(self, field, lower_ident_node),
+            args: vec![lower_pr!(self, lhs, lower_expr)],
+        })
+        // let lhs = lower_pr!(self, lhs, lower_expr);
+        // let field = lower_pr!(self, field, lower_ident_node);
+        // let field_node = self.get_current_owner_node(field).path();
 
-        if let Res::Def(DefKind::FieldAccessor, _) = field_node.res() {
-            assert!(field_node.segments().len() == 1);
-            hir::expr::ExprKind::FieldAccess(lhs, field_node.target_name())
-        } else {
-            hir::expr::ExprKind::Call(hir::expr::Call {
-                lhs: self.expr_path(field_node.span(), field),
-                args: vec![lhs],
-            })
-        }
+        // if let Res::Def(DefKind::FieldAccessor, _) = field_node.res() {
+        //     assert!(field_node.segments().len() == 1);
+        //     hir::expr::ExprKind::FieldAccess(lhs, field_node.target_name())
+        // } else {
+        //     hir::expr::ExprKind::Call(hir::expr::Call {
+        //         lhs: self.expr_path(field_node.span(), field),
+        //         args: vec![lhs],
+        //     })
+        // }
     }
 
     // Types //

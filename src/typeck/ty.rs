@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     cli::{
-        color::{Color, Colorize},
+        color::{Color, ColorizedStruct},
         verbose,
     },
     dt::idx::{declare_idx, Idx, IndexVec},
@@ -854,7 +854,7 @@ impl std::fmt::Debug for Ty {
 
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind())
+        self.kind().to_string().fmt(f)
     }
 }
 

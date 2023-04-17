@@ -9,7 +9,7 @@ use std::{
 use super::{
     builtin::builtins,
     ctx::GlobalCtx,
-    ty::{FieldId, MapTy, Ty, TyKind, TyMap, TyVarId},
+    ty::{FieldId, MapTy, Ty, TyKind, TyMap, TyVarId, VariantId},
 };
 use crate::{
     cli::verbose,

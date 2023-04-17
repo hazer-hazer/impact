@@ -651,10 +651,16 @@ impl<'hir> Typecker<'hir> {
 
     fn conv_adt(&mut self, def_id: DefId) -> Ty {
         let adt = self.hir.item(ItemId::new(def_id.into())).adt();
-        self.generalize_ty(&adt.generics, |this| {
+        let adt_ty = self.generalize_ty(&adt.generics, |this| {
             let variants = adt.variants.iter().map(|v| this.conv_variant(v)).collect();
             Ty::adt(Adt { def_id, variants })
-        })
+        });
+
+        adt.variants.iter().for_each(|v| {
+            self.tyctx_mut().type_node(v.id(), adt_ty);
+        });
+
+        adt_ty
     }
 
     fn conv_variant(&mut self, &variant: &hir::item::Variant) -> Variant {
@@ -672,11 +678,13 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn conv_field(&mut self, index: usize, field: &hir::item::Field) -> Field {
+        let ty = self.conv(field.ty);
+        self.tyctx_mut().type_node(field.id(), ty);
         Field {
             name: field
                 .name
                 .unwrap_or_else(|| Ident::new(field.span(), index.to_string().intern())),
-            ty: self.conv(field.ty),
+            ty,
         }
     }
 

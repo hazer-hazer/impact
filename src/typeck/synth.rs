@@ -116,7 +116,8 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Call(call) => self.synth_call(&call, expr_id),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
-            &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field, expr_id),
+            // &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field,
+            // expr_id),
             &ExprKind::BuiltinExpr(bt) => {
                 assert!(bt.is_value());
                 Ok(self.tyctx().builtin(bt))
