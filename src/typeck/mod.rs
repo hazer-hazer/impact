@@ -5,12 +5,13 @@ use self::{
     kind::{Kind, KindEx, KindExId, KindSort},
     ty::{
         Adt, ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty,
-        TyKind, TyVarId, Variant,
+        TyKind, TyVarId, Variant, VariantId,
     },
     tyctx::TyCtx,
 };
 use crate::{
     cli::verbose,
+    dt::idx::IndexVec,
     hir::{
         self,
         item::{GenericParams, ItemId, TyAlias},
@@ -651,13 +652,19 @@ impl<'hir> Typecker<'hir> {
 
     fn conv_adt(&mut self, def_id: DefId) -> Ty {
         let adt = self.hir.item(ItemId::new(def_id.into())).adt();
+
+        // Variant indexing defined here. For now, just incremental sequencing.
+        let variants: IndexVec<VariantId, HirId> = adt.variants.iter().copied().collect();
+
         let adt_ty = self.generalize_ty(&adt.generics, |this| {
-            let variants = adt.variants.iter().map(|v| this.conv_variant(v)).collect();
+            let variants = variants.iter().map(|v| this.conv_variant(v)).collect();
             Ty::adt(Adt { def_id, variants })
         });
 
-        adt.variants.iter().for_each(|v| {
-            self.tyctx_mut().type_node(v.id(), adt_ty);
+        variants.iter_enumerated().for_each(|(id, &hir_id)| {
+            self.tyctx_mut()
+                .set_variant_id(hir_id.as_owner().unwrap().into(), id);
+            self.tyctx_mut().type_node(hir_id, adt_ty);
         });
 
         adt_ty

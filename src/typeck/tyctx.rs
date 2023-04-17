@@ -56,6 +56,10 @@ pub struct TyCtx {
     expr_ty_bindings: HashMap<Expr, TyBindings>,
 
     def_ty_bindings: DefMap<HashSet<Expr>>,
+
+    variant_indices: DefMap<VariantId>,
+
+    // FIXME: Unused
     /// Mapping HirId of field access expression such as `data.field` to FieldId
     field_indices: HirMap<FieldId>,
 
@@ -70,6 +74,7 @@ impl TyCtx {
             typed: Default::default(),
             expr_ty_bindings: Default::default(),
             def_ty_bindings: Default::default(),
+            variant_indices: Default::default(),
             field_indices: Default::default(),
             ty_names: Default::default(),
         }
@@ -110,6 +115,14 @@ impl TyCtx {
 
     pub fn ty_name(&self, ty: Ty) -> Option<Ident> {
         self.ty_names.get_flat(ty.id()).copied()
+    }
+
+    pub fn set_variant_id(&mut self, def_id: DefId, id: VariantId) {
+        assert!(self.variant_indices.insert(def_id, id).is_none());
+    }
+
+    pub fn variant_id(&mut self, def_id: DefId) -> VariantId {
+        self.variant_indices.get_copied_unwrap(def_id)
     }
 
     pub fn set_field_index(&mut self, expr: Expr, id: FieldId) {

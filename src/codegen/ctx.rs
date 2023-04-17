@@ -10,7 +10,7 @@ use inkwell::{
 
 use crate::{
     cli::verbose,
-    hir::{item::Variant, HIR},
+    hir::HIR,
     mir::{Ty, MIR},
     resolve::{builtin::Builtin, def::DefId},
     session::Session,
@@ -50,6 +50,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         self.llvm_ctx.i8_type().ptr_type(AddressSpace::default())
     }
 
+    // TODO: Cache
     pub fn conv_ty(&self, ty: Ty) -> AnyTypeEnum<'ink> {
         match ty.kind() {
             TyKind::Unit => self.unit_ty().into(),

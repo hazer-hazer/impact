@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use inkwell::{
+    types::BasicType,
     values::{CallableValue, FunctionValue},
-    AddressSpace, types::BasicType,
+    AddressSpace,
 };
 
 use super::ctx::CodeGenCtx;
@@ -157,9 +158,30 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 
     fn visit_variant(&mut self, &variant: &Variant, hir: &HIR) {
         let adt_hir_id = variant.owner().inner().into();
-        let adt_ty = self.ctx.conv_basic_ty(self.ctx.sess.tyctx.tyof(adt_hir_id));
+        let adt_ty = self.ctx.sess.tyctx.tyof(adt_hir_id);
+        let ll_adt_ty = self.ctx.conv_basic_ty(adt_ty);
 
-        self.ctx.simple_func("ctor", adt_ty.fn_type(&self.ctx.conv_variant_fields_tys(adt_ty, vid), is_var_args), body)
+        let vid = self
+            .ctx
+            .sess
+            .tyctx
+            .variant_id(variant.as_owner().unwrap().into());
+
+        self.ctx.simple_func(
+            "ctor",
+            ll_adt_ty.fn_type(
+                &self
+                    .ctx
+                    .conv_variant_fields_tys(adt_ty.as_adt(), vid)
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>(),
+                false,
+            ),
+            |builder, params| {
+                adt_ty.as_adt().variants.iter().
+            },
+        );
     }
 }
 
