@@ -121,7 +121,7 @@ impl TyCtx {
         assert!(self.variant_indices.insert(def_id, id).is_none());
     }
 
-    pub fn variant_id(&mut self, def_id: DefId) -> VariantId {
+    pub fn variant_id(&self, def_id: DefId) -> VariantId {
         self.variant_indices.get_copied_unwrap(def_id)
     }
 

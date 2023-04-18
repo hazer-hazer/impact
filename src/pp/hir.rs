@@ -11,7 +11,7 @@ use crate::{
         visitor::HirVisitor,
         BodyId, BodyOwner, Path, HIR,
     },
-    parser::token::Punct,
+    parser::token::{Punct, Op},
     resolve::builtin::Builtin,
     session::Session,
     span::sym::{Ident, Kw},
@@ -84,7 +84,7 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_local_stmt(&mut self, local: &Local, hir: &HIR) {
         self.visit_ident(&local.name, hir);
-        self.pp.str(" = ");
+        self.pp.op(Op::Assign);
         self.visit_expr(&local.value, hir);
     }
 
@@ -116,7 +116,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.item_id(id);
         self.visit_ident(&name, hir);
         self.pp.ty_anno(id.hir_id());
-        self.pp.str(" = ");
+        self.pp.op(Op::Assign);
         self.visit_ty(&ty_item.ty, hir);
     }
 
@@ -132,7 +132,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.string(name.original_string());
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
-        self.pp.str(" = ");
+        self.pp.op(Op::Assign);
         self.visit_body(&value, BodyOwner::value(id.def_id()), hir);
     }
 
@@ -142,7 +142,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.ty_anno(id.hir_id());
         self.pp.sp();
         walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
-        self.pp.str(" = ");
+        self.pp.op(Op::Assign);
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
@@ -151,7 +151,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.string(name.original_string());
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
-        self.pp.str(" = ");
+        self.pp.op(Op::Assign);
         walk_each_delim!(self, data.variants, visit_variant, " | ", hir);
     }
 
@@ -167,7 +167,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_field(&mut self, field: &Field, hir: &HIR) {
         field.name.as_ref().map(|name| {
             self.pp.string(name.original_string());
-            self.pp.str(": ");
+            self.pp.punct(Punct::Colon);
         });
         self.visit_ty(&field.ty, hir);
         self.pp.ty_anno(field.id);
@@ -177,7 +177,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.string(name);
         self.pp.item_id(id);
         self.pp.ty_anno(id.hir_id());
-        self.pp.str(": ");
+        self.pp.punct(Punct::Colon);
         self.visit_ty(&extern_item.ty, hir);
     }
 
@@ -281,7 +281,7 @@ impl<'a> HirVisitor for HirPP<'a> {
 
         match pat.kind() {
             PatKind::Unit => {
-                self.pp.str("()");
+                self.pp.kw(Kw::Unit);
             },
             PatKind::Ident(ident) => {
                 self.visit_ident_pat(&ident, hir);

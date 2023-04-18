@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell::{
-    types::BasicType,
+    types::{BasicType, BasicTypeEnum},
     values::{CallableValue, FunctionValue},
     AddressSpace,
 };
@@ -40,6 +40,7 @@ pub struct FunctionMap<'ink> {
     instances: DefMap<FuncInstance<'ink>>,
     infix_ops: HashMap<InfixOp, FunctionValue<'ink>>,
     externals: DefMap<FunctionValue<'ink>>,
+    constructors: DefMap<FunctionValue<'ink>>,
 }
 
 impl<'ink> FunctionMap<'ink> {
@@ -90,6 +91,10 @@ impl<'ink> FunctionMap<'ink> {
 
     pub fn iter_internal(&self) -> impl Iterator<Item = (DefId, &FuncInstance<'ink>)> + '_ {
         self.instances.iter_enumerated_flat()
+    }
+
+    pub fn ctor(&self, def_id: DefId) -> FunctionValue<'ink> {
+        self.constructors.get_copied_unwrap(def_id)
     }
 }
 
@@ -156,7 +161,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         }
     }
 
-    fn visit_variant(&mut self, &variant: &Variant, hir: &HIR) {
+    fn visit_variant(&mut self, &variant: &Variant, _: &HIR) {
         let adt_hir_id = variant.owner().inner().into();
         let adt_ty = self.ctx.sess.tyctx.tyof(adt_hir_id);
         let ll_adt_ty = self.ctx.conv_basic_ty(adt_ty);
@@ -167,21 +172,35 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             .tyctx
             .variant_id(variant.as_owner().unwrap().into());
 
-        self.ctx.simple_func(
+        let fields_tys = self
+            .ctx
+            .conv_variant_fields_tys(adt_ty.as_adt(), vid)
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<BasicTypeEnum>>();
+
+        let ctor = self.ctx.simple_func(
             "ctor",
             ll_adt_ty.fn_type(
-                &self
-                    .ctx
-                    .conv_variant_fields_tys(adt_ty.as_adt(), vid)
-                    .into_iter()
+                &fields_tys
+                    .iter()
+                    .copied()
                     .map(Into::into)
                     .collect::<Vec<_>>(),
                 false,
             ),
-            |builder, params| {
-                adt_ty.as_adt().variants.iter().
+            |_builder, params| {
+                assert_eq!(params.len(), fields_tys.len());
+
+                let variant_ty = self.ctx.llvm_ctx.struct_type(&fields_tys, false);
+
+                Some(variant_ty.const_named_struct(params).into())
             },
         );
+
+        self.function_map
+            .constructors
+            .insert(variant.as_owner().unwrap().into(), ctor);
     }
 }
 

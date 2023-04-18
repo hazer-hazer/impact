@@ -13,8 +13,9 @@ use crate::{
         Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,
         TerminatorKind, MIR,
     },
+    parser::token::{Op, Punct},
     session::Session,
-    span::sym::Ident,
+    span::sym::{Ident, Kw},
 };
 
 pub struct MirPrinter<'ctx> {
@@ -62,7 +63,7 @@ impl<'ctx> MirPrinter<'ctx> {
         match &stmt.kind {
             StmtKind::Assign(lvalue, rvalue) => {
                 self.print_lvalue(lvalue);
-                self.pp.str(" = ");
+                self.pp.op(Op::Assign);
                 self.print_rvalue(rvalue);
             },
         }
@@ -82,7 +83,7 @@ impl<'ctx> MirPrinter<'ctx> {
             //     self.print_operand(rhs);
             // },
             RValue::Infix(op) => {
-                self.pp.string(format!("({})", op));
+                self.pp.punct(Punct::LParen).string(op).punct(Punct::RParen);
             },
             RValue::Closure(def_id) => {
                 self.pp.string(format!("closure{}", def_id));
@@ -111,6 +112,9 @@ impl<'ctx> MirPrinter<'ctx> {
                 self.pp.str("ref ");
                 self.print_lvalue(lv);
             },
+            RValue::Ctor(def_id) => {
+                self.pp.string(format!("ctor{def_id}"));
+            },
         }
     }
 
@@ -125,7 +129,7 @@ impl<'ctx> MirPrinter<'ctx> {
         match &const_.kind {
             ConstKind::Scalar(scalar) => self.pp.string(scalar),
             // FIXME: ZeroSized formatting?
-            ConstKind::ZeroSized => self.pp.str("()"),
+            ConstKind::ZeroSized => self.pp.kw(Kw::Unit),
             ConstKind::Slice { data } => match const_.ty.kind() {
                 crate::typeck::ty::TyKind::Str => {
                     self.pp.string(format!("\"{}\"", from_utf8(data).unwrap()))
@@ -133,7 +137,7 @@ impl<'ctx> MirPrinter<'ctx> {
                 _ => self.pp.string(format!("{:02x?}", data)),
             },
         };
-        self.pp.string(format!(": {}", const_.ty));
+        self.pp.punct(Punct::Colon).string(const_.ty);
     }
 
     fn print_terminator(&mut self, terminator: &Terminator) {
@@ -156,12 +160,12 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
-        self.pp.string(format!("[lambda{}]", lambda.def_id)).sp();
+        self.pp.str("[lambda").string(lambda.def_id).str("]");
         self.visit_body(&lambda.body_id, BodyOwner::lambda(lambda.def_id), hir);
     }
 
     fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId, hir: &HIR) {
-        self.pp.string(format!("{} =", name.original_string()));
+        self.pp.string(name.original_string()).op(Op::Assign);
         self.visit_body(value, BodyOwner::value(id.def_id()), hir);
     }
 
@@ -169,11 +173,12 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
     fn visit_pat(&mut self, &pat: &Pat, hir: &HIR) {
         let pat = hir.pat(pat);
         match pat.kind() {
-            PatKind::Unit => self.pp.str("()"),
-            PatKind::Ident(ident) => {
-                self.pp
-                    .string(format!("{}: {}", ident, self.sess.tyctx.tyof(pat.id())))
-            },
+            PatKind::Unit => self.pp.kw(Kw::Unit),
+            PatKind::Ident(ident) => self
+                .pp
+                .string(ident)
+                .punct(Punct::Colon)
+                .string(self.sess.tyctx.tyof(pat.id())),
         };
     }
 

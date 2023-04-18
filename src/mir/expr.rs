@@ -138,7 +138,7 @@ impl<'ctx> MirBuilder<'ctx> {
                         assert!(ty.is_instantiated());
                         RValue::ClosureRef(def_id)
                     },
-                    DefKind::Ctor => todo!(),
+                    DefKind::Ctor => RValue::Ctor(def_id),
                     DefKind::Local
                     | DefKind::Root
                     | DefKind::TyAlias

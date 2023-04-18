@@ -1,7 +1,9 @@
 use super::{AstLikePP, AstPPMode};
 use crate::{
     mir::thir::{BlockId, ExprId, ExprKind, Pat, PatKind, Stmt, StmtId, THIR},
+    parser::token::Punct,
     session::Session,
+    span::sym::Kw,
 };
 
 pub struct ThirPrinter<'a> {
@@ -29,7 +31,6 @@ impl<'a> ThirPrinter<'a> {
             &Stmt::Expr(id) => self.expr(id),
             Stmt::Local(pat, init) => {
                 self.pat(&pat);
-                self.pp.str(" = ");
                 self.expr(*init);
             },
         }
@@ -44,8 +45,8 @@ impl<'a> ThirPrinter<'a> {
             ExprKind::LocalRef(local) => {
                 self.pp.string(local);
             },
-            ExprKind::Def(def_id, ty) => {
-                self.pp.string(format!("{def_id}: {ty}"));
+            &ExprKind::Def(def_id, ty) => {
+                self.pp.colorized(def_id).punct(Punct::Colon).string(ty);
             },
             &ExprKind::Block(id) => self.block(id),
             &ExprKind::Ref(expr) => {
@@ -58,24 +59,28 @@ impl<'a> ThirPrinter<'a> {
                 args,
             } => {
                 self.expr(*lhs);
-                self.pp.str("(");
+                self.pp.punct(Punct::LParen);
                 args.iter().copied().for_each(|arg| self.expr(arg));
-                self.pp.str(")");
+                self.pp.punct(Punct::RParen);
             },
-            ExprKind::Lambda { def_id, body_id } => {
-                self.pp.string(format!("lambda{def_id} {{{body_id}}}"));
+            &ExprKind::Lambda { def_id, body_id } => {
+                self.pp
+                    .str("lambda")
+                    .colorized(def_id)
+                    .str("{")
+                    .string(body_id)
+                    .str("}");
             },
             &ExprKind::Ty(expr, ty) => {
                 self.expr(expr);
-                self.pp.str(": ");
-                self.pp.string(ty);
+                self.pp.punct(Punct::Colon).string(ty);
             },
             ExprKind::Builtin(bt) => {
                 self.pp.string(bt);
             },
             &ExprKind::FieldAccess(lhs, field, _) => {
                 self.expr(lhs);
-                self.pp.string(format!(".{field}"));
+                self.pp.punct(Punct::Dot).colorized(field);
             },
         }
     }
@@ -83,7 +88,7 @@ impl<'a> ThirPrinter<'a> {
     fn pat(&mut self, pat: &Pat) {
         match pat.kind {
             PatKind::Unit => {
-                self.pp.str("()");
+                self.pp.kw(Kw::Unit);
             },
             PatKind::Ident {
                 name,

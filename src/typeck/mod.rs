@@ -662,8 +662,8 @@ impl<'hir> Typecker<'hir> {
         });
 
         variants.iter_enumerated().for_each(|(id, &hir_id)| {
-            self.tyctx_mut()
-                .set_variant_id(hir_id.as_owner().unwrap().into(), id);
+            let v_def_id = self.hir.variant(hir_id).def_id;
+            self.tyctx_mut().set_variant_id(v_def_id, id);
             self.tyctx_mut().type_node(hir_id, adt_ty);
         });
 

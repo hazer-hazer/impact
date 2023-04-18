@@ -2,7 +2,7 @@ use crate::{
     ast::{NodeId, NodeMap, Path, WithNodeId},
     cli::color::{Color, Colorize, ColorizedStruct},
     hir::{item::ItemId, HirId, WithHirId, WithNodeKind},
-    parser::token::Punct,
+    parser::token::{Op, Punct},
     resolve::{
         def::DefId,
         res::{NamePath, ResKind},
@@ -129,7 +129,7 @@ impl<'a, D> AstLikePP<'a, D> {
 
     pub fn ty_anno(&mut self, id: HirId) -> &mut Self {
         if self.mode == AstPPMode::TyAnno {
-            self.str(": ");
+            self.punct(Punct::Colon);
             self.ty(id);
         }
         self
@@ -232,6 +232,18 @@ impl<'a, D> AstLikePP<'a, D> {
 
         self.str(pre);
         self.string(punct);
+        self.str(post)
+    }
+
+    fn op(&mut self, op: Op) -> &mut Self {
+        let (pre, post) = match op {
+            Op::Plus | Op::Minus | Op::Mul | Op::Div | Op::Mod | Op::BitOr | Op::Assign => {
+                (" ", " ")
+            },
+        };
+
+        self.str(pre);
+        self.string(op);
         self.str(post)
     }
 

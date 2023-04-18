@@ -251,6 +251,12 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     .unwrap_left()
             },
             RValue::Ref(lv) => self.local_value(lv.local).into(),
+            &RValue::Ctor(def_id) => self
+                .function_map
+                .ctor(def_id)
+                .as_global_value()
+                .as_pointer_value()
+                .into(),
         }
     }
 

@@ -9,7 +9,7 @@ use crate::{
         visitor::{walk_pr, AstVisitor},
         ErrorNode, IdentNode, NodeId, Path, WithNodeId, AST, N, PR,
     },
-    parser::token::Punct,
+    parser::token::{Op, Punct},
     span::sym::{Ident, Kw},
 };
 
@@ -41,10 +41,10 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_err(&mut self, err: &'ast ErrorNode) {
         if let Some(parsed) = err.parsed() {
             self.string(parsed);
-            self.out.push(' ');
+            self.sp();
         }
 
-        self.out.push_str("[ERROR]")
+        self.str("[ERROR]");
     }
 
     fn visit_ast(&mut self, ast: &'ast AST) {
@@ -99,7 +99,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         self.kw(Kw::Type);
         walk_pr!(self, name, name, id, true);
         self.visit_generic_params(generics);
-        self.str(" = ");
+        self.op(Op::Assign);
         walk_pr!(self, ty, visit_ty);
     }
 
@@ -122,7 +122,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             self.sp();
         }
         walk_each_pr_delim!(self, params, visit_pat, " ");
-        self.str(" = ");
+        self.op(Op::Assign);
         walk_pr!(self, body, visit_expr);
     }
 
@@ -136,7 +136,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         self.kw(Kw::Data);
         walk_pr!(self, name, name, id, true);
         self.visit_generic_params(generics);
-        self.str(" = ");
+        self.op(Op::Assign);
         walk_each_pr_delim!(self, variants, visit_variant, " | ");
     }
 
@@ -149,7 +149,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_field(&mut self, field: &'ast Field) {
         field.name.as_ref().map(|name| {
             walk_pr!(self, name, name, field.id, true);
-            self.str(": ");
+            self.punct(Punct::Colon);
         });
         walk_pr!(self, &field.ty, visit_ty);
     }
@@ -163,7 +163,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {
         walk_pr!(self, &item.name, visit_ident);
-        self.str(": ");
+        self.punct(Punct::Colon);
         walk_pr!(self, &item.ty, visit_ty);
     }
 
@@ -171,7 +171,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_pat(&mut self, pat: &'ast Pat) {
         match pat.kind() {
             PatKind::Unit => {
-                self.str("()");
+                self.kw(Kw::Unit);
             },
             PatKind::Ident(ident) => {
                 walk_pr!(self, ident, name, pat.id(), true);
@@ -207,9 +207,9 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     fn visit_infix_expr(&mut self, infix: &'ast Infix) {
         walk_pr!(self, &infix.lhs, visit_expr);
-        self.str(" ");
+        self.sp();
         self.visit_path_expr(&infix.op);
-        self.str(" ");
+        self.sp();
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 
