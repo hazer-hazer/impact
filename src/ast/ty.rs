@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use super::{
-    expr::Expr, is_block_ended, pr_display, pr_node_kind_str, prs_display_join, IsBlockEnded,
+    expr::Expr, pr_display, pr_node_kind_str, prs_display_join, IsBlockEnded,
     NodeId, NodeKindStr, Path, WithNodeId, N, PR,
 };
 use crate::span::{impl_with_span, Span, WithSpan};

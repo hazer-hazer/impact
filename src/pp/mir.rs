@@ -3,11 +3,8 @@ use std::str::from_utf8;
 use super::{hir::walk_each_delim, AstLikePP};
 use crate::{
     hir::{
-        expr::Lambda,
-        item::ItemId,
-        pat::{Pat, PatKind},
-        visitor::HirVisitor,
-        BodyId, BodyOwner, WithHirId, HIR,
+        expr::Lambda, item::ItemId, pat::PatKind, visitor::HirVisitor, BodyId, BodyOwner,
+        WithHirId, HIR, Pat,
     },
     mir::{
         Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,

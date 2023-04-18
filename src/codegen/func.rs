@@ -10,7 +10,8 @@ use super::ctx::CodeGenCtx;
 use crate::{
     cli::verbose,
     hir::{
-        item::{Adt, ExternItem, ItemId, Variant},
+        self,
+        item::{ExternItem, ItemId},
         visitor::HirVisitor,
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
@@ -149,7 +150,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 
     fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, _: &HIR) {
         let def_id = item_id.def_id();
-        let ty = self.ctx.sess.tyctx.tyof(def_id.into());
+        let ty = self.ctx.sess.tyctx.tyof(item_id.hir_id());
 
         verbose!("Ty of external item: {ty}");
 
@@ -161,16 +162,14 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         }
     }
 
-    fn visit_variant(&mut self, &variant: &Variant, _: &HIR) {
-        let adt_hir_id = variant.owner().inner().into();
-        let adt_ty = self.ctx.sess.tyctx.tyof(adt_hir_id);
+    fn visit_variant(&mut self, &hir_vid: &hir::Variant, hir: &HIR) {
+        let adt_hir_id: ItemId = hir_vid.inner().owner().into();
+        let adt_ty = self.ctx.sess.tyctx.tyof(adt_hir_id.hir_id());
         let ll_adt_ty = self.ctx.conv_basic_ty(adt_ty);
 
-        let vid = self
-            .ctx
-            .sess
-            .tyctx
-            .variant_id(variant.as_owner().unwrap().into());
+        let variant = hir.variant(hir_vid);
+
+        let vid = self.ctx.sess.tyctx.variant_id(variant.def_id);
 
         let fields_tys = self
             .ctx
@@ -198,9 +197,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             },
         );
 
-        self.function_map
-            .constructors
-            .insert(variant.as_owner().unwrap().into(), ctor);
+        self.function_map.constructors.insert(variant.def_id, ctor);
     }
 }
 
@@ -214,15 +211,12 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
     }
 
     fn gen_infix_op(&mut self, op: InfixOp) -> FunctionValue<'ink> {
+        let op_built_item_id: ItemId =
+            ItemId::new(self.ctx.sess.def_table.builtin(op.builtin()).into());
         self.ctx.simple_func(
             op.name(),
             self.ctx
-                .conv_ty(
-                    self.ctx
-                        .sess
-                        .tyctx
-                        .tyof(self.ctx.sess.def_table.builtin(op.builtin()).into()),
-                )
+                .conv_ty(self.ctx.sess.tyctx.tyof(op_built_item_id))
                 .into_function_type(),
             |builder, params| {
                 // verbose!(

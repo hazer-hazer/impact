@@ -3,6 +3,7 @@ use std::{
         hash_map::{DefaultHasher, Entry},
         HashMap, HashSet,
     },
+    fmt::Display,
     hash::{Hash, Hasher},
 };
 
@@ -14,7 +15,7 @@ use super::{
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::{expr::Expr, HirId, HirMap},
+    hir::{Expr, HirId},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefMap},
@@ -61,7 +62,7 @@ pub struct TyCtx {
 
     // FIXME: Unused
     /// Mapping HirId of field access expression such as `data.field` to FieldId
-    field_indices: HirMap<FieldId>,
+    field_indices: HashMap<Expr, FieldId>,
 
     // Metadata //
     ty_names: TyMap<Ident>,
@@ -109,8 +110,11 @@ impl TyCtx {
         self.builtins.get(&bt).copied().unwrap()
     }
 
-    pub fn node_type(&self, id: HirId) -> Option<Ty> {
-        self.typed.get(&id).copied()
+    pub fn node_type<Id>(&self, id: Id) -> Option<Ty>
+    where
+        Id: Into<HirId>,
+    {
+        self.typed.get(&id.into()).copied()
     }
 
     pub fn ty_name(&self, ty: Ty) -> Option<Ident> {
@@ -134,7 +138,10 @@ impl TyCtx {
     }
 
     /// Unwrap-version of `node_type` with a short name.
-    pub fn tyof(&self, id: HirId) -> Ty {
+    pub fn tyof<Id>(&self, id: Id) -> Ty
+    where
+        Id: Into<HirId> + Display + Copy,
+    {
         self.node_type(id)
             .expect(&format!("Type of node {} expected", id))
     }

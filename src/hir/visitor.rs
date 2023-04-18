@@ -1,12 +1,10 @@
 use super::{
-    expr::{Block, Call, Expr, ExprKind, Lambda, Lit, PathExpr, TyExpr},
-    item::{
-        Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, TyAlias, TyParam, Variant,
-    },
-    pat::{Pat, PatKind},
-    stmt::{Local, Stmt, StmtKind},
-    ty::{Ty, TyKind, TyPath},
-    BodyId, BodyOwner, Path, HIR,
+    expr::{Call, ExprKind, Lambda, Lit, PathExpr, TyExpr},
+    item::{Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, TyAlias, TyParam},
+    pat::PatKind,
+    stmt::{Local, StmtKind},
+    ty::{TyKind, TyPath},
+    BodyId, BodyOwner, Path, HIR, Stmt, Expr, Variant, Pat, Block, Ty,
 };
 use crate::{resolve::builtin::Builtin, span::sym::Ident};
 

@@ -6,11 +6,10 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        expr::{Block, Call, Expr, ExprKind, Lit, TyExpr},
+        expr::{Call, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
-        pat::Pat,
-        stmt::{Local, Stmt, StmtKind},
-        Body, BodyId, HirId, Path,
+        stmt::{Local, StmtKind},
+        Block, Body, BodyId, Expr, HirId, Pat, Path, Stmt,
     },
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
@@ -126,7 +125,7 @@ impl<'hir> Typecker<'hir> {
 
         let expr_ty = expr_ty.apply_ctx(self.ctx());
 
-        self.tyctx_mut().type_node(expr_id, expr_ty);
+        self.tyctx_mut().type_node(expr_id.into(), expr_ty);
 
         Ok(expr_ty)
     }
@@ -313,7 +312,7 @@ impl<'hir> Typecker<'hir> {
                 .iter()
                 .copied()
                 .zip(params_tys.iter().copied())
-                .for_each(|(param, ty)| this.tyctx_mut().type_node(param, ty));
+                .for_each(|(param, ty)| this.tyctx_mut().type_node(param.into(), ty));
 
             // FIXME: Clone
             let func_ty = params_tys.iter().fold(

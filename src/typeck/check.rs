@@ -5,7 +5,10 @@ use super::{
 };
 use crate::{
     dt::idx::IndexVec,
-    hir::expr::{Expr, ExprKind, Lambda, Lit},
+    hir::{
+        expr::{ExprKind, Lambda, Lit},
+        Expr,
+    },
     message::message::MessageBuilder,
     span::{sym::Ident, Spanned, WithSpan},
     typeck::{
@@ -58,7 +61,7 @@ impl<'hir> Typecker<'hir> {
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
-                self.tyctx_mut().type_node(expr_id, ty);
+                self.tyctx_mut().type_node(expr_id.into(), ty);
                 Ok(ok.apply_ctx(self.ctx()))
             },
             Err(_) => {

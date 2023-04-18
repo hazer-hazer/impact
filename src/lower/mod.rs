@@ -181,13 +181,16 @@ impl<'ast> Lower<'ast> {
         hir_id
     }
 
-    fn get_current_owner_node(&self, id: HirId) -> &Node {
+    fn get_current_owner_node<T>(&self, id: T) -> &Node
+    where
+        T: Into<HirId>,
+    {
         self.owner_stack
             .last()
             .unwrap()
             .owner
             .nodes
-            .get_unwrap(id.child_id())
+            .get_unwrap(id.into().child_id())
     }
 
     fn lower_node_id(&mut self, id: NodeId) -> HirId {
@@ -217,7 +220,7 @@ impl<'ast> Lower<'ast> {
     }
 
     // Statements //
-    fn lower_stmt(&mut self, stmt: &Stmt) -> Vec<hir::stmt::Stmt> {
+    fn lower_stmt(&mut self, stmt: &Stmt) -> Vec<hir::Stmt> {
         match stmt.kind() {
             StmtKind::Expr(expr) => {
                 vec![hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr))]
@@ -240,6 +243,7 @@ impl<'ast> Lower<'ast> {
                 kind,
                 stmt.span(),
             )))
+            .into()
         })
         .collect()
     }
@@ -381,7 +385,7 @@ impl<'ast> Lower<'ast> {
         })
     }
 
-    fn lower_variant(&mut self, variant: &Variant) -> hir::item::Variant {
+    fn lower_variant(&mut self, variant: &Variant) -> hir::Variant {
         let id = self.lower_node_id(variant.id);
         let name = lower_pr!(self, &variant.name, lower_ident);
         let fields = lower_each_pr!(self, &variant.fields, lower_field);
@@ -393,6 +397,7 @@ impl<'ast> Lower<'ast> {
             fields,
             span: variant.span(),
         }))
+        .into()
     }
 
     fn lower_field(&mut self, field: &Field) -> hir::item::Field {
@@ -431,7 +436,7 @@ impl<'ast> Lower<'ast> {
     }
 
     // Patterns //
-    fn lower_pat(&mut self, pat: &Pat) -> hir::pat::Pat {
+    fn lower_pat(&mut self, pat: &Pat) -> hir::Pat {
         verbose!("lower pat {}", pat.id());
         let id = self.lower_node_id(pat.id());
 
@@ -445,10 +450,11 @@ impl<'ast> Lower<'ast> {
             kind,
             pat.span(),
         )))
+        .into()
     }
 
     // Expressions //
-    fn lower_expr(&mut self, expr: &Expr) -> hir::expr::Expr {
+    fn lower_expr(&mut self, expr: &Expr) -> hir::Expr {
         let kind = match expr.kind() {
             ExprKind::Lit(lit) => self.lower_lit_expr(lit),
             ExprKind::Paren(inner) => return lower_pr!(self, inner, lower_expr),
@@ -469,6 +475,7 @@ impl<'ast> Lower<'ast> {
             kind,
             expr.span(),
         )))
+        .into()
     }
 
     fn lower_int_kind(&mut self, kind: IntKind) -> hir::expr::IntKind {
@@ -561,11 +568,7 @@ impl<'ast> Lower<'ast> {
         hir::expr::ExprKind::Call(hir::expr::Call { lhs, args })
     }
 
-    fn lower_builtin_call(
-        &mut self,
-        path: hir::Path,
-        args: &[hir::expr::Expr],
-    ) -> Result<Builtin, ()> {
+    fn lower_builtin_call(&mut self, path: hir::Path, args: &[hir::Expr]) -> Result<Builtin, ()> {
         let builtin_name_arg = args[0];
         let path = self.get_current_owner_node(path).path();
         let arg_span = self.get_current_owner_node(builtin_name_arg).expr().span();
@@ -619,8 +622,10 @@ impl<'ast> Lower<'ast> {
         lhs: &PR<N<Expr>>,
         field: &PR<IdentNode>,
     ) -> hir::expr::ExprKind {
+        let field = lower_pr!(self, field, lower_ident_node);
+        let field_span = self.get_current_owner_node(field).path().span();
         hir::expr::ExprKind::Call(hir::expr::Call {
-            lhs: lower_pr!(self, field, lower_ident_node),
+            lhs: self.expr_path(field_span, field),
             args: vec![lower_pr!(self, lhs, lower_expr)],
         })
         // let lhs = lower_pr!(self, lhs, lower_expr);
@@ -639,7 +644,7 @@ impl<'ast> Lower<'ast> {
     }
 
     // Types //
-    fn lower_ty(&mut self, ty: &Ty) -> hir::ty::Ty {
+    fn lower_ty(&mut self, ty: &Ty) -> hir::Ty {
         let kind = match ty.kind() {
             TyKind::Path(path) => Ok(self.lower_ty_path(path)),
             TyKind::Func(params, body) => Ok(self.lower_func_ty(params, body)),
@@ -658,6 +663,7 @@ impl<'ast> Lower<'ast> {
                 span: ty.span(),
             }))
         }
+        .into()
     }
 
     fn lower_ty_path(&mut self, path: &TyPath) -> hir::ty::TyKind {
@@ -733,6 +739,7 @@ impl<'ast> Lower<'ast> {
             vec![hir::PathSeg::new(ident.ident, ident.ident.span())],
             ident.ident.span(),
         )))
+        .into()
     }
 
     fn lower_res(&mut self, res: res::Res) -> Res {
@@ -760,13 +767,14 @@ impl<'ast> Lower<'ast> {
             segments,
             path.span(),
         )))
+        .into()
     }
 
     fn lower_path_seg(&mut self, seg: &PathSeg) -> hir::PathSeg {
         hir::PathSeg::new(self.lower_ident(seg.expect_name()), seg.span())
     }
 
-    fn lower_block(&mut self, block: &Block) -> hir::expr::Block {
+    fn lower_block(&mut self, block: &Block) -> hir::Block {
         assert!(!block.stmts().is_empty());
 
         let mut stmts = block.stmts()[0..block.stmts().len() - 1]
@@ -790,15 +798,17 @@ impl<'ast> Lower<'ast> {
 
         let id = self.lower_node_id(block.id());
         self.add_node(Node::BlockNode(hir::expr::BlockNode::new(id, stmts, expr)))
+            .into()
     }
 
     // Synthesis //
-    fn stmt(&mut self, span: Span, kind: hir::stmt::StmtKind) -> hir::stmt::Stmt {
+    fn stmt(&mut self, span: Span, kind: hir::stmt::StmtKind) -> hir::Stmt {
         let id = self.next_hir_id();
         self.add_node(Node::StmtNode(hir::stmt::StmtNode::new(id, kind, span)))
+            .into()
     }
 
-    fn stmt_item(&mut self, span: Span, item: ItemId) -> hir::stmt::Stmt {
+    fn stmt_item(&mut self, span: Span, item: ItemId) -> hir::Stmt {
         self.stmt(span, hir::stmt::StmtKind::Item(item))
     }
 
@@ -816,41 +826,38 @@ impl<'ast> Lower<'ast> {
         ItemId::new(owner_id)
     }
 
-    fn pat(&mut self, span: Span, kind: hir::pat::PatKind) -> hir::pat::Pat {
+    fn pat(&mut self, span: Span, kind: hir::pat::PatKind) -> hir::Pat {
         let id = self.next_hir_id();
         self.add_node(Node::PatNode(hir::pat::PatNode::new(id, kind, span)))
+            .into()
     }
 
-    fn pat_ident(&mut self, ident: Ident) -> hir::pat::Pat {
+    fn pat_ident(&mut self, ident: Ident) -> hir::Pat {
         self.pat(ident.span(), hir::pat::PatKind::Ident(ident))
     }
 
-    fn expr(&mut self, span: Span, kind: hir::expr::ExprKind) -> hir::expr::Expr {
+    fn expr(&mut self, span: Span, kind: hir::expr::ExprKind) -> hir::Expr {
         let id = self.next_hir_id();
         self.add_node(Node::ExprNode(hir::expr::ExprNode::new(id, kind, span)))
+            .into()
     }
 
-    fn expr_call(
-        &mut self,
-        span: Span,
-        lhs: hir::expr::Expr,
-        args: Vec<hir::expr::Expr>,
-    ) -> hir::expr::Expr {
+    fn expr_call(&mut self, span: Span, lhs: hir::Expr, args: Vec<hir::Expr>) -> hir::Expr {
         self.expr(
             span,
             hir::expr::ExprKind::Call(hir::expr::Call { lhs, args }),
         )
     }
 
-    fn expr_lit(&mut self, span: Span, lit: hir::expr::Lit) -> hir::expr::Expr {
+    fn expr_lit(&mut self, span: Span, lit: hir::expr::Lit) -> hir::Expr {
         self.expr(span, hir::expr::ExprKind::Lit(lit))
     }
 
-    fn expr_path(&mut self, span: Span, path: hir::Path) -> hir::expr::Expr {
+    fn expr_path(&mut self, span: Span, path: hir::Path) -> hir::Expr {
         self.expr(span, hir::expr::ExprKind::Path(hir::expr::PathExpr(path)))
     }
 
-    fn expr_lambda(&mut self, span: Span, body: hir::BodyId) -> hir::expr::Expr {
+    fn expr_lambda(&mut self, span: Span, body: hir::BodyId) -> hir::Expr {
         let node_id = self.sess.next_node_id();
         let def_id = self.sess.def_table.define(
             node_id,
@@ -866,7 +873,7 @@ impl<'ast> Lower<'ast> {
         )
     }
 
-    fn body(&mut self, params: Vec<hir::pat::Pat>, value: hir::expr::Expr) -> BodyId {
+    fn body(&mut self, params: Vec<hir::Pat>, value: hir::Expr) -> BodyId {
         let body = Body::new(params, value);
         let id = body.id();
 

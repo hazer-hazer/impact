@@ -1,4 +1,4 @@
-use super::{ty::Ty, BodyId, HirId, OwnerId, WithHirId, ROOT_OWNER_ID};
+use super::{BodyId, HirId, OwnerId, Ty, Variant, WithHirId, ROOT_OWNER_ID};
 use crate::{
     cli::color::{Color, ColorizedStruct},
     dt::idx::declare_idx,
@@ -16,6 +16,12 @@ impl ItemId {
 
     pub fn def_id(&self) -> DefId {
         self.inner().inner()
+    }
+}
+
+impl Into<HirId> for ItemId {
+    fn into(self) -> HirId {
+        self.hir_id()
     }
 }
 
@@ -68,8 +74,6 @@ impl WithHirId for Field {
 }
 
 impl_with_span!(Field);
-
-pub type Variant = HirId;
 
 #[derive(Debug)]
 pub struct VariantNode {

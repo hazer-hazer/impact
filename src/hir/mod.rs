@@ -4,15 +4,18 @@ use core::panic;
 use std::{collections::HashMap, fmt::Display};
 
 use self::{
-    expr::{Block, BlockNode, Expr, ExprKind, ExprNode, Lambda},
+    expr::{BlockNode, ExprKind, ExprNode, Lambda},
     item::{ItemId, ItemKind, ItemNode, Mod, VariantNode},
-    pat::{Pat, PatNode},
+    pat::PatNode,
     stmt::StmtNode,
     ty::TyNode,
 };
 use crate::{
     cli::color::{Color, ColorizedStruct},
-    dt::idx::{declare_idx, Idx, IndexVec},
+    dt::{
+        idx::{declare_idx, Idx, IndexVec},
+        new_type::new_type,
+    },
     resolve::{
         builtin::Builtin,
         def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
@@ -101,12 +104,6 @@ impl WithHirId for HirId {
     }
 }
 
-impl From<DefId> for HirId {
-    fn from(def_id: DefId) -> Self {
-        Self::new_owner(def_id)
-    }
-}
-
 pub type HirMap<T> = HashMap<HirId, T>;
 
 pub trait WithHirId {
@@ -122,7 +119,11 @@ pub struct ErrorNode {
 // HIR Node is any Node in HIR with HirId
 macro_rules! hir_nodes {
     // identified by HirId / other
-    ($($name: ident $ty: tt,)* / $($other_name: ident $other_ty: tt,)*) => {
+    ($($name: ident $id_name: ident $ty: tt,)* / $($other_name: ident $other_ty: tt,)*) => {
+        $(
+            new_type!($id_name HirId);
+        )*
+
         #[derive(Debug)]
         pub enum Node {
             $(
@@ -162,8 +163,8 @@ macro_rules! hir_nodes {
 
         impl<'hir> HIR {
             $(
-                pub fn $name(&self, $name: HirId) -> &$ty {
-                    match self.node($name) {
+                pub fn $name(&self, $name: $id_name) -> &$ty {
+                    match self.node($name.into()) {
                         Node::$ty(node) => node,
                         n @ _ => panic!("Expected {} HIR node, got {}", stringify!($name), n.name()),
                     }
@@ -174,13 +175,13 @@ macro_rules! hir_nodes {
 }
 
 hir_nodes!(
-    expr ExprNode,
-    stmt StmtNode,
-    pat PatNode,
-    block BlockNode,
-    ty TyNode,
-    path PathNode,
-    variant VariantNode,
+    expr Expr ExprNode,
+    stmt Stmt StmtNode,
+    pat Pat PatNode,
+    block Block BlockNode,
+    ty Ty TyNode,
+    path Path PathNode,
+    variant Variant VariantNode,
     /
     item ItemNode,
     root Mod,
@@ -552,7 +553,7 @@ impl Body {
     }
 
     pub fn id(&self) -> BodyId {
-        BodyId(self.value)
+        BodyId(self.value.into())
     }
 }
 
@@ -647,5 +648,3 @@ impl Display for PathNode {
 }
 
 impl_with_span!(PathNode);
-
-pub type Path = HirId;

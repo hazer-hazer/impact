@@ -512,7 +512,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     // Conversion //
-    fn conv(&mut self, ty: hir::ty::Ty) -> Ty {
+    fn conv(&mut self, ty: hir::Ty) -> Ty {
         let ty = self.hir.ty(ty);
         // TODO: Allow recursive?
 
@@ -575,8 +575,12 @@ impl<'hir> Typecker<'hir> {
 
                     DefKind::Data => self.conv_adt(def_id),
 
+                    // TODO: We need type collector to collect items types before typeck of
+                    // expressions
                     DefKind::Variant => {
-                        self.conv_adt(self.hir.variant(def_id.into()).id().owner().into())
+                        todo!()
+                        // self.conv_adt(self.hir.variant(def_id.into()).id().
+                        // owner().into())
                     },
 
                     // Non-type definitions from type namespace
@@ -654,23 +658,23 @@ impl<'hir> Typecker<'hir> {
         let adt = self.hir.item(ItemId::new(def_id.into())).adt();
 
         // Variant indexing defined here. For now, just incremental sequencing.
-        let variants: IndexVec<VariantId, HirId> = adt.variants.iter().copied().collect();
+        let variants: IndexVec<VariantId, hir::Variant> = adt.variants.iter().copied().collect();
 
         let adt_ty = self.generalize_ty(&adt.generics, |this| {
             let variants = variants.iter().map(|v| this.conv_variant(v)).collect();
             Ty::adt(Adt { def_id, variants })
         });
 
-        variants.iter_enumerated().for_each(|(id, &hir_id)| {
-            let v_def_id = self.hir.variant(hir_id).def_id;
+        variants.iter_enumerated().for_each(|(id, &hir_v)| {
+            let v_def_id = self.hir.variant(hir_v).def_id;
             self.tyctx_mut().set_variant_id(v_def_id, id);
-            self.tyctx_mut().type_node(hir_id, adt_ty);
+            self.tyctx_mut().type_node(hir_v.into(), adt_ty);
         });
 
         adt_ty
     }
 
-    fn conv_variant(&mut self, &variant: &hir::item::Variant) -> Variant {
+    fn conv_variant(&mut self, &variant: &hir::Variant) -> Variant {
         let variant = self.hir.variant(variant);
         Variant {
             def_id: variant.def_id,

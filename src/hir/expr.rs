@@ -1,11 +1,11 @@
 use std::fmt::Display;
 
-use super::{stmt::Stmt, ty::Ty, BodyId, HirId, Path, WithHirId};
+use super::{BodyId, HirId, Path, Stmt, Ty, WithHirId, Expr, Block};
 use crate::{
     resolve::{builtin::Builtin, def::DefId},
     span::{
         impl_with_span,
-        sym::{Ident, Symbol},
+        sym::{Symbol},
         Span, WithSpan,
     },
 };
@@ -123,8 +123,6 @@ impl WithHirId for BlockNode {
     }
 }
 
-pub type Block = HirId;
-
 #[derive(Debug)]
 pub struct PathExpr(pub Path);
 
@@ -187,5 +185,3 @@ impl WithHirId for ExprNode {
 }
 
 impl_with_span!(ExprNode);
-
-pub type Expr = HirId;

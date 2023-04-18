@@ -1,4 +1,4 @@
-use super::{HirId, Path, WithHirId};
+use super::{HirId, Path, WithHirId, Ty};
 use crate::{
     resolve::builtin::Builtin,
     span::{impl_with_span, Span, WithSpan},
@@ -39,5 +39,3 @@ pub enum TyKind {
     App(Ty, Vec<Ty>),
     Builtin(Builtin),
 }
-
-pub type Ty = HirId;

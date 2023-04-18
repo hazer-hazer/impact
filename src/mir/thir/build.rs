@@ -6,7 +6,7 @@ use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
     resolve::{builtin::Builtin, def::DefKind},
     span::WithSpan,
-    typeck::{ty::VariantId, tyctx::TyCtx},
+    typeck::{tyctx::TyCtx},
 };
 
 pub struct ThirBuilder<'ctx> {
@@ -39,12 +39,12 @@ impl<'ctx> ThirBuilder<'ctx> {
         (self.thir, expr)
     }
 
-    fn param(&mut self, param: hir::pat::Pat) -> ParamId {
+    fn param(&mut self, param: hir::Pat) -> ParamId {
         let pat = self.pat(param);
         self.thir.add_param(Param { pat })
     }
 
-    fn expr(&mut self, expr_id: hir::expr::Expr) -> ExprId {
+    fn expr(&mut self, expr_id: hir::Expr) -> ExprId {
         let expr = self.hir.expr(expr_id);
         let kind = match expr.kind() {
             hir::expr::ExprKind::Lit(lit) => {
@@ -134,7 +134,7 @@ impl<'ctx> ThirBuilder<'ctx> {
         }
     }
 
-    fn stmt(&mut self, stmt_id: hir::stmt::Stmt) -> Option<StmtId> {
+    fn stmt(&mut self, stmt_id: hir::Stmt) -> Option<StmtId> {
         let stmt = self.hir.stmt(stmt_id);
 
         let stmt = match stmt.kind() {
@@ -160,7 +160,7 @@ impl<'ctx> ThirBuilder<'ctx> {
         Stmt::Local(pat, self.expr(local.value))
     }
 
-    fn block(&mut self, block_id: hir::expr::Block) -> BlockId {
+    fn block(&mut self, block_id: hir::Block) -> BlockId {
         let block = self.hir.block(block_id);
 
         let stmts = block
@@ -173,7 +173,7 @@ impl<'ctx> ThirBuilder<'ctx> {
         self.thir.add_block(Block { stmts, expr })
     }
 
-    fn pat(&mut self, pat: hir::pat::Pat) -> Pat {
+    fn pat(&mut self, pat: hir::Pat) -> Pat {
         let pat = self.hir.pat(pat);
         let ty = self.tyctx.tyof(pat.id());
 

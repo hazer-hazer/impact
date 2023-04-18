@@ -1,17 +1,15 @@
 use super::{AstLikePP, AstPPMode};
 use crate::{
     hir::{
-        expr::{Block, Call, Expr, ExprKind, Lambda, Lit, TyExpr},
-        item::{
-            Adt, ExternItem, Field, GenericParams, ItemId, Mod, TyAlias, Variant, ROOT_ITEM_ID,
-        },
-        pat::{Pat, PatKind},
-        stmt::{Local, Stmt, StmtKind},
-        ty::{Ty, TyKind},
+        expr::{Call, ExprKind, Lambda, Lit, TyExpr},
+        item::{Adt, ExternItem, Field, GenericParams, ItemId, Mod, TyAlias, ROOT_ITEM_ID},
+        pat::PatKind,
+        stmt::{Local, StmtKind},
+        ty::TyKind,
         visitor::HirVisitor,
-        BodyId, BodyOwner, Path, HIR,
+        Block, BodyId, BodyOwner, Expr, Pat, Path, Stmt, Ty, Variant, HIR,
     },
-    parser::token::{Punct, Op},
+    parser::token::{Op, Punct},
     resolve::builtin::Builtin,
     session::Session,
     span::sym::{Ident, Kw},

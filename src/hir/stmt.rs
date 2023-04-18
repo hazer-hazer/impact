@@ -1,4 +1,4 @@
-use super::{expr::Expr, item::ItemId, HirId, WithHirId};
+use super::{item::ItemId, Expr, HirId, WithHirId};
 use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 
 #[derive(Debug)]
@@ -40,5 +40,3 @@ pub enum StmtKind {
     Expr(Expr),
     Item(ItemId),
 }
-
-pub type Stmt = HirId;

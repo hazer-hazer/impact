@@ -31,5 +31,3 @@ impl WithHirId for PatNode {
 }
 
 impl_with_span!(PatNode);
-
-pub type Pat = HirId;

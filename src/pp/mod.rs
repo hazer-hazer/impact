@@ -115,19 +115,25 @@ impl<'a, D> AstLikePP<'a, D> {
         self
     }
 
-    pub fn ty(&mut self, id: HirId) -> &mut Self {
+    pub fn ty<TyId>(&mut self, id: TyId) -> &mut Self
+    where
+        TyId: Into<HirId>,
+    {
         if self.mode == AstPPMode::TyAnno {
             self.string(
                 self.sess
                     .tyctx
-                    .pp_typed_node(id)
+                    .pp_typed_node(id.into())
                     .fg_color(Color::BrightBlue),
             );
         }
         self
     }
 
-    pub fn ty_anno(&mut self, id: HirId) -> &mut Self {
+    pub fn ty_anno<Id>(&mut self, id: Id) -> &mut Self
+    where
+        Id: Into<HirId>,
+    {
         if self.mode == AstPPMode::TyAnno {
             self.punct(Punct::Colon);
             self.ty(id);
