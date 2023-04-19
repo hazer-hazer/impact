@@ -14,9 +14,9 @@ use crate::{
         ErrorNode, IdentNode, NodeId, NodeMap, Path, WithNodeId, AST, N, PR,
     },
     cli::verbose,
-    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
     resolve::def::DefKind,
-    session::{Session, Stage, StageOutput},
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Symbol},
         Span, WithSpan,
@@ -332,8 +332,8 @@ impl<'ast> NameResolver<'ast> {
 }
 
 impl<'a> MessageHolder for NameResolver<'a> {
-    fn save(&mut self, msg: Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -438,9 +438,9 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
 }
 
 impl<'ast> Stage<()> for NameResolver<'ast> {
-    fn run(mut self) -> StageOutput<()> {
+    fn run(mut self) -> StageResult<()> {
         self.enter_module_scope(ROOT_MODULE_ID);
         self.visit_ast(self.ast);
-        StageOutput::new(self.sess, (), self.msg)
+        stage_result(self.sess, (), self.msg)
     }
 }

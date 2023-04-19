@@ -11,7 +11,8 @@ use impact::{
         command::{PPStages, StageName},
     },
     config::config::{Config, ConfigBuilder},
-    interface::interface::{Interface, InterruptionReason},
+    interface::interface::Interface,
+    session::InterruptionReason,
     span::source::Source,
 };
 use similar::{ChangeTag, TextDiff};

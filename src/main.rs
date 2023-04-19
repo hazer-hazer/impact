@@ -4,11 +4,11 @@
 use std::fs::read_to_string;
 
 use cli::color::Colorize;
-use interface::interface::{Interface, InterruptionReason};
+use interface::interface::Interface;
 
 use crate::{
     cli::{cli::CLI, verbose},
-    span::source::Source,
+    span::source::Source, session::InterruptionReason,
 };
 
 mod ast;

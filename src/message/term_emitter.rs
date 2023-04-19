@@ -38,14 +38,6 @@ impl TermEmitter {
 }
 
 impl MessageEmitter for TermEmitter {
-    fn error_appeared(&mut self) {
-        self.got_error = true;
-    }
-
-    fn got_error(&self) -> bool {
-        self.got_error
-    }
-
     fn process_msg(&self, sess: &Session, msg: &Message) {
         let source = sess.source_map.get_source(msg.span().source());
 

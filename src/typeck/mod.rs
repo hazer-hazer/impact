@@ -19,12 +19,12 @@ use crate::{
         HirId, Path, Res, WithHirId, HIR,
     },
     interface::writer::outln,
-    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefKind, DefMap},
     },
-    session::{Session, Stage, StageOutput},
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Internable},
         WithSpan,
@@ -104,8 +104,8 @@ pub struct Typecker<'hir> {
 }
 
 impl<'hir> MessageHolder for Typecker<'hir> {
-    fn save(&mut self, msg: Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -823,7 +823,7 @@ impl<'hir> Typecker<'hir> {
 }
 
 impl<'hir> Stage<()> for Typecker<'hir> {
-    fn run(mut self) -> StageOutput<()> {
+    fn run(mut self) -> StageResult<()> {
         self.under_new_ctx(|this| {
             this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);
@@ -844,7 +844,7 @@ impl<'hir> Stage<()> for Typecker<'hir> {
 
         self.sess.tyctx.apply_ctx_on_typed_nodes(&self.global_ctx);
 
-        StageOutput::new(self.sess, (), self.msg)
+        stage_result(self.sess, (), self.msg)
     }
 }
 

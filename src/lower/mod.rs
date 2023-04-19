@@ -16,14 +16,14 @@ use crate::{
         Body, BodyId, HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
         OWNER_SELF_CHILD_ID,
     },
-    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::{
         builtin::{Builtin, DeclareBuiltin},
         def::{DefId, DefKind},
         res::{self, NamePath},
     },
-    session::{Session, Stage, StageOutput},
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Internable, Kw},
         Span, WithSpan,
@@ -92,8 +92,8 @@ pub struct Lower<'ast> {
 }
 
 impl<'ast> MessageHolder for Lower<'ast> {
-    fn save(&mut self, msg: Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -916,8 +916,8 @@ impl<'ast> Lower<'ast> {
 }
 
 impl<'ast> Stage<HIR> for Lower<'ast> {
-    fn run(mut self) -> StageOutput<HIR> {
+    fn run(mut self) -> StageResult<HIR> {
         self.lower_ast();
-        StageOutput::new(self.sess, self.hir, self.msg)
+        stage_result(self.sess, self.hir, self.msg)
     }
 }

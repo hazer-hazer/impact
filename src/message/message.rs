@@ -162,20 +162,12 @@ impl Label {
 }
 
 pub trait MessageHolder {
-    fn save(&mut self, msg: Message);
+    fn storage(&mut self) -> &mut MessageStorage;
 }
 
 /// Result of execution producing any value, fallible with messages, preserving
 /// messages which can be warnings or notes
 pub type MessagesResult<T> = Result<(T, MessageStorage), MessageStorage>;
-
-macro_rules! output_stage_messages_result {
-    ($ctx: expr, $messages_result: expr) => {
-        match $messages_result {
-            Ok((data, msg)) => 
-        }
-    };
-}
 
 #[derive(Default)]
 pub struct MessageStorage {
@@ -195,8 +187,12 @@ impl MessageStorage {
         self.messages
     }
 
+    pub fn check_for_errors(&self) -> bool {
+        self.messages.iter().any(|msg| msg.is(MessageKind::Error))
+    }
+
     pub fn error_checked_result<T>(self, value: T) -> MessagesResult<T> {
-        if self.messages.iter().any(|msg| msg.is(MessageKind::Error)) {
+        if self.check_for_errors() {
             Err(self)
         } else {
             Ok((value, self))
@@ -296,11 +292,11 @@ impl MessageBuilder {
         assert!(self.labels.is_empty());
         let span = self.checked_span();
         let text = self.checked_text();
-        holder.save(self.label(span, text).build());
+        holder.storage().add_message(self.label(span, text).build());
     }
 
     pub fn emit(self, holder: &mut impl MessageHolder) {
         assert!(!self.labels.is_empty());
-        holder.save(self.build());
+        holder.storage().add_message(self.build());
     }
 }

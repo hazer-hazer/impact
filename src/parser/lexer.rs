@@ -1,8 +1,8 @@
 use super::token::{ComplexSymbol, IntKind};
 use crate::{
-    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{Punct, Token, TokenKind, TokenStream},
-    session::{Session, Stage, StageOutput},
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         source::SourceId,
         sym::{Kw, Symbol},
@@ -77,8 +77,8 @@ impl LexerCharCheck for char {
 }
 
 impl<'ast> MessageHolder for Lexer {
-    fn save(&mut self, msg: Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -365,7 +365,7 @@ impl Lexer {
 }
 
 impl Stage<TokenStream> for Lexer {
-    fn run(mut self) -> StageOutput<TokenStream> {
+    fn run(mut self) -> StageResult<TokenStream> {
         while !self.eof() {
             self.token_start_pos = self.pos;
             match self.peek().match_first() {
@@ -409,6 +409,6 @@ impl Stage<TokenStream> for Lexer {
         self.save_source_line();
         self.add_token(TokenKind::Eof, 1);
 
-        StageOutput::new(self.sess, TokenStream::new(self.tokens), self.msg)
+        stage_result(self.sess, TokenStream::new(self.tokens), self.msg)
     }
 }

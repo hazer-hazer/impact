@@ -14,8 +14,8 @@ use crate::{
     },
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
-    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
-    session::{Session, Stage, StageOutput},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Kw},
         Span, WithSpan,
@@ -101,8 +101,8 @@ pub struct Parser {
 }
 
 impl<'ast> MessageHolder for Parser {
-    fn save(&mut self, msg: Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -1694,8 +1694,8 @@ impl Parser {
 }
 
 impl<'ast> Stage<AST> for Parser {
-    fn run(mut self) -> StageOutput<AST> {
+    fn run(mut self) -> StageResult<AST> {
         let ast: AST = self.parse();
-        StageOutput::new(self.sess, ast, self.msg)
+        stage_result(self.sess, ast, self.msg)
     }
 }

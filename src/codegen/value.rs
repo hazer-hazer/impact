@@ -3,7 +3,9 @@ use inkwell::values::BasicValueEnum;
 use super::{ctx::CodeGenCtx, func::FunctionMap};
 use crate::{
     hir::visitor::HirVisitor,
+    message::message::MessageStorage,
     resolve::def::{DefId, DefMap},
+    session::{stage_result, Stage, StageResult},
 };
 
 #[derive(Default)]
@@ -24,6 +26,15 @@ pub struct ValueCodeGen<'ink, 'ctx, 'a> {
 
     function_map: &'a FunctionMap<'ink>,
     value_map: ValueMap<'ink>,
+    msg: MessageStorage,
+}
+
+impl<'ink, 'ctx, 'a> Stage<ValueMap<'ink>, CodeGenCtx<'ink, 'ctx>>
+    for ValueCodeGen<'ink, 'ctx, 'a>
+{
+    fn run(self) -> StageResult<ValueMap<'ink>, CodeGenCtx<'ink, 'ctx>> {
+        stage_result(self.ctx, self.value_map, self.msg)
+    }
 }
 
 impl<'ink, 'ctx, 'a> ValueCodeGen<'ink, 'ctx, 'a> {
@@ -32,10 +43,11 @@ impl<'ink, 'ctx, 'a> ValueCodeGen<'ink, 'ctx, 'a> {
             ctx,
             function_map,
             value_map: Default::default(),
+            msg: Default::default(),
         }
     }
 
-    pub fn gen_values(mut self) -> ValueMap<'ink> {
+    fn gen_values(mut self) -> ValueMap<'ink> {
         self.visit_hir(self.ctx.hir);
 
         self.value_map

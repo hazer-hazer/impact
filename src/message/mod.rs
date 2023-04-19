@@ -1,7 +1,8 @@
-use self::message::Message;
+use self::message::{Message, MessageStorage};
 use crate::{
     cli::verbose,
-    session::{Session, StageOutput, StageResult, WithSession, InterruptionReason},
+    dt::bool_enum::bool_enum,
+    session::{Session, SessionHolder},
 };
 
 pub mod debug_emitter;
@@ -9,17 +10,15 @@ pub mod human_lang;
 pub mod message;
 pub mod term_emitter;
 
+bool_enum!(ErrMessageOccurred);
+
 pub trait MessageEmitter {
-    fn emit<T, Ctx>(
-        &mut self,
-        output: StageOutput<T, Ctx>,
-        stop_on_error: bool,
-    ) -> StageResult<T, Ctx>
+    fn emit<Ctx>(&mut self, msg: MessageStorage, ctx: &Ctx) -> ErrMessageOccurred
     where
-        Ctx: WithSession,
+        Ctx: SessionHolder,
     {
-        let messages = output.messages;
-        let sess = output.ctx.sess();
+        let sess = ctx.sess();
+        let messages = msg.extract();
 
         if cfg!(feature = "verbose_debug") {
             if messages.is_empty() {
@@ -36,23 +35,17 @@ pub trait MessageEmitter {
             }
         }
 
+        let mut error_appeared = false;
+
         for msg in messages.iter() {
             if msg.is(message::MessageKind::Error) {
-                self.error_appeared();
+                error_appeared = true;
             }
             self.process_msg(&sess, &msg);
         }
 
-        if stop_on_error && self.got_error() {
-            Err((InterruptionReason::ErrorMessage, output.ctx))
-        } else {
-            Ok((output.data, output.ctx))
-        }
+        error_appeared.into()
     }
-
-    fn got_error(&self) -> bool;
-
-    fn error_appeared(&mut self);
 
     fn process_msg(&self, sess: &Session, msg: &Message);
 }

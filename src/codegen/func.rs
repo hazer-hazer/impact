@@ -1,7 +1,7 @@
-use std::{collections::HashMap, iter};
+use std::collections::HashMap;
 
 use inkwell::{
-    types::{BasicType, BasicTypeEnum},
+    types::BasicType,
     values::{CallableValue, FunctionValue},
     AddressSpace,
 };
@@ -15,10 +15,10 @@ use crate::{
         visitor::HirVisitor,
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
-    message::message::{MessageBuilder, MessageHolder, MessageStorage, MessagesResult},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
-    session::{Stage, StageOutput},
+    session::{stage_result, Stage, StageResult},
     span::sym::Ident,
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
     utils::macros::match_expected,
@@ -142,8 +142,8 @@ pub struct FunctionsCodeGen<'ink, 'ctx> {
 }
 
 impl<'ink, 'ctx> MessageHolder for FunctionsCodeGen<'ink, 'ctx> {
-    fn save(&mut self, msg: crate::message::message::Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -324,7 +324,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         );
     }
 
-    pub fn gen_functions(mut self) -> MessagesResult<FunctionMap<'ink>> {
+    fn gen_functions(&mut self) {
         self.visit_hir(self.ctx.hir);
 
         // Add infix operators functions
@@ -334,8 +334,6 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         });
 
         self.gen_main();
-
-        self.msg.error_checked_result(self.function_map)
     }
 
     fn unused_instance_warning(&mut self, def_id: DefId) {
@@ -344,5 +342,12 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
             .span(def.name.span())
             .text(format!("Unused {}", def.kind()))
             .emit_single_label(self);
+    }
+}
+
+impl<'ink, 'ctx> Stage<FunctionMap<'ink>, CodeGenCtx<'ink, 'ctx>> for FunctionsCodeGen<'ink, 'ctx> {
+    fn run(mut self) -> StageResult<FunctionMap<'ink>, CodeGenCtx<'ink, 'ctx>> {
+        self.gen_functions();
+        stage_result(self.ctx, self.function_map, self.msg)
     }
 }

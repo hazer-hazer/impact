@@ -13,28 +13,21 @@ use crate::{
     hir::{item::ItemId, HIR},
     mir::{Ty, MIR},
     resolve::{builtin::Builtin, def::DefId},
-    session::{Session, WithSession},
+    session::Session,
     typeck::{
         ty::{self, FloatKind, TyKind, VariantId},
         tyctx::InstantiatedTy,
     },
 };
 
-#[derive(Clone, Copy)]
 pub struct CodeGenCtx<'ink, 'ctx> {
-    pub sess: &'ctx Session,
+    pub sess: Session,
     pub mir: &'ctx MIR,
     pub hir: &'ctx HIR,
 
     // LLVM Context //
     pub llvm_ctx: &'ink Context,
-    pub llvm_module: &'ctx Module<'ink>,
-}
-
-impl<'ink, 'ctx> WithSession for CodeGenCtx<'ink, 'ctx> {
-    fn sess(&self) -> &Session {
-        self.sess
-    }
+    pub llvm_module: Module<'ink>,
 }
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {

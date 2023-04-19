@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use inkwell::context::Context;
 
 use crate::{
@@ -15,6 +13,7 @@ use crate::{
     hir::visitor::HirVisitor,
     interface::writer::outln,
     lower::Lower,
+    message::term_emitter::TermEmitter,
     mir::build::BuildFullMir,
     parser::{lexer::Lexer, parser::Parser},
     pp::{defs::DefPrinter, hir::HirPP, mir::MirPrinter, AstLikePP, AstPPMode},
@@ -23,7 +22,7 @@ use crate::{
         def::{DefId, ModuleId},
         resolve::NameResolver,
     },
-    session::{Session, Stage, InterruptionReason},
+    session::{InterruptResult, InterruptionReason, Session, Stage, StageResultImpl},
     span::source::Source,
     typeck::Typecker,
 };
@@ -32,15 +31,12 @@ pub struct Interface {
     config: Config,
 }
 
-pub type InterruptResult<'ast> = Result<Session, (InterruptionReason, Session)>;
-pub type UnitInterruptResult<'ast> = Result<Session, (InterruptionReason, Session)>;
-
 impl<'ast> Interface {
     pub fn new(config: Config) -> Self {
         Self { config }
     }
 
-    pub fn compile_single_source(self, source: Source) -> InterruptResult<'ast> {
+    pub fn compile_single_source(self, source: Source) -> InterruptResult {
         let mut sess = Session::new(self.config.clone());
 
         // Debug info //
@@ -50,13 +46,15 @@ impl<'ast> Interface {
         verbose!("ModuleId::Block: {}", ModuleId::Block(NodeId::new(0)));
         verbose!("ModuleId::Module: {}", ModuleId::Def(DefId::new(0)));
 
+        let mut term_emitter = TermEmitter::new();
+
         // Lexing //
         verbose!("=== Lexing ===");
         let stage = StageName::Lexer;
 
         let source_id = sess.source_map.add_source(source);
 
-        let (tokens, mut sess) = Lexer::new(source_id, sess).run_and_emit(true)?;
+        let (tokens, mut sess) = Lexer::new(source_id, sess).run_and_emit(&mut term_emitter)?;
 
         if cfg!(feature = "pp_lines") {
             outln!(
@@ -84,7 +82,7 @@ impl<'ast> Interface {
         verbose!("=== Parsing ===");
         let stage = StageName::Parser;
 
-        let mut parse_result = Parser::new(sess, tokens).run();
+        let mut parse_result = Parser::new(sess, tokens).run().recover()?;
 
         if parse_result.ctx().config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(parse_result.ctx(), AstPPMode::Normal);
@@ -97,7 +95,7 @@ impl<'ast> Interface {
             );
         }
 
-        let (ast, sess) = parse_result.emit(true)?;
+        let (ast, sess) = parse_result.emit(&mut term_emitter)?;
 
         let _mapped_ast = MappedAst::new(&ast, AstMapFiller::new().fill(&ast));
 
@@ -107,7 +105,7 @@ impl<'ast> Interface {
         verbose!("=== AST Validation ===");
         let stage = StageName::AstValidation;
 
-        let (_, sess) = AstValidator::new(sess, &ast).run_and_emit(true)?;
+        let (_, sess) = AstValidator::new(sess, &ast).run_and_emit(&mut term_emitter)?;
 
         let sess = self.should_stop(sess, stage)?;
 
@@ -115,7 +113,7 @@ impl<'ast> Interface {
         verbose!("=== Definition collection ===");
         let stage = StageName::DefCollect;
 
-        let (_, mut sess) = DefCollector::new(sess, &ast).run_and_emit(true)?;
+        let (_, mut sess) = DefCollector::new(sess, &ast).run_and_emit(&mut term_emitter)?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
@@ -134,7 +132,7 @@ impl<'ast> Interface {
         verbose!("=== Name resolution ===");
         let stage = StageName::NameRes;
 
-        let mut name_res_result = NameResolver::new(sess, &ast).run();
+        let mut name_res_result = NameResolver::new(sess, &ast).run().recover()?;
 
         if name_res_result.ctx().config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(name_res_result.ctx(), AstPPMode::Normal);
@@ -154,7 +152,7 @@ impl<'ast> Interface {
             outln!(name_res_result.ctx_mut().writer, "Printing AST after name resolution (resolved names are marked with the same color)\n{}", ast);
         }
 
-        let (_, sess) = name_res_result.emit(true)?;
+        let (_, sess) = name_res_result.emit(&mut term_emitter)?;
 
         let sess = self.should_stop(sess, stage)?;
 
@@ -162,7 +160,7 @@ impl<'ast> Interface {
         verbose!("=== Lowering ===");
         let stage = StageName::Lower;
 
-        let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(true)?;
+        let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(&mut term_emitter)?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = HirPP::new(&sess, AstPPMode::Normal);
@@ -176,7 +174,7 @@ impl<'ast> Interface {
         // Typeck //
         verbose!("=== Type checking ===");
         let stage = StageName::Typeck;
-        let mut typeck_result = Typecker::new(sess, &hir).run();
+        let mut typeck_result = Typecker::new(sess, &hir).run().recover()?;
 
         if typeck_result.ctx().config().check_pp_stage(stage) {
             let mut pp = HirPP::new(typeck_result.ctx(), AstPPMode::TyAnno);
@@ -189,7 +187,7 @@ impl<'ast> Interface {
             );
         }
 
-        let (_, sess) = typeck_result.emit(true)?;
+        let (_, sess) = typeck_result.emit(&mut term_emitter)?;
 
         let sess = self.should_stop(sess, stage)?;
 
@@ -197,7 +195,7 @@ impl<'ast> Interface {
         verbose!("=== MIR Construction ===");
         let stage = StageName::MirConstruction;
 
-        let (mir, mut sess) = BuildFullMir::new(sess, &hir).run_and_emit(true)?;
+        let (mir, mut sess) = BuildFullMir::new(sess, &hir).run_and_emit(&mut term_emitter)?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = MirPrinter::new(&sess, &mir);
@@ -213,14 +211,15 @@ impl<'ast> Interface {
         let stage = StageName::Codegen;
 
         let llvm_ctx = Context::create();
-        let (_, sess) = CodeGen::new(sess, &mir, &hir, &llvm_ctx).run_and_emit(true)?;
+        let (_, sess) =
+            CodeGen::new(sess, &mir, &hir, &llvm_ctx).run_and_emit(&mut term_emitter)?;
 
         let sess = self.should_stop(sess, stage)?;
 
         Ok(sess)
     }
 
-    fn should_stop<'a>(&self, sess: Session, stage: StageName) -> UnitInterruptResult<'a> {
+    fn should_stop(&self, sess: Session, stage: StageName) -> InterruptResult {
         if self.config.compilation_depth() <= stage {
             verbose!(
                 "Should stop on {} as {} is configured",

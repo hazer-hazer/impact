@@ -11,11 +11,11 @@ use crate::{
     message::{
         human_lang::items_are,
         message::{
-            Message, MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution,
+            MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution,
             SolutionKind,
         },
     },
-    session::{Session, Stage, StageOutput},
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Symbol},
         WithSpan,
@@ -61,8 +61,8 @@ pub struct AstValidator<'ast> {
 }
 
 impl<'ast> MessageHolder for AstValidator<'ast> {
-    fn save(&mut self, msg: Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -313,8 +313,8 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
 }
 
 impl<'ast> Stage<()> for AstValidator<'ast> {
-    fn run(mut self) -> StageOutput<()> {
+    fn run(mut self) -> StageResult<()> {
         self.visit_ast(self.ast);
-        StageOutput::new(self.sess, (), self.msg)
+        stage_result(self.sess, (), self.msg)
     }
 }

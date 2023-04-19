@@ -19,9 +19,9 @@ use super::{
 use crate::{
     cli::{color::Colorize, verbose},
     hir::HIR,
-    message::message::{MessageHolder, MessageStorage, MessagesResult},
+    message::message::{MessageHolder, MessageStorage},
     mir::MIR,
-    session::{Session, Stage, StageOutput, StageResult},
+    session::{stage_result, Session, Stage, StageResult, StageResultImpl},
 };
 
 pub struct CodeGen<'ink, 'ctx> {
@@ -35,8 +35,8 @@ pub struct CodeGen<'ink, 'ctx> {
 }
 
 impl<'ink, 'ctx> MessageHolder for CodeGen<'ink, 'ctx> {
-    fn save(&mut self, msg: crate::message::message::Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -51,7 +51,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         }
     }
 
-    fn codegen(mut self) -> MessagesResult<()> {
+    fn codegen(mut self) -> StageResult<(), CodeGenCtx<'ink, 'ctx>> {
         let _main_func = self
             .sess
             .def_table
@@ -65,33 +65,44 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         llvm_module.set_triple(&target_triple);
 
         let ctx = CodeGenCtx {
-            sess: &self.sess,
+            sess: self.sess,
             mir: self.mir,
             hir: self.hir,
             llvm_ctx: self.llvm_ctx,
-            llvm_module: &llvm_module,
+            llvm_module,
         };
 
-        let (function_map, msg) = FunctionsCodeGen::new(ctx).gen_functions()?;
-        let value_map = ValueCodeGen::new(ctx, &function_map).gen_values();
+        let (function_map, ctx) = FunctionsCodeGen::new(ctx).run()?.merged(&mut self.msg);
 
-        for (def_id, inst) in function_map.iter_internal() {
-            match inst {
+        let (value_map, ctx) = ValueCodeGen::new(ctx, &function_map)
+            .run()?
+            .merged(&mut self.msg);
+
+        let ctx = function_map
+            .iter_internal()
+            .try_fold(ctx, |ctx, (def_id, inst)| match inst {
                 &FuncInstance::Mono(ty, func) => {
-                    BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map).gen_body();
+                    let ((), ctx) =
+                        BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map)
+                            .run()?
+                            .merged(&mut self.msg);
+                    Ok(ctx)
                 },
                 FuncInstance::Poly(poly) => {
-                    poly.iter_enumerated_flat().for_each(|(_, &(ty, func))| {
-                        BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map)
-                            .gen_body();
-                    })
+                    poly.iter_enumerated_flat()
+                        .try_fold(ctx, |ctx, (_, &(ty, func))| {
+                            let ((), ctx) =
+                                BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map)
+                                    .run()?
+                                    .merged(&mut self.msg);
+                            Ok(ctx)
+                        })
                 },
-            }
-        }
+            })?;
 
-        verbose!("LLVM Module:\n{}", llvm_module.to_string());
+        verbose!("LLVM Module:\n{}", ctx.llvm_module.to_string());
 
-        llvm_module
+        ctx.llvm_module
             .verify()
             .map_err(|err| {
                 println!(
@@ -116,7 +127,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             .unwrap();
 
         target_machine
-            .write_to_file(&llvm_module, FileType::Object, &path)
+            .write_to_file(&ctx.llvm_module, FileType::Object, &path)
             .unwrap();
 
         let mut child = Command::new("gcc")
@@ -136,16 +147,15 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         child.wait().unwrap();
 
         let mut file = File::create(path.with_extension("ll")).unwrap();
-        file.write_all(llvm_module.to_string().as_bytes()).unwrap();
+        file.write_all(ctx.llvm_module.to_string().as_bytes())
+            .unwrap();
 
-        Ok(((), self.msg))
+        stage_result(ctx, (), self.msg)
     }
 }
 
 impl<'ink, 'ctx> Stage<()> for CodeGen<'ink, 'ctx> {
-    fn run(mut self) -> StageOutput<()> {
-        let result = self.codegen();
-        // FIXME: Rewrite stages to error propagation model
-        StageOutput::new(self.sess, (), self.msg)
+    fn run(self) -> StageResult<()> {
+        self.codegen().map_ctx(|ctx| ctx.sess)
     }
 }

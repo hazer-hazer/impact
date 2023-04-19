@@ -7,9 +7,9 @@ use crate::{
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
     cli::verbose,
-    message::message::{Message, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage},
     resolve::{builtin::DeclareBuiltin, def::Namespace},
-    session::{Session, Stage, StageOutput},
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         source::SourceId,
         sym::{Ident, Internable},
@@ -27,8 +27,8 @@ pub struct DefCollector<'ast> {
 }
 
 impl<'ast> MessageHolder for DefCollector<'ast> {
-    fn save(&mut self, msg: Message) {
-        self.msg.add_message(msg)
+    fn storage(&mut self) -> &mut MessageStorage {
+        &mut self.msg
     }
 }
 
@@ -252,7 +252,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
 }
 
 impl<'ast> Stage<()> for DefCollector<'ast> {
-    fn run(mut self) -> StageOutput<()> {
+    fn run(mut self) -> StageResult<()> {
         // FIXME: SourceId(0) is root file?
         assert_eq!(
             self.sess
@@ -266,6 +266,6 @@ impl<'ast> Stage<()> for DefCollector<'ast> {
 
         self.visit_ast(self.ast);
 
-        StageOutput::new(self.sess, (), self.msg)
+        stage_result(self.sess, (), self.msg)
     }
 }

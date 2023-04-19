@@ -9,11 +9,13 @@ use crate::{
     cli::verbose,
     dt::idx::IndexVec,
     hir::BodyId,
+    message::message::MessageStorage,
     mir::{
         Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator, TerminatorKind,
         Ty, BB, START_BB,
     },
     resolve::{builtin::Builtin, def::DefId},
+    session::{stage_result, Stage, StageResult},
     typeck::ty::{FloatKind, TyKind},
 };
 
@@ -32,6 +34,15 @@ pub struct BodyCodeGen<'ink, 'ctx, 'a> {
     locals_values: IndexVec<Local, Option<PointerValue<'ink>>>,
     function_map: &'a FunctionMap<'ink>,
     value_map: &'a ValueMap<'ink>,
+
+    msg: MessageStorage,
+}
+
+impl<'ink, 'ctx, 'a> Stage<(), CodeGenCtx<'ink, 'ctx>> for BodyCodeGen<'ink, 'ctx, 'a> {
+    fn run(mut self) -> StageResult<(), CodeGenCtx<'ink, 'ctx>> {
+        self.gen_body();
+        stage_result(self.ctx, (), self.msg)
+    }
 }
 
 impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
@@ -59,6 +70,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             locals_values: IndexVec::new_of(body.locals.len()),
             function_map,
             value_map,
+            msg: Default::default(),
         }
     }
 
@@ -107,7 +119,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     // Generators //
-    pub fn gen_body(&mut self) {
+    fn gen_body(&mut self) {
         if !self.ctx.should_be_built(self.func_def_id) {
             return;
         }

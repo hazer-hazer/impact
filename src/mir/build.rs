@@ -10,7 +10,7 @@ use crate::{
     message::message::MessageStorage,
     pp::thir::ThirPrinter,
     resolve::builtin::Builtin,
-    session::{Session, Stage, StageOutput},
+    session::{Session, Stage, StageResult, stage_result},
 };
 
 macro_rules! unpack {
@@ -165,8 +165,8 @@ impl<'ctx> HirVisitor for BuildFullMir<'ctx> {
 }
 
 impl<'ctx> Stage<MIR> for BuildFullMir<'ctx> {
-    fn run(mut self) -> StageOutput<MIR> {
+    fn run(mut self) -> StageResult<MIR> {
         self.visit_hir(self.hir);
-        StageOutput::new(self.sess, self.mir, self.msg)
+        stage_result(self.sess, self.mir, self.msg)
     }
 }

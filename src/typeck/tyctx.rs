@@ -15,7 +15,7 @@ use super::{
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::{item::ItemId, Expr, HirId},
+    hir::{Expr, HirId},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefMap},
