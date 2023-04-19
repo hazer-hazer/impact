@@ -160,11 +160,15 @@ impl<T, Ctx> RecoveredStageResult<T, Ctx> {
         &self.data
     }
 
-    pub fn emit(self, emitter: &mut impl MessageEmitter) -> Result<(T, Ctx), InterruptionErr<Ctx>>
+    pub fn emit(
+        mut self,
+        emitter: &mut impl MessageEmitter,
+    ) -> Result<(T, Ctx), InterruptionErr<Ctx>>
     where
         Ctx: SessionHolder,
     {
-        if emitter.emit(self.msg, &self.ctx).into() {
+        let (error_occurred, text) = emitter.emit(self.msg, &mut self.ctx);
+        if error_occurred.into() {
             Err((InterruptionReason::ErrorMessage, self.ctx))
         } else {
             Ok((self.data, self.ctx))
@@ -220,15 +224,17 @@ impl<T, Ctx> StageResultImpl<T, Ctx> for StageResult<T, Ctx> {
         Ctx: SessionHolder,
     {
         match self {
-            Ok(ok) => {
-                if emitter.emit(ok.msg, &ok.ctx).into() {
+            Ok(mut ok) => {
+                let (error_occurred, text) = emitter.emit(ok.msg, &mut ok.ctx);
+                if error_occurred.into() {
                     Err((InterruptionReason::ErrorMessage, ok.ctx))
                 } else {
                     Ok((ok.data, ok.ctx))
                 }
             },
-            Err(err) => {
-                let _its_already_an_error = emitter.emit(err.msg, &err.ctx);
+            Err(mut err) => {
+                let (_its_already_an_error, text) = emitter.emit(err.msg, &mut err.ctx);
+                err.ctx.sess_mut().writer.write(text);
                 Err((InterruptionReason::ErrorMessage, err.ctx))
             },
         }

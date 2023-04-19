@@ -1,20 +1,23 @@
 use super::{
-    message::{Label, Message, Solution, SolutionKind},
+    message::{self, Label, Message, Solution, SolutionKind},
     MessageEmitter,
 };
 use crate::{
-    cli::color::Colorize,
+    cli::{color::Colorize, verbose},
+    interface::writer::{outln, Writer},
     session::Session,
     span::source::{LineInfo, SpanSourceInfo},
 };
 
 pub struct TermEmitter {
-    got_error: bool,
+    writer: Writer,
 }
 
 impl TermEmitter {
     pub fn new() -> Self {
-        Self { got_error: false }
+        Self {
+            writer: Default::default(),
+        }
     }
 
     // TODO: Rewrite
@@ -38,7 +41,48 @@ impl TermEmitter {
 }
 
 impl MessageEmitter for TermEmitter {
-    fn process_msg(&self, sess: &Session, msg: &Message) {
+    fn emit<Ctx>(
+        mut self,
+        msg: super::message::MessageStorage,
+        ctx: &Ctx,
+    ) -> (super::ErrMessageOccurred, String)
+    where
+        Ctx: crate::session::SessionHolder,
+    {
+        let sess = ctx.sess();
+        let messages = msg.extract();
+
+        if cfg!(feature = "verbose_debug") {
+            if messages.is_empty() {
+                verbose!("Got no messages");
+            } else {
+                verbose!(
+                    "Printing messages as are\n{}",
+                    messages
+                        .iter()
+                        .map(|m| format!("{m:?}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+            }
+        }
+
+        let mut error_appeared = false;
+
+        for msg in messages.iter() {
+            if msg.is(message::MessageKind::Error) {
+                error_appeared = true;
+            }
+
+            self.process_msg(sess, &msg);
+        }
+
+        (error_appeared.into(), self.writer.data())
+    }
+}
+
+impl TermEmitter {
+    fn process_msg(&mut self, sess: &Session, msg: &Message) {
         let source = sess.source_map.get_source(msg.span().source());
 
         let SpanSourceInfo {
@@ -46,14 +90,19 @@ impl MessageEmitter for TermEmitter {
         } = source.get_span_info(msg.span());
 
         // Header line `error: Message
-        println!(
+        outln!(
+            self.writer,
             "{}",
-            format!("{}: {}", msg.kind(), msg.text()).fg_color(msg.kind().color())
+            format!("{}: {}", msg.kind(), msg.text()).fg_color(msg.kind().color()),
         );
 
         if sess.config().verbose_messages() {
             if let Some(origin) = msg.origin() {
-                println!("{}", format!("Originated from {}", origin).yellow())
+                outln!(
+                    self.writer,
+                    "{}",
+                    format!("Originated from {}", origin).yellow()
+                )
             }
         }
 
@@ -73,7 +122,8 @@ impl MessageEmitter for TermEmitter {
         let num = lines.first().unwrap().num;
 
         // Source-pointing line `[indent]--> file:line:col`
-        println!(
+        outln!(
+            self.writer,
             "{}--> {}:{}:{}",
             " ".repeat(num_indent),
             source.filename(),
@@ -89,13 +139,11 @@ impl MessageEmitter for TermEmitter {
             self.process_solution(sess, solution);
         }
 
-        println!();
+        self.writer.nl();
     }
-}
 
-impl TermEmitter {
     fn print_line(
-        &self,
+        &mut self,
         prefix: Option<&str>,
         LineInfo {
             str,
@@ -104,7 +152,8 @@ impl TermEmitter {
             ..
         }: &LineInfo,
     ) {
-        println!(
+        outln!(
+            self.writer,
             "{}{} |{} {}",
             " ".repeat(*num_indent),
             num,
@@ -113,7 +162,7 @@ impl TermEmitter {
         );
     }
 
-    fn process_label(&self, sess: &Session, label: &Label) {
+    fn process_label(&mut self, sess: &Session, label: &Label) {
         let span = label.span();
 
         let source = sess.source_map.get_source(span.source());
@@ -133,7 +182,8 @@ impl TermEmitter {
             } = lines.first().unwrap();
 
             self.print_line(None, line);
-            println!(
+            outln!(
+                self.writer,
                 "{}{}--- {}",
                 // Indent of span pos in line + indent before number + number length + 3 for ` | `
                 " ".repeat(pos_in_line as usize + num_indent + num_len + 3),
@@ -149,7 +199,8 @@ impl TermEmitter {
             } = lines.first().unwrap();
 
             if span.lo() != *pos {
-                println!(
+                outln!(
+                    self.writer,
                     "...{}v-- from here",
                     " ".repeat(pos_in_line as usize + num_indent + num_len + 1)
                 );
@@ -159,7 +210,8 @@ impl TermEmitter {
                 self.print_line(Some(" >"), line);
             });
 
-            println!(
+            outln!(
+                self.writer,
                 "{}\\--- {}",
                 " ".repeat(num_indent + num_len + 3),
                 label.text()
@@ -167,7 +219,7 @@ impl TermEmitter {
         }
     }
 
-    fn process_solution(&self, sess: &Session, solution: &Solution) {
+    fn process_solution(&mut self, sess: &Session, solution: &Solution) {
         match solution.kind() {
             SolutionKind::Rename { kind, name, to } => self.process_label(
                 sess,

@@ -7,8 +7,8 @@ use crate::{
         WithHirId, HIR,
     },
     mir::{
-        Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,
-        TerminatorKind, MIR,
+        Body, Const, ConstKind, LValue, Operand, ProjectionKind, RValue, Stmt, StmtKind,
+        Terminator, TerminatorKind, MIR,
     },
     parser::token::{Op, Punct},
     session::Session,
@@ -69,6 +69,16 @@ impl<'ctx> MirPrinter<'ctx> {
 
     fn print_lvalue(&mut self, lvalue: &LValue) {
         self.pp.string(lvalue.local);
+
+        if let Some(proj) = lvalue.proj {
+            match proj.kind {
+                ProjectionKind::Field(vid, fid) => {
+                    self.pp.string(vid);
+                    self.pp.punct(Punct::Dot);
+                    self.pp.string(fid);
+                },
+            }
+        }
     }
 
     fn print_rvalue(&mut self, rvalue: &RValue) {

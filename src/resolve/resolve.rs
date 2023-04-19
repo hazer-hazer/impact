@@ -142,7 +142,7 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::Mod
             | DefKind::Func
             | DefKind::External
-            | DefKind::Data
+            | DefKind::Adt
             | DefKind::Variant
             | DefKind::Ctor
             | DefKind::FieldAccessor
@@ -228,9 +228,8 @@ impl<'ast> NameResolver<'ast> {
                 // TODO: Alternatives
                 let def = self.sess.def_table.get_def(def_id);
                 match def.kind {
-                    DefKind::Data => todo!(),
-                    // TODO: Review Variant as module
-                    DefKind::Variant | DefKind::Mod => Some(ModuleId::Def(def_id)),
+                    // TODO: Review Adt + Variant as module
+                    DefKind::Adt | DefKind::Variant | DefKind::Mod => Some(ModuleId::Def(def_id)),
                     DefKind::TyAlias => {
                         MessageBuilder::error()
                             .span(path.span())

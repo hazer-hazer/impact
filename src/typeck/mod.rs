@@ -573,7 +573,7 @@ impl<'hir> Typecker<'hir> {
 
                     DefKind::TyParam => self.conv_ty_param(def_id),
 
-                    DefKind::Data => self.conv_adt(def_id),
+                    DefKind::Adt => self.conv_adt(def_id),
 
                     // TODO: We need type collector to collect items types before typeck of
                     // expressions

@@ -19,15 +19,15 @@ use crate::{
     hir::BodyId,
     resolve::{builtin::Builtin, def::DefId},
     span::{sym::Ident, Span},
-    typeck::ty::VariantId,
+    typeck::ty::{FieldId, VariantId},
 };
 
 declare_idx!(Local, u32, "_{}", Color::White);
 declare_idx!(BB, u32, "bb{}", Color::White);
 
 impl Local {
-    pub fn lvalue(&self) -> LValue {
-        LValue::new(*self, None)
+    pub fn lvalue(&self, proj: Option<Projection>) -> LValue {
+        LValue::new(*self, proj)
     }
 
     pub fn return_local() -> Local {
@@ -57,13 +57,23 @@ impl BB {
 
 #[derive(Clone, Copy)]
 pub enum ProjectionKind {
-    Field(u32, VariantId),
+    Field(VariantId, FieldId),
 }
 
 #[derive(Clone, Copy)]
 pub struct Projection {
+    /// Type after projection
     pub ty: Ty,
     pub kind: ProjectionKind,
+}
+
+impl Projection {
+    pub fn field(ty: Ty, vid: VariantId, fid: FieldId) -> Self {
+        Self {
+            ty,
+            kind: ProjectionKind::Field(vid, fid),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -85,6 +95,14 @@ impl LValue {
         Self {
             local: Local::return_local(),
             proj: None,
+        }
+    }
+
+    pub fn project(self, proj: Projection) -> LValue {
+        assert!(self.proj.is_none());
+        Self {
+            local: self.local,
+            proj: Some(proj),
         }
     }
 }

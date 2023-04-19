@@ -17,8 +17,8 @@ impl Writer {
         self.data.push('\n')
     }
 
-    pub fn data(&self) -> &String {
-        &self.data
+    pub fn data(self) -> String {
+        self.data
     }
 }
 

@@ -93,7 +93,7 @@ pub enum ExprKind {
         body_id: BodyId,
     },
     Ty(ExprId, Ty),
-    FieldAccess(ExprId, FieldId, VariantId),
+    FieldAccess(ExprId, VariantId, FieldId),
     Builtin(Builtin),
 }
 
@@ -118,8 +118,8 @@ impl Display for ExprKind {
             },
             ExprKind::Lambda { def_id, body_id } => write!(f, "λ{def_id} {{{body_id}}}"),
             ExprKind::Ty(expr, ty) => write!(f, "{expr}: {ty}"),
-            ExprKind::FieldAccess(lhs, field, variant_id) => {
-                write!(f, "{lhs}.{variant_id}.{field}")
+            ExprKind::FieldAccess(lhs, variant, field) => {
+                write!(f, "{lhs}.{variant}.{field}")
             },
             ExprKind::Builtin(bt) => write!(f, "{bt}"),
         }

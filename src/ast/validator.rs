@@ -11,8 +11,7 @@ use crate::{
     message::{
         human_lang::items_are,
         message::{
-            MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution,
-            SolutionKind,
+            MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution, SolutionKind,
         },
     },
     session::{stage_result, Session, Stage, StageResult},
@@ -90,7 +89,7 @@ impl<'ast> AstValidator<'ast> {
             },
             NameKind::Const => self.validate_const_name(name, kind),
             NameKind::File => self.validate_file_name(name, kind),
-            NameKind::DataTy | NameKind::Variant | NameKind::Type => {
+            NameKind::Adt | NameKind::Variant | NameKind::Type => {
                 self.validate_typename(name, kind)
             },
             NameKind::Mod => self.validate_mod_name(name, kind),
@@ -233,7 +232,7 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
         variants: &'ast [PR<Variant>],
         _: NodeId,
     ) {
-        self.validate_name(name.as_ref().unwrap(), NameKind::DataTy);
+        self.validate_name(name.as_ref().unwrap(), NameKind::Adt);
 
         self.visit_generic_params(generics);
 

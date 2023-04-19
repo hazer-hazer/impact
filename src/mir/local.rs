@@ -61,6 +61,7 @@ impl<'ctx> MirBuilder<'ctx> {
 
     pub(super) fn temp_lvalue(&mut self, ty: Ty, span: Span) -> LValue {
         let local_sym = self.builder.next_local_name().intern();
+        // FIXME: Always no projections for temporary?
         self.builder
             .push_local(
                 false,
@@ -71,6 +72,6 @@ impl<'ctx> MirBuilder<'ctx> {
                     user_defined: false,
                 },
             )
-            .lvalue()
+            .lvalue(None)
     }
 }

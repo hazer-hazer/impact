@@ -2,7 +2,7 @@ use super::{
     build::{unpack, MirBuilder},
     scalar::Scalar,
     thir::{ExprCategory, ExprId, ExprKind, Lit, Pat, PatKind},
-    BBWith, Const, LValue, Local, Operand, RValue, Ty, BB,
+    BBWith, Const, LValue, Local, Operand, Projection, RValue, Ty, BB,
 };
 use crate::{
     cli::verbose,
@@ -41,7 +41,7 @@ impl<'ctx> MirBuilder<'ctx> {
             ExprCategory::Const => bb.with(self.as_const(bb, expr_id).operand()),
             ExprCategory::LValue | ExprCategory::AsRValue | ExprCategory::StoreRValue => {
                 let operand = unpack!(bb = self.as_temp(bb, expr_id));
-                bb.with(operand.lvalue().operand())
+                bb.with(operand.lvalue(None).operand())
             },
         }
     }
@@ -61,10 +61,11 @@ impl<'ctx> MirBuilder<'ctx> {
     pub(super) fn as_lvalue(&mut self, mut bb: BB, expr_id: ExprId) -> BBWith<LValue> {
         let expr = self.thir.expr(expr_id);
         match &expr.kind {
-            &ExprKind::LocalRef(var) => bb.with(self.resolve_local_var(var).lvalue()),
-            &ExprKind::FieldAccess(expr, _field, _variant_id) => {
-                let _lhs = unpack!(bb = self.as_lvalue(bb, expr));
-                todo!()
+            &ExprKind::LocalRef(var) => bb.with(self.resolve_local_var(var).lvalue(None)),
+            &ExprKind::FieldAccess(lhs, vid, fid) => {
+                let field_ty = self.thir.expr(lhs).ty.as_adt().field_ty(vid, fid);
+                let lhs = unpack!(bb = self.as_lvalue(bb, lhs));
+                bb.with(lhs.project(Projection::field(field_ty, vid, fid)))
             },
             ExprKind::Lit(_)
             | ExprKind::Block(_)
@@ -75,7 +76,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Ref(_)
             | ExprKind::Builtin(_) => {
                 let temp = unpack!(bb = self.as_temp(bb, expr_id));
-                bb.with(temp.lvalue())
+                bb.with(temp.lvalue(None))
             },
         }
     }
@@ -142,7 +143,7 @@ impl<'ctx> MirBuilder<'ctx> {
                     DefKind::Local
                     | DefKind::Root
                     | DefKind::TyAlias
-                    | DefKind::Data
+                    | DefKind::Adt
                     | DefKind::Variant
                     | DefKind::Mod
                     | DefKind::DeclareBuiltin => {
@@ -178,9 +179,6 @@ impl<'ctx> MirBuilder<'ctx> {
             },
         }
     }
-
-    // fn call_as_rvalue(&mut self, bb: BB, func_ty: &Ty, lhs: &ExprId, args:
-    // &[ExprId]) -> BBWith<RValue> {}
 
     pub(super) fn as_temp(&mut self, bb: BB, expr_id: ExprId) -> BBWith<Local> {
         let &Expr { ty, span, .. } = self.thir.expr(expr_id);
@@ -266,7 +264,7 @@ impl<'ctx> MirBuilder<'ctx> {
                 let local = self.resolve_local_var(var);
                 let rvalue = unpack!(bb = self.as_rvalue(bb, expr_id));
                 verbose!("Store {local} = {rvalue}");
-                self.push_assign(bb, local.lvalue(), rvalue);
+                self.push_assign(bb, local.lvalue(None), rvalue);
             },
         }
         bb.unit()

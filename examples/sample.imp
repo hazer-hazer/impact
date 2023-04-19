@@ -17,11 +17,7 @@ data Option a =
     | Some a
     | None
 
-foo () = puts "lol"
-
 main () =
-    str = "asd"
-
-    a = ().foo
+    Option.Some 123
 
     ()

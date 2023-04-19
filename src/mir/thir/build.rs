@@ -6,7 +6,7 @@ use crate::{
     hir::{self, OwnerId, WithHirId, HIR},
     resolve::{builtin::Builtin, def::DefKind},
     span::WithSpan,
-    typeck::{tyctx::TyCtx},
+    typeck::tyctx::TyCtx,
 };
 
 pub struct ThirBuilder<'ctx> {
@@ -64,7 +64,7 @@ impl<'ctx> ThirBuilder<'ctx> {
                         ExprKind::Def(def_id, self.tyctx.tyof(expr_id))
                     },
                     DefKind::Lambda => unreachable!("Lambda cannot be resolved by path"),
-                    DefKind::Data
+                    DefKind::Adt
                     | DefKind::Variant
                     | DefKind::TyAlias
                     | DefKind::DeclareBuiltin

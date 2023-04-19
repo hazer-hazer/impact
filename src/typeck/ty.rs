@@ -326,6 +326,10 @@ impl Adt {
             .map(|v| v.fields.iter().map(|f| f.ty))
             .flatten()
     }
+
+    pub fn field_ty(&self, vid: VariantId, fid: FieldId) -> Ty {
+        self.variants.get(vid).unwrap().fields.get(fid).unwrap().ty
+    }
 }
 
 impl<To> MapTy<To, Adt<To>> for Adt {
