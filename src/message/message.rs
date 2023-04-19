@@ -165,8 +165,17 @@ pub trait MessageHolder {
     fn save(&mut self, msg: Message);
 }
 
-// FIXME: Rename 'cause of MsgResult
-pub type MessagesResult<T> = Result<T, MessageStorage>;
+/// Result of execution producing any value, fallible with messages, preserving
+/// messages which can be warnings or notes
+pub type MessagesResult<T> = Result<(T, MessageStorage), MessageStorage>;
+
+macro_rules! output_stage_messages_result {
+    ($ctx: expr, $messages_result: expr) => {
+        match $messages_result {
+            Ok((data, msg)) => 
+        }
+    };
+}
 
 #[derive(Default)]
 pub struct MessageStorage {
@@ -190,12 +199,10 @@ impl MessageStorage {
         if self.messages.iter().any(|msg| msg.is(MessageKind::Error)) {
             Err(self)
         } else {
-            Ok(value)
+            Ok((value, self))
         }
     }
 }
-
-pub type MsgResult<T> = Result<T, MessageBuilder>;
 
 pub struct MessageBuilder {
     kind: MessageKind,

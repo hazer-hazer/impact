@@ -1,13 +1,9 @@
 use std::fmt::Display;
 
-use super::{BodyId, HirId, Path, Stmt, Ty, WithHirId, Expr, Block};
+use super::{Block, BodyId, Expr, HirId, Path, Stmt, Ty, WithHirId};
 use crate::{
     resolve::{builtin::Builtin, def::DefId},
-    span::{
-        impl_with_span,
-        sym::{Symbol},
-        Span, WithSpan,
-    },
+    span::{impl_with_span, sym::Symbol, Span, WithSpan},
 };
 
 /// Get span of expression result. Used in typeck.

@@ -23,42 +23,13 @@ use crate::{
         def::{DefId, ModuleId},
         resolve::NameResolver,
     },
-    session::{Session, Stage},
+    session::{Session, Stage, InterruptionReason},
     span::source::Source,
     typeck::Typecker,
 };
 
 pub struct Interface {
     config: Config,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum InterruptionReason {
-    ConfiguredStop,
-    ErrorMessage,
-}
-
-impl InterruptionReason {
-    pub fn from_str(str: &str) -> Self {
-        match str {
-            "configured" => Self::ConfiguredStop,
-            "error" => Self::ErrorMessage,
-            _ => panic!("Invalid interruption reason name"),
-        }
-    }
-}
-
-impl Display for InterruptionReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                InterruptionReason::ConfiguredStop => "configured",
-                InterruptionReason::ErrorMessage => "error",
-            }
-        )
-    }
 }
 
 pub type InterruptResult<'ast> = Result<Session, (InterruptionReason, Session)>;
@@ -115,12 +86,12 @@ impl<'ast> Interface {
 
         let mut parse_result = Parser::new(sess, tokens).run();
 
-        if parse_result.sess().config().check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(parse_result.sess(), AstPPMode::Normal);
+        if parse_result.ctx().config().check_pp_stage(stage) {
+            let mut pp = AstLikePP::new(parse_result.ctx(), AstPPMode::Normal);
             pp.visit_ast(&parse_result.data());
             let ast = pp.get_string();
             outln!(
-                parse_result.sess_mut().writer,
+                parse_result.ctx_mut().writer,
                 "Printing AST after parsing\n{}",
                 ast
             );
@@ -165,22 +136,22 @@ impl<'ast> Interface {
 
         let mut name_res_result = NameResolver::new(sess, &ast).run();
 
-        if name_res_result.sess().config().check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(name_res_result.sess(), AstPPMode::Normal);
+        if name_res_result.ctx().config().check_pp_stage(stage) {
+            let mut pp = AstLikePP::new(name_res_result.ctx(), AstPPMode::Normal);
             pp.pp_defs();
             let defs = pp.get_string();
             outln!(
-                name_res_result.sess_mut().writer,
+                name_res_result.ctx_mut().writer,
                 "Printing definitions after name resolution\n{}",
                 defs
             );
         }
 
-        if name_res_result.sess().config().check_pp_stage(stage) {
-            let mut pp = AstLikePP::new(name_res_result.sess(), AstPPMode::NameHighlighter);
+        if name_res_result.ctx().config().check_pp_stage(stage) {
+            let mut pp = AstLikePP::new(name_res_result.ctx(), AstPPMode::NameHighlighter);
             pp.visit_ast(&ast);
             let ast = pp.get_string();
-            outln!(name_res_result.sess_mut().writer, "Printing AST after name resolution (resolved names are marked with the same color)\n{}", ast);
+            outln!(name_res_result.ctx_mut().writer, "Printing AST after name resolution (resolved names are marked with the same color)\n{}", ast);
         }
 
         let (_, sess) = name_res_result.emit(true)?;
@@ -207,12 +178,12 @@ impl<'ast> Interface {
         let stage = StageName::Typeck;
         let mut typeck_result = Typecker::new(sess, &hir).run();
 
-        if typeck_result.sess().config().check_pp_stage(stage) {
-            let mut pp = HirPP::new(typeck_result.sess(), AstPPMode::TyAnno);
+        if typeck_result.ctx().config().check_pp_stage(stage) {
+            let mut pp = HirPP::new(typeck_result.ctx(), AstPPMode::TyAnno);
             pp.visit_hir(&hir);
             let hir = pp.pp.get_string();
             outln!(
-                typeck_result.sess_mut().writer,
+                typeck_result.ctx_mut().writer,
                 "Printing HIR with type annotations\n{}",
                 hir
             );

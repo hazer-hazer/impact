@@ -247,7 +247,7 @@ pub enum RValue {
     ClosureRef(DefId),
 
     ValueRef(DefId),
-    Ctor(DefId),
+    Ctor(DefId, Ty),
 
     // TODO: Maybe move to terminator only when doing algebraic effects.
     Call {
@@ -276,7 +276,7 @@ impl Display for RValue {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            RValue::Ctor(def_id) => write!(f, "ctor{def_id}"),
+            RValue::Ctor(def_id, ty) => write!(f, "ctor{def_id}: {ty}"),
         }
     }
 }

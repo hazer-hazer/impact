@@ -21,6 +21,7 @@
     "lval",
     "lvalue",
     "monomorphize",
+    "monomorphized",
     "Monomorphizer",
     "multispan",
     "nanos",

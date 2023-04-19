@@ -3,8 +3,8 @@ use std::str::from_utf8;
 use super::{hir::walk_each_delim, AstLikePP};
 use crate::{
     hir::{
-        expr::Lambda, item::ItemId, pat::PatKind, visitor::HirVisitor, BodyId, BodyOwner,
-        WithHirId, HIR, Pat,
+        expr::Lambda, item::ItemId, pat::PatKind, visitor::HirVisitor, BodyId, BodyOwner, Pat,
+        WithHirId, HIR,
     },
     mir::{
         Body, Const, ConstKind, LValue, Operand, RValue, Stmt, StmtKind, Terminator,
@@ -109,8 +109,8 @@ impl<'ctx> MirPrinter<'ctx> {
                 self.pp.str("ref ");
                 self.print_lvalue(lv);
             },
-            RValue::Ctor(def_id) => {
-                self.pp.string(format!("ctor{def_id}"));
+            RValue::Ctor(def_id, ty) => {
+                self.pp.string(format!("ctor{def_id}: {ty}"));
             },
         }
     }

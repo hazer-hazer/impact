@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter};
 
 use inkwell::{
     types::{BasicType, BasicTypeEnum},
@@ -15,9 +15,10 @@ use crate::{
         visitor::HirVisitor,
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
-    message::message::{MessageStorage, MessagesResult},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage, MessagesResult},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
+    session::{Stage, StageOutput},
     span::sym::Ident,
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
     utils::macros::match_expected,
@@ -41,7 +42,6 @@ pub struct FunctionMap<'ink> {
     instances: DefMap<FuncInstance<'ink>>,
     infix_ops: HashMap<InfixOp, FunctionValue<'ink>>,
     externals: DefMap<FunctionValue<'ink>>,
-    constructors: DefMap<FunctionValue<'ink>>,
 }
 
 impl<'ink> FunctionMap<'ink> {
@@ -56,6 +56,36 @@ impl<'ink> FunctionMap<'ink> {
 
     pub fn infix(&self, op: InfixOp) -> FunctionValue<'ink> {
         self.infix_ops.get(&op).copied().unwrap()
+    }
+
+    fn add_instance<F>(
+        &mut self,
+        def_id: DefId,
+        func_ty: InstantiatedTy,
+        mut with: F,
+    ) -> Result<(), DefId>
+    where
+        F: FnMut(DefId, Ty) -> FunctionValue<'ink>,
+    {
+        match func_ty {
+            InstantiatedTy::Mono(ty) => {
+                let value = with(def_id, ty);
+                self.insert_mono(ty, value);
+                Ok(())
+            },
+            InstantiatedTy::Poly(poly) => {
+                poly.iter().for_each(|inst| {
+                    let (ty, _) = inst.unwrap();
+                    let value = with(def_id, ty);
+                    self.insert_poly(ty, value);
+                });
+                Ok(())
+            },
+            InstantiatedTy::None => {
+                // FIXME: Is this place right for unused warning?
+                Err(def_id)
+            },
+        }
     }
 
     pub fn instance(&self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
@@ -94,8 +124,14 @@ impl<'ink> FunctionMap<'ink> {
         self.instances.iter_enumerated_flat()
     }
 
-    pub fn ctor(&self, def_id: DefId) -> FunctionValue<'ink> {
-        self.constructors.get_copied_unwrap(def_id)
+    fn each_instance<F>(&self, def_id: DefId, f: F)
+    where
+        F: Fn(FunctionValue<'ink>),
+    {
+        match self.instances.get_flat(def_id).unwrap() {
+            FuncInstance::Mono(_, mono) => f(*mono),
+            FuncInstance::Poly(poly) => poly.iter_flat().map(|(_, val)| val).copied().for_each(f),
+        }
     }
 }
 
@@ -103,6 +139,12 @@ pub struct FunctionsCodeGen<'ink, 'ctx> {
     ctx: CodeGenCtx<'ink, 'ctx>,
     function_map: FunctionMap<'ink>,
     msg: MessageStorage,
+}
+
+impl<'ink, 'ctx> MessageHolder for FunctionsCodeGen<'ink, 'ctx> {
+    fn save(&mut self, msg: crate::message::message::Message) {
+        self.msg.add_message(msg)
+    }
 }
 
 impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
@@ -121,31 +163,23 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             return;
         }
 
+        let owner_ty = self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id));
+
         // For Func or Lambda owner we get its type (possibly polymorphic, in which case
         // we monomorphize it). For value we'll generate anonymous function of
         // type `() -> ValueType` and then immediately call it.
         let func_ty = match owner.kind {
-            BodyOwnerKind::Value => InstantiatedTy::Mono(Ty::func(
-                Some(def_id),
-                vec![Ty::unit()],
-                self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id)),
-            )),
-            BodyOwnerKind::Func | BodyOwnerKind::Lambda => self.ctx.func_ty(def_id),
+            BodyOwnerKind::Value => {
+                InstantiatedTy::Mono(Ty::func(Some(def_id), vec![Ty::unit()], owner_ty))
+            },
+            BodyOwnerKind::Func | BodyOwnerKind::Lambda => self.ctx.inst_ty(owner_ty, def_id),
         };
 
-        match func_ty {
-            InstantiatedTy::Mono(ty) => {
-                let value = self.func_value(def_id, ty);
-                self.function_map.insert_mono(ty, value);
-            },
-            InstantiatedTy::Poly(poly) => {
-                poly.iter().for_each(|inst| {
-                    let (ty, _) = inst.unwrap();
-                    let value = self.func_value(def_id, ty);
-                    self.function_map.insert_poly(ty, value);
-                });
-            },
-        };
+        self.function_map
+            .add_instance(def_id, func_ty, |def_id, ty| {
+                self.ctx.func_value(def_id, ty)
+            })
+            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
     }
 
     fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, _: &HIR) {
@@ -155,7 +189,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         verbose!("Ty of external item: {ty}");
 
         if ty.is_func_like() {
-            let func = self.func_value(def_id, ty);
+            let func = self.ctx.func_value(def_id, ty);
             self.function_map.externals.insert(def_id, func);
         } else {
             todo!("Extern values")
@@ -163,41 +197,34 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
     }
 
     fn visit_variant(&mut self, &hir_vid: &hir::Variant, hir: &HIR) {
-        let adt_hir_id: ItemId = hir_vid.inner().owner().into();
-        let adt_ty = self.ctx.sess.tyctx.tyof(adt_hir_id.hir_id());
-        let ll_adt_ty = self.ctx.conv_basic_ty(adt_ty);
-
         let variant = hir.variant(hir_vid);
-
         let vid = self.ctx.sess.tyctx.variant_id(variant.def_id);
 
-        let fields_tys = self
-            .ctx
-            .conv_variant_fields_tys(adt_ty.as_adt(), vid)
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<BasicTypeEnum>>();
+        // Here `Ty::generalize` is used, to generate constructor function monomorphized
+        // by ADT type parameters.
+        // E.g. `Some a` has constructor of type `forall a. a -> Some a`
+        let ctor_ty = self.ctx.sess.tyctx.tyof(hir_vid).generalize();
+        let ctor_func_ty = self.ctx.inst_ty(ctor_ty, variant.ctor_def_id);
 
-        let ctor = self.ctx.simple_func(
-            "ctor",
-            ll_adt_ty.fn_type(
-                &fields_tys
-                    .iter()
-                    .copied()
-                    .map(Into::into)
-                    .collect::<Vec<_>>(),
-                false,
-            ),
-            |_builder, params| {
-                assert_eq!(params.len(), fields_tys.len());
+        self.function_map
+            .add_instance(variant.ctor_def_id, ctor_func_ty, |_def_id, ty| {
+                self.ctx.simple_func(
+                    &format!("ctor_{vid}"),
+                    self.ctx.conv_ty(ty).into_function_type(),
+                    |_builder, params| {
+                        // Fields types are constructor parameters types
+                        let fields_tys = params
+                            .iter()
+                            .map(|param| param.get_type().as_basic_type_enum())
+                            .collect::<Vec<_>>();
 
-                let variant_ty = self.ctx.llvm_ctx.struct_type(&fields_tys, false);
+                        let variant_struct_ty = self.ctx.llvm_ctx.struct_type(&fields_tys, false);
 
-                Some(variant_ty.const_named_struct(params).into())
-            },
-        );
-
-        self.function_map.constructors.insert(variant.def_id, ctor);
+                        Some(variant_struct_ty.const_named_struct(params).into())
+                    },
+                )
+            })
+            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
     }
 }
 
@@ -211,8 +238,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
     }
 
     fn gen_infix_op(&mut self, op: InfixOp) -> FunctionValue<'ink> {
-        let op_built_item_id: ItemId =
-            ItemId::new(self.ctx.sess.def_table.builtin(op.builtin()).into());
+        let op_built_item_id = ItemId::new(self.ctx.sess.def_table.builtin(op.builtin()).into());
         self.ctx.simple_func(
             op.name(),
             self.ctx
@@ -255,7 +281,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         )
     }
 
-    pub fn gen_main(&mut self) {
+    fn gen_main(&mut self) {
         let def_id = self.ctx.sess.def_table.expect_main_func();
 
         let real_main_ty = self.ctx.llvm_ctx.i32_type().fn_type(
@@ -312,26 +338,11 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         self.msg.error_checked_result(self.function_map)
     }
 
-    fn func_value(&mut self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
-        let ll_ty = self.ctx.conv_ty(ty).into_function_type();
-        self.ctx.llvm_module.add_function(
-            &self.func_name(def_id, ty),
-            ll_ty,
-            Some(inkwell::module::Linkage::External),
-        )
-    }
-
-    fn func_name(&self, def_id: DefId, _ty: Ty) -> String {
-        if def_id == self.ctx.sess.def_table.expect_main_func() {
-            return "_main".to_string();
-        }
-        format!(
-            "{}",
-            self.ctx
-                .hir
-                .item_name(ItemId::new(def_id.into()))
-                .original_string(),
-            // ty.id()
-        )
+    fn unused_instance_warning(&mut self, def_id: DefId) {
+        let def = self.ctx.sess.def_table.get_def(def_id);
+        MessageBuilder::warn()
+            .span(def.name.span())
+            .text(format!("Unused {}", def.kind()))
+            .emit_single_label(self);
     }
 }

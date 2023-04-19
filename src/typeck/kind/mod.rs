@@ -1,7 +1,7 @@
 pub mod check;
 
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     fmt::Display,
     hash::{Hash, Hasher},
     sync::RwLock,
@@ -177,6 +177,19 @@ impl Kind {
             KindSort::Var(_) => true,
             KindSort::Ex(_) => false,
             KindSort::Forall(_, body) => body.is_solved(),
+        }
+    }
+
+    pub fn get_ty_vars(&self) -> HashSet<TyVarId> {
+        match self.sort() {
+            KindSort::Var(_) | KindSort::Ex(_) => HashSet::default(),
+            KindSort::Ty(ty) => ty.get_ty_vars(),
+            KindSort::Abs(param, body) => param
+                .get_ty_vars()
+                .into_iter()
+                .chain(body.get_ty_vars())
+                .collect(),
+            KindSort::Forall(_, kind) => kind.get_ty_vars(),
         }
     }
 }

@@ -189,6 +189,17 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
     }
 
     #[inline]
+    pub fn iter_flat(&self) -> impl Iterator<Item = &T> + '_
+    where
+        I: From<usize>,
+    {
+        self.vec
+            .iter()
+            .filter(|v| v.is_some())
+            .map(|v| v.as_ref().unwrap())
+    }
+
+    #[inline]
     pub fn get_mut_unwrap(&mut self, i: I) -> &mut T {
         let a: &mut Option<T> = self.get_mut(i).unwrap();
         a.as_mut().unwrap()

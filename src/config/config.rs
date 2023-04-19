@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     cli::command::{PPStages, StageName},
-    interface::interface::InterruptionReason,
+    session::InterruptionReason,
 };
 
 #[derive(Clone)]

@@ -1,10 +1,12 @@
 //! Session is a compilation context passed through all stages of compilation.
 
+use std::fmt::Display;
+
 use crate::{
     ast::{AstMetadata, NodeId},
     config::config::Config,
     hir::HIR,
-    interface::{interface::InterruptionReason, writer::Writer},
+    interface::writer::Writer,
     message::{
         message::{Message, MessageStorage},
         term_emitter::TermEmitter,
@@ -46,10 +48,6 @@ impl Session {
         }
     }
 
-    pub fn with_sess<'a, T>(&'a self, val: &'a T) -> WithSession<'a, T> {
-        WithSession { sess: self, val }
-    }
-
     pub fn config(&self) -> &Config {
         &self.config
     }
@@ -70,9 +68,14 @@ impl Session {
     }
 }
 
-pub struct WithSession<'a, T> {
-    sess: &'a Session,
-    val: &'a T,
+pub trait WithSession {
+    fn sess(&self) -> &Session;
+}
+
+impl WithSession for Session {
+    fn sess(&self) -> &Session {
+        self
+    }
 }
 
 pub trait SessionHolder {
@@ -84,47 +87,84 @@ pub trait SessionHolder {
     }
 }
 
-pub struct StageOutput<T> {
-    pub sess: Session,
+#[derive(Debug, Clone, PartialEq)]
+pub enum InterruptionReason {
+    ConfiguredStop,
+    ErrorMessage,
+}
+
+impl InterruptionReason {
+    pub fn from_str(str: &str) -> Self {
+        match str {
+            "configured" => Self::ConfiguredStop,
+            "error" => Self::ErrorMessage,
+            _ => panic!("Invalid interruption reason name"),
+        }
+    }
+}
+
+impl Display for InterruptionReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                InterruptionReason::ConfiguredStop => "configured",
+                InterruptionReason::ErrorMessage => "error",
+            }
+        )
+    }
+}
+
+pub type StageResult<T, Ctx = Session> = Result<(T, Ctx), (InterruptionReason, Ctx)>;
+
+pub struct StageOutput<T, Ctx = Session> {
+    pub ctx: Ctx,
     pub data: T,
     pub messages: Vec<Message>,
 }
 
-pub type StageResult<T> = Result<(T, Session), (InterruptionReason, Session)>;
-
-impl<'ast, T> StageOutput<T> {
-    pub fn new(sess: Session, data: T, messages: MessageStorage) -> Self {
+impl<T, Ctx> StageOutput<T, Ctx> {
+    pub fn new(ctx: Ctx, data: T, messages: MessageStorage) -> Self {
         Self {
-            sess,
+            ctx,
             data,
             messages: messages.extract(),
         }
-    }
-
-    pub fn emit(self, stop_on_error: bool) -> StageResult<T> {
-        TermEmitter::new().emit(self, stop_on_error)
     }
 
     pub fn data(&self) -> &T {
         &self.data
     }
 
-    pub fn sess(&self) -> &Session {
-        &self.sess
+    pub fn ctx(&self) -> &Ctx {
+        &self.ctx
     }
 
-    pub fn sess_mut(&mut self) -> &mut Session {
-        &mut self.sess
+    pub fn ctx_mut(&mut self) -> &mut Ctx {
+        &mut self.ctx
     }
 }
 
-pub trait Stage<T>
+impl<T, Ctx> StageOutput<T, Ctx>
+where
+    Ctx: WithSession,
+{
+    pub fn emit(self, stop_on_error: bool) -> StageResult<T, Ctx> {
+        TermEmitter::new().emit(self, stop_on_error)
+    }
+}
+
+pub trait Stage<T, Ctx = Session>
 where
     Self: Sized,
 {
-    fn run(self) -> StageOutput<T>;
+    fn run(self) -> StageOutput<T, Ctx>;
 
-    fn run_and_emit(self, stop_on_error: bool) -> StageResult<T> {
+    fn run_and_emit(self, stop_on_error: bool) -> StageResult<T, Ctx>
+    where
+        Ctx: WithSession,
+    {
         let output = self.run();
         output.emit(stop_on_error)
     }

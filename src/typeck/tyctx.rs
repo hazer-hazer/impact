@@ -15,7 +15,7 @@ use super::{
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::{Expr, HirId},
+    hir::{item::ItemId, Expr, HirId},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefMap},
@@ -41,6 +41,8 @@ impl TyBindings {
 }
 
 pub enum InstantiatedTy<T = Ty, E = ()> {
+    /// Type does not have instances because is never used
+    None,
     Mono(T),
     Poly(Vec<Result<(T, Expr), E>>),
 }
@@ -193,18 +195,20 @@ impl TyCtx {
         }
     }
 
-    pub fn instantiated_ty(&self, def_id: DefId) -> InstantiatedTy {
-        let ty = self.tyof(HirId::new_owner(def_id));
+    pub fn instantiated_ty(&self, ty: Ty, def_id: DefId) -> InstantiatedTy {
         if ty.is_instantiated() {
             InstantiatedTy::Mono(ty.mono_checked())
         } else {
-            InstantiatedTy::Poly(
-                self.def_ty_bindings
-                    .get_unwrap(def_id)
-                    .iter()
-                    .map(|&expr| self.instantiated_expr_ty(expr).map(|ty| (ty, expr)))
-                    .collect(),
-            )
+            if let Some(bindings) = self.def_ty_bindings.get_flat(def_id) {
+                InstantiatedTy::Poly(
+                    bindings
+                        .iter()
+                        .map(|&expr| self.instantiated_expr_ty(expr).map(|ty| (ty, expr)))
+                        .collect(),
+                )
+            } else {
+                InstantiatedTy::None
+            }
         }
     }
 
@@ -244,19 +248,19 @@ impl TyCtx {
     /// this definitions from `expr_ty_bindings`. We have `Expr -> (TyVarId
     /// -> Ty)[]` and `DefId -> set Expr` mapping. The result must be a list
     /// of expressions with unique substitutions of definition type variables.
-    pub fn unique_def_bound_usages(&self, def_id: DefId) -> Vec<Expr> {
+    pub fn unique_def_bound_usages(&self, id: DefId) -> Vec<Expr> {
         let mut unique_bindings = HashSet::<u64>::new();
-        self.def_ty_bindings.get_unwrap(def_id).iter().fold(
-            Vec::<Expr>::new(),
-            |mut exprs, expr| {
+        self.def_ty_bindings
+            .get_unwrap(id)
+            .iter()
+            .fold(Vec::<Expr>::new(), |mut exprs, expr| {
                 let mut s = DefaultHasher::new();
                 self.expr_ty_bindings.get(expr).unwrap().hash(&mut s);
                 if unique_bindings.insert(s.finish()) {
                     exprs.push(*expr);
                 }
                 exprs
-            },
-        )
+            })
     }
 
     // Debug //

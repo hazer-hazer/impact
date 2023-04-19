@@ -21,7 +21,7 @@ use crate::{
     hir::HIR,
     message::message::{MessageHolder, MessageStorage, MessagesResult},
     mir::MIR,
-    session::{Session, Stage, StageOutput},
+    session::{Session, Stage, StageOutput, StageResult},
 };
 
 pub struct CodeGen<'ink, 'ctx> {
@@ -51,12 +51,12 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         }
     }
 
-    fn codegen(&mut self) -> MessagesResult<()> {
+    fn codegen(mut self) -> MessagesResult<()> {
         let _main_func = self
             .sess
             .def_table
             .main_func()
-            .map_err(|err| err.emit(self));
+            .map_err(|err| err.emit(&mut self));
 
         let llvm_module = self.llvm_ctx.create_module("kek");
         Target::initialize_all(&InitializationConfig::default());
@@ -72,7 +72,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             llvm_module: &llvm_module,
         };
 
-        let function_map = FunctionsCodeGen::new(ctx).gen_functions()?;
+        let (function_map, msg) = FunctionsCodeGen::new(ctx).gen_functions()?;
         let value_map = ValueCodeGen::new(ctx, &function_map).gen_values();
 
         for (def_id, inst) in function_map.iter_internal() {
@@ -138,16 +138,13 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         let mut file = File::create(path.with_extension("ll")).unwrap();
         file.write_all(llvm_module.to_string().as_bytes()).unwrap();
 
-        Ok(())
+        Ok(((), self.msg))
     }
 }
 
 impl<'ink, 'ctx> Stage<()> for CodeGen<'ink, 'ctx> {
     fn run(mut self) -> StageOutput<()> {
         let result = self.codegen();
-        if let Err(msgs) = result {
-            self.msg.merge(msgs);
-        }
         // FIXME: Rewrite stages to error propagation model
         StageOutput::new(self.sess, (), self.msg)
     }

@@ -10,10 +10,10 @@ use inkwell::{
 
 use crate::{
     cli::verbose,
-    hir::HIR,
+    hir::{item::ItemId, HIR},
     mir::{Ty, MIR},
     resolve::{builtin::Builtin, def::DefId},
-    session::Session,
+    session::{Session, WithSession},
     typeck::{
         ty::{self, FloatKind, TyKind, VariantId},
         tyctx::InstantiatedTy,
@@ -29,6 +29,12 @@ pub struct CodeGenCtx<'ink, 'ctx> {
     // LLVM Context //
     pub llvm_ctx: &'ink Context,
     pub llvm_module: &'ctx Module<'ink>,
+}
+
+impl<'ink, 'ctx> WithSession for CodeGenCtx<'ink, 'ctx> {
+    fn sess(&self) -> &Session {
+        self.sess
+    }
 }
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
@@ -122,8 +128,8 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         .expect(&format!("Failed to convert {} to BasicType", ty))
     }
 
-    pub fn func_ty(&self, def_id: DefId) -> InstantiatedTy<Ty> {
-        let inst_ty = self.sess.tyctx.instantiated_ty(def_id);
+    pub fn inst_ty(&self, ty: Ty, def_id: DefId) -> InstantiatedTy<Ty> {
+        let inst_ty = self.sess.tyctx.instantiated_ty(ty, def_id);
 
         match inst_ty {
             InstantiatedTy::Mono(mono) => InstantiatedTy::Mono(mono),
@@ -132,10 +138,8 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                     .map(|res| res.map(|(ty, expr)| (ty, expr)))
                     .collect(),
             ),
+            InstantiatedTy::None => InstantiatedTy::None,
         }
-
-        // .map(|res| res.map(|ty| self.conv_ty(ty).into_function_type()))
-        // .collect()
     }
 
     // Functions //
@@ -164,6 +168,28 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         }
 
         func
+    }
+
+    pub fn func_value(&mut self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
+        let ll_ty = self.conv_ty(ty).into_function_type();
+        self.llvm_module.add_function(
+            &self.func_name(def_id, ty),
+            ll_ty,
+            Some(inkwell::module::Linkage::External),
+        )
+    }
+
+    fn func_name(&self, def_id: DefId, _ty: Ty) -> String {
+        if def_id == self.sess.def_table.expect_main_func() {
+            return "_main".to_string();
+        }
+        format!(
+            "{}",
+            self.hir
+                .item_name(ItemId::new(def_id.into()))
+                .original_string(),
+            // ty.id()
+        )
     }
 
     // pub fn simple_func(

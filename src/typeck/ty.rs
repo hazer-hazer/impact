@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     fmt::Formatter,
     hash::{Hash, Hasher},
     sync::RwLock,
@@ -843,6 +843,41 @@ impl Ty {
 
     pub fn is_unit(&self) -> bool {
         self.kind() == &TyKind::Unit
+    }
+
+    pub fn get_ty_vars(&self) -> HashSet<TyVarId> {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Existential(_)
+            | TyKind::Str => HashSet::default(),
+            TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => params
+                .into_iter()
+                .chain([body].into_iter())
+                .map(Ty::get_ty_vars)
+                .flatten()
+                .collect(),
+            TyKind::Adt(adt) => adt
+                .walk_tys()
+                .map(|ty| ty.get_ty_vars())
+                .flatten()
+                .collect(),
+            TyKind::Ref(ty) => ty.get_ty_vars(),
+            &TyKind::Var(var) => HashSet::from([var]),
+            // Forall type variable is ignored, as might be unused in body
+            TyKind::Forall(_, ty) => ty.get_ty_vars(),
+            TyKind::Kind(kind) => kind.get_ty_vars(),
+        }
+    }
+
+    /// For each type variable, convert type to `forall var. ty`
+    pub fn generalize(&self) -> Ty {
+        self.get_ty_vars()
+            .into_iter()
+            .fold(*self, |ty, var| Ty::forall(var, ty))
     }
 }
 

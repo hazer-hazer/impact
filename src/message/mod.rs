@@ -1,18 +1,25 @@
 use self::message::Message;
 use crate::{
     cli::verbose,
-    interface::interface::InterruptionReason,
-    session::{Session, StageOutput, StageResult},
+    session::{Session, StageOutput, StageResult, WithSession, InterruptionReason},
 };
 
 pub mod debug_emitter;
+pub mod human_lang;
 pub mod message;
 pub mod term_emitter;
-pub mod human_lang;
 
 pub trait MessageEmitter {
-    fn emit<'ast, T>(&mut self, output: StageOutput<T>, stop_on_error: bool) -> StageResult<T> {
+    fn emit<T, Ctx>(
+        &mut self,
+        output: StageOutput<T, Ctx>,
+        stop_on_error: bool,
+    ) -> StageResult<T, Ctx>
+    where
+        Ctx: WithSession,
+    {
         let messages = output.messages;
+        let sess = output.ctx.sess();
 
         if cfg!(feature = "verbose_debug") {
             if messages.is_empty() {
@@ -33,13 +40,13 @@ pub trait MessageEmitter {
             if msg.is(message::MessageKind::Error) {
                 self.error_appeared();
             }
-            self.process_msg(&output.sess, &msg);
+            self.process_msg(&sess, &msg);
         }
 
         if stop_on_error && self.got_error() {
-            Err((InterruptionReason::ErrorMessage, output.sess))
+            Err((InterruptionReason::ErrorMessage, output.ctx))
         } else {
-            Ok((output.data, output.sess))
+            Ok((output.data, output.ctx))
         }
     }
 
