@@ -16,6 +16,7 @@ use crate::{
         self,
         item::{GenericParams, ItemId, TyAlias},
         ty::TyPath,
+        visitor::HirVisitor,
         HirId, Path, Res, WithHirId, HIR,
     },
     interface::writer::outln,
@@ -33,8 +34,8 @@ use crate::{
 
 pub mod builtin;
 mod check;
+mod conv;
 pub mod ctx;
-// pub mod kind;
 pub mod kind;
 mod synth;
 pub mod ty;
@@ -88,7 +89,7 @@ where
 pub type TyResult<T> = Result<T, TypeckErr>;
 
 pub struct Typecker<'hir> {
-    // Context //
+    // Typecker context //
     global_ctx: GlobalCtx,
     ctx_stack: Vec<InferCtx>,
     existential: ExistentialId,
@@ -566,8 +567,8 @@ impl<'hir> Typecker<'hir> {
                 match def_kind {
                     DefKind::TyAlias => {
                         // Path conversion is done linearly, i.e. we get type alias from HIR and
-                        // convert its type, caching it FIXME: Type alias
-                        // item gotten two times: one here, one in `conv_ty_alias`
+                        // convert its type, caching it
+                        // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                         self.conv_ty_alias(def_id)
                     },
 
@@ -824,6 +825,8 @@ impl<'hir> Typecker<'hir> {
 
 impl<'hir> Stage<()> for Typecker<'hir> {
     fn run(mut self) -> StageResult<()> {
+        self.visit_hir(self.hir);
+
         self.under_new_ctx(|this| {
             this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);
@@ -840,7 +843,12 @@ impl<'hir> Stage<()> for Typecker<'hir> {
             });
         });
 
-        outln!(dbg, self.sess.writer, "Type ctx:\n {}", self.dump_ctx_stack());
+        outln!(
+            dbg,
+            self.sess.writer,
+            "Type ctx:\n {}",
+            self.dump_ctx_stack()
+        );
 
         self.sess.tyctx.apply_ctx_on_typed_nodes(&self.global_ctx);
 

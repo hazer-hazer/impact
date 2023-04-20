@@ -16,6 +16,7 @@ use crate::{
     span::{sym::Ident, Spanned, WithSpan},
     typeck::kind::Kind,
 };
+
 impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
         let hir_id = HirId::new_owner(item.def_id());
@@ -154,23 +155,28 @@ impl<'hir> Typecker<'hir> {
 
     // TODO: Type collection stage
     fn synth_res(&mut self, res: Res) -> TyResult<Ty> {
-        match res {
-            Res::Def(kind, def_id) => match kind {
-                DefKind::Func => todo!(),
-                DefKind::Value => todo!(),
-                DefKind::Lambda => todo!(),
-                DefKind::Ctor => todo!(),
-                DefKind::FieldAccessor => todo!(),
-                DefKind::TyParam => todo!(),
-                DefKind::External => todo!(),
-                DefKind::Local => unreachable!(),
-                DefKind::DeclareBuiltin => unreachble!(),
-            },
-            Res::Local(hir_id) => Ok(self.tyctx().node_type(hir_id).unwrap()),
-            Res::DeclareBuiltin => todo!(),
-            Res::Builtin(_) => todo!(),
-            Res::Error => unreachable!(),
-        }
+        todo!()
+        // match res {
+        //     Res::Def(kind, def_id) => match kind {
+        //         // Owners
+        //         DefKind::Func | DefKind::Value | DefKind::Lambda => {
+        //             let hir_id = HirId::new_owner(def_id);
+        //             Ok(self.tyctx().node_type(hir_id).unwrap())
+        //         },
+
+        //         DefKind::Ctor => {},
+        //         DefKind::FieldAccessor => todo!(),
+        //         DefKind::TyParam => todo!(),
+        //         DefKind::External => todo!(),
+        //         DefKind::Local => unreachable!(),
+        //         DefKind::DeclareBuiltin => unreachble!(),
+        //     },
+        //     Res::Local(hir_id) =>
+        // Ok(self.tyctx().node_type(hir_id).unwrap()),
+        //     Res::DeclareBuiltin => todo!(),
+        //     Res::Builtin(_) => todo!(),
+        //     Res::Error => unreachable!(),
+        // }
     }
 
     fn synth_ty_expr(&mut self, ty_expr: &TyExpr) -> TyResult<Ty> {
