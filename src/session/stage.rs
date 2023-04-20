@@ -1,5 +1,8 @@
 use super::{Session, SessionHolder};
-use crate::message::{message::MessageStorage, MessageEmitter};
+use crate::{
+    interface::writer::outln,
+    message::{message::MessageStorage, MessageEmitter},
+};
 
 /// Stage is a common trait implemented by all compilation stages and their
 /// substeps.
@@ -167,7 +170,7 @@ impl<T, Ctx> RecoveredStageResult<T, Ctx> {
     where
         Ctx: SessionHolder,
     {
-        let (error_occurred, text) = emitter.emit(self.msg, &mut self.ctx);
+        let error_occurred = emitter.emit(self.msg, &mut self.ctx);
         if error_occurred.into() {
             Err((InterruptionReason::ErrorMessage, self.ctx))
         } else {
@@ -182,7 +185,12 @@ pub trait StageResultImpl<T, Ctx = Session> {
     fn map_ctx<U>(self, f: impl FnOnce(Ctx) -> U) -> StageResult<T, U>;
     fn unit_ctx(self) -> StageResult<T, ()>;
 
-    fn recover(self) -> Result<RecoveredStageResult<T, Ctx>, InterruptionErr<Ctx>>;
+    fn recover(
+        self,
+        emitter: &mut impl MessageEmitter,
+    ) -> Result<RecoveredStageResult<T, Ctx>, InterruptionErr<Ctx>>
+    where
+        Ctx: SessionHolder;
 
     fn emit(self, emitter: &mut impl MessageEmitter) -> Result<(T, Ctx), InterruptionErr<Ctx>>
     where
@@ -208,14 +216,23 @@ impl<T, Ctx> StageResultImpl<T, Ctx> for StageResult<T, Ctx> {
         self.map_ctx(|_| ())
     }
 
-    fn recover(self) -> Result<RecoveredStageResult<T, Ctx>, InterruptionErr<Ctx>> {
+    fn recover(
+        self,
+        emitter: &mut impl MessageEmitter,
+    ) -> Result<RecoveredStageResult<T, Ctx>, InterruptionErr<Ctx>>
+    where
+        Ctx: SessionHolder,
+    {
         match self {
-            Ok(ok) => Ok(RecoveredStageResult {
-                ctx: ok.ctx,
-                data: ok.data,
-                msg: ok.msg,
-            }),
-            Err(err) => Err((InterruptionReason::ErrorMessage, err.ctx)),
+            Ok(StageOk { ctx, data, msg }) => Ok(RecoveredStageResult { ctx, data, msg }),
+            Err(StageErr {
+                reason,
+                mut ctx,
+                msg,
+            }) => {
+                let _its_already_an_error = emitter.emit(msg, &mut ctx);
+                Err((reason, ctx))
+            },
         }
     }
 
@@ -224,18 +241,21 @@ impl<T, Ctx> StageResultImpl<T, Ctx> for StageResult<T, Ctx> {
         Ctx: SessionHolder,
     {
         match self {
-            Ok(mut ok) => {
-                let (error_occurred, text) = emitter.emit(ok.msg, &mut ok.ctx);
+            Ok(StageOk { mut ctx, data, msg }) => {
+                let error_occurred = emitter.emit(msg, &mut ctx);
                 if error_occurred.into() {
-                    Err((InterruptionReason::ErrorMessage, ok.ctx))
+                    Err((InterruptionReason::ErrorMessage, ctx))
                 } else {
-                    Ok((ok.data, ok.ctx))
+                    Ok((data, ctx))
                 }
             },
-            Err(mut err) => {
-                let (_its_already_an_error, text) = emitter.emit(err.msg, &mut err.ctx);
-                err.ctx.sess_mut().writer.write(text);
-                Err((InterruptionReason::ErrorMessage, err.ctx))
+            Err(StageErr {
+                reason,
+                mut ctx,
+                msg,
+            }) => {
+                let _its_already_an_error = emitter.emit(msg, &mut ctx);
+                Err((reason, ctx))
             },
         }
     }

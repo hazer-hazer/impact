@@ -353,7 +353,10 @@ fn test_sources() -> io::Result<()> {
             _ => {},
         }
 
-        let writer_data = sess.writer.data();
+        let writer_data = sess
+            .writer
+            .iter_sections()
+            .fold(String::new(), |acc, (_, s)| format!("{acc}{s}"));
 
         println!("{}", writer_data);
 

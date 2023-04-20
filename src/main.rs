@@ -8,7 +8,8 @@ use interface::interface::Interface;
 
 use crate::{
     cli::{cli::CLI, verbose},
-    span::source::Source, session::InterruptionReason,
+    session::InterruptionReason,
+    span::source::Source,
 };
 
 mod ast;
@@ -47,7 +48,14 @@ fn main() {
         Ok(sess) => (None, sess),
     };
 
-    println!("{}", sess.writer.data());
+    println!(
+        "{}",
+        sess.writer
+            .iter_sections()
+            .fold(String::new(), |acc, (section, str)| {
+                format!("{acc}{section}\n{str}\n")
+            })
+    );
 
     if let Some(interruption_reason) = interruption_reason {
         match interruption_reason {

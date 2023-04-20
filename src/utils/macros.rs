@@ -17,3 +17,17 @@ macro_rules! match_expected {
 }
 
 pub(crate) use match_expected;
+
+macro_rules! concat_string {
+    () => { String::with_capacity(0) };
+    ($($s:expr),+) => {{
+        use std::ops::AddAssign;
+        let mut len = 0;
+        $(len.add_assign(AsRef::<str>::as_ref(&$s).len());)+
+        let mut buf = String::with_capacity(len);
+        $(buf.push_str($s.as_ref());)+
+        buf
+    }};
+}
+
+pub(crate) use concat_string;

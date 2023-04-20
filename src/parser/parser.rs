@@ -13,7 +13,7 @@ use crate::{
         PR,
     },
     cli::color::{Color, Colorize},
-    interface::writer::{out, outln},
+    interface::writer::{out, outln, WriterSection},
     message::message::{MessageBuilder, MessageHolder, MessageStorage},
     session::{stage_result, Session, Stage, StageResult},
     span::{
@@ -1564,6 +1564,7 @@ impl Parser {
 
         if wrong_tree {
             outln!(
+                dbg,
                 self.sess.writer,
                 "{}{} `{}`-`{}`",
                 prefix,
@@ -1592,6 +1593,7 @@ impl Parser {
         match entry.kind {
             ParseEntryKind::Opt => {
                 out!(
+                    dbg,
                     self.sess.writer,
                     "{}{}? `{}`-`{}` - {} ",
                     prefix,
@@ -1616,7 +1618,7 @@ impl Parser {
                         },
                     );
                 } else {
-                    self.sess.writer.nl();
+                    outln!(dbg, self.sess.writer);
                 }
             },
             ParseEntryKind::Wrapper
@@ -1625,6 +1627,7 @@ impl Parser {
                 let expect = entry.kind == ParseEntryKind::ExpectWrapper;
 
                 out!(
+                    dbg,
                     self.sess.writer,
                     "{}[{}]{} `{}`-`{}` - ",
                     prefix,
@@ -1645,11 +1648,12 @@ impl Parser {
                         },
                     );
                 } else {
-                    self.sess.writer.nl();
+                    outln!(dbg, self.sess.writer);
                 }
             },
             ParseEntryKind::Expect => {
                 outln!(
+                    dbg,
                     self.sess.writer,
                     "{}{}! `{}`-`{}`",
                     prefix,
@@ -1680,6 +1684,7 @@ impl Parser {
                 };
 
                 outln!(
+                    dbg,
                     self.sess.writer,
                     "{}{}{} `{}`-`{}`",
                     prefix,

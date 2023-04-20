@@ -15,16 +15,22 @@ pub struct SpanSourceInfo<'a> {
     pub pos_in_line: SpanPos,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct LineInfo<'a> {
     pub str: &'a str,
-    pub index: usize,                   // Line index in Source.lines_positions
-    pub prev_line_index: Option<usize>, // Index of previous line
-    pub pos: SpanPos,                   // Line absolute source position
-    pub num: usize,                     // Line number (starts with 1)
-    pub num_len: usize,                 // Length of line number as string
-    pub num_indent: usize,              /* Calculated indent for line number to align with
-                                         * source lines */
+    /// Line index in Source.lines_positions
+    pub index: usize,
+    /// Index of previous line
+    pub prev_line_index: Option<usize>,
+    /// Line absolute source position
+    pub pos: SpanPos,
+    /// Line number (starts with 1)
+    pub num: usize,
+    /// Length of line number as string
+    pub num_len: usize,
+    /// Calculated indent for line number to align with
+    /// source lines
+    pub num_indent: usize,
 }
 
 /// Some source, e.g. source file

@@ -99,6 +99,12 @@ pub struct Variant {
     span: Span,
 }
 
+impl WithNodeId for Variant {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+}
+
 impl Variant {
     pub fn new(
         id: NodeId,

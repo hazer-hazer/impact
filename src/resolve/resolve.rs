@@ -7,7 +7,7 @@ use super::{
 use crate::{
     ast::{
         expr::{Block, Expr, PathExpr},
-        item::{Item, ItemKind},
+        item::{Item, ItemKind, Variant},
         pat::{Pat, PatKind},
         ty::TyPath,
         visitor::{walk_each_pr, walk_pr, AstVisitor},
@@ -279,12 +279,14 @@ impl<'ast> NameResolver<'ast> {
             return Res::error();
         };
 
-        for (index, seg) in path.segments().iter().enumerate() {
+        for (index, seg) in path.segments().iter().enumerate().skip(1) {
             let is_target = index == path.segments().len() - 1;
             let name = *seg.expect_name();
             let span = seg.span();
             let prefix_str = &path.prefix_str(index);
             let prefix_span = path.prefix_span(index);
+
+            dbg!(is_target, name, span, prefix_str);
 
             // Path prefix segments must be type identifiers
             if !is_target && !seg.expect_name().is_ty() {
@@ -391,6 +393,14 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         walk_each_pr!(self, params, visit_pat);
         walk_pr!(self, body, visit_expr);
 
+        self.exit_scope();
+    }
+
+    fn visit_variant(&mut self, variant: &'ast Variant) {
+        self.enter_module_scope(ModuleId::Def(
+            self.sess.def_table.get_def_id(variant.id()).unwrap(),
+        ));
+        walk_each_pr!(self, &variant.fields, visit_field);
         self.exit_scope();
     }
 

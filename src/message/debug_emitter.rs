@@ -6,33 +6,16 @@ use crate::{
     session::Session,
 };
 
-pub struct DebugEmitter {
-    writer: Writer,
+pub struct DebugEmitter {}
+
+impl DebugEmitter {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
-impl DebugEmitter {}
-
 impl MessageEmitter for DebugEmitter {
-    fn emit<Ctx>(
-        mut self,
-        msg: super::message::MessageStorage,
-        ctx: &Ctx,
-    ) -> (super::ErrMessageOccurred, String)
-    where
-        Ctx: crate::session::SessionHolder,
-    {
-        let mut error_occurred = false;
-        let text = msg
-            .extract()
-            .iter()
-            .map(|msg| {
-                if msg.is(crate::message::message::MessageKind::Error) {
-                    error_occurred = true
-                };
-                format!("{:?}", msg)
-            })
-            .collect();
-
-        (error_occurred.into(), text)
+    fn process_msg(&mut self, sess: &mut Session, msg: &Message) {
+        outln!(dbg, sess.writer, "{:?}", msg);
     }
 }

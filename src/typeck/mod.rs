@@ -840,7 +840,7 @@ impl<'hir> Stage<()> for Typecker<'hir> {
             });
         });
 
-        outln!(self.sess.writer, "Type ctx:\n {}", self.dump_ctx_stack());
+        outln!(dbg, self.sess.writer, "Type ctx:\n {}", self.dump_ctx_stack());
 
         self.sess.tyctx.apply_ctx_on_typed_nodes(&self.global_ctx);
 

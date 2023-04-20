@@ -41,48 +41,7 @@ impl TermEmitter {
 }
 
 impl MessageEmitter for TermEmitter {
-    fn emit<Ctx>(
-        mut self,
-        msg: super::message::MessageStorage,
-        ctx: &Ctx,
-    ) -> (super::ErrMessageOccurred, String)
-    where
-        Ctx: crate::session::SessionHolder,
-    {
-        let sess = ctx.sess();
-        let messages = msg.extract();
-
-        if cfg!(feature = "verbose_debug") {
-            if messages.is_empty() {
-                verbose!("Got no messages");
-            } else {
-                verbose!(
-                    "Printing messages as are\n{}",
-                    messages
-                        .iter()
-                        .map(|m| format!("{m:?}"))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                );
-            }
-        }
-
-        let mut error_appeared = false;
-
-        for msg in messages.iter() {
-            if msg.is(message::MessageKind::Error) {
-                error_appeared = true;
-            }
-
-            self.process_msg(sess, &msg);
-        }
-
-        (error_appeared.into(), self.writer.data())
-    }
-}
-
-impl TermEmitter {
-    fn process_msg(&mut self, sess: &Session, msg: &Message) {
+    fn process_msg(&mut self, sess: &mut Session, msg: &Message) {
         let source = sess.source_map.get_source(msg.span().source());
 
         let SpanSourceInfo {
@@ -91,6 +50,7 @@ impl TermEmitter {
 
         // Header line `error: Message
         outln!(
+            msg,
             self.writer,
             "{}",
             format!("{}: {}", msg.kind(), msg.text()).fg_color(msg.kind().color()),
@@ -99,6 +59,7 @@ impl TermEmitter {
         if sess.config().verbose_messages() {
             if let Some(origin) = msg.origin() {
                 outln!(
+                    msg,
                     self.writer,
                     "{}",
                     format!("Originated from {}", origin).yellow()
@@ -123,6 +84,7 @@ impl TermEmitter {
 
         // Source-pointing line `[indent]--> file:line:col`
         outln!(
+            msg,
             self.writer,
             "{}--> {}:{}:{}",
             " ".repeat(num_indent),
@@ -139,9 +101,13 @@ impl TermEmitter {
             self.process_solution(sess, solution);
         }
 
-        self.writer.nl();
-    }
+        outln!(msg, self.writer);
 
+        sess.writer.take_away_from(&mut self.writer);
+    }
+}
+
+impl TermEmitter {
     fn print_line(
         &mut self,
         prefix: Option<&str>,
@@ -153,6 +119,7 @@ impl TermEmitter {
         }: &LineInfo,
     ) {
         outln!(
+            msg,
             self.writer,
             "{}{} |{} {}",
             " ".repeat(*num_indent),
@@ -162,7 +129,7 @@ impl TermEmitter {
         );
     }
 
-    fn process_label(&mut self, sess: &Session, label: &Label) {
+    fn process_label(&mut self, sess: &mut Session, label: &Label) {
         let span = label.span();
 
         let source = sess.source_map.get_source(span.source());
@@ -183,6 +150,7 @@ impl TermEmitter {
 
             self.print_line(None, line);
             outln!(
+                msg,
                 self.writer,
                 "{}{}--- {}",
                 // Indent of span pos in line + indent before number + number length + 3 for ` | `
@@ -200,6 +168,7 @@ impl TermEmitter {
 
             if span.lo() != *pos {
                 outln!(
+                    msg,
                     self.writer,
                     "...{}v-- from here",
                     " ".repeat(pos_in_line as usize + num_indent + num_len + 1)
@@ -211,6 +180,7 @@ impl TermEmitter {
             });
 
             outln!(
+                msg,
                 self.writer,
                 "{}\\--- {}",
                 " ".repeat(num_indent + num_len + 3),
@@ -219,7 +189,7 @@ impl TermEmitter {
         }
     }
 
-    fn process_solution(&mut self, sess: &Session, solution: &Solution) {
+    fn process_solution(&mut self, sess: &mut Session, solution: &Solution) {
         match solution.kind() {
             SolutionKind::Rename { kind, name, to } => self.process_label(
                 sess,

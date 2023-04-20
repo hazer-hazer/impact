@@ -9,10 +9,10 @@ use crate::{
         expr::{Call, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Local, StmtKind},
-        Block, Body, BodyId, Expr, HirId, Pat, Path, Stmt,
+        Block, Body, BodyId, Expr, HirId, Pat, Path, Res, Stmt,
     },
     message::message::MessageBuilder,
-    resolve::def::{DefId, DefKind},
+    resolve::def::{self, DefId, DefKind},
     span::{sym::Ident, Spanned, WithSpan},
     typeck::kind::Kind,
 };
@@ -140,15 +140,37 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
+    // Note: This is a path expression
     fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
         self.lookup_typed_term_ty(self.hir.path(path).target_name())
             .ok_or_else(|| {
                 MessageBuilder::error()
                     .span(self.hir.path(path).span())
-                    .text(format!("Term {} does not have a type", path))
+                    .text(format!("[BUG] Term {path} does not have a type"))
                     .emit_single_label(self);
                 TypeckErr::Reported
             })
+    }
+
+    // TODO: Type collection stage
+    fn synth_res(&mut self, res: Res) -> TyResult<Ty> {
+        match res {
+            Res::Def(kind, def_id) => match kind {
+                DefKind::Func => todo!(),
+                DefKind::Value => todo!(),
+                DefKind::Lambda => todo!(),
+                DefKind::Ctor => todo!(),
+                DefKind::FieldAccessor => todo!(),
+                DefKind::TyParam => todo!(),
+                DefKind::External => todo!(),
+                DefKind::Local => unreachable!(),
+                DefKind::DeclareBuiltin => unreachble!(),
+            },
+            Res::Local(hir_id) => Ok(self.tyctx().node_type(hir_id).unwrap()),
+            Res::DeclareBuiltin => todo!(),
+            Res::Builtin(_) => todo!(),
+            Res::Error => unreachable!(),
+        }
     }
 
     fn synth_ty_expr(&mut self, ty_expr: &TyExpr) -> TyResult<Ty> {
