@@ -15,7 +15,7 @@ use super::{
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::{Expr, HirId},
+    hir::{self, Expr, HirId},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefMap},
@@ -50,6 +50,10 @@ pub enum InstantiatedTy<T = Ty, E = ()> {
 pub struct TyCtx {
     builtins: HashMap<Builtin, Ty>,
 
+    converted: HashMap<hir::Ty, Ty>,
+
+    ty_defs: DefMap<Ty>,
+
     /// Types associated to DefId's (meaning for each item is different!)
     /// and types of HIR expressions.
     /// - Type alias: `[Type alias DefId] -> [Its type]`
@@ -74,6 +78,8 @@ impl TyCtx {
     pub fn new() -> Self {
         Self {
             builtins: builtins(),
+            converted: Default::default(),
+            ty_defs: Default::default(),
             typed: Default::default(),
             expr_ty_bindings: Default::default(),
             def_ty_bindings: Default::default(),
@@ -81,6 +87,22 @@ impl TyCtx {
             field_indices: Default::default(),
             ty_names: Default::default(),
         }
+    }
+
+    pub fn add_conv(&mut self, hir: hir::Ty, ty: Ty) {
+        assert!(self.converted.insert(hir, ty).is_none());
+    }
+
+    pub fn get_conv(&self, hir: hir::Ty) -> Option<Ty> {
+        self.converted.get(&hir).copied()
+    }
+
+    pub fn type_def(&mut self, def_id: DefId, ty: Ty) {
+        assert!(self.ty_defs.insert(def_id, ty).is_none());
+    }
+
+    pub fn def_ty(&self, def_id: DefId) -> Option<Ty> {
+        self.ty_defs.get_flat(def_id).copied()
     }
 
     pub fn type_node(&mut self, id: HirId, ty: Ty) {

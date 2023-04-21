@@ -1,5 +1,5 @@
 use super::{
-    ty::{Ty, TyKind, VariantId},
+    ty::{Ty, TyKind, VariantId, IntKind, ExKind, FloatKind},
     TyResult, TypeckErr, Typecker, Typed,
 };
 use crate::{
@@ -136,8 +136,12 @@ impl<'hir> Typecker<'hir> {
             Lit::Bool(_) => Ty::bool(),
             Lit::String(_) => Ty::str(),
 
-            &Lit::Int(_, kind) => self.conv_int(kind),
-            &Lit::Float(_, kind) => self.conv_float(kind),
+            &Lit::Int(_, kind) => IntKind::try_from(kind)
+                .map_or_else(|_| self.add_fresh_ex(ExKind::Int).1, |kind| Ty::int(kind)),
+            &Lit::Float(_, kind) => FloatKind::try_from(kind).map_or_else(
+                |_| self.add_fresh_ex(ExKind::Float).1,
+                |kind| Ty::float(kind),
+            ),
         })
     }
 

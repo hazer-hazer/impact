@@ -94,7 +94,6 @@ pub struct Typecker<'hir> {
     ctx_stack: Vec<InferCtx>,
     existential: ExistentialId,
     kind_ex: KindExId,
-    ty_params: DefMap<TyVarId>,
     try_mode: bool,
 
     hir: &'hir HIR,
@@ -117,7 +116,6 @@ impl<'hir> Typecker<'hir> {
             ctx_stack: Default::default(),
             existential: ExistentialId::new(0),
             kind_ex: KindExId::new(0),
-            ty_params: Default::default(),
             try_mode: false,
 
             hir,
@@ -512,206 +510,6 @@ impl<'hir> Typecker<'hir> {
         ty.apply_ctx(self.ctx()).func_def_id()
     }
 
-    // Conversion //
-    fn conv(&mut self, ty: hir::Ty) -> Ty {
-        let ty = self.hir.ty(ty);
-        // TODO: Allow recursive?
-
-        match ty.kind() {
-            &hir::ty::TyKind::Path(TyPath(path)) => self.conv_ty_path(path),
-            hir::ty::TyKind::Func(params, body) => {
-                let params = params
-                    .iter()
-                    .copied()
-                    .map(|param| self.conv(param))
-                    .collect();
-                let body = self.conv(*body);
-                Ty::func(None, params, body)
-            },
-            hir::ty::TyKind::App(cons, args) => match self.hir.ty(*cons).kind() {
-                hir::ty::TyKind::Builtin(bt) => match bt {
-                    Builtin::RefTy => {
-                        let mut args = args.iter().map(|&arg| self.conv(arg)).collect::<Vec<_>>();
-                        assert_eq!(args.len(), 1);
-                        return Ty::ref_to(args.remove(0));
-                    },
-                    _ => panic!(),
-                },
-                _ => panic!(),
-            },
-            hir::ty::TyKind::Builtin(bt) => match bt {
-                Builtin::UnitTy => Ty::unit(),
-                Builtin::I32 => Ty::int(IntKind::I32),
-                Builtin::Str => Ty::str(),
-                Builtin::RefTy => {
-                    let kind_var = Kind::next_kind_var_id();
-                    Ty::ty_kind(Kind::new_forall(
-                        kind_var,
-                        Kind::new_abs(
-                            Kind::new_var(kind_var),
-                            Kind::new_ty(Ty::ref_to(Ty::ty_kind(Kind::new_var(kind_var)))),
-                        ),
-                    ))
-                },
-                Builtin::RefCons | Builtin::AddInt | Builtin::SubInt | Builtin::UnitValue => {
-                    unreachable!()
-                },
-            },
-        }
-    }
-
-    fn conv_ty_path(&mut self, path: Path) -> Ty {
-        let path = self.hir.path(path);
-        match path.res() {
-            &Res::Def(def_kind, def_id) => {
-                match def_kind {
-                    DefKind::TyAlias => {
-                        // Path conversion is done linearly, i.e. we get type alias from HIR and
-                        // convert its type, caching it
-                        // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
-                        self.conv_ty_alias(def_id)
-                    },
-
-                    DefKind::TyParam => self.conv_ty_param(def_id),
-
-                    DefKind::Adt => self.conv_adt(def_id),
-
-                    // TODO: We need type collector to collect items types before typeck of
-                    // expressions
-                    DefKind::Variant => {
-                        todo!()
-                        // self.conv_adt(self.hir.variant(def_id.into()).id().
-                        // owner().into())
-                    },
-
-                    // Non-type definitions from type namespace
-                    DefKind::Root | DefKind::Mod => {
-                        MessageBuilder::error()
-                            .span(path.span())
-                            .text(format!("{} item used as type", def_kind))
-                            .emit_single_label(self);
-
-                        Ty::error()
-                    },
-
-                    DefKind::DeclareBuiltin => todo!(),
-
-                    // Definitions from value namespace
-                    DefKind::External
-                    | DefKind::Ctor
-                    | DefKind::FieldAccessor
-                    | DefKind::Local
-                    | DefKind::Lambda
-                    | DefKind::Func
-                    | DefKind::Value => {
-                        unreachable!()
-                    },
-                }
-            },
-            &Res::Builtin(bt) if bt.is_ty() => todo!(),
-            _ => unreachable!(),
-        }
-    }
-
-    fn generalize_ty(
-        &mut self,
-        generics: &GenericParams,
-        mut make_ty: impl FnMut(&mut Self) -> Ty,
-    ) -> Ty {
-        let ty_params = generics
-            .ty_params
-            .iter()
-            .map(|ty_param| {
-                let ty_var_id = Ty::next_ty_var_id();
-                assert!(self.ty_params.insert(ty_param.def_id, ty_var_id).is_none());
-                ty_var_id
-            })
-            .collect::<Vec<_>>();
-        let ty = make_ty(self);
-        ty_params
-            .iter()
-            .copied()
-            .fold(ty, |ty, ty_param| Ty::forall(ty_param, ty))
-    }
-
-    fn conv_ty_alias(&mut self, ty_alias_def_id: DefId) -> Ty {
-        let hir_id = HirId::new_owner(ty_alias_def_id);
-        let def = self.sess.def_table.get_def(ty_alias_def_id);
-        if let Some(def_ty) = self.tyctx().node_type(hir_id) {
-            return def_ty;
-        }
-
-        let &TyAlias { ty, ref generics } =
-            self.hir.item(ItemId::new(def.def_id.into())).ty_alias();
-
-        self.generalize_ty(generics, |this| {
-            let ty = this.conv(ty).apply_ctx(this.ctx());
-            this.tyctx_mut().type_node(hir_id, ty);
-            ty
-        })
-    }
-
-    fn conv_ty_param(&mut self, ty_param_def_id: DefId) -> Ty {
-        Ty::var(self.ty_params.get_copied_unwrap(ty_param_def_id))
-    }
-
-    fn conv_adt(&mut self, def_id: DefId) -> Ty {
-        let adt = self.hir.item(ItemId::new(def_id.into())).adt();
-
-        // Variant indexing defined here. For now, just incremental sequencing.
-        let variants: IndexVec<VariantId, hir::Variant> = adt.variants.iter().copied().collect();
-
-        let adt_ty = self.generalize_ty(&adt.generics, |this| {
-            let variants = variants.iter().map(|v| this.conv_variant(v)).collect();
-            Ty::adt(Adt { def_id, variants })
-        });
-
-        variants.iter_enumerated().for_each(|(id, &hir_v)| {
-            let v_def_id = self.hir.variant(hir_v).def_id;
-            self.tyctx_mut().set_variant_id(v_def_id, id);
-            self.tyctx_mut().type_node(hir_v.into(), adt_ty);
-        });
-
-        adt_ty
-    }
-
-    fn conv_variant(&mut self, &variant: &hir::Variant) -> Variant {
-        let variant = self.hir.variant(variant);
-        Variant {
-            def_id: variant.def_id,
-            name: variant.name,
-            fields: variant
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, field)| self.conv_field(index, field))
-                .collect(),
-        }
-    }
-
-    fn conv_field(&mut self, index: usize, field: &hir::item::Field) -> Field {
-        let ty = self.conv(field.ty);
-        self.tyctx_mut().type_node(field.id(), ty);
-        Field {
-            name: field
-                .name
-                .unwrap_or_else(|| Ident::new(field.span(), index.to_string().intern())),
-            ty,
-        }
-    }
-
-    fn conv_int(&mut self, kind: hir::expr::IntKind) -> Ty {
-        IntKind::try_from(kind)
-            .map_or_else(|_| self.add_fresh_ex(ExKind::Int).1, |kind| Ty::int(kind))
-    }
-
-    fn conv_float(&mut self, kind: hir::expr::FloatKind) -> Ty {
-        FloatKind::try_from(kind).map_or_else(
-            |_| self.add_fresh_ex(ExKind::Float).1,
-            |kind| Ty::float(kind),
-        )
-    }
-
     // Debug //
     fn dump_ctx_stack(&self) -> String {
         let exes = self.ctx_stack.iter().fold(vec![], |exes, ctx| {
@@ -825,8 +623,6 @@ impl<'hir> Typecker<'hir> {
 
 impl<'hir> Stage<()> for Typecker<'hir> {
     fn run(mut self) -> StageResult<()> {
-        self.visit_hir(self.hir);
-
         self.under_new_ctx(|this| {
             this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);

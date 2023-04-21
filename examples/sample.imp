@@ -14,7 +14,7 @@ extern
     puts: str -> i32
 
 data Option a =
-    | Some a
+    | Some Some
     | None
 
 main () =
