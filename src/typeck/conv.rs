@@ -229,18 +229,22 @@ impl<'hir> TyConv<'hir> {
             })
         });
 
-        variants.iter_enumerated().for_each(|(id, &v_hir_id)| {
+        variants.iter_enumerated().for_each(|(vid, &v_hir_id)| {
             let variant_node = self.hir.variant(v_hir_id);
             let v_def_id = variant_node.def_id;
 
-            self.tyctx_mut().set_variant_id(v_def_id, id);
+            self.tyctx_mut().set_variant_id(v_def_id, vid);
             self.tyctx_mut().type_node(v_hir_id.into(), adt_ty);
             self.tyctx_mut().type_def(v_def_id, adt_ty);
 
             // Constructor type
             let ctor_def_id = variant_node.ctor_def_id;
-            self.tyctx_mut()
-                .type_def(ctor_def_id, Ty::func(ctor_def_id, params, body))
+            let ctor_ty = adt_ty.substituted_forall_body(Ty::func(
+                Some(ctor_def_id),
+                adt_ty.as_adt().field_tys(vid),
+                adt_ty,
+            ));
+            self.tyctx_mut().type_def(ctor_def_id, ctor_ty)
         });
 
         adt_ty

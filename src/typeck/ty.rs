@@ -330,6 +330,16 @@ impl Adt {
     pub fn field_ty(&self, vid: VariantId, fid: FieldId) -> Ty {
         self.variants.get(vid).unwrap().fields.get(fid).unwrap().ty
     }
+
+    pub fn field_tys(&self, vid: VariantId) -> Vec<Ty> {
+        self.variants
+            .get(vid)
+            .unwrap()
+            .fields
+            .iter()
+            .map(|field| field.ty)
+            .collect()
+    }
 }
 
 impl<To> MapTy<To, Adt<To>> for Adt {
@@ -440,6 +450,7 @@ impl std::fmt::Display for TyKind {
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Ty(TyId);
 
+// TODO: Split Ty methods into separate files for Typeck and public usage.
 impl Ty {
     pub fn id(&self) -> TyId {
         self.0
@@ -731,6 +742,13 @@ impl Ty {
         }
     }
 
+    pub fn degeneralize(&self) -> Ty {
+        match self.kind() {
+            TyKind::Forall(_, body) => body.generalize(),
+            _ => *self,
+        }
+    }
+
     pub fn substitute(&self, subst: TyVarId, with: Ty) -> Ty {
         verbose!("Substitute {} in {} with {}", subst, self, with);
 
@@ -877,7 +895,30 @@ impl Ty {
         }
     }
 
-    /// For each type variable, convert type to `forall var. ty`
+    /// Substitution applied to type such that `forall a1. forall aN.
+    /// body`/`subst` becomes `forall a1. forall aN. subst`.
+    pub fn substituted_forall_body(&self, subst: Ty) -> Ty {
+        match self.kind() {
+            &TyKind::Forall(var, body) => Ty::forall(var, body.substituted_forall_body(subst)),
+            _ => subst,
+        }
+    }
+
+    /// Returns vec of type variables from outer `forall`s.
+    pub fn get_outer_ty_vars(&self) -> Vec<TyVarId> {
+        match self.kind() {
+            &TyKind::Forall(var, body) => vec![var]
+                .into_iter()
+                .chain(body.get_outer_ty_vars().into_iter())
+                .collect(),
+            _ => vec![],
+        }
+    }
+
+    #[deprecated]
+    // FIXME
+    /// Deprecated because if `forall a. a` occurs, it adds one more `forall a.
+    /// forall a.`. For each type variable, convert type to `forall var. ty`
     pub fn generalize(&self) -> Ty {
         self.get_ty_vars()
             .into_iter()
@@ -1024,6 +1065,21 @@ pub struct MonoTy {
 
 #[cfg(test)]
 mod tests {
+    // Ty tests //
+    use std::collections::HashMap;
+
+    use super::{Ty, TyVarId};
+    use crate::typeck::builtin::ty;
+
+    mod get_outer_ty_vars {
+        use super::*;
+
+        #[test]
+        fn simple_valid() {
+            assert_eq!(ty!(forall a. a).get_outer_ty_vars(), vec![]);
+        }
+    }
+
     // use crate::session::SourceId;
 
     // const SOME_SOURCE_ID: SourceId = SourceId::new(123);
