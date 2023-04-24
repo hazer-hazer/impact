@@ -1073,10 +1073,15 @@ mod tests {
 
     mod get_outer_ty_vars {
         use super::*;
+        use crate::typeck::builtin::TyMacroCtx;
 
         #[test]
         fn simple_valid() {
-            assert_eq!(ty!(forall a. a).get_outer_ty_vars(), vec![]);
+            let mut ctx = TyMacroCtx::default();
+            assert_eq!(
+                ty!(@ctx ctx; forall a. a).get_outer_ty_vars(),
+                vec![ctx.ty_var("a")]
+            );
         }
     }
 

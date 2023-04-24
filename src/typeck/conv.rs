@@ -278,16 +278,17 @@ impl<'hir> TyConv<'hir> {
 
 impl<'hir> HirVisitor for TyConv<'hir> {
     fn visit_ty(&mut self, &hir_ty: &hir::Ty, hir: &HIR) {
-        self.tyctx_mut().add_conv(hir_ty, self.conv(hir_ty, None));
+        let conv = self.conv(hir_ty, None);
+        self.tyctx_mut().add_conv(hir_ty, conv);
     }
 
     fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
-        self.tyctx_mut()
-            .type_node(id.hir_id(), self.conv_ty_alias(id.def_id()));
+        let conv = self.conv_ty_alias(id.def_id());
+        self.tyctx_mut().type_node(id.hir_id(), conv);
     }
 
     fn visit_adt_item(&mut self, name: Ident, adt: &hir::item::Adt, id: ItemId, hir: &HIR) {
-        self.tyctx_mut()
-            .type_node(id.hir_id(), self.conv_adt(id.def_id()))
+        let conv = self.conv_adt(id.def_id());
+        self.tyctx_mut().type_node(id.hir_id(), conv)
     }
 }

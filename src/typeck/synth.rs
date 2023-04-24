@@ -1,5 +1,5 @@
 use super::{
-    ty::{Ty, TyKind, VariantId, IntKind, ExKind, FloatKind},
+    ty::{ExKind, FloatKind, IntKind, Ty, TyKind, VariantId},
     TyResult, TypeckErr, Typecker, Typed,
 };
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
 
 impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
-        let hir_id = HirId::new_owner(item.def_id());
+        let hir_id = item.hir_id();
         match self.sess.def_table.get_def(item.def_id()).kind() {
             DefKind::DeclareBuiltin => {
                 self.tyctx_mut().type_node(
@@ -41,7 +41,7 @@ impl<'hir> Typecker<'hir> {
             ItemKind::TyAlias(_ty) => {
                 verbose!("Synth ty alias {}", item.def_id());
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
-                return Ok(self.conv_ty_alias(item.def_id()));
+                return Ok(self.tyctx().node_type(hir_id).unwrap());
             },
             ItemKind::Mod(Mod { items }) => {
                 // FIXME: How not to clone?
@@ -66,12 +66,14 @@ impl<'hir> Typecker<'hir> {
             },
             ItemKind::ExternItem(extern_item) => {
                 let ty = self
-                    .conv(extern_item.ty)
+                    .tyctx()
+                    .get_conv(extern_item.ty)
+                    .unwrap()
                     .maybe_add_func_def_id(item.def_id());
                 self.type_term(item.name(), ty);
                 ty
             },
-            ItemKind::Adt(_) => self.conv_adt(item.def_id()),
+            ItemKind::Adt(_) => self.tyctx().node_type(hir_id).unwrap(),
         };
 
         let ty = ty.apply_ctx(self.ctx());
@@ -187,7 +189,7 @@ impl<'hir> Typecker<'hir> {
         // FIXME: Check wf?
         // FIXME: Do we need `try_to`?
         self.try_to(|this| {
-            let anno_ty = this.conv(ty_expr.ty);
+            let anno_ty = this.tyctx().get_conv(ty_expr.ty).unwrap();
             this.check(ty_expr.expr, anno_ty)
         })
     }
