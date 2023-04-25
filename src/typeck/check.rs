@@ -1,6 +1,6 @@
 use super::{
     ctx::InferCtx,
-    ty::{ExKind, Existential, FloatKind, IntKind, MapTy, Ty, TyKind},
+    ty::{Ex, ExKind, FloatKind, IntKind, MapTy, Ty, TyKind},
     TyResult, Typecker,
 };
 use crate::{
@@ -349,7 +349,7 @@ impl<'hir> Typecker<'hir> {
     /// This function is a attempt to generalize logic of left and right
     /// instantiations. It should be rewritten carefully and used.
     #[deprecated]
-    fn try_instantiate_common(&mut self, ex: Existential, ty: Ty) -> TyResult<Ty> {
+    fn try_instantiate_common(&mut self, ex: Ex, ty: Ty) -> TyResult<Ty> {
         // Inst(L|R)Reach
         match ty.kind() {
             &TyKind::Existential(ty_ex) => {
@@ -380,7 +380,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     /// InstantiateL
-    fn instantiate_l(&mut self, ex: Existential, r_ty: Ty) -> TyResult<Ty> {
+    fn instantiate_l(&mut self, ex: Ex, r_ty: Ty) -> TyResult<Ty> {
         if let &TyKind::Existential(beta_ex) = r_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
                 return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
@@ -419,7 +419,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     /// InstantiateR
-    fn instantiate_r(&mut self, l_ty: Ty, ex: Existential) -> TyResult<Ty> {
+    fn instantiate_r(&mut self, l_ty: Ty, ex: Ex) -> TyResult<Ty> {
         if let &TyKind::Existential(beta_ex) = l_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
                 return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
@@ -461,14 +461,14 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn instantiate(&mut self, dir: InstantiateDir, ty: Ty, ex: Existential) -> TyResult<Ty> {
+    fn instantiate(&mut self, dir: InstantiateDir, ty: Ty, ex: Ex) -> TyResult<Ty> {
         match dir {
             InstantiateDir::Left => self.instantiate_l(ex, ty),
             InstantiateDir::Right => self.instantiate_r(ty, ex),
         }
     }
 
-    fn instantiate_func(&mut self, dir: InstantiateDir, ty: Ty, ex: Existential) -> TyResult<Ty> {
+    fn instantiate_func(&mut self, dir: InstantiateDir, ty: Ty, ex: Ex) -> TyResult<Ty> {
         let (params, body) = ty.as_func_like();
 
         self.try_to(|this| {
@@ -497,8 +497,8 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    fn instantiate_adt(&mut self, dir: InstantiateDir, ty: Ty, ex: Existential) -> TyResult<Ty> {
-        let adt = ty.as_adt();
+    fn instantiate_adt(&mut self, dir: InstantiateDir, ty: Ty, ex: Ex) -> TyResult<Ty> {
+        let adt = ty.as_adt().unwrap();
 
         self.try_to(|this| {
             let variant_exes = adt

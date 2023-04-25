@@ -63,7 +63,7 @@ impl<'ctx> MirBuilder<'ctx> {
         match &expr.kind {
             &ExprKind::LocalRef(var) => bb.with(self.resolve_local_var(var).lvalue(None)),
             &ExprKind::FieldAccess(lhs, vid, fid) => {
-                let field_ty = self.thir.expr(lhs).ty.as_adt().field_ty(vid, fid);
+                let field_ty = self.thir.expr(lhs).ty.as_adt().unwrap().field_ty(vid, fid);
                 let lhs = unpack!(bb = self.as_lvalue(bb, lhs));
                 bb.with(lhs.project(Projection::field(field_ty, vid, fid)))
             },

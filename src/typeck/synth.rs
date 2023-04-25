@@ -203,7 +203,7 @@ impl<'hir> Typecker<'hir> {
         let lhs_ty = self.synth_expr(lhs)?;
 
         // FIXME: Really bug if not data?
-        let adt = lhs_ty.as_data().unwrap();
+        let adt = lhs_ty.as_adt().unwrap();
         let variants = &adt.variants;
 
         assert!(!variants.is_empty());

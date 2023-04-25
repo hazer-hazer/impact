@@ -241,7 +241,7 @@ impl<'hir> TyConv<'hir> {
             let ctor_def_id = variant_node.ctor_def_id;
             let ctor_ty = adt_ty.substituted_forall_body(Ty::func(
                 Some(ctor_def_id),
-                adt_ty.as_adt().field_tys(vid),
+                adt_ty.as_adt().unwrap().field_tys(vid),
                 adt_ty,
             ));
             self.tyctx_mut().type_def(ctor_def_id, ctor_ty)

@@ -24,7 +24,7 @@ use crate::{
 };
 
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
-declare_idx!(ExistentialId, u32, "^{}", Color::Blue);
+declare_idx!(ExId, u32, "^{}", Color::Blue);
 declare_idx!(TyVarId, u32, "{}", Color::Cyan);
 declare_idx!(VariantId, u32, "{}", Color::White);
 
@@ -47,32 +47,32 @@ impl std::fmt::Display for ExKind {
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct Existential {
+pub struct Ex {
     kind: ExKind,
-    id: ExistentialId,
+    id: ExId,
 }
 
 /// Frequently used pair of Existential with Ty for this existential.
-pub type ExPair<E = Existential> = (E, Ty);
+pub type ExPair<E = Ex> = (E, Ty);
 
-impl Existential {
-    pub fn new(kind: ExKind, id: ExistentialId) -> Self {
+impl Ex {
+    pub fn new(kind: ExKind, id: ExId) -> Self {
         Self { kind, id }
     }
 
-    pub fn common(id: ExistentialId) -> Self {
+    pub fn common(id: ExId) -> Self {
         Self::new(ExKind::Common, id)
     }
 
-    pub fn int(id: ExistentialId) -> Self {
+    pub fn int(id: ExId) -> Self {
         Self::new(ExKind::Int, id)
     }
 
-    pub fn float(id: ExistentialId) -> Self {
+    pub fn float(id: ExId) -> Self {
         Self::new(ExKind::Float, id)
     }
 
-    pub fn id(&self) -> ExistentialId {
+    pub fn id(&self) -> ExId {
         self.id
     }
 
@@ -93,7 +93,7 @@ impl Existential {
     }
 }
 
-impl std::fmt::Display for Existential {
+impl std::fmt::Display for Ex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.kind(), self.id())
     }
@@ -396,7 +396,7 @@ pub enum TyKind {
     Ref(Ty),
 
     Var(TyVarId),
-    Existential(Existential),
+    Existential(Ex),
     Forall(TyVarId, Ty),
 
     /// Type kind.
@@ -520,7 +520,7 @@ impl Ty {
         Self::new(TyKind::Forall(var, body))
     }
 
-    pub fn existential(ex: Existential) -> Ty {
+    pub fn existential(ex: Ex) -> Ty {
         Self::new(TyKind::Existential(ex))
     }
 
@@ -545,7 +545,7 @@ impl Ty {
         self.tys().kind()
     }
 
-    pub fn as_ex(&self) -> Option<Existential> {
+    pub fn as_ex(&self) -> Option<Ex> {
         match self.kind() {
             &TyKind::Existential(ex) => Some(ex),
             _ => None,
@@ -621,11 +621,11 @@ impl Ty {
         matches!(self.kind(), TyKind::Func(..) | TyKind::FuncDef(..))
     }
 
-    pub fn is_data(&self) -> bool {
+    pub fn is_adt(&self) -> bool {
         matches!(self.kind(), TyKind::Adt(..))
     }
 
-    pub fn as_data(&self) -> Option<&Adt> {
+    pub fn as_adt(&self) -> Option<&Adt> {
         match self.kind() {
             TyKind::Adt(adt) => Some(adt),
             _ => None,
@@ -664,39 +664,10 @@ impl Ty {
     }
 
     pub fn as_mono(&self) -> Option<MonoTy> {
-        let sort = match self.kind() {
-            TyKind::Error => Some(MonoTyKind::Error),
-            TyKind::Unit => Some(MonoTyKind::Unit),
-            TyKind::Bool => Some(MonoTyKind::Bool),
-            &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
-            &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
-            TyKind::Str => Some(MonoTyKind::String),
-            // FIXME: Unwrap
-            TyKind::Ref(ty) => Some(MonoTyKind::Ref(Box::new(ty.as_mono().unwrap()))),
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
-                let params = params
-                    .iter()
-                    .map(|param| param.as_mono().ok_or(()))
-                    .collect::<Result<Vec<_>, _>>()
-                    .ok()?
-                    .into_iter()
-                    .map(Box::new)
-                    .collect();
-                let body = body.as_mono()?;
-                Some(MonoTyKind::Func(params, Box::new(body)))
-            },
-            // FIXME: Unwrap
-            TyKind::Adt(adt) => Some(MonoTyKind::Adt(
-                adt.map_ty(&mut |ty| ty.as_mono().ok_or(())).ok()?,
-            )),
-            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(..) => None,
-            TyKind::Kind(_) => None,
-        }?;
-
-        Some(MonoTy { sort, ty: *self })
+        (*self).try_into().ok()
     }
 
-    pub fn contains_ex(&self, ex: Existential) -> bool {
+    pub fn contains_ex(&self, ex: Ex) -> bool {
         match self.kind() {
             TyKind::Error
             | TyKind::Unit
@@ -846,10 +817,6 @@ impl Ty {
 
     pub fn as_func_like(&self) -> (&[Ty], Ty) {
         match_expected!(self.kind(), TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => (params.as_ref(), *body))
-    }
-
-    pub fn as_adt(&self) -> &Adt {
-        match_expected!(self.kind(), TyKind::Adt(adt) => adt)
     }
 
     pub fn return_ty(&self) -> Ty {
@@ -1063,26 +1030,275 @@ pub struct MonoTy {
     pub ty: Ty,
 }
 
+impl TryFrom<Ty> for MonoTy {
+    type Error = ();
+
+    fn try_from(value: Ty) -> Result<Self, Self::Error> {
+        let sort = match value.kind() {
+            TyKind::Error => Some(MonoTyKind::Error),
+            TyKind::Unit => Some(MonoTyKind::Unit),
+            TyKind::Bool => Some(MonoTyKind::Bool),
+            &TyKind::Int(kind) => Some(MonoTyKind::Int(kind)),
+            &TyKind::Float(kind) => Some(MonoTyKind::Float(kind)),
+            TyKind::Str => Some(MonoTyKind::String),
+            // FIXME: Unwrap
+            &TyKind::Ref(ty) => Some(MonoTyKind::Ref(Box::new(ty.try_into()?))),
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+                let params = params
+                    .iter()
+                    .map(|&param| param.try_into())
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .map(Box::new)
+                    .collect();
+                let body = Self::try_from(*body)?;
+                Some(MonoTyKind::Func(params, Box::new(body)))
+            },
+            // FIXME: Unwrap
+            TyKind::Adt(adt) => Some(MonoTyKind::Adt(adt.map_ty(&mut |ty| ty.try_into())?)),
+            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(..) => None,
+            TyKind::Kind(_) => None,
+        }
+        .ok_or(())?;
+
+        Ok(MonoTy { sort, ty: value })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Ty tests //
-    use std::collections::HashMap;
+    use super::{Ex, ExId, Field, Ty, TyVarId, Variant};
+    use crate::{
+        dt::idx::IndexVec,
+        resolve::def::DefId,
+        span::sym::{Ident, Internable},
+        typeck::{
+            builtin::{ty, TyMacroCtx},
+            kind::{Kind, KindEx, KindExId},
+            ty::{Adt, MonoTy, MonoTyKind, TyKind, DEFAULT_INT_KIND},
+        },
+    };
 
-    use super::{Ty, TyVarId};
-    use crate::typeck::builtin::ty;
+    enum TyGen {
+        Mono,
+        Poly,
+        Ex,
+        Adt,
+        Func,
+        FuncDef,
+        Var,
+        KindTy,
+    }
 
-    mod get_outer_ty_vars {
-        use super::*;
-        use crate::typeck::builtin::TyMacroCtx;
-
-        #[test]
-        fn simple_valid() {
-            let mut ctx = TyMacroCtx::default();
-            assert_eq!(
-                ty!(@ctx ctx; forall a. a).get_outer_ty_vars(),
-                vec![ctx.ty_var("a")]
-            );
+    fn gen(kind: TyGen) -> Ty {
+        match kind {
+            TyGen::Mono => super_simple_ty(),
+            TyGen::Poly => Ty::forall(make_ty_var(), super_simple_ty()),
+            TyGen::Ex => Ty::existential(make_ex()),
+            TyGen::Adt => Ty::adt(make_adt()),
+            TyGen::Func => Ty::func(None, vec![super_simple_ty()], super_simple_ty()),
+            TyGen::FuncDef => Ty::func(
+                Some(DefId::new(0)),
+                vec![super_simple_ty()],
+                super_simple_ty(),
+            ),
+            TyGen::Var => Ty::var(make_ty_var()),
+            TyGen::KindTy => Ty::ty_kind(Kind::new_ty(super_simple_ty())),
         }
+    }
+
+    fn make_ex() -> Ex {
+        Ex::common(ExId::new(0))
+    }
+
+    fn make_ty_var() -> TyVarId {
+        TyVarId::new(0)
+    }
+
+    fn super_simple_ty() -> Ty {
+        Ty::default_int()
+    }
+
+    fn make_field() -> Field {
+        Field {
+            name: Ident::synthetic("a".intern()),
+            ty: super_simple_ty(),
+        }
+    }
+
+    fn make_variant() -> Variant {
+        Variant {
+            def_id: DefId::new(0),
+            name: Ident::synthetic("a".intern()),
+            fields: IndexVec::from_iter([make_field()]),
+        }
+    }
+
+    fn make_adt() -> Adt {
+        Adt {
+            def_id: DefId::new(0),
+            variants: IndexVec::from_iter([make_variant()]),
+        }
+    }
+
+    #[test]
+    fn func_constructor_kind() {
+        assert!(matches!(gen(TyGen::Func).kind(), TyKind::Func(..)));
+        assert!(matches!(gen(TyGen::FuncDef).kind(), TyKind::FuncDef(..)));
+    }
+
+    #[test]
+    fn as_ex() {
+        let ex = make_ex();
+        assert_eq!(Ty::existential(ex).as_ex(), Some(ex));
+
+        assert!(matches!(super_simple_ty().as_ex(), None));
+    }
+
+    #[test]
+    fn expect_kind() {
+        Ty::ty_kind(Kind::new_ty(super_simple_ty())).expect_kind();
+    }
+
+    #[test]
+    #[should_panic]
+    fn expect_kind_fail() {
+        super_simple_ty().expect_kind();
+    }
+
+    #[test]
+    fn as_kind_ex() {
+        let kind_ex = KindEx::new(KindExId::new(0));
+        assert_eq!(
+            Ty::ty_kind(Kind::new_ex(kind_ex)).as_kind_ex(),
+            Some(kind_ex)
+        );
+    }
+
+    #[test]
+    fn is_ty() {
+        assert!(super_simple_ty().is_ty());
+        assert!(!Ty::ty_kind(Kind::new_ty(super_simple_ty())).is_ty());
+    }
+
+    #[test]
+    fn is_kind() {
+        assert!(Ty::ty_kind(Kind::new_ty(super_simple_ty())).is_kind());
+        assert!(!super_simple_ty().is_kind());
+    }
+
+    #[test]
+    fn is_mono() {
+        assert!(super_simple_ty().is_mono());
+
+        assert!(!gen(TyGen::Poly).is_mono());
+        assert!(gen(TyGen::Var).is_mono());
+    }
+
+    #[test]
+    fn is_func_like() {
+        assert!(gen(TyGen::Func).is_func_like());
+        assert!(gen(TyGen::FuncDef).is_func_like());
+        assert!(!super_simple_ty().is_func_like());
+    }
+
+    #[test]
+    fn is_adt() {
+        assert!(Ty::adt(make_adt()).is_adt());
+        assert!(!super_simple_ty().is_adt());
+    }
+
+    #[test]
+    fn as_adt() {
+        assert_eq!(Ty::adt(make_adt()).as_adt(), Some(&make_adt()));
+        assert!(matches!(super_simple_ty().as_adt(), None));
+    }
+
+    #[test]
+    fn is_instantiated() {
+        assert!(super_simple_ty().is_instantiated());
+        assert!(!gen(TyGen::Ex).is_instantiated());
+        assert!(!gen(TyGen::Poly).is_instantiated());
+        assert!(!gen(TyGen::Var).is_instantiated());
+        assert!(!gen(TyGen::KindTy).is_instantiated());
+    }
+
+    #[test]
+    fn is_solved() {
+        assert!(super_simple_ty().is_solved());
+        assert!(!gen(TyGen::Ex).is_solved());
+        assert!(gen(TyGen::Poly).is_solved());
+        assert!(gen(TyGen::Var).is_solved());
+        assert!(gen(TyGen::KindTy).is_solved());
+    }
+
+    #[test]
+    fn as_mono() {
+        assert_eq!(
+            Ty::default_int().as_mono(),
+            Some(MonoTy {
+                sort: MonoTyKind::Int(DEFAULT_INT_KIND),
+                ty: Ty::default_int()
+            })
+        );
+    }
+
+    #[test]
+    fn contains_ex() {
+        let ex = make_ex();
+        assert!(Ty::forall(make_ty_var(), Ty::existential(ex)).contains_ex(ex));
+
+        assert!(!Ty::default_int().contains_ex(ex));
+    }
+
+    #[test]
+    fn mono() {
+        gen(TyGen::Mono).mono();
+    }
+
+    #[test]
+    #[should_panic]
+    fn mono_failed() {
+        gen(TyGen::Poly).mono();
+    }
+
+    #[test]
+    fn mono_checked() {
+        let mono = gen(TyGen::Mono);
+        assert_eq!(mono.mono_checked(), mono);
+    }
+
+    #[test]
+    #[should_panic]
+    fn mono_checked_failed() {
+        gen(TyGen::Poly).mono_checked();
+    }
+
+    #[test]
+    fn func_def_id() {
+        assert!(matches!(gen(TyGen::FuncDef).func_def_id(), Some(..)));
+        assert!(matches!(gen(TyGen::Func).func_def_id(), None));
+        assert!(matches!(super_simple_ty().func_def_id(), None));
+    }
+
+    #[test]
+    fn maybe_add_func_def_id() {
+        let def_id = DefId::new(0);
+        let func = Ty::func(None, vec![super_simple_ty()], super_simple_ty());
+        assert_eq!(
+            func.maybe_add_func_def_id(def_id),
+            Ty::func(Some(def_id), vec![super_simple_ty()], super_simple_ty())
+        );
+    }
+
+    #[test]
+    fn get_outer_ty_vars() {
+        let mut ctx = TyMacroCtx::default();
+        assert_eq!(
+            ty!(@ctx ctx; forall a. a).get_outer_ty_vars(),
+            vec![ctx.ty_var("a")]
+        );
     }
 
     // use crate::session::SourceId;

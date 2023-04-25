@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::{
     kind::{Kind, KindEx, KindExId, KindVarId},
-    ty::{ExKind, Existential, ExistentialId, Ty, TyVarId},
+    ty::{Ex, ExId, ExKind, Ty, TyVarId},
 };
 use crate::{
     dt::idx::IndexVec,
@@ -10,23 +10,23 @@ use crate::{
 };
 
 pub trait AlgoCtx {
-    fn get_solution(&self, ex: Existential) -> Option<Ty>;
+    fn get_solution(&self, ex: Ex) -> Option<Ty>;
     fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind>;
 }
 
 #[derive(Default, Debug)]
 pub struct GlobalCtx {
-    solved: IndexVec<ExistentialId, Option<Ty>>,
+    solved: IndexVec<ExId, Option<Ty>>,
 
     // FIXME: This might be absolutely wrong
-    existentials: IndexVec<ExistentialId, Option<(usize, usize)>>,
+    existentials: IndexVec<ExId, Option<(usize, usize)>>,
 
     kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
     kind_exes: IndexVec<KindExId, Option<(usize, usize)>>,
 }
 
 impl AlgoCtx for GlobalCtx {
-    fn get_solution(&self, ex: Existential) -> Option<Ty> {
+    fn get_solution(&self, ex: Ex) -> Option<Ty> {
         self.solved.get_flat(ex.id()).copied()
     }
 
@@ -53,7 +53,7 @@ impl GlobalCtx {
             });
     }
 
-    pub fn has_ex(&self, ex: Existential) -> bool {
+    pub fn has_ex(&self, ex: Ex) -> bool {
         self.existentials().contains(&ex.id()) || self.solved.has(ex.id())
     }
 
@@ -64,7 +64,7 @@ impl GlobalCtx {
             || self.kind_exes_sol.has(ex.id())
     }
 
-    pub fn get_ex_index(&self, ex: Existential) -> Option<(usize, usize)> {
+    pub fn get_ex_index(&self, ex: Ex) -> Option<(usize, usize)> {
         self.existentials.get_flat(ex.id()).copied()
     }
 
@@ -72,12 +72,12 @@ impl GlobalCtx {
         self.kind_exes.get_flat(ex.id()).copied()
     }
 
-    pub fn solved(&self) -> &IndexVec<ExistentialId, Option<Ty>> {
+    pub fn solved(&self) -> &IndexVec<ExId, Option<Ty>> {
         &self.solved
     }
 
     // FIXME: Copypaste
-    pub fn solve(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
+    pub fn solve(&mut self, ex: Ex, sol: Ty) -> Option<Ty> {
         if self.has_ex(ex) {
             assert!(
                 self.solved.insert(ex.id(), sol).is_none(),
@@ -92,14 +92,14 @@ impl GlobalCtx {
         }
     }
 
-    pub fn existentials(&self) -> Vec<ExistentialId> {
+    pub fn existentials(&self) -> Vec<ExId> {
         self.existentials
             .iter_enumerated_flat()
             .map(|(ex, _)| ex)
             .collect()
     }
 
-    pub fn unsolved(&self) -> Vec<ExistentialId> {
+    pub fn unsolved(&self) -> Vec<ExId> {
         self.existentials
             .iter_enumerated_flat()
             .filter_map(|(ex, _)| {
@@ -122,13 +122,13 @@ impl GlobalCtx {
 #[derive(Default, Clone, Debug)]
 pub struct InferCtx {
     /// Existentials defined in current context
-    existentials: Vec<Existential>,
+    existentials: Vec<Ex>,
 
     /// Existentials solved in current context. Leak to global context.
     // Note: I end up with storing `solved` and unsolved existentials separately due to `try`
     // logic.  We need to enter new "try to"-context under which we do not violate upper
     // context.
-    solved: IndexVec<ExistentialId, Option<Ty>>,
+    solved: IndexVec<ExId, Option<Ty>>,
 
     /// Type variables defined in current context. Do not leak to global
     /// context. Actually only used for well-formedness checks.
@@ -152,7 +152,7 @@ pub struct InferCtx {
 }
 
 impl AlgoCtx for InferCtx {
-    fn get_solution(&self, ex: Existential) -> Option<Ty> {
+    fn get_solution(&self, ex: Ex) -> Option<Ty> {
         self.solved.get_flat(ex.id()).copied()
     }
 
@@ -170,7 +170,7 @@ impl InferCtx {
         }
     }
 
-    pub fn new_with_ex(ex: Existential) -> Self {
+    pub fn new_with_ex(ex: Ex) -> Self {
         Self {
             existentials: Vec::from([ex]),
             ..Default::default()
@@ -219,7 +219,7 @@ impl InferCtx {
         self.vars.iter().find(|&&_var| var == _var).copied()
     }
 
-    pub fn get_ex_index(&self, ex: Existential) -> Option<usize> {
+    pub fn get_ex_index(&self, ex: Ex) -> Option<usize> {
         self.existentials.iter().position(|&ex_| ex == ex_)
     }
 
@@ -229,7 +229,7 @@ impl InferCtx {
 
     /// Checks if existential is declared in this context.
     /// Solutions of existentials do not count.
-    pub fn has_ex(&self, ex: Existential) -> bool {
+    pub fn has_ex(&self, ex: Ex) -> bool {
         self.existentials.contains(&ex)
     }
 
@@ -238,7 +238,7 @@ impl InferCtx {
     }
 
     /// Seems to be a strange function, but useful in `ascend_ctx` checks.
-    pub fn get_ex(&self, ex: Existential) -> Option<Existential> {
+    pub fn get_ex(&self, ex: Ex) -> Option<Ex> {
         if self.has_ex(ex) {
             Some(ex)
         } else {
@@ -260,7 +260,7 @@ impl InferCtx {
         self.vars.push(var);
     }
 
-    pub fn add_ex(&mut self, ex: Existential) {
+    pub fn add_ex(&mut self, ex: Ex) {
         assert!(!self.has_ex(ex));
         self.existentials.push(ex);
     }
@@ -280,7 +280,7 @@ impl InferCtx {
     }
 
     /// Returns solution if existential is in context.
-    pub fn solve(&mut self, ex: Existential, sol: Ty) -> Option<Ty> {
+    pub fn solve(&mut self, ex: Ex, sol: Ty) -> Option<Ty> {
         if self.has_ex(ex) {
             assert!(
                 self.solved.insert(ex.id(), sol).is_none(),
@@ -301,7 +301,7 @@ impl InferCtx {
     }
 
     // Getters //
-    pub fn unsolved(&self) -> Vec<Existential> {
+    pub fn unsolved(&self) -> Vec<Ex> {
         self.existentials
             .iter()
             .filter_map(|&ex| {
@@ -314,7 +314,7 @@ impl InferCtx {
             .collect()
     }
 
-    pub fn int_exes(&self) -> Vec<Existential> {
+    pub fn int_exes(&self) -> Vec<Ex> {
         self.existentials()
             .iter()
             .filter_map(|&ex| match ex.kind() {
@@ -324,7 +324,7 @@ impl InferCtx {
             .collect()
     }
 
-    pub fn float_exes(&self) -> Vec<Existential> {
+    pub fn float_exes(&self) -> Vec<Ex> {
         self.existentials()
             .iter()
             .filter_map(|&ex| match ex.kind() {
@@ -338,7 +338,7 @@ impl InferCtx {
         &self.terms
     }
 
-    pub fn existentials(&self) -> &Vec<Existential> {
+    pub fn existentials(&self) -> &Vec<Ex> {
         &self.existentials
     }
 

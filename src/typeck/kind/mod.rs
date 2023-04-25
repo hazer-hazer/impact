@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 
 use super::{
     ctx::AlgoCtx,
-    ty::{Existential, TyVarId},
+    ty::{Ex, TyVarId},
 };
 use crate::{
     cli::color::{Color, ColorizedStruct},
@@ -158,7 +158,7 @@ impl Kind {
         }
     }
 
-    pub fn contains_ty_ex(&self, ex: Existential) -> bool {
+    pub fn contains_ty_ex(&self, ex: Ex) -> bool {
         match self.sort() {
             KindSort::Ty(ty) => ty.contains_ex(ex),
             KindSort::Abs(param, body) => param.contains_ty_ex(ex) | body.contains_ty_ex(ex),

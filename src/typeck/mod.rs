@@ -4,8 +4,8 @@ use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
     kind::{Kind, KindEx, KindExId, KindSort},
     ty::{
-        Adt, ExKind, ExPair, Existential, ExistentialId, Field, FloatKind, IntKind, MonoTy, Ty,
-        TyKind, TyVarId, Variant, VariantId,
+        Adt, Ex, ExId, ExKind, ExPair, Field, FloatKind, IntKind, MonoTy, Ty, TyKind, TyVarId,
+        Variant, VariantId,
     },
     tyctx::TyCtx,
 };
@@ -92,7 +92,7 @@ pub struct Typecker<'hir> {
     // Typecker context //
     global_ctx: GlobalCtx,
     ctx_stack: Vec<InferCtx>,
-    existential: ExistentialId,
+    existential: ExId,
     kind_ex: KindExId,
     try_mode: bool,
 
@@ -114,7 +114,7 @@ impl<'hir> Typecker<'hir> {
         Self {
             global_ctx: Default::default(),
             ctx_stack: Default::default(),
-            existential: ExistentialId::new(0),
+            existential: ExId::new(0),
             kind_ex: KindExId::new(0),
             try_mode: false,
 
@@ -276,7 +276,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     /// Returns (existential context depth, existential position in context)
-    fn find_unbound_ex_depth(&self, ex: Existential) -> (usize, usize) {
+    fn find_unbound_ex_depth(&self, ex: Ex) -> (usize, usize) {
         self._ascend_ctx(|ctx| ctx.get_ex_index(ex))
             .or_else(|| self.global_ctx.get_ex_index(ex))
             .expect(&format!(
@@ -296,8 +296,8 @@ impl<'hir> Typecker<'hir> {
             ))
     }
 
-    fn fresh_ex(&mut self, sort: ExKind) -> Existential {
-        Existential::new(sort, *self.existential.inc())
+    fn fresh_ex(&mut self, sort: ExKind) -> Ex {
+        Ex::new(sort, *self.existential.inc())
     }
 
     fn fresh_kind_ex(&mut self) -> KindEx {
@@ -320,7 +320,7 @@ impl<'hir> Typecker<'hir> {
         (ex, Ty::ty_kind(Kind::new_ex(ex)))
     }
 
-    fn is_unsolved_ex(&self, ty: Ty) -> Option<Existential> {
+    fn is_unsolved_ex(&self, ty: Ty) -> Option<Ex> {
         if let Some(ex) = ty.as_ex() {
             if let None = self.get_solution(ex) {
                 return Some(ex);
@@ -346,7 +346,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     // TODO: Solutions must be stored just in the current context, DO NOT ASCEND
-    fn solve(&mut self, ex: Existential, sol: MonoTy) -> Ty {
+    fn solve(&mut self, ex: Ex, sol: MonoTy) -> Ty {
         let sol = sol.ty;
         if let &TyKind::Existential(sol_ex) = sol.kind() {
             assert_ne!(sol_ex, ex, "Tried to solve ex with itself {} / {}", ex, sol);
@@ -376,7 +376,7 @@ impl<'hir> Typecker<'hir> {
         self.ctx_mut().type_term(name, ty)
     }
 
-    fn add_ex(&mut self, ex: Existential) {
+    fn add_ex(&mut self, ex: Ex) {
         verbose!("Add ex {}", ex);
         self.ctx_mut().add_ex(ex);
     }
@@ -387,7 +387,7 @@ impl<'hir> Typecker<'hir> {
         Ty::var(var)
     }
 
-    fn get_solution(&self, ex: Existential) -> Option<Ty> {
+    fn get_solution(&self, ex: Ex) -> Option<Ty> {
         self.ascend_ctx(|ctx| ctx.get_solution(ex))
             .or_else(|| self.global_ctx.get_solution(ex))
     }
@@ -397,7 +397,7 @@ impl<'hir> Typecker<'hir> {
             .or_else(|| self.global_ctx.get_kind_ex_solution(ex))
     }
 
-    fn is_unsolved(&self, ex: Existential) -> bool {
+    fn is_unsolved(&self, ex: Ex) -> bool {
         self.get_solution(ex).is_none()
     }
 
