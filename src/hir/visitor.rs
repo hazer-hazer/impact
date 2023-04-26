@@ -1,12 +1,15 @@
 use super::{
-    expr::{Call, ExprKind, Lambda, Lit, PathExpr, TyExpr},
+    expr::{Call, ExprKind, Lambda, Lit, TyExpr},
     item::{Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, TyAlias, TyParam},
     pat::PatKind,
     stmt::{Local, StmtKind},
-    ty::{TyKind, TyPath},
-    Block, BodyId, BodyOwner, Expr, Pat, Path, Stmt, Ty, Variant, HIR,
+    ty::TyKind,
+    Block, BodyId, BodyOwner, Expr, ExprPath, Pat, Stmt, Ty, TyPath, Variant, HIR,
 };
-use crate::{resolve::builtin::Builtin, span::sym::Ident};
+use crate::{
+    resolve::builtin::{TyBuiltin, ValueBuiltin},
+    span::sym::Ident,
+};
 
 macro_rules! walk_each {
     ($self: ident, $els: expr, $visitor: ident, $hir: expr) => {
@@ -151,9 +154,7 @@ pub trait HirVisitor {
 
     fn visit_lit_expr(&mut self, _: &Lit, _hir: &HIR) {}
 
-    fn visit_path_expr(&mut self, path: &PathExpr, hir: &HIR) {
-        self.visit_path(&path.0, hir)
-    }
+    fn visit_path_expr(&mut self, _path: &ExprPath, _hir: &HIR) {}
 
     fn visit_block_expr(&mut self, block: &Block, hir: &HIR) {
         self.visit_block(block, hir)
@@ -182,7 +183,7 @@ pub trait HirVisitor {
         self.visit_ident(field, hir);
     }
 
-    fn visit_builtin_expr(&mut self, _bt: &Builtin) {}
+    fn visit_builtin_expr(&mut self, _bt: &ValueBuiltin) {}
 
     // Types //
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {
@@ -195,9 +196,7 @@ pub trait HirVisitor {
         }
     }
 
-    fn visit_ty_path(&mut self, path: &TyPath, hir: &HIR) {
-        self.visit_path(&path.0, hir)
-    }
+    fn visit_ty_path(&mut self, _path: &TyPath, _hir: &HIR) {}
 
     fn visit_func_ty(&mut self, params: &[Ty], body: &Ty, hir: &HIR) {
         walk_each!(self, params, visit_ty, hir);
@@ -209,13 +208,10 @@ pub trait HirVisitor {
         walk_each!(self, args, visit_ty, hir);
     }
 
-    fn visit_builtin_ty(&mut self, _bt: &Builtin, _hir: &HIR) {}
+    fn visit_builtin_ty(&mut self, _bt: &TyBuiltin, _hir: &HIR) {}
 
     // Fragments //
     fn visit_ident(&mut self, _: &Ident, _hir: &HIR) {}
-
-    fn visit_path(&mut self, _: &Path, _hir: &HIR) {}
-
     fn visit_block(&mut self, block: &Block, hir: &HIR) {
         let block = hir.block(*block);
         walk_each!(self, block.stmts(), visit_stmt, hir);

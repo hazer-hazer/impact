@@ -13,15 +13,15 @@ use crate::{
         self,
         item::{Adt, ItemId, ItemNode, Mod, TyAlias},
         stmt::Local,
-        Body, BodyId, HirId, Node, Owner, OwnerChildId, OwnerId, Res, FIRST_OWNER_CHILD_ID, HIR,
-        OWNER_SELF_CHILD_ID,
+        Body, BodyId, ExprDefKind, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind,
+        TyRes, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
     message::message::{MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::{
         builtin::{Builtin, DeclareBuiltin},
         def::{DefId, DefKind},
-        res::{self, NamePath},
+        res::{self, NamePath, ResKind},
     },
     session::{stage_result, Session, Stage, StageResult},
     span::{
@@ -106,8 +106,8 @@ enum LoweredOwner {
 impl Into<Node> for LoweredOwner {
     fn into(self) -> Node {
         match self {
-            LoweredOwner::Root(root) => Node::Mod(root),
-            LoweredOwner::Item(item) => Node::ItemNode(item),
+            LoweredOwner::Root(root) => Node::Root(root),
+            LoweredOwner::Item(item) => Node::Item(item),
         }
     }
 }
@@ -241,12 +241,8 @@ impl<'ast> Lower<'ast> {
         .into_iter()
         .map(|kind| {
             let id = self.lower_node_id(stmt.id());
-            self.add_node(Node::StmtNode(hir::stmt::StmtNode::new(
-                id,
-                kind,
-                stmt.span(),
-            )))
-            .into()
+            self.add_node(Node::Stmt(hir::stmt::StmtNode::new(id, kind, stmt.span())))
+                .into()
         })
         .collect()
     }
@@ -281,7 +277,9 @@ impl<'ast> Lower<'ast> {
             let def_id = this.sess.def_table.get_def_id(item.id()).unwrap();
 
             let kind = match item.kind() {
-                ItemKind::Type(name, generics, ty) => this.lower_type_item(name, generics, ty),
+                ItemKind::Type(name, generics, ty) => {
+                    this.lower_type_item(name, generics, ty, def_id)
+                },
                 ItemKind::Mod(name, items) => this.lower_mod_item(name, items, item.span()),
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
@@ -322,10 +320,21 @@ impl<'ast> Lower<'ast> {
         _: &PR<Ident>,
         generics: &GenericParams,
         ty: &PR<N<Ty>>,
+        def_id: DefId,
     ) -> hir::item::ItemKind {
+        let ty = lower_pr!(self, ty, lower_ty);
+
+        match self.get_current_owner_node(ty) {
+            Node::Ty(ty) => match ty.kind() {
+                &hir::ty::TyKind::Builtin(bt) => self.sess.def_table.add_builtin(bt.into(), def_id),
+                _ => {},
+            },
+            _ => {},
+        }
+
         hir::item::ItemKind::TyAlias(TyAlias {
             generics: self.lower_generic_params(generics),
-            ty: lower_pr!(self, ty, lower_ty),
+            ty,
         })
     }
 
@@ -353,9 +362,9 @@ impl<'ast> Lower<'ast> {
             let body = self.body(vec![], value);
 
             match self.get_current_owner_node(value) {
-                Node::ExprNode(expr) => match expr.kind() {
+                Node::Expr(expr) => match expr.kind() {
                     &hir::expr::ExprKind::BuiltinExpr(bt) => {
-                        self.sess.def_table.add_builtin(bt, def_id)
+                        self.sess.def_table.add_builtin(bt.into(), def_id)
                     },
                     _ => {},
                 },
@@ -398,7 +407,7 @@ impl<'ast> Lower<'ast> {
         let id = self.lower_node_id(variant.id);
         let name = lower_pr!(self, &variant.name, lower_ident);
         let fields = lower_each_pr!(self, &variant.fields, lower_field);
-        self.add_node(hir::Node::VariantNode(hir::item::VariantNode {
+        self.add_node(hir::Node::Variant(hir::item::VariantNode {
             id,
             def_id: self.sess.def_table.get_def_id(variant.id).unwrap(),
             ctor_def_id: self.sess.def_table.get_def_id(variant.ctor_id).unwrap(),
@@ -455,12 +464,8 @@ impl<'ast> Lower<'ast> {
             PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
         };
 
-        self.add_node(hir::Node::PatNode(hir::pat::PatNode::new(
-            id,
-            kind,
-            pat.span(),
-        )))
-        .into()
+        self.add_node(hir::Node::Pat(hir::pat::PatNode::new(id, kind, pat.span())))
+            .into()
     }
 
     // Expressions //
@@ -480,7 +485,7 @@ impl<'ast> Lower<'ast> {
 
         let id = self.lower_node_id(expr.id());
 
-        self.add_node(hir::Node::ExprNode(hir::expr::ExprNode::new(
+        self.add_node(hir::Node::Expr(hir::expr::ExprNode::new(
             id,
             kind,
             expr.span(),
@@ -522,7 +527,7 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_path_expr(&mut self, path: &PathExpr) -> hir::expr::ExprKind {
-        hir::expr::ExprKind::Path(hir::expr::PathExpr(lower_pr!(self, &path.0, lower_path)))
+        hir::expr::ExprKind::Path(lower_pr!(self, &path.0, lower_expr_path))
     }
 
     fn lower_block_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
@@ -532,7 +537,7 @@ impl<'ast> Lower<'ast> {
     fn lower_infix_expr(&mut self, infix: &Infix) -> hir::expr::ExprKind {
         // Note [TRANSFORM]: [lhs] [op] [rhs] -> [op] [lhs] [rhs]
         let op_path_span = infix.op.0.as_ref().unwrap().span();
-        let op_path = lower_pr!(self, &infix.op.0, lower_path);
+        let op_path = lower_pr!(self, &infix.op.0, lower_expr_path);
         let op_path = self.expr_path(op_path_span, op_path);
 
         let first_op_arg = lower_pr!(self, &infix.lhs, lower_expr);
@@ -556,63 +561,79 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_call_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
+        if let ExprKind::Path(PathExpr(path)) = call.lhs.as_ref().unwrap().kind() {
+            let maybe_builtin = self.maybe_lower_builtin_call(
+                path.as_ref().unwrap(),
+                &call
+                    .args
+                    .iter()
+                    .map(|arg| arg.as_deref().unwrap())
+                    .collect::<Vec<_>>(),
+            );
+
+            if let Some(bt) = maybe_builtin {
+                let bt_expr = bt.try_into();
+                if let Ok(bt_expr) = bt_expr {
+                    return hir::expr::ExprKind::BuiltinExpr(bt_expr);
+                } else {
+                    MessageBuilder::error()
+                        .text(format!("{} builtin cannot be used as value", bt))
+                        .span(call.args.first().unwrap().span())
+                        .emit_single_label(self);
+                }
+                // Continue lowering even an error appeared.
+                // Lowering methods do not handle Results :(
+            }
+        }
+
         let lhs = lower_pr!(self, &call.lhs, lower_expr);
         let args = lower_each_pr!(self, &call.args, lower_expr);
-
-        match self.get_current_owner_node(lhs).expr().kind() {
-            hir::expr::ExprKind::Path(path) => {
-                if let Ok(bt) = self.lower_builtin_call(path.0, &args) {
-                    if bt.is_value() {
-                        return hir::expr::ExprKind::BuiltinExpr(bt);
-                    } else {
-                        MessageBuilder::error()
-                            .text(format!("{} builtin cannot be used as value", bt))
-                            .span(call.args.first().unwrap().span())
-                            .emit_single_label(self);
-                    }
-                }
-            },
-            _ => {},
-        }
 
         hir::expr::ExprKind::Call(hir::expr::Call { lhs, args })
     }
 
-    fn lower_builtin_call(&mut self, path: hir::Path, args: &[hir::Expr]) -> Result<Builtin, ()> {
-        let builtin_name_arg = args[0];
-        let path = self.get_current_owner_node(path).path();
-        let arg_span = self.get_current_owner_node(builtin_name_arg).expr().span();
-        match path.res() {
-            Res::DeclareBuiltin => {
-                let name = match self.get_current_owner_node(builtin_name_arg).expr().kind() {
-                    hir::expr::ExprKind::Lit(lit) => match lit {
-                        hir::expr::Lit::String(name) => Some(name),
-                        _ => None,
-                    },
+    fn maybe_lower_builtin_call(&mut self, path: &Path, args: &[&Expr]) -> Option<Builtin> {
+        if let ResKind::DeclareBuiltin = self.sess.res.get(NamePath::new(path.id())).unwrap().kind()
+        {
+            if args.len() != 1 {
+                MessageBuilder::error()
+                    .span(path.span())
+                    .text(format!(
+                        "`builtin` expects exactly one argument, but {} were supplied",
+                        args.len()
+                    ))
+                    .emit_single_label(self);
+                return None;
+            }
+            let builtin_name_arg = args[0];
+            let arg_span = builtin_name_arg.span();
+
+            let name = match builtin_name_arg.kind() {
+                ExprKind::Lit(lit) => match lit {
+                    Lit::String(name) => Some(name),
                     _ => None,
-                };
-                if let Some(name) = name {
-                    if let Ok(bt) = Builtin::try_from(name.as_str()) {
-                        Ok(bt)
-                    } else {
-                        MessageBuilder::error()
-                            .text(format!("Unknown builtin `{}`", name))
-                            .span(arg_span)
-                            .emit_single_label(self);
-                        Err(())
-                    }
+                },
+                _ => None,
+            };
+            if let Some(name) = name {
+                if let Ok(bt) = Builtin::try_from(name.as_str()) {
+                    Some(bt)
                 } else {
                     MessageBuilder::error()
-                        .text(
-                            "`builtin` expects string literal (builtin name) as argument"
-                                .to_string(),
-                        )
+                        .text(format!("Unknown builtin `{}`", name))
                         .span(arg_span)
                         .emit_single_label(self);
-                    Err(())
+                    None
                 }
-            },
-            _ => Err(()),
+            } else {
+                MessageBuilder::error()
+                    .text("`builtin` expects string literal (builtin name) as argument".to_string())
+                    .span(arg_span)
+                    .emit_single_label(self);
+                None
+            }
+        } else {
+            None
         }
     }
 
@@ -633,7 +654,7 @@ impl<'ast> Lower<'ast> {
         field: &PR<IdentNode>,
     ) -> hir::expr::ExprKind {
         let field = lower_pr!(self, field, lower_ident_node);
-        let field_span = self.get_current_owner_node(field).path().span();
+        let field_span = self.get_current_owner_node(field).expr_path().span();
         hir::expr::ExprKind::Call(hir::expr::Call {
             lhs: self.expr_path(field_span, field),
             args: vec![lower_pr!(self, lhs, lower_expr)],
@@ -666,9 +687,9 @@ impl<'ast> Lower<'ast> {
         let id = self.lower_node_id(ty.id());
 
         if let Ok(kind) = kind {
-            self.add_node(Node::TyNode(hir::ty::TyNode::new(id, kind, ty.span())))
+            self.add_node(Node::Ty(hir::ty::TyNode::new(id, kind, ty.span())))
         } else {
-            self.add_node(Node::ErrorNode(hir::ErrorNode {
+            self.add_node(Node::Error(hir::ErrorNode {
                 id,
                 span: ty.span(),
             }))
@@ -677,7 +698,19 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_ty_path(&mut self, path: &TyPath) -> hir::ty::TyKind {
-        hir::ty::TyKind::Path(hir::ty::TyPath(lower_pr!(self, &path.0, lower_path)))
+        let path = path.0.as_ref().unwrap();
+        let id = self.lower_node_id(path.id());
+        let segments = lower_each!(self, path.segments(), lower_path_seg);
+        let res = self.lower_ty_res(self.sess.res.get(NamePath::new(path.id())).unwrap());
+        let path = self
+            .add_node(Node::TyPath(hir::PathNode::new(
+                id,
+                res,
+                segments,
+                path.span(),
+            )))
+            .into();
+        hir::ty::TyKind::Path(path)
     }
 
     fn lower_func_ty(&mut self, params: &Vec<PR<N<Ty>>>, body: &PR<N<Ty>>) -> hir::ty::TyKind {
@@ -699,34 +732,38 @@ impl<'ast> Lower<'ast> {
         cons: &PR<N<Ty>>,
         args: &[PR<N<Expr>>],
     ) -> Result<hir::ty::TyKind, ()> {
-        let cons = lower_pr!(self, cons, lower_ty);
-        let args = lower_each_pr!(self, args, lower_expr);
-        let cons_node = self.get_current_owner_node(cons).ty();
-        let _cons_span = cons_node.span();
+        if let TyKind::Path(TyPath(path)) = cons.as_ref().unwrap().kind() {
+            let path = path.as_ref().unwrap();
+            let maybe_builtin = self.maybe_lower_builtin_call(
+                path,
+                &args
+                    .iter()
+                    .map(|expr| expr.as_deref().unwrap())
+                    .collect::<Vec<_>>(),
+            );
 
-        // FIXME: Maybe span of the whole node?
-        let cons_span = self.get_current_owner_node(cons).ty().span();
-
-        let path_cons = match cons_node.kind() {
-            hir::ty::TyKind::Path(path) => Some(path.0),
-            _ => None,
-        };
-
-        if let Some(path_cons) = path_cons {
-            if let Ok(bt) = self.lower_builtin_call(path_cons, &args) {
-                if bt.is_ty() {
-                    return Ok(hir::ty::TyKind::Builtin(bt));
+            if let Some(bt) = maybe_builtin {
+                let bt_ty = bt.try_into();
+                if let Ok(bt_ty) = bt_ty {
+                    return Ok(hir::ty::TyKind::Builtin(bt_ty));
                 } else {
                     MessageBuilder::error()
-                        .span(cons_span)
+                        .span(path.span())
                         .text(format!("{} builtin cannot be used as type", bt))
                         .emit_single_label(self);
                 }
+                // Continue lowering even an error appeared.
+                // Lowering methods do not handle Results :(
             }
         }
 
+        let cons = lower_pr!(self, cons, lower_ty);
+        let _args = lower_each_pr!(self, args, lower_expr);
+        let cons_node = self.get_current_owner_node(cons).ty();
+        let cons_span = cons_node.span();
+
         MessageBuilder::error()
-            .span(cons_span.to(cons_span))
+            .span(cons_span)
             .text(
                 "Type constructors with const parameters can only be used with builtin for now"
                     .to_string(),
@@ -740,10 +777,10 @@ impl<'ast> Lower<'ast> {
         *ident
     }
 
-    fn lower_ident_node(&mut self, ident: &IdentNode) -> hir::Path {
+    fn lower_ident_node(&mut self, ident: &IdentNode) -> hir::ExprPath {
         let id = self.lower_node_id(ident.id());
-        let res = self.lower_res(self.sess.res.get(NamePath::new(ident.id())).unwrap());
-        self.add_node(Node::PathNode(hir::PathNode::new(
+        let res = self.lower_expr_res(self.sess.res.get(NamePath::new(ident.id())).unwrap());
+        self.add_node(Node::ExprPath(hir::PathNode::new(
             id,
             res,
             vec![hir::PathSeg::new(ident.ident, ident.ident.span())],
@@ -752,26 +789,57 @@ impl<'ast> Lower<'ast> {
         .into()
     }
 
-    fn lower_res(&mut self, res: res::Res) -> Res {
+    fn lower_expr_res(&mut self, res: res::Res) -> ExprRes {
         match res.kind() {
-            &res::ResKind::Local(node_id) => Res::Local(
+            &res::ResKind::Local(node_id) => ExprRes::Local(
                 *self
                     .node_id_hir_id
                     .get_expect(node_id, &format!("Local resolution {}", res)),
             ),
             &res::ResKind::Def(def_id) => {
-                Res::Def(self.sess.def_table.get_def(def_id).kind, def_id)
+                let def_kind = self.sess.def_table.get_def(def_id).kind();
+                ExprRes::Def(
+                    match def_kind {
+                        DefKind::Func => ExprDefKind::Func,
+                        DefKind::Value => ExprDefKind::Value,
+                        DefKind::Ctor => ExprDefKind::Ctor,
+                        DefKind::FieldAccessor => ExprDefKind::FieldAccessor,
+                        DefKind::External => ExprDefKind::External,
+                        _ => unreachable!(),
+                    },
+                    def_id,
+                )
             },
-            &res::ResKind::DeclareBuiltin => Res::DeclareBuiltin,
-            res::ResKind::Error => Res::Error,
+            ResKind::DeclareBuiltin => unreachable!(),
+            res::ResKind::Error => unreachable!(),
         }
     }
 
-    fn lower_path(&mut self, path: &Path) -> hir::Path {
+    fn lower_ty_res(&mut self, res: res::Res) -> TyRes {
+        match res.kind() {
+            &res::ResKind::Local(_node_id) => unreachable!(),
+            &res::ResKind::Def(def_id) => {
+                let def_kind = self.sess.def_table.get_def(def_id).kind();
+                TyRes::Def(
+                    match def_kind {
+                        DefKind::TyAlias => TyDefKind::TyAlias,
+                        DefKind::Adt => TyDefKind::Adt,
+                        DefKind::TyParam => TyDefKind::TyParam,
+                        _ => unreachable!(),
+                    },
+                    def_id,
+                )
+            },
+            &res::ResKind::DeclareBuiltin => todo!(),
+            res::ResKind::Error => unreachable!(),
+        }
+    }
+
+    fn lower_expr_path(&mut self, path: &Path) -> hir::ExprPath {
         let id = self.lower_node_id(path.id());
         let segments = lower_each!(self, path.segments(), lower_path_seg);
-        let res = self.lower_res(self.sess.res.get(NamePath::new(path.id())).unwrap());
-        self.add_node(Node::PathNode(hir::PathNode::new(
+        let res = self.lower_expr_res(self.sess.res.get(NamePath::new(path.id())).unwrap());
+        self.add_node(Node::ExprPath(hir::PathNode::new(
             id,
             res,
             segments,
@@ -807,7 +875,7 @@ impl<'ast> Lower<'ast> {
         };
 
         let id = self.lower_node_id(block.id());
-        self.add_node(Node::BlockNode(hir::expr::BlockNode::new(
+        self.add_node(Node::Block(hir::expr::BlockNode::new(
             id,
             stmts,
             expr,
@@ -819,7 +887,7 @@ impl<'ast> Lower<'ast> {
     // Synthesis //
     fn stmt(&mut self, span: Span, kind: hir::stmt::StmtKind) -> hir::Stmt {
         let id = self.next_hir_id();
-        self.add_node(Node::StmtNode(hir::stmt::StmtNode::new(id, kind, span)))
+        self.add_node(Node::Stmt(hir::stmt::StmtNode::new(id, kind, span)))
             .into()
     }
 
@@ -843,7 +911,7 @@ impl<'ast> Lower<'ast> {
 
     fn pat(&mut self, span: Span, kind: hir::pat::PatKind) -> hir::Pat {
         let id = self.next_hir_id();
-        self.add_node(Node::PatNode(hir::pat::PatNode::new(id, kind, span)))
+        self.add_node(Node::Pat(hir::pat::PatNode::new(id, kind, span)))
             .into()
     }
 
@@ -853,7 +921,7 @@ impl<'ast> Lower<'ast> {
 
     fn expr(&mut self, span: Span, kind: hir::expr::ExprKind) -> hir::Expr {
         let id = self.next_hir_id();
-        self.add_node(Node::ExprNode(hir::expr::ExprNode::new(id, kind, span)))
+        self.add_node(Node::Expr(hir::expr::ExprNode::new(id, kind, span)))
             .into()
     }
 
@@ -868,8 +936,8 @@ impl<'ast> Lower<'ast> {
         self.expr(span, hir::expr::ExprKind::Lit(lit))
     }
 
-    fn expr_path(&mut self, span: Span, path: hir::Path) -> hir::Expr {
-        self.expr(span, hir::expr::ExprKind::Path(hir::expr::PathExpr(path)))
+    fn expr_path(&mut self, span: Span, path: hir::ExprPath) -> hir::Expr {
+        self.expr(span, hir::expr::ExprKind::Path(path))
     }
 
     fn expr_lambda(&mut self, span: Span, body: hir::BodyId) -> hir::Expr {

@@ -1,9 +1,9 @@
 use super::{
-    message::{self, Label, Message, Solution, SolutionKind},
+    message::{Label, Message, Solution, SolutionKind},
     MessageEmitter,
 };
 use crate::{
-    cli::{color::Colorize, verbose},
+    cli::{color::Colorize},
     interface::writer::{outln, Writer},
     session::Session,
     span::source::{LineInfo, SpanSourceInfo},

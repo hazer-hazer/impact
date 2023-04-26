@@ -17,7 +17,10 @@ use crate::{
     cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, IndexVec},
     hir::BodyId,
-    resolve::{builtin::Builtin, def::DefId},
+    resolve::{
+        builtin::{Builtin, ValueBuiltin},
+        def::DefId,
+    },
     span::{sym::Ident, Span},
     typeck::ty::{FieldId, VariantId},
 };
@@ -224,13 +227,13 @@ impl InfixOp {
     }
 }
 
-impl TryFrom<Builtin> for InfixOp {
+impl TryFrom<ValueBuiltin> for InfixOp {
     type Error = ();
 
-    fn try_from(value: Builtin) -> Result<Self, Self::Error> {
+    fn try_from(value: ValueBuiltin) -> Result<Self, Self::Error> {
         match value {
-            Builtin::AddInt => Ok(InfixOp::AddInt),
-            Builtin::SubInt => Ok(InfixOp::SubInt),
+            ValueBuiltin::AddInt => Ok(InfixOp::AddInt),
+            ValueBuiltin::SubInt => Ok(InfixOp::SubInt),
             _ => Err(()),
         }
     }

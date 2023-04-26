@@ -1,6 +1,5 @@
 use super::{Session, SessionHolder};
 use crate::{
-    interface::writer::outln,
     message::{message::MessageStorage, term_emitter::TermEmitter, MessageEmitter},
 };
 

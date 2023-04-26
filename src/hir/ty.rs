@@ -1,6 +1,6 @@
-use super::{HirId, Path, WithHirId, Ty};
+use super::{HirId, Ty, TyPath, WithHirId};
 use crate::{
-    resolve::builtin::Builtin,
+    resolve::builtin::{TyBuiltin},
     span::{impl_with_span, Span, WithSpan},
 };
 
@@ -30,12 +30,9 @@ impl WithHirId for TyNode {
 impl_with_span!(TyNode);
 
 #[derive(Debug)]
-pub struct TyPath(pub Path);
-
-#[derive(Debug)]
 pub enum TyKind {
     Path(TyPath),
     Func(Vec<Ty>, Ty),
     App(Ty, Vec<Ty>),
-    Builtin(Builtin),
+    Builtin(TyBuiltin),
 }

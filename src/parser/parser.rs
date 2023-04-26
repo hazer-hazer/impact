@@ -13,7 +13,7 @@ use crate::{
         PR,
     },
     cli::color::{Color, Colorize},
-    interface::writer::{out, outln, WriterSection},
+    interface::writer::{out, outln},
     message::message::{MessageBuilder, MessageHolder, MessageStorage},
     session::{stage_result, Session, Stage, StageResult},
     span::{

@@ -1,8 +1,11 @@
 use std::fmt::Display;
 
-use super::{Block, BodyId, Expr, HirId, Path, Stmt, Ty, WithHirId};
+use super::{Block, BodyId, Expr, ExprPath, HirId, Stmt, Ty, WithHirId};
 use crate::{
-    resolve::{builtin::Builtin, def::DefId},
+    resolve::{
+        builtin::{ValueBuiltin},
+        def::DefId,
+    },
     span::{impl_with_span, sym::Symbol, Span, WithSpan},
 };
 
@@ -128,9 +131,6 @@ impl WithHirId for BlockNode {
 }
 
 #[derive(Debug)]
-pub struct PathExpr(pub Path);
-
-#[derive(Debug)]
 pub struct Lambda {
     pub def_id: DefId,
     pub body_id: BodyId,
@@ -151,14 +151,14 @@ pub struct Call {
 #[derive(Debug)]
 pub enum ExprKind {
     Lit(Lit),
-    Path(PathExpr),
+    Path(ExprPath),
     Block(Block),
     Lambda(Lambda),
     Call(Call),
     Let(Block),
     Ty(TyExpr),
     // FieldAccess(Expr, Ident),
-    BuiltinExpr(Builtin),
+    BuiltinExpr(ValueBuiltin),
 }
 
 #[derive(Debug)]

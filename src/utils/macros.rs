@@ -31,3 +31,34 @@ macro_rules! concat_string {
 }
 
 pub(crate) use concat_string;
+
+/// For given `subset` and `superset` enum variants impl `Into<superset> for
+/// subset` and `TryFrom<superset> for subset`
+macro_rules! sub_enum_conversion {
+    ($subset_enum: ident <: $superset_enum: ident {$($same_variant_name: ident),+}) => {
+        sub_enum_conversion!($subset_enum <: $superset_enum {$($same_variant_name <: $same_variant_name),+});
+    };
+
+    ($subset_enum: ident <: $superset_enum: ident {$($subset: ident <: $superset: ident),+}) => {
+        impl Into<$superset_enum> for $subset_enum {
+            fn into(self) -> $superset_enum {
+                match self {
+                    $(Self::$subset => $superset_enum::$superset),+
+                }
+            }
+        }
+
+        impl TryFrom<$superset_enum> for $subset_enum {
+            type Error = ();
+
+            fn try_from(superset: $superset_enum) -> Result<Self, Self::Error> {
+                match superset {
+                    $($superset_enum::$superset => Ok($subset_enum::$subset),)+
+                    _ => Err(()),
+                }
+            }
+        }
+    };
+}
+
+pub(crate) use sub_enum_conversion;

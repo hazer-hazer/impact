@@ -1,5 +1,5 @@
 use super::{
-    ty::{Ex, ExKind, FloatKind, IntKind, Ty, TyKind, VariantId},
+    ty::{ExKind, FloatKind, IntKind, Ty, TyKind, VariantId},
     TyResult, TypeckErr, Typecker, Typed,
 };
 use crate::{
@@ -9,10 +9,10 @@ use crate::{
         expr::{Call, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Local, StmtKind},
-        Block, Body, BodyId, Expr, HirId, Pat, Path, Res, Stmt,
+        Block, Body, BodyId, Expr, ExprDefKind, ExprPath, ExprRes, Pat, Stmt,
     },
     message::message::MessageBuilder,
-    resolve::def::{self, DefId, DefKind},
+    resolve::def::{DefId, DefKind},
     span::{sym::Ident, Spanned, WithSpan},
     typeck::kind::Kind,
 };
@@ -112,7 +112,7 @@ impl<'hir> Typecker<'hir> {
 
         let expr_ty = match self.hir.expr(expr_id).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
-            ExprKind::Path(path) => self.synth_path(path.0),
+            &ExprKind::Path(path) => self.synth_path(path),
             &ExprKind::Block(block) => self.synth_block(block),
             ExprKind::Lambda(lambda) => self.synth_body(lambda.def_id, lambda.body_id),
             ExprKind::Call(call) => self.synth_call(&call, expr_id),
@@ -120,10 +120,7 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
             // &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field,
             // expr_id),
-            &ExprKind::BuiltinExpr(bt) => {
-                assert!(bt.is_value());
-                Ok(self.tyctx().builtin(bt))
-            },
+            &ExprKind::BuiltinExpr(bt) => Ok(self.tyctx().builtin(bt.into())),
         }?;
 
         let expr_ty = expr_ty.apply_ctx(self.ctx());
@@ -148,36 +145,25 @@ impl<'hir> Typecker<'hir> {
     }
 
     // Note: This is a path **expression**
-    fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
-        self.synth_res(self.hir.path(path).res())
+    fn synth_path(&mut self, path: ExprPath) -> TyResult<Ty> {
+        self.synth_res(self.hir.expr_path(path).res())
     }
 
-    fn synth_res(&mut self, res: &Res) -> TyResult<Ty> {
+    fn synth_res(&mut self, res: &ExprRes) -> TyResult<Ty> {
         match res {
-            &Res::Def(def_kind, def_id) => match def_kind {
+            &ExprRes::Def(def_kind, def_id) => match def_kind {
                 // Definition types collected in `conv`
-                DefKind::External
-                | DefKind::FieldAccessor
-                | DefKind::Ctor
-                | DefKind::Func
-                | DefKind::Value => Ok(self.tyctx().def_ty(def_id).expect(&format!(
+                ExprDefKind::External
+                | ExprDefKind::FieldAccessor
+                | ExprDefKind::Ctor
+                | ExprDefKind::Func
+                | ExprDefKind::Value => Ok(self.tyctx().def_ty(def_id).expect(&format!(
                     "Expected type of def {} ty be collected at conv stage",
                     self.sess.def_table.get_def(def_id)
                 ))),
-
-                // Lambda is anonymous => we cannot refer to it
-                DefKind::Lambda => unreachable!(),
-
-                DefKind::Local => unreachable!(),
-                _ => unreachable!(),
             },
-            &Res::Local(local) => Ok(self.tyctx().node_type(local).unwrap()),
-            // FIXME: Maybe unreachable?
-            Res::DeclareBuiltin => todo!(),
-            &Res::Builtin(bt) => Ok(self.tyctx().builtin(bt)),
-
-            // Resolution error must already be reported
-            Res::Error => Err(TypeckErr::Reported),
+            &ExprRes::Local(local) => Ok(self.tyctx().node_type(local).unwrap()),
+            &ExprRes::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
         }
     }
 

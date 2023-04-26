@@ -1,23 +1,19 @@
 use super::{
     kind::Kind,
-    ty::{Adt, ExKind, Field, FieldId, FloatKind, IntKind, TyVarId, Variant, VariantId},
+    ty::{Adt, Field, FieldId, IntKind, TyVarId, Variant, VariantId},
     tyctx::TyCtx,
-    Typecker,
 };
 use crate::{
-    cli::verbose,
     dt::idx::IndexVec,
     hir::{
         self,
         item::{GenericParams, ItemId, TyAlias, TyParam},
-        ty::TyPath,
-        visitor::{walk_each, HirVisitor},
-        HirId, Path, Res, WithHirId, HIR,
+        visitor::{walk_each, HirVisitor}, TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{MessageHolder, MessageStorage},
     resolve::{
-        builtin::Builtin,
-        def::{DefId, DefKind, DefMap},
+        builtin::TyBuiltin,
+        def::{DefId, DefMap},
     },
     session::{stage_result, Session, Stage, StageResult},
     span::{
@@ -64,7 +60,7 @@ impl<'hir> TyConv<'hir> {
         let ty_node = self.hir.ty(ty);
 
         match ty_node.kind() {
-            &hir::ty::TyKind::Path(TyPath(path)) => self.conv_ty_path(path, ty_def_id),
+            &hir::ty::TyKind::Path(path) => self.conv_ty_path(path, ty_def_id),
             hir::ty::TyKind::Func(params, body) => {
                 let params = params
                     .iter()
@@ -76,7 +72,7 @@ impl<'hir> TyConv<'hir> {
             },
             hir::ty::TyKind::App(cons, args) => match self.hir.ty(*cons).kind() {
                 hir::ty::TyKind::Builtin(bt) => match bt {
-                    Builtin::RefTy => {
+                    TyBuiltin::RefTy => {
                         let mut args = args
                             .iter()
                             .map(|&arg| self.conv(arg, ty_def_id))
@@ -89,10 +85,10 @@ impl<'hir> TyConv<'hir> {
                 _ => todo!(),
             },
             hir::ty::TyKind::Builtin(bt) => match bt {
-                Builtin::UnitTy => Ty::unit(),
-                Builtin::I32 => Ty::int(IntKind::I32),
-                Builtin::Str => Ty::str(),
-                Builtin::RefTy => {
+                TyBuiltin::UnitTy => Ty::unit(),
+                TyBuiltin::I32 => Ty::int(IntKind::I32),
+                TyBuiltin::Str => Ty::str(),
+                TyBuiltin::RefTy => {
                     let kind_var = Kind::next_kind_var_id();
                     Ty::ty_kind(Kind::new_forall(
                         kind_var,
@@ -102,17 +98,14 @@ impl<'hir> TyConv<'hir> {
                         ),
                     ))
                 },
-                Builtin::RefCons | Builtin::AddInt | Builtin::SubInt | Builtin::UnitValue => {
-                    unreachable!()
-                },
             },
         }
     }
 
-    fn conv_ty_path(&mut self, path: Path, ty_def_id: Option<DefId>) -> Ty {
-        let path = self.hir.path(path);
+    fn conv_ty_path(&mut self, path: TyPath, ty_def_id: Option<DefId>) -> Ty {
+        let path = self.hir.ty_path(path);
         match path.res() {
-            &Res::Def(def_kind, def_id) => {
+            &TyRes::Def(def_kind, def_id) => {
                 if let Some(ty_def_id) = ty_def_id {
                     if ty_def_id == def_id {
                         todo!("Recursive type handling")
@@ -120,54 +113,19 @@ impl<'hir> TyConv<'hir> {
                 }
 
                 match def_kind {
-                    DefKind::TyAlias => {
+                    TyDefKind::TyAlias => {
                         // Path conversion is done linearly, i.e. we get type alias from HIR and
                         // convert its type, caching it
                         // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                         self.conv_ty_alias(def_id)
                     },
 
-                    DefKind::TyParam => self.conv_ty_param(def_id),
+                    TyDefKind::TyParam => self.conv_ty_param(def_id),
 
-                    DefKind::Adt => self.conv_adt(def_id),
-
-                    // // TODO: We need type collector to collect items types before typeck of
-                    // expressions
-                    DefKind::Variant => {
-                        panic!(
-                            "Variant cannot be used as a type; {} {}",
-                            self.sess.def_table.get_def(def_id),
-                            path.span()
-                        )
-                    },
-
-                    // Non-type definitions from type namespace
-                    // FIXME: Must be check in resolver and not appear on typeck stage
-                    DefKind::Root | DefKind::Mod => {
-                        MessageBuilder::error()
-                            .span(path.span())
-                            .text(format!("{} item used as type", def_kind))
-                            .emit_single_label(self);
-
-                        Ty::error()
-                    },
-
-                    DefKind::DeclareBuiltin => todo!(),
-
-                    // Definitions from value namespace
-                    DefKind::External
-                    | DefKind::Ctor
-                    | DefKind::FieldAccessor
-                    | DefKind::Local
-                    | DefKind::Lambda
-                    | DefKind::Func
-                    | DefKind::Value => {
-                        unreachable!()
-                    },
+                    TyDefKind::Adt => self.conv_adt(def_id),
                 }
             },
-            &Res::Builtin(bt) if bt.is_ty() => todo!(),
-            _ => unreachable!(),
+            &TyRes::Builtin(_bt) => todo!(),
         }
     }
 

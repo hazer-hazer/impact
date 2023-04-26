@@ -7,10 +7,10 @@ use crate::{
         stmt::{Local, StmtKind},
         ty::TyKind,
         visitor::HirVisitor,
-        Block, BodyId, BodyOwner, Expr, Pat, Path, Stmt, Ty, Variant, HIR,
+        Block, BodyId, BodyOwner, Expr, ExprPath, Pat, Stmt, Ty, TyPath, Variant, HIR,
     },
     parser::token::{Op, Punct},
-    resolve::builtin::Builtin,
+    resolve::builtin::{ TyBuiltin, ValueBuiltin},
     session::Session,
     span::sym::{Ident, Kw},
 };
@@ -208,6 +208,14 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.string(lit);
     }
 
+    fn visit_path_expr(&mut self, path: &ExprPath, hir: &HIR) {
+        let path = hir.expr_path(*path);
+
+        // TODO: Operator name in parentheses
+        self.pp.string(path);
+        self.pp.hir_id(path);
+    }
+
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
         let body = hir.body(lambda.body_id);
         self.pp.punct(Punct::Backslash);
@@ -239,7 +247,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_ident(field, hir);
     }
 
-    fn visit_builtin_expr(&mut self, bt: &Builtin) {
+    fn visit_builtin_expr(&mut self, bt: &ValueBuiltin) {
         self.pp.string(bt);
     }
 
@@ -256,6 +264,12 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.hir_id(ty);
     }
 
+    fn visit_ty_path(&mut self, path: &TyPath, hir: &HIR) {
+        let path = hir.ty_path(*path);
+        self.pp.string(path);
+        self.pp.hir_id(path);
+    }
+
     fn visit_func_ty(&mut self, params: &[Ty], body: &Ty, hir: &HIR) {
         walk_each_delim!(self, params, visit_ty, " ", hir);
         self.pp.punct(Punct::Arrow);
@@ -268,7 +282,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_each_delim!(self, args, visit_ty, " ", hir);
     }
 
-    fn visit_builtin_ty(&mut self, bt: &Builtin, _hir: &HIR) {
+    fn visit_builtin_ty(&mut self, bt: &TyBuiltin, _hir: &HIR) {
         self.pp.string(bt);
     }
 
@@ -292,14 +306,6 @@ impl<'a> HirVisitor for HirPP<'a> {
     // Fragments //
     fn visit_ident(&mut self, ident: &Ident, _hir: &HIR) {
         self.pp.string(ident);
-    }
-
-    fn visit_path(&mut self, path: &Path, hir: &HIR) {
-        let path = hir.path(*path);
-
-        // TODO: Operator name in parentheses
-        self.pp.string(path);
-        self.pp.hir_id(path);
     }
 
     fn visit_block(&mut self, block: &Block, hir: &HIR) {

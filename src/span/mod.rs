@@ -148,8 +148,8 @@ where
 }
 
 macro_rules! impl_with_span {
-    ($ty: ty) => {
-        impl WithSpan for $ty {
+    ($ty: ident $(<$($generic: ident)+>)?) => {
+        impl<$($($generic,)+)?> WithSpan for $ty<$($($generic,)+)?> {
             fn span(&self) -> Span {
                 self.span
             }

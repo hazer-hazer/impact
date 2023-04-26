@@ -6,7 +6,10 @@ use crate::{
     cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
-    resolve::{builtin::Builtin, def::DefId},
+    resolve::{
+        builtin::{ValueBuiltin},
+        def::DefId,
+    },
     span::{
         impl_with_span,
         sym::{Ident, Symbol},
@@ -94,7 +97,7 @@ pub enum ExprKind {
     },
     Ty(ExprId, Ty),
     FieldAccess(ExprId, VariantId, FieldId),
-    Builtin(Builtin),
+    Builtin(ValueBuiltin),
 }
 
 impl Display for ExprKind {
@@ -238,7 +241,7 @@ impl THIR {
         self.body_owner
     }
 
-    pub fn is_builtin_expr(&self, id: ExprId, bt: Builtin) -> bool {
+    pub fn is_builtin_expr(&self, id: ExprId, bt: ValueBuiltin) -> bool {
         match self.expr(id).kind {
             ExprKind::Builtin(bt_) => bt == bt_,
             _ => false,

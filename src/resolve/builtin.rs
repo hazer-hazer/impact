@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
 use super::def::{DefId, Namespace};
-use crate::span::sym::{Ident, Internable, Symbol};
+use crate::{
+    span::sym::{Ident, Internable, Symbol},
+    utils::macros::sub_enum_conversion,
+};
 
 #[derive(Clone, Copy)]
 pub struct DeclareBuiltin {
@@ -27,16 +30,31 @@ impl DeclareBuiltin {
 }
 
 macro_rules! builtin_table {
-    ($($ns: ident $name: ident;)*) => {
+    ($($table_name: ident in $ns: ident { $($name: ident,)* })*) => {
+        $(
+            #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
+            pub enum $table_name {
+                $($name),*
+            }
+        )*
+
+        $(
+            sub_enum_conversion! {
+                $table_name <: Builtin {
+                    $($name <: $name),*
+                }
+            }
+        )*
+
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
         pub enum Builtin {
-            $($name),*
+            $($($name,)*)*
         }
 
         impl Builtin {
             pub fn name(&self) -> &str {
                 match self {
-                    $(Self::$name => stringify!($name),)*
+                    $($(Self::$name => stringify!($name),)*)*
                 }
             }
 
@@ -46,7 +64,7 @@ macro_rules! builtin_table {
 
             fn ns_of(builtin: Builtin) -> Namespace {
                 match builtin {
-                    $(Self::$name => Namespace::$ns,)*
+                    $($(Self::$name => Namespace::$ns,)*)*
                 }
             }
 
@@ -63,7 +81,7 @@ macro_rules! builtin_table {
             }
 
             pub fn each(mut f: impl FnMut(Builtin)) {
-                $(f(Self::$name));*
+                $($(f(Self::$name);)*)*
             }
         }
 
@@ -72,35 +90,47 @@ macro_rules! builtin_table {
 
             fn try_from(value: &str) -> Result<Self, Self::Error> {
                 match value {
-                    $(stringify!($name) => Ok(Self::$name),)*
+                    $($(stringify!($name) => Ok(Self::$name),)*)*
                     _ => Err(()),
                 }
+            }
+        }
+
+        $(
+            impl Display for $table_name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let bt: Builtin = (*self).into();
+                    write!(f, "{} `{}`", bt.ns(), bt.name())
+                }
+            }
+        )*
+
+        impl Display for Builtin {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{} `{}`", self.ns(), self.name())
             }
         }
     };
 }
 
-impl Display for Builtin {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} `{}`", self.ns(), self.name())
-    }
-}
-
 builtin_table! {
-    // Operators //
-    Value AddInt;
-    Value SubInt;
+    ValueBuiltin in Value {
+        // Operators //
+        AddInt,
+        SubInt,
 
-    // Values //
-    Value UnitValue;
+        // Values //
+        UnitValue,
 
-    // Constructors //
-    // FIXME: Constructors are not implemented
-    Value RefCons;
+        // Constructors //
+        RefCons,
+    }
 
-    // Primitive types //
-    Type UnitTy;
-    Type I32;
-    Type Str;
-    Type RefTy;
+    TyBuiltin in Type {
+        // Primitive types //
+        UnitTy,
+        I32,
+        Str,
+        RefTy,
+    }
 }

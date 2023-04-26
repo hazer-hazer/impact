@@ -7,7 +7,10 @@ use super::{
 use crate::{
     cli::verbose,
     mir::{thir::Expr, InfixOp},
-    resolve::{builtin::Builtin, def::DefKind},
+    resolve::{
+        builtin::{ValueBuiltin},
+        def::DefKind,
+    },
     typeck::ty::{FloatKind, IntKind},
 };
 
@@ -156,17 +159,14 @@ impl<'ctx> MirBuilder<'ctx> {
             },
 
             &ExprKind::Builtin(bt) => match bt {
-                Builtin::UnitValue => bb.with(self.unit_const().operand().rvalue()),
-                Builtin::AddInt | Builtin::SubInt => {
+                ValueBuiltin::UnitValue => bb.with(self.unit_const().operand().rvalue()),
+                ValueBuiltin::AddInt | ValueBuiltin::SubInt => {
                     bb.with(RValue::Infix(InfixOp::try_from(bt).unwrap()))
-                    // unreachable!("builtin {} must not appear as a standalone
-                    // expression", bt)
+                    // unreachable!("ValueBuiltin {} must not appear as a
+                    // standalone expression", bt)
                 },
-                Builtin::RefTy | Builtin::Str | Builtin::UnitTy | Builtin::I32 => {
-                    unreachable!("builtin {} is not an expression", bt)
-                },
-                Builtin::RefCons => {
-                    panic!("Ref constructor used as a standalone expression and must not appear on MIR building stage as Builtin")
+                ValueBuiltin::RefCons => {
+                    panic!("Ref constructor used as a standalone expression and must not appear on MIR building stage as ValueBuiltin")
                 },
             },
             ExprKind::Call { .. } | ExprKind::Ref(_) => {

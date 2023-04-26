@@ -1,7 +1,10 @@
 //! HIR is nothing more than just an unwrapped version of AST, i.e. freed of
 //! parse results.
 use core::panic;
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+};
 
 use self::{
     expr::{BlockNode, ExprKind, ExprNode, Lambda},
@@ -17,7 +20,7 @@ use crate::{
         new_type::new_type,
     },
     resolve::{
-        builtin::Builtin,
+        builtin::{TyBuiltin, ValueBuiltin},
         def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
     },
     span::{
@@ -25,6 +28,7 @@ use crate::{
         sym::{Ident, Symbol},
         Span, WithSpan,
     },
+    utils::macros::sub_enum_conversion,
 };
 
 pub mod expr;
@@ -121,7 +125,7 @@ impl_with_span!(ErrorNode);
 // HIR Node is any Node in HIR with HirId
 macro_rules! hir_nodes {
     // identified by HirId / other
-    ($($name: ident $id_name: ident $ty: tt,)* / $($other_name: ident $other_ty: tt,)*) => {
+    ($($name: ident $id_name: ident $ty: ty,)* / $($other_name: ident $variant_name: ident $other_ty: ty,)*) => {
         $(
             new_type!($id_name HirId);
         )*
@@ -129,32 +133,32 @@ macro_rules! hir_nodes {
         #[derive(Debug)]
         pub enum Node {
             $(
-                $ty($ty),
+                $id_name($ty),
             )*
             $(
-                $other_ty($other_ty),
+                $variant_name($other_ty),
             )*
         }
 
         impl Node {
             pub fn name(&self) -> &str {
                 match self {
-                    $(Self::$ty(_) => stringify!($name),)*
-                    $(Self::$other_ty(_) => stringify!($other_name),)*
+                    $(Self::$id_name(_) => stringify!($name),)*
+                    $(Self::$variant_name(_) => stringify!($other_name),)*
                 }
             }
 
             pub fn span(&self) -> Span {
                 match self {
-                    $(Self::$ty(node) => node.span(),)*
-                    $(Self::$other_ty(node) => node.span(),)*
+                    $(Self::$id_name(node) => node.span(),)*
+                    $(Self::$variant_name(node) => node.span(),)*
                 }
             }
 
             $(
                 pub fn $name(&self) -> &$ty {
                     match self {
-                        Self::$ty(inner) => inner,
+                        Self::$id_name(inner) => inner,
                         _ => panic!("Expected `{}` HIR node", stringify!($name)),
                     }
                 }
@@ -163,7 +167,7 @@ macro_rules! hir_nodes {
             $(
                 pub fn $other_name(&self) -> &$other_ty {
                     match self {
-                        Self::$other_ty(inner) => inner,
+                        Self::$variant_name(inner) => inner,
                         _ => panic!("Expected `{}` HIR node", stringify!($other_name)),
                     }
                 }
@@ -174,7 +178,7 @@ macro_rules! hir_nodes {
             $(
                 pub fn $name(&self, $name: $id_name) -> &$ty {
                     match self.node($name.into()) {
-                        Node::$ty(node) => node,
+                        Node::$id_name(node) => node,
                         n @ _ => panic!("Expected {} HIR node, got {}", stringify!($name), n.name()),
                     }
                 }
@@ -189,12 +193,13 @@ hir_nodes!(
     pat Pat PatNode,
     block Block BlockNode,
     ty Ty TyNode,
-    path Path PathNode,
+    expr_path ExprPath PathNode<ExprRes>,
+    ty_path TyPath PathNode<TyRes>,
     variant Variant VariantNode,
     /
-    item ItemNode,
-    root Mod,
-    error ErrorNode,
+    item Item ItemNode,
+    root Root Mod,
+    error Error ErrorNode,
 );
 
 /// Do not confuse with `Node`, this is just kind of list of names.
@@ -205,7 +210,8 @@ pub enum NodeKind {
     Pat,
     Block,
     Ty,
-    Path,
+    ExprPath,
+    TyPath,
     Variant,
     Item,
     Root,
@@ -214,19 +220,23 @@ pub enum NodeKind {
 
 impl Display for NodeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NodeKind::Expr => "expression",
-            NodeKind::Stmt => "statement",
-            NodeKind::Pat => "pattern",
-            NodeKind::Block => "block",
-            NodeKind::Ty => "ty",
-            NodeKind::Path => "path",
-            NodeKind::Variant => "variant",
-            NodeKind::Item => "item",
-            NodeKind::Root => "root",
-            NodeKind::Error => "[ERROR]",
-        }
-        .fmt(f)
+        write!(
+            f,
+            "{}",
+            match self {
+                NodeKind::Expr => "expression",
+                NodeKind::Stmt => "statement",
+                NodeKind::Pat => "pattern",
+                NodeKind::Block => "block",
+                NodeKind::Ty => "ty",
+                NodeKind::ExprPath => "expression path",
+                NodeKind::TyPath => "type path",
+                NodeKind::Variant => "variant",
+                NodeKind::Item => "item",
+                NodeKind::Root => "root",
+                NodeKind::Error => "[ERROR]",
+            }
+        )
     }
 }
 
@@ -254,7 +264,8 @@ impl_with_node_kind!(
     PatNode: NodeKind::Pat,
     BlockNode: NodeKind::Block,
     TyNode: NodeKind::Ty,
-    PathNode: NodeKind::Path,
+    PathNode<ExprRes>: NodeKind::ExprPath,
+    PathNode<TyRes>: NodeKind::TyPath,
     VariantNode: NodeKind::Variant,
     ItemNode: NodeKind::Item,
     Mod: NodeKind::Root,
@@ -264,39 +275,41 @@ impl_with_node_kind!(
 impl Node {
     pub fn as_owner<'hir>(&'hir self) -> Option<OwnerNode<'hir>> {
         match self {
-            Node::ItemNode(item) => Some(OwnerNode::Item(item)),
-            Node::Mod(root) => Some(OwnerNode::Root(root)),
+            Node::Item(item) => Some(OwnerNode::Item(item)),
+            Node::Root(root) => Some(OwnerNode::Root(root)),
             _ => None,
         }
     }
 
     pub fn hir_id(&self) -> HirId {
         match self {
-            Node::ExprNode(expr) => expr.id(),
-            Node::StmtNode(stmt) => stmt.id(),
-            Node::PatNode(pat) => pat.id(),
-            Node::BlockNode(block) => block.id(),
-            Node::TyNode(ty) => ty.id(),
-            Node::PathNode(path) => path.id(),
-            Node::VariantNode(variant) => variant.id(),
-            Node::ItemNode(item) => HirId::new_owner(item.def_id()),
-            Node::Mod(_root) => HirId::new_owner(ROOT_DEF_ID),
-            Node::ErrorNode(error) => error.id,
+            Node::Expr(expr) => expr.id(),
+            Node::Stmt(stmt) => stmt.id(),
+            Node::Pat(pat) => pat.id(),
+            Node::Block(block) => block.id(),
+            Node::Ty(ty) => ty.id(),
+            Node::ExprPath(path) => path.id(),
+            Node::TyPath(path) => path.id(),
+            Node::Variant(variant) => variant.id(),
+            Node::Item(item) => HirId::new_owner(item.def_id()),
+            Node::Root(_root) => HirId::new_owner(ROOT_DEF_ID),
+            Node::Error(error) => error.id,
         }
     }
 
     pub fn kind(&self) -> NodeKind {
         match self {
-            Node::ExprNode(_) => NodeKind::Expr,
-            Node::StmtNode(_) => NodeKind::Stmt,
-            Node::PatNode(_) => NodeKind::Pat,
-            Node::BlockNode(_) => NodeKind::Block,
-            Node::TyNode(_) => NodeKind::Ty,
-            Node::PathNode(_) => NodeKind::Path,
-            Node::VariantNode(_) => NodeKind::Variant,
-            Node::ItemNode(_) => NodeKind::Item,
-            Node::Mod(_) => NodeKind::Root,
-            Node::ErrorNode(_) => NodeKind::Error,
+            Node::Expr(_) => NodeKind::Expr,
+            Node::Stmt(_) => NodeKind::Stmt,
+            Node::Pat(_) => NodeKind::Pat,
+            Node::Block(_) => NodeKind::Block,
+            Node::Ty(_) => NodeKind::Ty,
+            Node::ExprPath(_) => NodeKind::ExprPath,
+            Node::TyPath(_) => NodeKind::TyPath,
+            Node::Variant(_) => NodeKind::Variant,
+            Node::Item(_) => NodeKind::Item,
+            Node::Root(_) => NodeKind::Root,
+            Node::Error(_) => NodeKind::Error,
         }
     }
 }
@@ -399,11 +412,11 @@ impl HIR {
 
     pub fn owner_body(&self, owner_id: OwnerId) -> Option<BodyId> {
         match self.node(HirId::new_owner(owner_id.into())) {
-            Node::ExprNode(ExprNode {
+            Node::Expr(ExprNode {
                 kind: ExprKind::Lambda(Lambda { body_id: body, .. }),
                 ..
             }) => Some(*body),
-            Node::ItemNode(ItemNode {
+            Node::Item(ItemNode {
                 kind: ItemKind::Func(body) | ItemKind::Value(body),
                 ..
             }) => Some(*body),
@@ -413,15 +426,15 @@ impl HIR {
 
     pub fn body_owner_kind(&self, owner_id: OwnerId) -> BodyOwnerKind {
         match self.node(HirId::new_owner(owner_id.into())) {
-            Node::ExprNode(ExprNode {
+            Node::Expr(ExprNode {
                 kind: ExprKind::Lambda(Lambda { .. }),
                 ..
             }) => BodyOwnerKind::Lambda,
-            Node::ItemNode(ItemNode {
+            Node::Item(ItemNode {
                 kind: ItemKind::Func(_),
                 ..
             }) => BodyOwnerKind::Func,
-            Node::ItemNode(ItemNode {
+            Node::Item(ItemNode {
                 kind: ItemKind::Value(_),
                 ..
             }) => BodyOwnerKind::Value,
@@ -584,39 +597,113 @@ impl Display for PathSeg {
     }
 }
 
-// TODO: Add `HIR`-level DefKind excluding unreachable kinds after resolution
-//  and lowering is done.
-#[derive(Debug, Eq, PartialEq, Hash)]
-pub enum Res {
-    Def(DefKind, DefId),
-    Local(HirId),
-    // FIXME: Remove, because it appears in `Def` variant.
-    DeclareBuiltin,
-    Builtin(Builtin),
-    Error,
+/// Reduced version of `DefKind` for type definitions.
+/// Handy in typeck.
+/// Modules: No Root and Mod (same for `ExprDefKind`), because path referring
+/// to mod is only possible in imports.
+/// Locals: Locals are removed too, because there's a
+/// specific kind of `Res::Local`.
+/// DeclareBuiltin: It only exists for
+/// one purpose -- simplification of lowering process, and it cannot appear as a
+/// standalone path after lowering!
+/// Variant: Removed because paths cannot refer to a specific variant but only
+/// to constructors which are expressions. BUT! Path to variant resolution is
+/// possible in patterns, also can come back to type paths for refinement types.
+/// Error: Error resolution is removed too, but can be returned back if
+/// resolution process will stably be recoverable.
+/// Also check `ExprDefKind`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum TyDefKind {
+    TyAlias,
+    Adt,
+    TyParam,
 }
 
-impl Display for Res {
+impl Display for TyDefKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let def_kind: DefKind = (*self).into();
+        write!(f, "{def_kind}")
+    }
+}
+
+sub_enum_conversion! {
+    TyDefKind <: DefKind {
+        TyAlias,
+        Adt,
+        TyParam
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum TyRes {
+    Def(TyDefKind, DefId),
+    Builtin(TyBuiltin),
+}
+
+impl Display for TyRes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Res::Def(kind, id) => write!(f, "{} def {}", kind, id),
-            Res::Local(hir_id) => write!(f, "local {}", hir_id),
-            Res::DeclareBuiltin => write!(f, "[`builtin`]"),
-            Res::Builtin(bt) => write!(f, "[builtin {}]", bt),
-            Res::Error => write!(f, "[ERROR]"),
+            TyRes::Def(kind, id) => write!(f, "{kind}{id}"),
+            TyRes::Builtin(bt) => write!(f, "{bt}"),
+        }
+    }
+}
+
+/// Reduced version of `DefKind` for expression definitions.
+/// Lambda: Remove, because lambdas are anonymous, hence we cannot refer to it
+/// by path. Please, read `TyDefKind` description.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum ExprDefKind {
+    Func,
+    Value,
+    Ctor,
+    FieldAccessor,
+    External,
+}
+
+impl Display for ExprDefKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let def_kind: DefKind = (*self).into();
+        write!(f, "{def_kind}")
+    }
+}
+
+sub_enum_conversion! {
+    ExprDefKind <: DefKind {
+        Func,
+        Value,
+        Ctor,
+        FieldAccessor,
+        External
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub enum ExprRes {
+    Def(ExprDefKind, DefId),
+    Local(HirId),
+    Builtin(ValueBuiltin),
+}
+
+impl Display for ExprRes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprRes::Def(kind, id) => write!(f, "{kind}{id}"),
+            ExprRes::Local(id) => write!(f, "{id}"),
+            ExprRes::Builtin(bt) => write!(f, "{bt}"),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct PathNode {
+pub struct PathNode<Res> {
     id: HirId,
     res: Res,
     segments: Vec<PathSeg>,
     span: Span,
 }
 
-impl PathNode {
+impl<Res> PathNode<Res> {
     pub fn new(id: HirId, res: Res, segments: Vec<PathSeg>, span: Span) -> Self {
         Self {
             id,
@@ -639,13 +726,13 @@ impl PathNode {
     }
 }
 
-impl WithHirId for PathNode {
+impl<Res> WithHirId for PathNode<Res> {
     fn id(&self) -> HirId {
         self.id
     }
 }
 
-impl Display for PathNode {
+impl<Res> Display for PathNode<Res> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -659,4 +746,4 @@ impl Display for PathNode {
     }
 }
 
-impl_with_span!(PathNode);
+impl_with_span!(PathNode<Res>);

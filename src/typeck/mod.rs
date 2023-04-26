@@ -3,33 +3,17 @@ use std::fmt::Display;
 use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
     kind::{Kind, KindEx, KindExId, KindSort},
-    ty::{
-        Adt, Ex, ExId, ExKind, ExPair, Field, FloatKind, IntKind, MonoTy, Ty, TyKind, TyVarId,
-        Variant, VariantId,
-    },
+    ty::{Ex, ExId, ExKind, ExPair, MonoTy, Ty, TyKind, TyVarId},
     tyctx::TyCtx,
 };
 use crate::{
     cli::verbose,
-    dt::idx::IndexVec,
-    hir::{
-        self,
-        item::{GenericParams, ItemId, TyAlias},
-        ty::TyPath,
-        visitor::HirVisitor,
-        HirId, Path, Res, WithHirId, HIR,
-    },
+    hir::{HirId, HIR},
     interface::writer::outln,
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
-    resolve::{
-        builtin::Builtin,
-        def::{DefId, DefKind, DefMap},
-    },
-    session::{stage_result, Session, Stage, StageResult, StageResultImpl},
-    span::{
-        sym::{Ident, Internable},
-        WithSpan,
-    },
+    message::message::{MessageHolder, MessageStorage},
+    resolve::def::DefId,
+    session::{stage_result, Session, Stage, StageResult},
+    span::sym::Ident,
     typeck::conv::TyConv,
 };
 

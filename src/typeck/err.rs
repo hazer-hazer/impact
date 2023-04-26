@@ -1,7 +1,7 @@
 use super::{ty::TyKind, Ty, Typecker};
 use crate::{
     cli::color::Colorize,
-    hir::{HirId, Node, NodeKind},
+    hir::{HirId},
     message::message::MessageBuilder,
 };
 

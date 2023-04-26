@@ -1,8 +1,8 @@
-use clap::error;
+
 
 use super::{message::Message, MessageEmitter};
 use crate::{
-    interface::writer::{outln, Writer},
+    interface::writer::{outln},
     session::Session,
 };
 

@@ -3,8 +3,10 @@ use super::{
     StmtId, THIR,
 };
 use crate::{
-    hir::{self, OwnerId, WithHirId, HIR},
-    resolve::{builtin::Builtin, def::DefKind},
+    hir::{self, ExprDefKind, OwnerId, WithHirId, HIR},
+    resolve::{
+        builtin::{ValueBuiltin},
+    },
     span::WithSpan,
     typeck::tyctx::TyCtx,
 };
@@ -58,27 +60,18 @@ impl<'ctx> ThirBuilder<'ctx> {
                 };
                 ExprKind::Lit(lit)
             },
-            hir::expr::ExprKind::Path(path) => match self.hir.path(path.0).res() {
-                &hir::Res::Def(kind, def_id) => match kind {
-                    DefKind::External | DefKind::Func | DefKind::Value => {
+            &hir::expr::ExprKind::Path(path) => match self.hir.expr_path(path).res() {
+                &hir::ExprRes::Def(kind, def_id) => match kind {
+                    ExprDefKind::External | ExprDefKind::Func | ExprDefKind::Value => {
                         ExprKind::Def(def_id, self.tyctx.tyof(expr_id))
                     },
-                    DefKind::Lambda => unreachable!("Lambda cannot be resolved by path"),
-                    DefKind::Adt
-                    | DefKind::Variant
-                    | DefKind::TyAlias
-                    | DefKind::DeclareBuiltin
-                    | DefKind::Root
-                    | DefKind::Mod => {
-                        unreachable!("Expression path cannot point to such definition kinds")
-                    },
-                    DefKind::Local => unreachable!("Locals must be resolved as Res::Local"),
-                    DefKind::Ctor => todo!(),
-                    DefKind::FieldAccessor => todo!(),
-                    DefKind::TyParam => todo!(),
+                    ExprDefKind::Ctor => todo!(),
+                    ExprDefKind::FieldAccessor => todo!(),
                 },
-                &hir::Res::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
-                hir::Res::Builtin(_) | hir::Res::DeclareBuiltin | hir::Res::Error => unreachable!(),
+                &hir::ExprRes::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
+                hir::ExprRes::Builtin(_) => {
+                    unreachable!()
+                },
             },
             &hir::expr::ExprKind::Block(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Lambda(hir::expr::Lambda {
@@ -117,7 +110,7 @@ impl<'ctx> ThirBuilder<'ctx> {
 
         match self.hir.expr(lhs).kind() {
             hir::expr::ExprKind::BuiltinExpr(bt) => match bt {
-                Builtin::RefCons => {
+                ValueBuiltin::RefCons => {
                     assert_eq!(args.len(), 1);
                     let arg = self.expr(args[0]);
                     return ExprKind::Ref(arg);
