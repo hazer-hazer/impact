@@ -283,6 +283,10 @@ impl<'hir> HirVisitor for TyConv<'hir> {
             .is_none());
     }
 
+    fn visit_value_item(&mut self, name: Ident, value: &hir::BodyId, id: ItemId, hir: &HIR) {
+        
+    }
+
     fn visit_ty(&mut self, &hir_ty: &hir::Ty, _: &HIR) {
         let conv = self.conv(hir_ty, None);
         self.tyctx_mut().add_conv(hir_ty, conv);

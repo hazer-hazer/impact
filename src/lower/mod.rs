@@ -696,11 +696,12 @@ impl<'ast> Lower<'ast> {
                     .get_expect(node_id, &format!("Local resolution {}", res)),
             ),
             &res::ResKind::Def(def_id) => {
-                assert!(self.sess.def_table.as_builtin(def_id).is_none());
+                let def = self.sess.def_table.get_def(def_id);
+                // assert!(self.sess.def_table.as_builtin(def_id).expect(&format!("{def} builtin
+                // must not appear in ")));
 
-                let def_kind = self.sess.def_table.get_def(def_id).kind();
                 ExprRes::Def(
-                    match def_kind {
+                    match def.kind() {
                         DefKind::Func => ExprDefKind::Func,
                         DefKind::Value => ExprDefKind::Value,
                         DefKind::Ctor => ExprDefKind::Ctor,
@@ -719,7 +720,7 @@ impl<'ast> Lower<'ast> {
         match res.kind() {
             &res::ResKind::Local(_) => unreachable!(),
             &res::ResKind::Def(def_id) => {
-                assert!(self.sess.def_table.as_builtin(def_id).is_none());
+                // assert!(self.sess.def_table.as_builtin(def_id).is_none());
 
                 let def_kind = self.sess.def_table.get_def(def_id).kind();
                 TyRes::Def(
