@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{
     dt::idx::IndexVec,
+    hir::HirId,
     span::sym::{Ident, Symbol},
 };
 
@@ -149,6 +150,9 @@ pub struct InferCtx {
     /// Kind existentials solved in current context. Have same properties as
     /// `solved`.
     kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
+
+    // TODO: Might be only Expr nodes
+    inferring_nodes: Vec<HirId>,
 }
 
 impl AlgoCtx for InferCtx {
@@ -208,6 +212,15 @@ impl InferCtx {
             kind_vars: Vec::from([var]),
             ..Default::default()
         }
+    }
+
+    pub fn add_inferring_node(&mut self, id: HirId) {
+        // assert!(!self.inferring_nodes.contains(&id));
+        self.inferring_nodes.push(id);
+    }
+
+    pub fn inferring_nodes(&self) -> &[HirId] {
+        self.inferring_nodes.as_ref()
     }
 
     // Getters //

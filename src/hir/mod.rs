@@ -116,6 +116,8 @@ pub struct ErrorNode {
     pub span: Span,
 }
 
+impl_with_span!(ErrorNode);
+
 // HIR Node is any Node in HIR with HirId
 macro_rules! hir_nodes {
     // identified by HirId / other
@@ -139,6 +141,13 @@ macro_rules! hir_nodes {
                 match self {
                     $(Self::$ty(_) => stringify!($name),)*
                     $(Self::$other_ty(_) => stringify!($other_name),)*
+                }
+            }
+
+            pub fn span(&self) -> Span {
+                match self {
+                    $(Self::$ty(node) => node.span(),)*
+                    $(Self::$other_ty(node) => node.span(),)*
                 }
             }
 
@@ -206,9 +215,9 @@ pub enum NodeKind {
 impl Display for NodeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NodeKind::Expr => "expr",
-            NodeKind::Stmt => "stmt",
-            NodeKind::Pat => "pat",
+            NodeKind::Expr => "expression",
+            NodeKind::Stmt => "statement",
+            NodeKind::Pat => "pattern",
             NodeKind::Block => "block",
             NodeKind::Ty => "ty",
             NodeKind::Path => "path",
@@ -575,10 +584,13 @@ impl Display for PathSeg {
     }
 }
 
+// TODO: Add `HIR`-level DefKind excluding unreachable kinds after resolution
+//  and lowering is done.
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Res {
     Def(DefKind, DefId),
     Local(HirId),
+    // FIXME: Remove, because it appears in `Def` variant.
     DeclareBuiltin,
     Builtin(Builtin),
     Error,

@@ -46,15 +46,13 @@ impl<'ast> Interface {
         verbose!("ModuleId::Block: {}", ModuleId::Block(NodeId::new(0)));
         verbose!("ModuleId::Module: {}", ModuleId::Def(DefId::new(0)));
 
-        let mut msg_emitter = TermEmitter::new();
-
         // Lexing //
         verbose!("=== Lexing ===");
         let stage = StageName::Lexer;
 
         let source_id = sess.source_map.add_source(source);
 
-        let (tokens, mut sess) = Lexer::new(source_id, sess).run_and_emit(&mut msg_emitter)?;
+        let (tokens, mut sess) = Lexer::new(source_id, sess).run_and_emit()?;
 
         if cfg!(feature = "pp_lines") {
             outln!(
@@ -83,7 +81,7 @@ impl<'ast> Interface {
         verbose!("=== Parsing ===");
         let stage = StageName::Parser;
 
-        let mut parse_result = Parser::new(sess, tokens).run().recover(&mut msg_emitter)?;
+        let mut parse_result = Parser::new(sess, tokens).run().recover()?;
 
         if parse_result.ctx().config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(parse_result.ctx(), AstPPMode::Normal);
@@ -97,7 +95,7 @@ impl<'ast> Interface {
             );
         }
 
-        let (ast, sess) = parse_result.emit(&mut msg_emitter)?;
+        let (ast, sess) = parse_result.emit()?;
 
         let _mapped_ast = MappedAst::new(&ast, AstMapFiller::new().fill(&ast));
 
@@ -107,7 +105,7 @@ impl<'ast> Interface {
         verbose!("=== AST Validation ===");
         let stage = StageName::AstValidation;
 
-        let (_, sess) = AstValidator::new(sess, &ast).run_and_emit(&mut msg_emitter)?;
+        let (_, sess) = AstValidator::new(sess, &ast).run_and_emit()?;
 
         let sess = self.should_stop(sess, stage)?;
 
@@ -115,7 +113,7 @@ impl<'ast> Interface {
         verbose!("=== Definition collection ===");
         let stage = StageName::DefCollect;
 
-        let (_, mut sess) = DefCollector::new(sess, &ast).run_and_emit(&mut msg_emitter)?;
+        let (_, mut sess) = DefCollector::new(sess, &ast).run_and_emit()?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(&sess, AstPPMode::Normal);
@@ -135,9 +133,7 @@ impl<'ast> Interface {
         verbose!("=== Name resolution ===");
         let stage = StageName::NameRes;
 
-        let mut name_res_result = NameResolver::new(sess, &ast)
-            .run()
-            .recover(&mut msg_emitter)?;
+        let mut name_res_result = NameResolver::new(sess, &ast).run().recover()?;
 
         if name_res_result.ctx().config().check_pp_stage(stage) {
             let mut pp = AstLikePP::new(name_res_result.ctx(), AstPPMode::Normal);
@@ -158,7 +154,7 @@ impl<'ast> Interface {
             outln!(dbg, name_res_result.ctx_mut().writer, "Printing AST after name resolution (resolved names are marked with the same color)\n{}", ast);
         }
 
-        let (_, sess) = name_res_result.emit(&mut msg_emitter)?;
+        let (_, sess) = name_res_result.emit()?;
 
         let sess = self.should_stop(sess, stage)?;
 
@@ -166,7 +162,7 @@ impl<'ast> Interface {
         verbose!("=== Lowering ===");
         let stage = StageName::Lower;
 
-        let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit(&mut msg_emitter)?;
+        let (hir, mut sess) = Lower::new(sess, &ast).run_and_emit()?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = HirPP::new(&sess, AstPPMode::Normal);
@@ -180,7 +176,7 @@ impl<'ast> Interface {
         // Typeck //
         verbose!("=== Type checking ===");
         let stage = StageName::Typeck;
-        let mut typeck_result = Typecker::new(sess, &hir).run().recover(&mut msg_emitter)?;
+        let mut typeck_result = Typecker::new(sess, &hir).run().recover()?;
 
         if typeck_result.ctx().config().check_pp_stage(stage) {
             let mut pp = HirPP::new(typeck_result.ctx(), AstPPMode::TyAnno);
@@ -194,7 +190,7 @@ impl<'ast> Interface {
             );
         }
 
-        let (_, sess) = typeck_result.emit(&mut msg_emitter)?;
+        let (_, sess) = typeck_result.emit()?;
 
         let sess = self.should_stop(sess, stage)?;
 
@@ -202,7 +198,7 @@ impl<'ast> Interface {
         verbose!("=== MIR Construction ===");
         let stage = StageName::MirConstruction;
 
-        let (mir, mut sess) = BuildFullMir::new(sess, &hir).run_and_emit(&mut msg_emitter)?;
+        let (mir, mut sess) = BuildFullMir::new(sess, &hir).run_and_emit()?;
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = MirPrinter::new(&sess, &mir);
@@ -218,7 +214,7 @@ impl<'ast> Interface {
         let stage = StageName::Codegen;
 
         let llvm_ctx = Context::create();
-        let (_, sess) = CodeGen::new(sess, &mir, &hir, &llvm_ctx).run_and_emit(&mut msg_emitter)?;
+        let (_, sess) = CodeGen::new(sess, &mir, &hir, &llvm_ctx).run_and_emit()?;
 
         let sess = self.should_stop(sess, stage)?;
 

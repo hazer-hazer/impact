@@ -215,7 +215,10 @@ impl<'ast> Lower<'ast> {
         self.with_owner(ROOT_NODE_ID, |this| {
             let mut items = lower_each_pr_flat!(this, this.ast.items(), lower_item);
             items.push(this.builtin_func());
-            LoweredOwner::Root(Mod { items })
+            LoweredOwner::Root(Mod {
+                items,
+                span: this.sess.def_table.root_span(),
+            })
         });
     }
 
@@ -279,7 +282,7 @@ impl<'ast> Lower<'ast> {
 
             let kind = match item.kind() {
                 ItemKind::Type(name, generics, ty) => this.lower_type_item(name, generics, ty),
-                ItemKind::Mod(name, items) => this.lower_mod_item(name, items),
+                ItemKind::Mod(name, items) => this.lower_mod_item(name, items, item.span()),
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
                 },
@@ -326,9 +329,15 @@ impl<'ast> Lower<'ast> {
         })
     }
 
-    fn lower_mod_item(&mut self, _: &PR<Ident>, items: &Vec<PR<N<Item>>>) -> hir::item::ItemKind {
+    fn lower_mod_item(
+        &mut self,
+        _: &PR<Ident>,
+        items: &Vec<PR<N<Item>>>,
+        span: Span,
+    ) -> hir::item::ItemKind {
         hir::item::ItemKind::Mod(Mod {
             items: lower_each_pr_flat!(self, items, lower_item),
+            span,
         })
     }
 
@@ -407,6 +416,7 @@ impl<'ast> Lower<'ast> {
                 .name
                 .as_ref()
                 .map(|name| lower_pr!(self, name, lower_ident)),
+            accessor_def_id: self.sess.def_table.get_def_id(field.accessor_id).unwrap(),
             ty: lower_pr!(self, &field.ty, lower_ty),
             span: field.span(),
         }
@@ -797,8 +807,13 @@ impl<'ast> Lower<'ast> {
         };
 
         let id = self.lower_node_id(block.id());
-        self.add_node(Node::BlockNode(hir::expr::BlockNode::new(id, stmts, expr)))
-            .into()
+        self.add_node(Node::BlockNode(hir::expr::BlockNode::new(
+            id,
+            stmts,
+            expr,
+            block.span(),
+        )))
+        .into()
     }
 
     // Synthesis //

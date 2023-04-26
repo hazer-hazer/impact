@@ -101,6 +101,17 @@ impl Kind {
         }
     }
 
+    pub fn walk_inner_tys(&self) -> Box<dyn Iterator<Item = Ty> + '_> {
+        match self.sort() {
+            KindSort::Ty(ty) => ty.walk_inner_tys(),
+            KindSort::Abs(param, body) => {
+                Box::new(param.walk_inner_tys().chain(body.walk_inner_tys()))
+            },
+            KindSort::Var(_) | KindSort::Ex(_) => Box::new(std::iter::empty()),
+            KindSort::Forall(_, body) => body.walk_inner_tys(),
+        }
+    }
+
     //
     pub fn substitute(&self, subst: KindVarId, with: Kind) -> Self {
         match self.sort() {

@@ -1,16 +1,17 @@
 use super::{
     kind::Kind,
-    ty::{Adt, ExKind, Field, FloatKind, IntKind, TyVarId, Variant, VariantId},
+    ty::{Adt, ExKind, Field, FieldId, FloatKind, IntKind, TyVarId, Variant, VariantId},
     tyctx::TyCtx,
     Typecker,
 };
 use crate::{
+    cli::verbose,
     dt::idx::IndexVec,
     hir::{
         self,
-        item::{GenericParams, ItemId, TyAlias},
+        item::{GenericParams, ItemId, TyAlias, TyParam},
         ty::TyPath,
-        visitor::HirVisitor,
+        visitor::{walk_each, HirVisitor},
         HirId, Path, Res, WithHirId, HIR,
     },
     message::message::{MessageBuilder, MessageHolder, MessageStorage},
@@ -18,7 +19,7 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefKind, DefMap},
     },
-    session::Session,
+    session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Internable},
         WithSpan,
@@ -26,7 +27,7 @@ use crate::{
     typeck::Ty,
 };
 
-struct TyConv<'hir> {
+pub struct TyConv<'hir> {
     hir: &'hir HIR,
 
     ty_params: DefMap<TyVarId>,
@@ -42,6 +43,15 @@ impl<'hir> MessageHolder for TyConv<'hir> {
 }
 
 impl<'hir> TyConv<'hir> {
+    pub fn new(sess: Session, hir: &'hir HIR) -> Self {
+        Self {
+            hir,
+            ty_params: Default::default(),
+            sess,
+            msg: Default::default(),
+        }
+    }
+
     fn tyctx(&self) -> &TyCtx {
         &self.sess.tyctx
     }
@@ -54,9 +64,7 @@ impl<'hir> TyConv<'hir> {
         let ty_node = self.hir.ty(ty);
 
         match ty_node.kind() {
-            hir::ty::TyKind::Path(TyPath(path)) => {
-                todo!()
-            },
+            &hir::ty::TyKind::Path(TyPath(path)) => self.conv_ty_path(path, ty_def_id),
             hir::ty::TyKind::Func(params, body) => {
                 let params = params
                     .iter()
@@ -126,7 +134,11 @@ impl<'hir> TyConv<'hir> {
                     // // TODO: We need type collector to collect items types before typeck of
                     // expressions
                     DefKind::Variant => {
-                        panic!("Variant cannot be used as a type")
+                        panic!(
+                            "Variant cannot be used as a type; {} {}",
+                            self.sess.def_table.get_def(def_id),
+                            path.span()
+                        )
                     },
 
                     // Non-type definitions from type namespace
@@ -167,11 +179,7 @@ impl<'hir> TyConv<'hir> {
         let ty_params = generics
             .ty_params
             .iter()
-            .map(|ty_param| {
-                let ty_var_id = Ty::next_ty_var_id();
-                assert!(self.ty_params.insert(ty_param.def_id, ty_var_id).is_none());
-                ty_var_id
-            })
+            .map(|ty_param| self.ty_params.get_copied_unwrap(ty_param.def_id))
             .collect::<Vec<_>>();
         let ty = make_ty(self);
         ty_params
@@ -184,7 +192,7 @@ impl<'hir> TyConv<'hir> {
         &mut self,
         def_id: DefId,
         generics: &GenericParams,
-        mut make_ty: impl FnMut(&mut Self) -> Ty,
+        make_ty: impl FnMut(&mut Self) -> Ty,
     ) -> Ty {
         if let Some(def_ty) = self.tyctx().def_ty(def_id) {
             return def_ty;
@@ -209,7 +217,14 @@ impl<'hir> TyConv<'hir> {
     }
 
     fn conv_ty_param(&mut self, ty_param_def_id: DefId) -> Ty {
-        Ty::var(self.ty_params.get_copied_unwrap(ty_param_def_id))
+        Ty::var(
+            self.ty_params
+                .get_flat(ty_param_def_id)
+                .copied()
+                .expect(&format!(
+                    "Type parameter {ty_param_def_id} declaration not found"
+                )),
+        )
     }
 
     fn conv_adt(&mut self, adt_def_id: DefId) -> Ty {
@@ -237,13 +252,39 @@ impl<'hir> TyConv<'hir> {
             self.tyctx_mut().type_node(v_hir_id.into(), adt_ty);
             self.tyctx_mut().type_def(v_def_id, adt_ty);
 
+            let degeneralized_adt_ty = adt_ty.degeneralize();
+            let fields_tys = degeneralized_adt_ty.as_adt().unwrap().field_tys(vid);
+
             // Constructor type
             let ctor_def_id = variant_node.ctor_def_id;
-            let ctor_ty = adt_ty.substituted_forall_body(Ty::func(
+            let ctor_ty = adt_ty.substituted_forall_body(Ty::tight_func(
                 Some(ctor_def_id),
-                adt_ty.as_adt().unwrap().field_tys(vid),
+                fields_tys.iter().copied().collect(),
                 adt_ty,
             ));
+
+            // Field accessors types
+            variant_node
+                .fields
+                .iter()
+                .enumerate()
+                .for_each(|(index, field)| {
+                    // Field indexing defined here. For now, just incremental sequencing.
+                    let field_id = FieldId::new(index as u32);
+                    let field_ty = fields_tys.get(field_id).copied().unwrap();
+
+                    let field_accessor_def_id = field.accessor_def_id;
+                    // Field accessor ty: `AdtTy -> FieldTy`
+                    let field_accessor_ty = adt_ty.substituted_forall_body(Ty::tight_func(
+                        Some(field_accessor_def_id),
+                        vec![degeneralized_adt_ty],
+                        field_ty,
+                    ));
+
+                    self.tyctx_mut()
+                        .type_def(field_accessor_def_id, field_accessor_ty);
+                });
+
             self.tyctx_mut().type_def(ctor_def_id, ctor_ty)
         });
 
@@ -277,18 +318,40 @@ impl<'hir> TyConv<'hir> {
 }
 
 impl<'hir> HirVisitor for TyConv<'hir> {
-    fn visit_ty(&mut self, &hir_ty: &hir::Ty, hir: &HIR) {
+    fn visit_ty_param(&mut self, ty_param: &TyParam, _: &HIR) {
+        assert!(self
+            .ty_params
+            .insert(ty_param.def_id, Ty::next_ty_var_id())
+            .is_none());
+    }
+
+    fn visit_ty(&mut self, &hir_ty: &hir::Ty, _: &HIR) {
         let conv = self.conv(hir_ty, None);
         self.tyctx_mut().add_conv(hir_ty, conv);
     }
 
     fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        self.visit_generic_params(&ty_item.generics, hir);
+        self.visit_ty(&ty_item.ty, hir);
+
         let conv = self.conv_ty_alias(id.def_id());
         self.tyctx_mut().type_node(id.hir_id(), conv);
     }
 
     fn visit_adt_item(&mut self, name: Ident, adt: &hir::item::Adt, id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        self.visit_generic_params(&adt.generics, hir);
+        walk_each!(self, adt.variants, visit_variant, hir);
+
         let conv = self.conv_adt(id.def_id());
-        self.tyctx_mut().type_node(id.hir_id(), conv)
+        self.tyctx_mut().type_node(id.hir_id(), conv);
+    }
+}
+
+impl<'hir> Stage<()> for TyConv<'hir> {
+    fn run(mut self) -> StageResult<(), Session> {
+        self.visit_hir(self.hir);
+        stage_result(self.sess, (), self.msg)
     }
 }

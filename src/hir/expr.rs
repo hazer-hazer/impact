@@ -97,11 +97,19 @@ pub struct BlockNode {
     id: HirId,
     stmts: Vec<Stmt>,
     expr: Option<Expr>,
+    span: Span,
 }
 
+impl_with_span!(BlockNode);
+
 impl BlockNode {
-    pub fn new(id: HirId, stmts: Vec<Stmt>, expr: Option<Expr>) -> Self {
-        Self { id, stmts, expr }
+    pub fn new(id: HirId, stmts: Vec<Stmt>, expr: Option<Expr>, span: Span) -> Self {
+        Self {
+            id,
+            stmts,
+            expr,
+            span,
+        }
     }
 
     pub fn stmts(&self) -> &[Stmt] {

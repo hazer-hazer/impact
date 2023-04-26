@@ -51,7 +51,7 @@ impl<'hir> Typecker<'hir> {
     //  */
     // pub fn check_and_type(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
     //     self.check(expr_id, ty).map(|ty| {
-    //         self.tyctx_mut().type_node(expr_id, ty);
+    //         self.type_inferring_node(expr_id, ty);
     //         ty
     //     })
     // }
@@ -61,7 +61,7 @@ impl<'hir> Typecker<'hir> {
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
-                self.tyctx_mut().type_node(expr_id.into(), ty);
+                self.type_inferring_node(expr_id.into(), ty);
                 Ok(ok.apply_ctx(self.ctx()))
             },
             Err(_) => {
@@ -236,6 +236,8 @@ impl<'hir> Typecker<'hir> {
         assert!(self.ty_wf(r_ty).is_ok());
 
         match (l_ty.kind(), r_ty.kind()) {
+            (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
+
             // FIXME: Is these pats ok?
             (TyKind::Error, _) | (_, TyKind::Error) => Err(TypeckErr::LateReport),
 
@@ -321,8 +323,6 @@ impl<'hir> Typecker<'hir> {
                     todo!("Cycle error");
                 }
             },
-
-            (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
 
             _ => Err(TypeckErr::LateReport),
         }

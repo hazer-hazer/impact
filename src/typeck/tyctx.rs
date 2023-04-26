@@ -71,6 +71,7 @@ pub struct TyCtx {
     field_indices: HashMap<Expr, FieldId>,
 
     // Metadata //
+    // FIXME: Never set
     ty_names: TyMap<Ident>,
 }
 
@@ -125,7 +126,8 @@ impl TyCtx {
         self.typed.iter_mut().for_each(|(_, ty)| {
             let applied = ty.apply_ctx(ctx);
             // TODO: Error reporting instead of assertion
-            assert!(applied.is_solved());
+            // FIXME: We need somehow emit messages and then check for bugs like this
+            // assert!(applied.is_solved(), "Unsolved type {applied} after typeck");
             *ty = applied;
         });
     }

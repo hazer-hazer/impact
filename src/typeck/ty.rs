@@ -331,7 +331,7 @@ impl Adt {
         self.variants.get(vid).unwrap().fields.get(fid).unwrap().ty
     }
 
-    pub fn field_tys(&self, vid: VariantId) -> Vec<Ty> {
+    pub fn field_tys(&self, vid: VariantId) -> IndexVec<FieldId, Ty> {
         self.variants
             .get(vid)
             .unwrap()
@@ -505,6 +505,16 @@ impl Ty {
         } else {
             TyKind::Func(params, body)
         })
+    }
+
+    /// Generate function if there're more than one parameter, otherwise type is
+    /// the body type
+    pub fn tight_func(def_id: Option<DefId>, params: Vec<Ty>, body: Ty) -> Ty {
+        if params.is_empty() {
+            body
+        } else {
+            Self::func(def_id, params, body)
+        }
     }
 
     pub fn adt(adt: Adt) -> Ty {
@@ -687,6 +697,33 @@ impl Ty {
         }
     }
 
+    pub fn walk_inner_tys(&self) -> Box<dyn Iterator<Item = Ty> + '_> {
+        match self.kind() {
+            TyKind::Error
+            | TyKind::Unit
+            | TyKind::Bool
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Existential(_)
+            | TyKind::Var(_)
+            | TyKind::Str => Box::new(std::iter::empty()),
+            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+                Box::new(params.iter().copied().chain(std::iter::once(*body)))
+            },
+            TyKind::Adt(adt) => Box::new(adt.walk_tys()),
+            TyKind::Ref(ty) => ty.walk_inner_tys(),
+            TyKind::Forall(_, body) => body.walk_inner_tys(),
+            TyKind::Kind(kind) => kind.walk_inner_tys(),
+        }
+    }
+
+    pub fn contains_error(&self) -> bool {
+        match self.kind() {
+            TyKind::Error => true,
+            _ => self.walk_inner_tys().any(|ty| ty.contains_error()),
+        }
+    }
+
     pub fn mono(&self) -> MonoTy {
         self.as_mono()
             .expect(&format!("{} expected to be a mono type", self))
@@ -715,7 +752,7 @@ impl Ty {
 
     pub fn degeneralize(&self) -> Ty {
         match self.kind() {
-            TyKind::Forall(_, body) => body.generalize(),
+            TyKind::Forall(_, body) => body.degeneralize(),
             _ => *self,
         }
     }
@@ -1019,9 +1056,12 @@ pub enum MonoTyKind {
     Int(IntKind),
     Float(FloatKind),
     String,
+    Ex(Ex),
+    Var(TyVarId),
     Func(Vec<Box<MonoTy>>, Box<MonoTy>),
     Ref(Box<MonoTy>),
     Adt(Adt<MonoTy>),
+    Kind(Box<MonoTy>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1056,8 +1096,16 @@ impl TryFrom<Ty> for MonoTy {
             },
             // FIXME: Unwrap
             TyKind::Adt(adt) => Some(MonoTyKind::Adt(adt.map_ty(&mut |ty| ty.try_into())?)),
-            TyKind::Var(_) | TyKind::Existential(_) | TyKind::Forall(..) => None,
-            TyKind::Kind(_) => None,
+            &TyKind::Existential(ex) => Some(MonoTyKind::Ex(ex)),
+            &TyKind::Var(var) => Some(MonoTyKind::Var(var)),
+            TyKind::Forall(..) => None,
+            TyKind::Kind(kind) => match kind.sort() {
+                &KindSort::Ty(ty) => Some(MonoTyKind::Kind(Box::new(ty.try_into()?))),
+
+                KindSort::Abs(..) | KindSort::Var(_) | KindSort::Ex(_) | KindSort::Forall(..) => {
+                    None
+                },
+            },
         }
         .ok_or(())?;
 

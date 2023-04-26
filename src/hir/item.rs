@@ -52,7 +52,10 @@ pub struct TyAlias {
 #[derive(Debug)]
 pub struct Mod {
     pub items: Vec<ItemId>,
+    pub span: Span,
 }
+
+impl_with_span!(Mod);
 
 #[derive(Debug)]
 pub struct Func {
@@ -62,6 +65,7 @@ pub struct Func {
 #[derive(Debug)]
 pub struct Field {
     pub id: HirId,
+    pub accessor_def_id: DefId,
     pub name: Option<Ident>,
     pub ty: Ty,
     pub span: Span,

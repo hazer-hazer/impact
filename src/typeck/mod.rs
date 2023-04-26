@@ -25,17 +25,19 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefKind, DefMap},
     },
-    session::{stage_result, Session, Stage, StageResult},
+    session::{stage_result, Session, Stage, StageResult, StageResultImpl},
     span::{
         sym::{Ident, Internable},
         WithSpan,
     },
+    typeck::conv::TyConv,
 };
 
 pub mod builtin;
 mod check;
 mod conv;
 pub mod ctx;
+mod err;
 pub mod kind;
 mod synth;
 pub mod ty;
@@ -147,6 +149,11 @@ impl<'hir> Typecker<'hir> {
         );
     }
 
+    fn type_inferring_node(&mut self, id: HirId, ty: Ty) {
+        self.tyctx_mut().type_node(id, ty);
+        self.ctx_mut().add_inferring_node(id);
+    }
+
     // fn cyclic_ty(&mut self, ty: Ty, references: Ty, on: ExistentialId) {
     //     MessageBuilder::error()
     //     .text(format!("Cyclic type {}", self.tyctx().ty(ty)))
@@ -164,6 +171,20 @@ impl<'hir> Typecker<'hir> {
 
     fn ctx_depth(&self) -> usize {
         self.ctx_stack.len()
+    }
+
+    fn verify_ctx(&mut self) {
+        self.ctx()
+            .inferring_nodes()
+            .iter()
+            .copied()
+            .map(|id| self.must_be_inferred(id))
+            .filter_map(|msg| msg)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .for_each(|msg| {
+                msg.emit(self);
+            });
     }
 
     fn enter_ctx(&mut self, ctx: InferCtx) {
@@ -623,6 +644,10 @@ impl<'hir> Typecker<'hir> {
 
 impl<'hir> Stage<()> for Typecker<'hir> {
     fn run(mut self) -> StageResult<()> {
+        let conv = TyConv::new(self.sess, self.hir);
+        let ((), sess) = conv.run()?.merged(&mut self.msg);
+        self.sess = sess;
+
         self.under_new_ctx(|this| {
             this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);

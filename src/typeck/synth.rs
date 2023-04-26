@@ -1,5 +1,5 @@
 use super::{
-    ty::{ExKind, FloatKind, IntKind, Ty, TyKind, VariantId},
+    ty::{Ex, ExKind, FloatKind, IntKind, Ty, TyKind, VariantId},
     TyResult, TypeckErr, Typecker, Typed,
 };
 use crate::{
@@ -22,7 +22,7 @@ impl<'hir> Typecker<'hir> {
         let hir_id = item.hir_id();
         match self.sess.def_table.get_def(item.def_id()).kind() {
             DefKind::DeclareBuiltin => {
-                self.tyctx_mut().type_node(
+                self.type_inferring_node(
                     hir_id,
                     Ty::func(
                         Some(item.def_id()),
@@ -43,7 +43,7 @@ impl<'hir> Typecker<'hir> {
                 // FIXME: Type alias item gotten two times: one here, one in `conv_ty_alias`
                 return Ok(self.tyctx().node_type(hir_id).unwrap());
             },
-            ItemKind::Mod(Mod { items }) => {
+            ItemKind::Mod(Mod { items, .. }) => {
                 // FIXME: How not to clone?
                 for item in items.clone() {
                     self.synth_item(item)?;
@@ -77,7 +77,7 @@ impl<'hir> Typecker<'hir> {
         };
 
         let ty = ty.apply_ctx(self.ctx());
-        self.tyctx_mut().type_node(hir_id, ty);
+        self.type_inferring_node(hir_id, ty);
 
         TyResult::Ok(Ty::unit())
     }
@@ -103,7 +103,7 @@ impl<'hir> Typecker<'hir> {
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
         let local_ty = self.synth_expr(local.value)?.apply_ctx(self.ctx());
         self.type_term(local.name, local_ty);
-        self.tyctx_mut().type_node(local.id, local_ty);
+        self.type_inferring_node(local.id, local_ty);
         Ok(Ty::unit())
     }
 
@@ -128,7 +128,7 @@ impl<'hir> Typecker<'hir> {
 
         let expr_ty = expr_ty.apply_ctx(self.ctx());
 
-        self.tyctx_mut().type_node(expr_id.into(), expr_ty);
+        self.type_inferring_node(expr_id.into(), expr_ty);
 
         Ok(expr_ty)
     }
@@ -147,42 +147,38 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    // Note: This is a path expression
+    // Note: This is a path **expression**
     fn synth_path(&mut self, path: Path) -> TyResult<Ty> {
-        self.lookup_typed_term_ty(self.hir.path(path).target_name())
-            .ok_or_else(|| {
-                MessageBuilder::error()
-                    .span(self.hir.path(path).span())
-                    .text(format!("[BUG] Term {path} does not have a type"))
-                    .emit_single_label(self);
-                TypeckErr::Reported
-            })
+        self.synth_res(self.hir.path(path).res())
     }
 
-    // TODO: Type collection stage
-    fn synth_res(&mut self, res: Res) -> TyResult<Ty> {
-        todo!()
-        // match res {
-        //     Res::Def(kind, def_id) => match kind {
-        //         // Owners
-        //         DefKind::Func | DefKind::Value | DefKind::Lambda => {
-        //             let hir_id = HirId::new_owner(def_id);
-        //             Ok(self.tyctx().node_type(hir_id).unwrap())
-        //         },
+    fn synth_res(&mut self, res: &Res) -> TyResult<Ty> {
+        match res {
+            &Res::Def(def_kind, def_id) => match def_kind {
+                // Definition types collected in `conv`
+                DefKind::External
+                | DefKind::FieldAccessor
+                | DefKind::Ctor
+                | DefKind::Func
+                | DefKind::Value => Ok(self.tyctx().def_ty(def_id).expect(&format!(
+                    "Expected type of def {} ty be collected at conv stage",
+                    self.sess.def_table.get_def(def_id)
+                ))),
 
-        //         DefKind::Ctor => {},
-        //         DefKind::FieldAccessor => todo!(),
-        //         DefKind::TyParam => todo!(),
-        //         DefKind::External => todo!(),
-        //         DefKind::Local => unreachable!(),
-        //         DefKind::DeclareBuiltin => unreachble!(),
-        //     },
-        //     Res::Local(hir_id) =>
-        // Ok(self.tyctx().node_type(hir_id).unwrap()),
-        //     Res::DeclareBuiltin => todo!(),
-        //     Res::Builtin(_) => todo!(),
-        //     Res::Error => unreachable!(),
-        // }
+                // Lambda is anonymous => we cannot refer to it
+                DefKind::Lambda => unreachable!(),
+
+                DefKind::Local => unreachable!(),
+                _ => unreachable!(),
+            },
+            &Res::Local(local) => Ok(self.tyctx().node_type(local).unwrap()),
+            // FIXME: Maybe unreachable?
+            Res::DeclareBuiltin => todo!(),
+            &Res::Builtin(bt) => Ok(self.tyctx().builtin(bt)),
+
+            // Resolution error must already be reported
+            Res::Error => Err(TypeckErr::Reported),
+        }
     }
 
     fn synth_ty_expr(&mut self, ty_expr: &TyExpr) -> TyResult<Ty> {
@@ -252,6 +248,7 @@ impl<'hir> Typecker<'hir> {
                 .map_or(Ok(Ty::unit()), |&expr| this.synth_expr(expr));
 
             this.default_number_exes();
+            this.verify_ctx();
 
             res_ty
         })
@@ -346,7 +343,7 @@ impl<'hir> Typecker<'hir> {
                 .iter()
                 .copied()
                 .zip(params_tys.iter().copied())
-                .for_each(|(param, ty)| this.tyctx_mut().type_node(param.into(), ty));
+                .for_each(|(param, ty)| this.type_inferring_node(param.into(), ty));
 
             // FIXME: Clone
             let func_ty = params_tys.iter().fold(
@@ -400,7 +397,7 @@ impl<'hir> Typecker<'hir> {
 
     //         let param_ty = this.get_typed_pat(lambda.param);
 
-    //         this.tyctx_mut().type_node(lambda.param, param_ty);
+    //         this.type_inferring_node(lambda.param, param_ty);
 
     //         Ok(Ty::func(param_ty, body_ty))
     //     })

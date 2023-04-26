@@ -4,7 +4,7 @@ use super::{
     pat::PatKind,
     stmt::{Local, StmtKind},
     ty::{TyKind, TyPath},
-    BodyId, BodyOwner, Path, HIR, Stmt, Expr, Variant, Pat, Block, Ty,
+    Block, BodyId, BodyOwner, Expr, Pat, Path, Stmt, Ty, Variant, HIR,
 };
 use crate::{resolve::builtin::Builtin, span::sym::Ident};
 
@@ -15,6 +15,8 @@ macro_rules! walk_each {
         })
     };
 }
+
+pub(crate) use walk_each;
 
 pub trait HirVisitor {
     fn visit_hir(&mut self, hir: &HIR) {

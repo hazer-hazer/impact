@@ -765,6 +765,7 @@ impl Parser {
         Ok(Field::new(
             self.next_node_id(),
             index,
+            self.next_node_id(),
             name,
             ty,
             self.close_span(lo),

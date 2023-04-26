@@ -434,6 +434,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         self.sess.res.set(NamePath::new(path.id()), res);
     }
 
+    // FIXME: Should resolve to field accessor NodeId
     fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast PR<IdentNode>) {
         walk_pr!(self, lhs, visit_expr);
         let field = field.as_ref().unwrap();
