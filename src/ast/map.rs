@@ -104,7 +104,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
         self.map.map.insert(item.id(), AstNode::Item(item));
         match item.kind() {
             item::ItemKind::Type(name, generics, ty) => {
-                self.visit_type_item(name, generics, ty, item.id())
+                self.visit_ty_item(name, generics, ty, item.id())
             },
             item::ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
             item::ItemKind::Decl(name, params, body) => {

@@ -63,9 +63,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     // Items //
     fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
-            ItemKind::Type(name, generics, ty) => {
-                self.visit_type_item(name, generics, ty, item.id())
-            },
+            ItemKind::Type(name, generics, ty) => self.visit_ty_item(name, generics, ty, item.id()),
             ItemKind::Mod(name, items) => self.visit_mod_item(name, items, item.id()),
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
@@ -89,7 +87,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_pr!(self, &ty_param.name, name, ty_param.id(), true);
     }
 
-    fn visit_type_item(
+    fn visit_ty_item(
         &mut self,
         name: &'ast PR<Ident>,
         generics: &'ast GenericParams,

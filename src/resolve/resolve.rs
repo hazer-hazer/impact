@@ -1,21 +1,26 @@
 use std::collections::HashMap;
 
 use super::{
+    builtin::Builtin,
     def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
     res::{NamePath, Res},
 };
 use crate::{
     ast::{
-        expr::{Block, Expr, PathExpr},
-        item::{Item, ItemKind, Variant},
+        expr::{Block, Call, Expr, ExprKind, Lit, PathExpr},
+        item::{GenericParams, Item, ItemKind, Variant},
         pat::{Pat, PatKind},
-        ty::TyPath,
+        ty::{Ty, TyKind, TyPath},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
         ErrorNode, IdentNode, NodeId, NodeMap, Path, WithNodeId, AST, N, PR,
     },
     cli::verbose,
     message::message::{MessageBuilder, MessageHolder, MessageStorage},
-    resolve::def::DefKind,
+    resolve::{
+        builtin::{TyBuiltin, ValueBuiltin},
+        def::DefKind,
+        res::ResKind,
+    },
     session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Symbol},
@@ -330,6 +335,53 @@ impl<'ast> NameResolver<'ast> {
 
         unreachable!()
     }
+
+    fn maybe_builtin(&mut self, path: &Path, args: &[&Expr]) -> Option<Builtin> {
+        // Note: All paths in declaration body must already be resolved
+        let res = self.sess.res.get(NamePath::new(path.id())).unwrap();
+        if let ResKind::DeclareBuiltin = res.kind() {
+            if args.len() != 1 {
+                MessageBuilder::error()
+                    .span(path.span())
+                    .text(format!(
+                        "`builtin` expects exactly one argument, but {} were supplied",
+                        args.len()
+                    ))
+                    .emit_single_label(self);
+                return None;
+            }
+
+            let builtin_name_arg = args[0];
+            let arg_span = builtin_name_arg.span();
+
+            let name = match builtin_name_arg.kind() {
+                ExprKind::Lit(lit) => match lit {
+                    Lit::String(name) => Some(name),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some(name) = name {
+                if let Ok(bt) = Builtin::try_from(name.as_str()) {
+                    Some(bt)
+                } else {
+                    MessageBuilder::error()
+                        .text(format!("Unknown builtin `{}`", name))
+                        .span(arg_span)
+                        .emit_single_label(self);
+                    None
+                }
+            } else {
+                MessageBuilder::error()
+                    .text("`builtin` expects string literal (builtin name) as argument".to_string())
+                    .span(arg_span)
+                    .emit_single_label(self);
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> MessageHolder for NameResolver<'a> {
@@ -364,9 +416,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 self.nearest_mod_item = ModuleId::Def(def_id);
                 self.visit_mod_item(name, items, item.id());
             },
-            ItemKind::Type(name, generics, ty) => {
-                self.visit_type_item(name, generics, ty, item.id())
-            },
+            ItemKind::Type(name, generics, ty) => self.visit_ty_item(name, generics, ty, item.id()),
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id());
             },
@@ -384,7 +434,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         name: &'ast PR<Ident>,
         params: &'ast Vec<PR<Pat>>,
         body: &'ast PR<N<Expr>>,
-        _: NodeId,
+        id: NodeId,
     ) {
         walk_pr!(self, name, visit_ident);
 
@@ -394,6 +444,78 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         walk_pr!(self, body, visit_expr);
 
         self.exit_scope();
+
+        if params.is_empty() {
+            if let ExprKind::Call(Call { lhs, args }) = body.as_deref().unwrap().kind() {
+                if let ExprKind::Path(PathExpr(path)) = lhs.as_deref().unwrap().kind() {
+                    let path = path.as_ref().unwrap();
+                    let maybe_builtin = self.maybe_builtin(
+                        path,
+                        &args
+                            .iter()
+                            .map(|arg| arg.as_deref().unwrap())
+                            .collect::<Vec<_>>(),
+                    );
+
+                    if let Some(bt) = maybe_builtin {
+                        let bt_expr: Result<ValueBuiltin, _> = bt.try_into();
+                        if let Ok(bt_expr) = bt_expr {
+                            self.sess.def_table.add_builtin(
+                                bt_expr.into(),
+                                self.sess.def_table.get_def_id(id).unwrap(),
+                            )
+                        } else {
+                            MessageBuilder::error()
+                                .text(format!("{} builtin cannot be used as value", bt))
+                                .span(args.first().unwrap().span())
+                                .emit_single_label(self);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn visit_ty_item(
+        &mut self,
+        name: &'ast PR<Ident>,
+        generics: &'ast GenericParams,
+        ty: &'ast PR<N<Ty>>,
+        id: NodeId,
+    ) {
+        walk_pr!(self, name, visit_ident);
+        self.visit_generic_params(generics);
+        walk_pr!(self, ty, visit_ty);
+
+        if let TyKind::AppExpr(lhs, args) = ty.as_deref().unwrap().kind() {
+            if let TyKind::Path(TyPath(path)) = lhs.as_deref().unwrap().kind() {
+                let path = path.as_ref().unwrap();
+                let maybe_builtin = self.maybe_builtin(
+                    path,
+                    &args
+                        .iter()
+                        .map(|arg| arg.as_deref().unwrap())
+                        .collect::<Vec<_>>(),
+                );
+
+                if let Some(bt) = maybe_builtin {
+                    let bt_ty: Result<TyBuiltin, _> = bt.try_into();
+                    if let Ok(bt_expr) = bt_ty {
+                        self.sess.def_table.add_builtin(
+                            bt_expr.into(),
+                            self.sess.def_table.get_def_id(id).unwrap(),
+                        )
+                    } else {
+                        MessageBuilder::error()
+                            .text(format!("{} builtin cannot be used as type", bt))
+                            .span(args.first().unwrap().span())
+                            .emit_single_label(self);
+                    }
+                    // Continue lowering even an error appeared.
+                    // Lowering methods do not handle Results :(
+                }
+            }
+        }
     }
 
     fn visit_variant(&mut self, variant: &'ast Variant) {

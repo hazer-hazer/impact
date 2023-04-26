@@ -193,7 +193,7 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
         match item.kind() {
             ItemKind::Type(name, generics, ty) => {
                 self.validate_typename(name.as_ref().unwrap(), NameKind::Type);
-                self.visit_type_item(name, generics, ty, item.id());
+                self.visit_ty_item(name, generics, ty, item.id());
             },
             ItemKind::Mod(name, items) => {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Mod);

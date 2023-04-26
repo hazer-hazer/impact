@@ -10,7 +10,7 @@ use crate::{
         Block, BodyId, BodyOwner, Expr, ExprPath, Pat, Stmt, Ty, TyPath, Variant, HIR,
     },
     parser::token::{Op, Punct},
-    resolve::builtin::{ TyBuiltin, ValueBuiltin},
+    resolve::builtin::{TyBuiltin, ValueBuiltin},
     session::Session,
     span::sym::{Ident, Kw},
 };
@@ -198,7 +198,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
             // ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
-            ExprKind::BuiltinExpr(bt) => self.visit_builtin_expr(bt),
+            ExprKind::Builtin(bt) => self.visit_builtin_expr(bt),
         }
         self.pp.ty_anno(expr_id);
         self.pp.hir_id(expr);

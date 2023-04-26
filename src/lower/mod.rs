@@ -322,15 +322,14 @@ impl<'ast> Lower<'ast> {
         ty: &PR<N<Ty>>,
         def_id: DefId,
     ) -> hir::item::ItemKind {
-        let ty = lower_pr!(self, ty, lower_ty);
-
-        match self.get_current_owner_node(ty) {
-            Node::Ty(ty) => match ty.kind() {
-                &hir::ty::TyKind::Builtin(bt) => self.sess.def_table.add_builtin(bt.into(), def_id),
-                _ => {},
-            },
-            _ => {},
-        }
+        let ty = if let Some(bt_ty) = self.sess.def_table.as_builtin(def_id) {
+            self.ty(
+                ty.as_ref().unwrap().span(),
+                hir::ty::TyKind::Builtin(bt_ty.try_into().unwrap()),
+            )
+        } else {
+            lower_pr!(self, ty, lower_ty)
+        };
 
         hir::item::ItemKind::TyAlias(TyAlias {
             generics: self.lower_generic_params(generics),
@@ -357,29 +356,25 @@ impl<'ast> Lower<'ast> {
         body: &PR<N<Expr>>,
         def_id: DefId,
     ) -> hir::item::ItemKind {
+        let body = if let Some(bt_expr) = self.sess.def_table.as_builtin(def_id) {
+            self.expr(
+                body.as_ref().unwrap().span(),
+                hir::expr::ExprKind::Builtin(bt_expr.try_into().unwrap()),
+            )
+        } else {
+            lower_pr!(self, body, lower_expr)
+        };
+
+        let params = ast_params
+            .iter()
+            .map(|param| lower_pr!(self, param, lower_pat))
+            .collect::<Vec<_>>();
+
+        let body = self.body(params, body);
+
         if ast_params.is_empty() {
-            let value = lower_pr!(self, body, lower_expr);
-            let body = self.body(vec![], value);
-
-            match self.get_current_owner_node(value) {
-                Node::Expr(expr) => match expr.kind() {
-                    &hir::expr::ExprKind::BuiltinExpr(bt) => {
-                        self.sess.def_table.add_builtin(bt.into(), def_id)
-                    },
-                    _ => {},
-                },
-                _ => {},
-            }
-
             hir::item::ItemKind::Value(body)
         } else {
-            let params = ast_params
-                .iter()
-                .map(|param| lower_pr!(self, param, lower_pat))
-                .collect::<Vec<_>>();
-
-            let value = lower_pr!(self, body, lower_expr);
-
             // Note: Removed currying
             // for (index, &param) in params[1..].iter().enumerate().rev() {
             //     let span = ast_params[index].span().to(body.span());
@@ -387,7 +382,7 @@ impl<'ast> Lower<'ast> {
             //     value = self.expr_lambda(span, body);
             // }
 
-            hir::item::ItemKind::Func(self.body(params, value))
+            hir::item::ItemKind::Func(body)
         }
     }
 
@@ -561,80 +556,10 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_call_expr(&mut self, call: &Call) -> hir::expr::ExprKind {
-        if let ExprKind::Path(PathExpr(path)) = call.lhs.as_ref().unwrap().kind() {
-            let maybe_builtin = self.maybe_lower_builtin_call(
-                path.as_ref().unwrap(),
-                &call
-                    .args
-                    .iter()
-                    .map(|arg| arg.as_deref().unwrap())
-                    .collect::<Vec<_>>(),
-            );
-
-            if let Some(bt) = maybe_builtin {
-                let bt_expr = bt.try_into();
-                if let Ok(bt_expr) = bt_expr {
-                    return hir::expr::ExprKind::BuiltinExpr(bt_expr);
-                } else {
-                    MessageBuilder::error()
-                        .text(format!("{} builtin cannot be used as value", bt))
-                        .span(call.args.first().unwrap().span())
-                        .emit_single_label(self);
-                }
-                // Continue lowering even an error appeared.
-                // Lowering methods do not handle Results :(
-            }
-        }
-
         let lhs = lower_pr!(self, &call.lhs, lower_expr);
         let args = lower_each_pr!(self, &call.args, lower_expr);
 
         hir::expr::ExprKind::Call(hir::expr::Call { lhs, args })
-    }
-
-    fn maybe_lower_builtin_call(&mut self, path: &Path, args: &[&Expr]) -> Option<Builtin> {
-        if let ResKind::DeclareBuiltin = self.sess.res.get(NamePath::new(path.id())).unwrap().kind()
-        {
-            if args.len() != 1 {
-                MessageBuilder::error()
-                    .span(path.span())
-                    .text(format!(
-                        "`builtin` expects exactly one argument, but {} were supplied",
-                        args.len()
-                    ))
-                    .emit_single_label(self);
-                return None;
-            }
-            let builtin_name_arg = args[0];
-            let arg_span = builtin_name_arg.span();
-
-            let name = match builtin_name_arg.kind() {
-                ExprKind::Lit(lit) => match lit {
-                    Lit::String(name) => Some(name),
-                    _ => None,
-                },
-                _ => None,
-            };
-            if let Some(name) = name {
-                if let Ok(bt) = Builtin::try_from(name.as_str()) {
-                    Some(bt)
-                } else {
-                    MessageBuilder::error()
-                        .text(format!("Unknown builtin `{}`", name))
-                        .span(arg_span)
-                        .emit_single_label(self);
-                    None
-                }
-            } else {
-                MessageBuilder::error()
-                    .text("`builtin` expects string literal (builtin name) as argument".to_string())
-                    .span(arg_span)
-                    .emit_single_label(self);
-                None
-            }
-        } else {
-            None
-        }
     }
 
     fn lower_let_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
@@ -730,35 +655,9 @@ impl<'ast> Lower<'ast> {
     fn lower_ty_app_expr(
         &mut self,
         cons: &PR<N<Ty>>,
-        args: &[PR<N<Expr>>],
+        _args: &[PR<N<Expr>>],
     ) -> Result<hir::ty::TyKind, ()> {
-        if let TyKind::Path(TyPath(path)) = cons.as_ref().unwrap().kind() {
-            let path = path.as_ref().unwrap();
-            let maybe_builtin = self.maybe_lower_builtin_call(
-                path,
-                &args
-                    .iter()
-                    .map(|expr| expr.as_deref().unwrap())
-                    .collect::<Vec<_>>(),
-            );
-
-            if let Some(bt) = maybe_builtin {
-                let bt_ty = bt.try_into();
-                if let Ok(bt_ty) = bt_ty {
-                    return Ok(hir::ty::TyKind::Builtin(bt_ty));
-                } else {
-                    MessageBuilder::error()
-                        .span(path.span())
-                        .text(format!("{} builtin cannot be used as type", bt))
-                        .emit_single_label(self);
-                }
-                // Continue lowering even an error appeared.
-                // Lowering methods do not handle Results :(
-            }
-        }
-
         let cons = lower_pr!(self, cons, lower_ty);
-        let _args = lower_each_pr!(self, args, lower_expr);
         let cons_node = self.get_current_owner_node(cons).ty();
         let cons_span = cons_node.span();
 
@@ -797,6 +696,8 @@ impl<'ast> Lower<'ast> {
                     .get_expect(node_id, &format!("Local resolution {}", res)),
             ),
             &res::ResKind::Def(def_id) => {
+                assert!(self.sess.def_table.as_builtin(def_id).is_none());
+
                 let def_kind = self.sess.def_table.get_def(def_id).kind();
                 ExprRes::Def(
                     match def_kind {
@@ -810,15 +711,16 @@ impl<'ast> Lower<'ast> {
                     def_id,
                 )
             },
-            ResKind::DeclareBuiltin => unreachable!(),
-            res::ResKind::Error => unreachable!(),
+            ResKind::DeclareBuiltin | res::ResKind::Error => unreachable!(),
         }
     }
 
     fn lower_ty_res(&mut self, res: res::Res) -> TyRes {
         match res.kind() {
-            &res::ResKind::Local(_node_id) => unreachable!(),
+            &res::ResKind::Local(_) => unreachable!(),
             &res::ResKind::Def(def_id) => {
+                assert!(self.sess.def_table.as_builtin(def_id).is_none());
+
                 let def_kind = self.sess.def_table.get_def(def_id).kind();
                 TyRes::Def(
                     match def_kind {
@@ -830,8 +732,7 @@ impl<'ast> Lower<'ast> {
                     def_id,
                 )
             },
-            &res::ResKind::DeclareBuiltin => todo!(),
-            res::ResKind::Error => unreachable!(),
+            &res::ResKind::DeclareBuiltin | res::ResKind::Error => unreachable!(),
         }
     }
 
@@ -917,6 +818,12 @@ impl<'ast> Lower<'ast> {
 
     fn pat_ident(&mut self, ident: Ident) -> hir::Pat {
         self.pat(ident.span(), hir::pat::PatKind::Ident(ident))
+    }
+
+    fn ty(&mut self, span: Span, kind: hir::ty::TyKind) -> hir::Ty {
+        let id = self.next_hir_id();
+        self.add_node(Node::Ty(hir::ty::TyNode::new(id, kind, span)))
+            .into()
     }
 
     fn expr(&mut self, span: Span, kind: hir::expr::ExprKind) -> hir::Expr {

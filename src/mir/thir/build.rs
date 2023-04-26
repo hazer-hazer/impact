@@ -4,9 +4,7 @@ use super::{
 };
 use crate::{
     hir::{self, ExprDefKind, OwnerId, WithHirId, HIR},
-    resolve::{
-        builtin::{ValueBuiltin},
-    },
+    resolve::builtin::ValueBuiltin,
     span::WithSpan,
     typeck::tyctx::TyCtx,
 };
@@ -69,9 +67,6 @@ impl<'ctx> ThirBuilder<'ctx> {
                     ExprDefKind::FieldAccessor => todo!(),
                 },
                 &hir::ExprRes::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
-                hir::ExprRes::Builtin(_) => {
-                    unreachable!()
-                },
             },
             &hir::expr::ExprKind::Block(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Lambda(hir::expr::Lambda {
@@ -94,7 +89,7 @@ impl<'ctx> ThirBuilder<'ctx> {
             //         VariantId::new(0),
             //     )
             // },
-            &hir::expr::ExprKind::BuiltinExpr(bt) => ExprKind::Builtin(bt),
+            &hir::expr::ExprKind::Builtin(bt) => ExprKind::Builtin(bt),
         };
 
         self.thir.add_expr(Expr {
@@ -109,7 +104,7 @@ impl<'ctx> ThirBuilder<'ctx> {
         let args = &call.args;
 
         match self.hir.expr(lhs).kind() {
-            hir::expr::ExprKind::BuiltinExpr(bt) => match bt {
+            hir::expr::ExprKind::Builtin(bt) => match bt {
                 ValueBuiltin::RefCons => {
                     assert_eq!(args.len(), 1);
                     let arg = self.expr(args[0]);

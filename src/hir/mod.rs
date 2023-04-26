@@ -456,7 +456,7 @@ impl HIR {
             | ExprKind::Path(_)
             | ExprKind::Lambda(_)
             | ExprKind::Call(_)
-            | ExprKind::BuiltinExpr(_)
+            | ExprKind::Builtin(_)
             // | ExprKind::FieldAccess(..)
             | ExprKind::Ty(_) => expr.span(),
             &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
@@ -637,14 +637,12 @@ sub_enum_conversion! {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum TyRes {
     Def(TyDefKind, DefId),
-    Builtin(TyBuiltin),
 }
 
 impl Display for TyRes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TyRes::Def(kind, id) => write!(f, "{kind}{id}"),
-            TyRes::Builtin(bt) => write!(f, "{bt}"),
         }
     }
 }
@@ -682,7 +680,6 @@ sub_enum_conversion! {
 pub enum ExprRes {
     Def(ExprDefKind, DefId),
     Local(HirId),
-    Builtin(ValueBuiltin),
 }
 
 impl Display for ExprRes {
@@ -690,7 +687,6 @@ impl Display for ExprRes {
         match self {
             ExprRes::Def(kind, id) => write!(f, "{kind}{id}"),
             ExprRes::Local(id) => write!(f, "{id}"),
-            ExprRes::Builtin(bt) => write!(f, "{bt}"),
         }
     }
 }

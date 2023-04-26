@@ -120,7 +120,7 @@ impl<'hir> Typecker<'hir> {
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
             // &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field,
             // expr_id),
-            &ExprKind::BuiltinExpr(bt) => Ok(self.tyctx().builtin(bt.into())),
+            &ExprKind::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
         }?;
 
         let expr_ty = expr_ty.apply_ctx(self.ctx());
@@ -163,7 +163,6 @@ impl<'hir> Typecker<'hir> {
                 ))),
             },
             &ExprRes::Local(local) => Ok(self.tyctx().node_type(local).unwrap()),
-            &ExprRes::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
         }
     }
 

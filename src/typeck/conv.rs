@@ -8,7 +8,8 @@ use crate::{
     hir::{
         self,
         item::{GenericParams, ItemId, TyAlias, TyParam},
-        visitor::{walk_each, HirVisitor}, TyDefKind, TyPath, TyRes, WithHirId, HIR,
+        visitor::{walk_each, HirVisitor},
+        TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },
     message::message::{MessageHolder, MessageStorage},
     resolve::{
@@ -125,7 +126,6 @@ impl<'hir> TyConv<'hir> {
                     TyDefKind::Adt => self.conv_adt(def_id),
                 }
             },
-            &TyRes::Builtin(_bt) => todo!(),
         }
     }
 
