@@ -4,6 +4,7 @@ use super::{
     TyResult, Typecker,
 };
 use crate::{
+    cli::verbose,
     dt::idx::IndexVec,
     hir::{
         expr::{ExprKind, Lambda, Lit},
@@ -58,13 +59,18 @@ impl<'hir> Typecker<'hir> {
 
     /// Checks if expression is of type `ty`.
     /// Reports `Type mismatch` error.
+    /// expr_id == HirId::synth(18, 4) && ty.as_ex().map_or(false, |ex| ex.id == ExId::new(1))
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
+        verbose!("Check expr {expr_id} is of type {ty}");
         match self._check(expr_id, ty) {
             Ok(ok) => {
+                verbose!("Expr {expr_id} is of type {ty}");
                 self.type_inferring_node(expr_id, ty);
                 Ok(ok.apply_ctx(self.ctx()))
             },
             Err(_) => {
+                verbose!("Failed: Expr {expr_id} is NOT of type {ty}");
+
                 let span = self.hir.expr_result_span(expr_id);
 
                 MessageBuilder::error()
@@ -234,7 +240,7 @@ impl<'hir> Typecker<'hir> {
         match (l_ty.kind(), r_ty.kind()) {
             (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
 
-            // FIXME: Is these pats ok?
+            // FIXME: Are these pats ok?
             (TyKind::Error, _) | (_, TyKind::Error) => Err(TypeckErr::LateReport),
 
             (TyKind::Unit, TyKind::Unit) => Ok(r_ty),
@@ -245,13 +251,17 @@ impl<'hir> Typecker<'hir> {
 
             (TyKind::Var(var), TyKind::Var(var_)) if var == var_ => Ok(r_ty),
 
+            // ^a <: ^b
             (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => Ok(r_ty),
 
             // Int existentials //
+            // ^a < Int
             (&TyKind::Existential(int_ex), TyKind::Int(_)) if int_ex.is_int() => {
                 Ok(self.solve(int_ex, r_ty.mono()))
             },
 
+            // int^a <: ^b
+            // FIXME: Might not be valid logic
             (&TyKind::Existential(int_ex), &TyKind::Existential(ex)) if int_ex.is_int() => {
                 // FIXME: This is a test logic
                 let sol = Ty::default_int();
@@ -259,16 +269,20 @@ impl<'hir> Typecker<'hir> {
                 Ok(self.solve(ex, sol.mono()))
             },
 
-            (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
+            // ERROR: ¬(int^a <: (?))
+            // (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),
 
             // Float existentials //
+            // float^a <: Float
             (&TyKind::Existential(float_ex), TyKind::Float(_)) if float_ex.is_float() => {
                 Ok(self.solve(float_ex, r_ty.mono()))
             },
 
-            (TyKind::Existential(float_ex), _) if float_ex.is_float() => Err(TypeckErr::LateReport),
+            // ERROR: ¬(float^a <: (?))
+            // (TyKind::Existential(float_ex), _) if float_ex.is_float() =>
+            // Err(TypeckErr::LateReport),
 
-            //
+            // ((param_tys₁...) -> body₁) <: ((param_tys₂...) -> body₂)
             (TyKind::Func(params, body1), TyKind::Func(params_, body2))
             | (TyKind::FuncDef(_, params, body1), TyKind::Func(params_, body2))
             | (TyKind::Func(params, body1), TyKind::FuncDef(_, params_, body2))
@@ -283,10 +297,12 @@ impl<'hir> Typecker<'hir> {
                 // })
             },
 
+            // ref a <: ref b
             (&TyKind::Ref(inner), &TyKind::Ref(inner_)) => {
                 Ok(Ty::ref_to(self._subtype(inner, inner_)?))
             },
 
+            // forall a. body <: (?)
             (&TyKind::Forall(alpha, body), _) => {
                 let ex = self.fresh_ex(ExKind::Common);
                 let ex_ty = Ty::ex(ex);
@@ -297,13 +313,16 @@ impl<'hir> Typecker<'hir> {
                 })
             },
 
+            // (?) <: forall a. body
             (_, &TyKind::Forall(alpha, body)) => self
                 .under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this._subtype(l_ty, body)
                 }),
 
+            // adt₁ <: adt₂
             (TyKind::Adt(adt), TyKind::Adt(adt_)) if adt.def_id == adt_.def_id => Ok(r_ty),
 
+            // InstL
             (&TyKind::Existential(ex), _) if ex.is_common() => {
                 if !r_ty.contains_ex(ex) {
                     self.instantiate_l(ex, r_ty)
@@ -312,6 +331,7 @@ impl<'hir> Typecker<'hir> {
                 }
             },
 
+            // InstR
             (_, &TyKind::Existential(ex)) if ex.is_common() => {
                 if !l_ty.contains_ex(ex) {
                     self.instantiate_r(l_ty, ex)

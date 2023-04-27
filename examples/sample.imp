@@ -18,6 +18,6 @@ data Option a =
     | None
 
 main () =
-    a = Option.Some
+    a = Option.Some 123
 
     ()
