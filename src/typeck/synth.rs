@@ -18,14 +18,14 @@ use crate::{
 };
 
 impl<'hir> Typecker<'hir> {
-    pub fn synth_item(&mut self, item: ItemId) -> TyResult<Ty> {
-        let hir_id = item.hir_id();
-        match self.sess.def_table.get_def(item.def_id()).kind() {
+    pub fn synth_item(&mut self, item_id: ItemId) -> TyResult<Ty> {
+        let hir_id = item_id.hir_id();
+        match self.sess.def_table.get_def(item_id.def_id()).kind() {
             DefKind::DeclareBuiltin => {
                 self.type_inferring_node(
                     hir_id,
                     Ty::func(
-                        Some(item.def_id()),
+                        Some(item_id.def_id()),
                         vec![Ty::str()],
                         Ty::var(Ty::next_ty_var_id()),
                     ),
@@ -35,7 +35,7 @@ impl<'hir> Typecker<'hir> {
             _ => {},
         }
 
-        let item = self.hir.item(item);
+        let item = self.hir.item(item_id);
 
         let ty = match item.kind() {
             ItemKind::TyAlias(_ty) => {
@@ -56,11 +56,25 @@ impl<'hir> Typecker<'hir> {
             // these branches?
             &ItemKind::Value(value) => {
                 let value_ty = self.synth_body(item.def_id(), value)?;
+                let conv_def_ty = self
+                    .tyctx()
+                    .def_ty(item_id.def_id())
+                    .unwrap()
+                    .as_kind_ex()
+                    .unwrap();
+                self.solve_kind_ex(conv_def_ty, Kind::new_ty(value_ty));
                 self.type_term(item.name(), value_ty);
                 value_ty
             },
             &ItemKind::Func(body) => {
                 let value_ty = self.synth_body(item.def_id(), body)?;
+                let conv_def_ty = self
+                    .tyctx()
+                    .def_ty(item_id.def_id())
+                    .unwrap()
+                    .as_kind_ex()
+                    .unwrap();
+                self.solve_kind_ex(conv_def_ty, Kind::new_ty(value_ty));
                 self.type_term(item.name(), value_ty);
                 value_ty
             },
@@ -102,6 +116,7 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
         let local_ty = self.synth_expr(local.value)?.apply_ctx(self.ctx());
+        self.tyctx_mut().type_node(local.id, local_ty);
         self.type_term(local.name, local_ty);
         self.type_inferring_node(local.id, local_ty);
         Ok(Ty::unit())

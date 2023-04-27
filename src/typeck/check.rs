@@ -293,7 +293,7 @@ impl<'hir> Typecker<'hir> {
 
             (&TyKind::Forall(alpha, body), _) => {
                 let ex = self.fresh_ex(ExKind::Common);
-                let ex_ty = Ty::existential(ex);
+                let ex_ty = Ty::ex(ex);
                 let with_substituted_alpha = body.substitute(alpha, ex_ty);
 
                 self.under_ctx(InferCtx::new_with_ex(ex), |this| {
@@ -360,7 +360,7 @@ impl<'hir> Typecker<'hir> {
                 assert!(self.get_solution(ty_ex).is_none());
 
                 if ex_depth <= ty_ex_depth {
-                    let ex_ty = Ty::existential(ex);
+                    let ex_ty = Ty::ex(ex);
 
                     self.solve(ty_ex, ex_ty.mono());
                     return Ok(ex_ty.apply_ctx(self.ctx()));
@@ -383,7 +383,7 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_l(&mut self, ex: Ex, r_ty: Ty) -> TyResult<Ty> {
         if let &TyKind::Existential(beta_ex) = r_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
-                return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
+                return Ok(self.solve(beta_ex, Ty::ex(ex).mono()));
             }
         }
 
@@ -422,7 +422,7 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_r(&mut self, l_ty: Ty, ex: Ex) -> TyResult<Ty> {
         if let &TyKind::Existential(beta_ex) = l_ty.kind() {
             if self.find_unbound_ex_depth(ex) < self.find_unbound_ex_depth(beta_ex) {
-                return Ok(self.solve(beta_ex, Ty::existential(ex).mono()));
+                return Ok(self.solve(beta_ex, Ty::ex(ex).mono()));
             }
         }
 
@@ -449,7 +449,7 @@ impl<'hir> Typecker<'hir> {
                 let alpha_ex = this.fresh_ex(ExKind::Common);
 
                 this.under_ctx(InferCtx::new_with_ex(alpha_ex), |this| {
-                    let alpha_ex_ty = Ty::existential(alpha_ex);
+                    let alpha_ex_ty = Ty::ex(alpha_ex);
                     let body_ty = body.substitute(alpha, alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)
                 })

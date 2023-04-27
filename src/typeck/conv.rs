@@ -1,15 +1,15 @@
 use super::{
-    kind::Kind,
-    ty::{Adt, Field, FieldId, IntKind, TyVarId, Variant, VariantId},
+    kind::{Kind, KindEx},
+    ty::{Adt, Ex, Field, FieldId, IntKind, TyVarId, Variant, VariantId},
     tyctx::TyCtx,
 };
 use crate::{
     dt::idx::IndexVec,
     hir::{
         self,
-        item::{GenericParams, ItemId, TyAlias, TyParam},
+        item::{ExternItem, GenericParams, ItemId, TyAlias, TyParam},
         visitor::{walk_each, HirVisitor},
-        TyDefKind, TyPath, TyRes, WithHirId, HIR,
+        BodyOwner, TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },
     message::message::{MessageHolder, MessageStorage},
     resolve::{
@@ -284,7 +284,19 @@ impl<'hir> HirVisitor for TyConv<'hir> {
     }
 
     fn visit_value_item(&mut self, name: Ident, value: &hir::BodyId, id: ItemId, hir: &HIR) {
-        
+        self.visit_ident(&name, hir);
+        self.visit_body(value, BodyOwner::value(id.def_id()), hir);
+
+        let ex = Ty::ty_kind(Kind::new_ex(KindEx::new(self.tyctx_mut().fresh_kind_ex())));
+        self.tyctx_mut().type_def(id.def_id(), ex);
+    }
+
+    fn visit_func_item(&mut self, name: Ident, body: &hir::BodyId, id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        self.visit_body(body, BodyOwner::func(id.def_id()), hir);
+
+        let ex = Ty::ty_kind(Kind::new_ex(KindEx::new(self.tyctx_mut().fresh_kind_ex())));
+        self.tyctx_mut().type_def(id.def_id(), ex);
     }
 
     fn visit_ty(&mut self, &hir_ty: &hir::Ty, _: &HIR) {

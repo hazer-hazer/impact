@@ -1,9 +1,5 @@
-use super::{ty::TyKind, Ty, Typecker};
-use crate::{
-    cli::color::Colorize,
-    hir::{HirId},
-    message::message::MessageBuilder,
-};
+use super::{kind::KindSort, ty::TyKind, Ty, Typecker};
+use crate::{cli::color::Colorize, hir::HirId, message::message::MessageBuilder};
 
 impl<'hir> Typecker<'hir> {
     pub fn must_be_inferred(&self, id: HirId) -> Option<MessageBuilder> {
@@ -34,9 +30,14 @@ impl<'hir> Typecker<'hir> {
         )
     }
 
+    // FIXME: Replace with `Ty::pretty_str` and `Kind::pretty_str`
     fn ty_str(&self, ty: Ty) -> String {
         match ty.kind() {
             TyKind::Existential(_) => Self::uninferred_ty(),
+            TyKind::Kind(kind) => match kind.sort() {
+                KindSort::Ex(_) => Self::uninferred_ty(),
+                _ => kind.to_string(),
+            },
             _ => ty.to_string(),
         }
     }

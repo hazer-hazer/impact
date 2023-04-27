@@ -10,7 +10,8 @@ use std::{
 use super::{
     builtin::builtins,
     ctx::GlobalCtx,
-    ty::{FieldId, MapTy, Ty, TyKind, TyMap, TyVarId, VariantId},
+    kind::{KindEx, KindExId},
+    ty::{Ex, ExId, FieldId, MapTy, Ty, TyKind, TyMap, TyVarId, VariantId},
 };
 use crate::{
     cli::verbose,
@@ -54,6 +55,9 @@ pub struct TyCtx {
 
     ty_defs: DefMap<Ty>,
 
+    ex: ExId,
+    kind_ex: KindExId,
+
     /// Types associated to DefId's (meaning for each item is different!)
     /// and types of HIR expressions.
     /// - Type alias: `[Type alias DefId] -> [Its type]`
@@ -81,6 +85,8 @@ impl TyCtx {
             builtins: builtins(),
             converted: Default::default(),
             ty_defs: Default::default(),
+            ex: ExId::new(0),
+            kind_ex: KindExId::new(0),
             typed: Default::default(),
             expr_ty_bindings: Default::default(),
             def_ty_bindings: Default::default(),
@@ -106,6 +112,28 @@ impl TyCtx {
         self.ty_defs.get_flat(def_id).copied()
     }
 
+    pub fn def_ty_exes(&self) -> Vec<Ex> {
+        self.ty_defs
+            .iter_flat()
+            .filter_map(|ty| ty.as_ex())
+            .collect()
+    }
+
+    pub fn def_ty_kind_exes(&self) -> Vec<KindEx> {
+        self.ty_defs
+            .iter_flat()
+            .filter_map(|ty| ty.as_kind_ex())
+            .collect()
+    }
+
+    pub fn fresh_ex(&mut self) -> ExId {
+        *self.ex.inc()
+    }
+
+    pub fn fresh_kind_ex(&mut self) -> KindExId {
+        *self.kind_ex.inc()
+    }
+
     pub fn type_node(&mut self, id: HirId, ty: Ty) {
         verbose!("Type node {} with {}", id, ty);
         // assert!(
@@ -128,6 +156,7 @@ impl TyCtx {
             // TODO: Error reporting instead of assertion
             // FIXME: We need somehow emit messages and then check for bugs like this
             // assert!(applied.is_solved(), "Unsolved type {applied} after typeck");
+            verbose!("Apply global ctx on ty {ty} => {applied}");
             *ty = applied;
         });
     }

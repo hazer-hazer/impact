@@ -530,7 +530,7 @@ impl Ty {
         Self::new(TyKind::Forall(var, body))
     }
 
-    pub fn existential(ex: Ex) -> Ty {
+    pub fn ex(ex: Ex) -> Ty {
         Self::new(TyKind::Existential(ex))
     }
 
@@ -1143,7 +1143,7 @@ mod tests {
         match kind {
             TyGen::Mono => super_simple_ty(),
             TyGen::Poly => Ty::forall(make_ty_var(), super_simple_ty()),
-            TyGen::Ex => Ty::existential(make_ex()),
+            TyGen::Ex => Ty::ex(make_ex()),
             TyGen::Adt => Ty::adt(make_adt()),
             TyGen::Func => Ty::func(None, vec![super_simple_ty()], super_simple_ty()),
             TyGen::FuncDef => Ty::func(
@@ -1199,7 +1199,7 @@ mod tests {
     #[test]
     fn as_ex() {
         let ex = make_ex();
-        assert_eq!(Ty::existential(ex).as_ex(), Some(ex));
+        assert_eq!(Ty::ex(ex).as_ex(), Some(ex));
 
         assert!(matches!(super_simple_ty().as_ex(), None));
     }
@@ -1295,7 +1295,7 @@ mod tests {
     #[test]
     fn contains_ex() {
         let ex = make_ex();
-        assert!(Ty::forall(make_ty_var(), Ty::existential(ex)).contains_ex(ex));
+        assert!(Ty::forall(make_ty_var(), Ty::ex(ex)).contains_ex(ex));
 
         assert!(!Ty::default_int().contains_ex(ex));
     }

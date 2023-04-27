@@ -78,8 +78,6 @@ pub struct Typecker<'hir> {
     // Typecker context //
     global_ctx: GlobalCtx,
     ctx_stack: Vec<InferCtx>,
-    existential: ExId,
-    kind_ex: KindExId,
     try_mode: bool,
 
     hir: &'hir HIR,
@@ -100,8 +98,6 @@ impl<'hir> Typecker<'hir> {
         Self {
             global_ctx: Default::default(),
             ctx_stack: Default::default(),
-            existential: ExId::new(0),
-            kind_ex: KindExId::new(0),
             try_mode: false,
 
             hir,
@@ -302,17 +298,17 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn fresh_ex(&mut self, sort: ExKind) -> Ex {
-        Ex::new(sort, *self.existential.inc())
+        Ex::new(sort, self.tyctx_mut().fresh_ex())
     }
 
     fn fresh_kind_ex(&mut self) -> KindEx {
-        KindEx::new(*self.kind_ex.inc())
+        KindEx::new(self.tyctx_mut().fresh_kind_ex())
     }
 
     fn add_fresh_ex(&mut self, sort: ExKind) -> ExPair {
         let ex = self.fresh_ex(sort);
         self.add_ex(ex);
-        (ex, Ty::existential(ex))
+        (ex, Ty::ex(ex))
     }
 
     fn add_fresh_common_ex(&mut self) -> ExPair {
@@ -320,9 +316,9 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn add_fresh_kind_ex(&mut self) -> ExPair<KindEx> {
-        let ex = self.fresh_kind_ex();
-        self.ctx_mut().add_kind_ex(ex);
-        (ex, Ty::ty_kind(Kind::new_ex(ex)))
+        let kind_ex = self.fresh_kind_ex();
+        self.add_kind_ex(kind_ex);
+        (kind_ex, Ty::ty_kind(Kind::new_ex(kind_ex)))
     }
 
     fn is_unsolved_ex(&self, ty: Ty) -> Option<Ex> {
@@ -384,6 +380,10 @@ impl<'hir> Typecker<'hir> {
     fn add_ex(&mut self, ex: Ex) {
         verbose!("Add ex {}", ex);
         self.ctx_mut().add_ex(ex);
+    }
+
+    fn add_kind_ex(&mut self, kind_ex: KindEx) {
+        self.ctx_mut().add_kind_ex(kind_ex);
     }
 
     fn add_var(&mut self, var: TyVarId) -> Ty {
@@ -633,6 +633,19 @@ impl<'hir> Stage<()> for Typecker<'hir> {
         self.sess = sess;
 
         self.under_new_ctx(|this| {
+            // Add existentials defined in conv for definitions, so initial context is
+            // well-formed
+            this.tyctx()
+                .def_ty_exes()
+                .iter()
+                .copied()
+                .for_each(|ex| this.add_ex(ex));
+            this.tyctx()
+                .def_ty_kind_exes()
+                .iter()
+                .copied()
+                .for_each(|kind_ex| this.add_kind_ex(kind_ex));
+
             this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);
 
