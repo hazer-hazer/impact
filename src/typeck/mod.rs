@@ -14,7 +14,7 @@ use crate::{
     resolve::def::DefId,
     session::{stage_result, Session, Stage, StageResult},
     span::sym::Ident,
-    typeck::conv::TyConv,
+    typeck::{conv::TyConv, ty::MonoTyKind},
 };
 
 pub mod builtin;
@@ -129,9 +129,12 @@ impl<'hir> Typecker<'hir> {
         );
     }
 
-    fn type_inferring_node(&mut self, id: HirId, ty: Ty) {
+    fn type_inferring_node<Id>(&mut self, id: Id, ty: Ty)
+    where
+        Id: Into<HirId> + Copy,
+    {
         self.tyctx_mut().type_node(id, ty);
-        self.ctx_mut().add_inferring_node(id);
+        // self.ctx_mut().add_inferring_node(id.into());
     }
 
     // fn cyclic_ty(&mut self, ty: Ty, references: Ty, on: ExistentialId) {
@@ -153,19 +156,19 @@ impl<'hir> Typecker<'hir> {
         self.ctx_stack.len()
     }
 
-    fn verify_ctx(&mut self) {
-        self.ctx()
-            .inferring_nodes()
-            .iter()
-            .copied()
-            .map(|id| self.must_be_inferred(id))
-            .filter_map(|msg| msg)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .for_each(|msg| {
-                msg.emit(self);
-            });
-    }
+    // fn verify_ctx(&mut self) {
+    //     self.ctx()
+    //         .inferring_nodes()
+    //         .iter()
+    //         .copied()
+    //         .map(|id| self.must_be_inferred(id))
+    //         .filter_map(|msg| msg)
+    //         .collect::<Vec<_>>()
+    //         .into_iter()
+    //         .for_each(|msg| {
+    //             msg.emit(self);
+    //         });
+    // }
 
     fn enter_ctx(&mut self, ctx: InferCtx) {
         self.ctx_stack.push(ctx);
@@ -346,16 +349,22 @@ impl<'hir> Typecker<'hir> {
             .collect()
     }
 
-    // TODO: Solutions must be stored just in the current context, DO NOT ASCEND
+    // // TODO: Solutions must be stored just in the current context, DO NOT ASCEND
     fn solve(&mut self, ex: Ex, sol: MonoTy) -> Ty {
-        let sol = sol.ty;
-        if let &TyKind::Existential(sol_ex) = sol.kind() {
-            assert_ne!(sol_ex, ex, "Tried to solve ex with itself {} / {}", ex, sol);
+        if let &MonoTyKind::Ex(sol_ex) = &sol.sort {
+            assert_ne!(
+                sol_ex, ex,
+                "Tried to solve ex with itself {} / {}",
+                ex, sol.ty
+            );
         }
-        verbose!("Solve {} as {}", ex, sol);
-        self._ascend_ctx_mut(|ctx| ctx.solve(ex, sol))
-            .map_or_else(|| self.global_ctx.solve(ex, sol), |(ty, _)| Some(ty))
-            .unwrap()
+        let ty = sol.ty;
+        verbose!("Solve {} as {} in [CTX {}]", ex, ty, self.ctx_depth());
+        self.ctx_mut().solve(ex, sol);
+        ty
+        // self._ascend_ctx_mut(|ctx| ctx.solve(ex, sol))
+        //     .map_or_else(|| self.global_ctx.solve(ex, sol), |(ty, _)|
+        // Some(ty))     .unwrap()
     }
 
     fn solve_kind_ex(&mut self, ex: KindEx, sol: Kind) -> Kind {
@@ -367,14 +376,9 @@ impl<'hir> Typecker<'hir> {
             );
         }
 
-        verbose!("Solve {} as {}", ex, sol);
+        verbose!("Solve {} as {} in [CTX {}]", ex, sol, self.ctx_depth());
         self.ctx_mut().solve_kind_ex(ex, sol);
         sol
-    }
-
-    fn type_term(&mut self, name: Ident, ty: Ty) {
-        verbose!("Type term {}: {}", name, ty);
-        self.ctx_mut().type_term(name, ty)
     }
 
     fn add_ex(&mut self, ex: Ex) {
@@ -406,55 +410,52 @@ impl<'hir> Typecker<'hir> {
         self.get_solution(ex).is_none()
     }
 
-    fn lookup_typed_term_ty(&self, name: Ident) -> Option<Ty> {
-        self.ascend_ctx(|ctx: &InferCtx| ctx.get_term(name))
-    }
-
-    pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
-        match ty.kind() {
-            TyKind::Error => Ok(ty),
-            TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str => Ok(ty),
-            &TyKind::Var(_ident) => {
-                // FIXME
-                Ok(ty)
-                // if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
-                //     Ok(ty)
-                // } else {
-                //     self.ty_illformed(ty)
-                // }
-            },
-            &TyKind::Existential(ex) => {
-                if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() || self.global_ctx.has_ex(ex) {
-                    Ok(ty)
-                } else {
-                    self.ty_illformed(ty)
-                }
-            },
-            TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
-                params.iter().copied().try_for_each(|param| {
-                    self.ty_wf(param)?;
-                    Ok(())
-                })?;
-                self.ty_wf(*body)
-            },
-            TyKind::Adt(adt) => {
-                adt.walk_tys().try_for_each(|ty| {
-                    self.ty_wf(ty)?;
-                    Ok(())
-                })?;
-                Ok(ty)
-            },
-            &TyKind::Forall(alpha, body) => self.under_ctx(InferCtx::new_with_var(alpha), |this| {
-                // let open_forall = this.open_forall(body, alpha);
-                this.ty_wf(body)
-            }),
-            &TyKind::Ref(inner) => self.ty_wf(inner),
-            &TyKind::Kind(kind) => match kind.sort() {
-                &KindSort::Ty(ty) => self.ty_wf(ty),
-                _ => Ok(Ty::ty_kind(self.kind_wf(kind)?)),
-            },
-        }
-    }
+    // We cannot verify type well-formedness as we already deviate from CaEBTC
+    // pub fn ty_wf(&mut self, ty: Ty) -> TyResult<Ty> {
+    //     match ty.kind() {
+    //         TyKind::Error => Ok(ty),
+    //         TyKind::Unit | TyKind::Bool | TyKind::Int(_) | TyKind::Float(_) |
+    // TyKind::Str => Ok(ty),         &TyKind::Var(_ident) => {
+    //             // FIXME
+    //             Ok(ty)
+    //             // if self.ascend_ctx(|ctx| ctx.get_var(ident)).is_some() {
+    //             //     Ok(ty)
+    //             // } else {
+    //             //     self.ty_illformed(ty)
+    //             // }
+    //         },
+    //         &TyKind::Existential(ex) => {
+    //             if self.ascend_ctx(|ctx| ctx.get_ex(ex)).is_some() ||
+    // self.global_ctx.has_ex(ex) {                 Ok(ty)
+    //             } else {
+    //                 self.ty_illformed(ty)
+    //             }
+    //         },
+    //         TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
+    //             params.iter().copied().try_for_each(|param| {
+    //                 self.ty_wf(param)?;
+    //                 Ok(())
+    //             })?;
+    //             self.ty_wf(*body)
+    //         },
+    //         TyKind::Adt(adt) => {
+    //             adt.walk_tys().try_for_each(|ty| {
+    //                 self.ty_wf(ty)?;
+    //                 Ok(())
+    //             })?;
+    //             Ok(ty)
+    //         },
+    //         &TyKind::Forall(alpha, body) =>
+    // self.under_ctx(InferCtx::new_with_var(alpha), |this| {             // let
+    // open_forall = this.open_forall(body, alpha);             this.ty_wf(body)
+    //         }),
+    //         &TyKind::Ref(inner) => self.ty_wf(inner),
+    //         &TyKind::Kind(kind) => match kind.sort() {
+    //             &KindSort::Ty(ty) => self.ty_wf(ty),
+    //             _ => Ok(Ty::ty_kind(self.kind_wf(kind)?)),
+    //         },
+    //     }
+    // }
 
     pub fn kind_wf(&mut self, kind: Kind) -> TyResult<Kind> {
         match kind.sort() {
@@ -543,17 +544,6 @@ impl<'hir> Typecker<'hir> {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let terms = self
-            .ctx_stack
-            .iter()
-            .fold(vec![], |terms, ctx| {
-                terms.into_iter().chain(ctx.terms().into_iter()).collect()
-            })
-            .iter()
-            .map(|(name, ty)| format!("  {}: {}", name, ty))
-            .collect::<Vec<_>>()
-            .join("\n");
-
         let solved = exes
             .1
             .into_iter()
@@ -620,8 +610,8 @@ impl<'hir> Typecker<'hir> {
                 });
 
         format!(
-            "[CTX]\nvars: {}\nterms:\n{}\nsolved:\n{}\nunsolved: {}\nglobal solved:\n{}\nglobal existentials: {}\nType bindings:\n{}",
-            vars, terms, solved, unsolved, global_solved, global_exes, expr_ty_bindings
+            "[CTX]\nvars: {}\nsolved:\n{}\nunsolved: {}\nglobal solved:\n{}\nglobal existentials: {}\nType bindings:\n{}",
+            vars,  solved, unsolved, global_solved, global_exes, expr_ty_bindings
         )
     }
 }

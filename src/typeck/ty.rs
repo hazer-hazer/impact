@@ -7,6 +7,7 @@ use std::{
 
 use once_cell::sync::Lazy;
 
+use self::interner::TY_INTERNER;
 use super::{
     ctx::AlgoCtx,
     kind::{Kind, KindEx, KindSort},
@@ -27,6 +28,17 @@ declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
 declare_idx!(ExId, u32, "^{}", Color::Blue);
 declare_idx!(TyVarId, u32, "{}", Color::Cyan);
 declare_idx!(VariantId, u32, "{}", Color::White);
+
+impl TyVarId {
+    pub fn pretty(&self) -> String {
+        TY_INTERNER
+            .read()
+            .unwrap()
+            .ty_var_name(*self)
+            .map(|name| name.to_string())
+            .unwrap_or(format!("a{}", self))
+    }
+}
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ExKind {
@@ -427,21 +439,21 @@ impl std::fmt::Display for TyKind {
             TyKind::FuncDef(def_id, params, body) => {
                 write!(
                     f,
-                    "({} -> {}){}",
+                    "{} -> {}",
                     params
                         .iter()
                         .map(ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(" "),
                     body,
-                    def_id
+                    // def_id
                 )
             },
             TyKind::Adt(adt) => adt.fmt(f),
             TyKind::Ref(ty) => write!(f, "ref {ty}"),
-            TyKind::Var(name) => write!(f, "{name}"),
+            &TyKind::Var(id) => write!(f, "{}", id.pretty()),
             TyKind::Existential(ex) => write!(f, "{ex}"),
-            TyKind::Forall(alpha, ty) => write!(f, "(∀{alpha}. {ty})"),
+            TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {ty})", alpha.pretty()),
             TyKind::Kind(kind) => write!(f, "{kind}"),
         }
     }
@@ -465,8 +477,8 @@ impl Ty {
         Self::intern(TyS::new(kind))
     }
 
-    pub fn next_ty_var_id() -> TyVarId {
-        *TY_INTERNER.write().unwrap().ty_var_id.inc()
+    pub fn next_ty_var_id(name: Option<Ident>) -> TyVarId {
+        TY_INTERNER.write().unwrap().next_ty_var(name)
     }
 
     // Constructors //
@@ -968,50 +980,88 @@ impl std::fmt::Display for TyS {
     }
 }
 
-static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| RwLock::new(TyInterner::new()));
+mod interner {
+    use std::{
+        collections::{hash_map::DefaultHasher, HashMap, HashSet},
+        fmt::Formatter,
+        hash::{Hash, Hasher},
+        sync::RwLock,
+    };
 
-pub struct TyInterner {
-    map: HashMap<u64, TyId>,
-    types: Vec<&'static TyS>,
-    ty_var_id: TyVarId,
-}
+    use once_cell::sync::Lazy;
 
-impl TyInterner {
-    pub fn new() -> Self {
-        Self {
-            map: Default::default(),
-            types: Default::default(),
-            ty_var_id: TyVarId(0),
+    use super::{TyId, TyS, TyVarId};
+    use crate::{
+        cli::{
+            color::{Color, ColorizedStruct},
+            verbose,
+        },
+        dt::idx::{declare_idx, Idx, IndexVec},
+        hir::{self},
+        resolve::def::DefId,
+        span::sym::Ident,
+        utils::macros::match_expected,
+    };
+
+    pub static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| RwLock::new(TyInterner::new()));
+
+    pub struct TyInterner {
+        map: HashMap<u64, TyId>,
+        types: Vec<&'static TyS>,
+        ty_var_id: TyVarId,
+        ty_var_names: IndexVec<TyVarId, Option<Ident>>,
+    }
+
+    impl TyInterner {
+        pub fn new() -> Self {
+            Self {
+                map: Default::default(),
+                types: Default::default(),
+                ty_var_id: TyVarId::new(0),
+                ty_var_names: Default::default(),
+            }
         }
-    }
 
-    fn hash(ty: &TyS) -> u64 {
-        let mut state = DefaultHasher::new();
-        ty.hash(&mut state);
-        state.finish()
-    }
-
-    pub fn intern(&mut self, tys: TyS) -> TyId {
-        let hash = Self::hash(&tys);
-
-        if let Some(id) = self.map.get(&hash) {
-            return *id;
+        fn hash(ty: &TyS) -> u64 {
+            let mut state = DefaultHasher::new();
+            ty.hash(&mut state);
+            state.finish()
         }
 
-        // !Leaked
-        let ty = Box::leak(Box::new(tys));
-        let id = TyId::from(self.types.len());
+        pub fn intern(&mut self, tys: TyS) -> TyId {
+            let hash = Self::hash(&tys);
 
-        self.map.insert(hash, id);
-        self.types.push(ty);
+            if let Some(id) = self.map.get(&hash) {
+                return *id;
+            }
 
-        id
-    }
+            // !Leaked
+            let ty = Box::leak(Box::new(tys));
+            let id = TyId::from(self.types.len());
 
-    pub fn expect(&self, ty: TyId) -> &'static TyS {
-        self.types
-            .get(ty.as_usize())
-            .expect(&format!("Failed to find type by type id {}", ty))
+            self.map.insert(hash, id);
+            self.types.push(ty);
+
+            id
+        }
+
+        pub fn expect(&self, ty: TyId) -> &'static TyS {
+            self.types
+                .get(ty.as_usize())
+                .expect(&format!("Failed to find type by type id {}", ty))
+        }
+
+        pub fn next_ty_var(&mut self, name: Option<Ident>) -> TyVarId {
+            let id = *self.ty_var_id.inc();
+            if let Some(name) = name {
+                assert!(self.ty_var_names.insert(id, name).is_none());
+            }
+            id
+        }
+
+        pub fn ty_var_name(&self, id: TyVarId) -> Option<Ident> {
+            self.ty_var_names.get_flat(id).copied()
+        }
     }
 }
 

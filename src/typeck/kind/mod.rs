@@ -9,19 +9,32 @@ use std::{
 
 use once_cell::sync::Lazy;
 
+use self::interner::KIND_INTERNER;
 use super::{
     ctx::AlgoCtx,
     ty::{Ex, TyVarId},
 };
 use crate::{
     cli::color::{Color, ColorizedStruct},
-    dt::idx::{declare_idx, Idx},
+    dt::idx::{declare_idx, Idx, IndexVec},
+    span::sym::Ident,
     typeck::ty::{Ty, TyKind},
 };
 
 declare_idx!(KindId, u32, "{}", Color::White);
 declare_idx!(KindExId, u32, "'^{}", Color::BrightMagenta);
 declare_idx!(KindVarId, u32, "'{}", Color::BrightCyan);
+
+impl KindVarId {
+    pub fn pretty(&self) -> String {
+        KIND_INTERNER
+            .read()
+            .unwrap()
+            .kind_var_name(*self)
+            .map(|name| name.to_string())
+            .unwrap_or(format!("'k{}", self.0))
+    }
+}
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct KindEx(KindExId);
@@ -50,8 +63,8 @@ impl Kind {
         Self(KIND_INTERNER.write().unwrap().intern(data))
     }
 
-    pub fn next_kind_var_id() -> KindVarId {
-        *KIND_INTERNER.write().unwrap().kind_var_id.inc()
+    pub fn next_kind_var_id(name: Option<Ident>) -> KindVarId {
+        KIND_INTERNER.write().unwrap().next_kind_var_id(name)
     }
 
     // Constructors //
@@ -232,9 +245,9 @@ impl Display for KindSort {
         match self {
             KindSort::Ty(ty) => write!(f, "'({})", ty),
             KindSort::Abs(param, body) => write!(f, "{param} -> {body}"),
-            KindSort::Var(var) => write!(f, "{var}"),
+            KindSort::Var(var) => write!(f, "{}", var.pretty()),
             KindSort::Ex(ex) => write!(f, "{ex}"),
-            KindSort::Forall(var, body) => write!(f, "forall {var}. {body}"),
+            KindSort::Forall(var, body) => write!(f, "forall {}. {body}", var.pretty()),
         }
     }
 }
@@ -250,49 +263,83 @@ impl Display for KindData {
     }
 }
 
-pub struct KindInterner {
-    map: HashMap<u64, KindId>,
-    kinds: Vec<&'static KindData>,
-    kind_var_id: KindVarId,
-}
+mod interner {
+    use std::{
+        collections::{hash_map::DefaultHasher, HashMap, HashSet},
+        fmt::Display,
+        hash::{Hash, Hasher},
+        sync::RwLock,
+    };
 
-impl KindInterner {
-    pub fn new() -> Self {
-        Self {
-            map: Default::default(),
-            kinds: Default::default(),
-            kind_var_id: KindVarId::new(0),
+    use once_cell::sync::Lazy;
+
+    use super::{KindData, KindId, KindVarId};
+    use crate::{
+        cli::color::{Color, ColorizedStruct},
+        dt::idx::{declare_idx, Idx, IndexVec},
+        span::sym::Ident,
+        typeck::ty::{Ty, TyKind},
+    };
+
+    pub struct KindInterner {
+        map: HashMap<u64, KindId>,
+        kinds: Vec<&'static KindData>,
+        kind_var_id: KindVarId,
+        kind_var_names: IndexVec<KindVarId, Option<Ident>>,
+    }
+
+    impl KindInterner {
+        pub fn new() -> Self {
+            Self {
+                map: Default::default(),
+                kinds: Default::default(),
+                kind_var_id: KindVarId::new(0),
+                kind_var_names: Default::default(),
+            }
+        }
+
+        fn hash(kind: &KindData) -> u64 {
+            let mut state = DefaultHasher::new();
+            kind.hash(&mut state);
+            state.finish()
+        }
+
+        pub fn intern(&mut self, data: KindData) -> KindId {
+            let hash = Self::hash(&data);
+
+            if let Some(id) = self.map.get(&hash) {
+                return *id;
+            }
+
+            // !Leaked
+            let ty = Box::leak(Box::new(data));
+            let id = KindId::from(self.kinds.len());
+
+            self.map.insert(hash, id);
+            self.kinds.push(ty);
+
+            id
+        }
+
+        pub fn expect(&self, id: KindId) -> &'static KindData {
+            self.kinds
+                .get(id.as_usize())
+                .expect(&format!("Failed to find type by type id {}", id))
+        }
+
+        pub fn next_kind_var_id(&mut self, name: Option<Ident>) -> KindVarId {
+            let id = *self.kind_var_id.inc();
+            if let Some(name) = name {
+                assert!(self.kind_var_names.insert(id, name).is_none());
+            }
+            id
+        }
+
+        pub fn kind_var_name(&self, id: KindVarId) -> Option<Ident> {
+            self.kind_var_names.get_flat(id).copied()
         }
     }
 
-    fn hash(kind: &KindData) -> u64 {
-        let mut state = DefaultHasher::new();
-        kind.hash(&mut state);
-        state.finish()
-    }
-
-    pub fn intern(&mut self, data: KindData) -> KindId {
-        let hash = Self::hash(&data);
-
-        if let Some(id) = self.map.get(&hash) {
-            return *id;
-        }
-
-        // !Leaked
-        let ty = Box::leak(Box::new(data));
-        let id = KindId::from(self.kinds.len());
-
-        self.map.insert(hash, id);
-        self.kinds.push(ty);
-
-        id
-    }
-
-    pub fn expect(&self, id: KindId) -> &'static KindData {
-        self.kinds
-            .get(id.as_usize())
-            .expect(&format!("Failed to find type by type id {}", id))
-    }
+    pub static KIND_INTERNER: Lazy<RwLock<KindInterner>> =
+        Lazy::new(|| RwLock::new(KindInterner::new()));
 }
-
-static KIND_INTERNER: Lazy<RwLock<KindInterner>> = Lazy::new(|| RwLock::new(KindInterner::new()));

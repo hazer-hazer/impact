@@ -27,7 +27,7 @@ impl<'hir> Typecker<'hir> {
                     Ty::func(
                         Some(item_id.def_id()),
                         vec![Ty::str()],
-                        Ty::var(Ty::next_ty_var_id()),
+                        Ty::var(Ty::next_ty_var_id(None)),
                     ),
                 );
                 return Ok(Ty::unit());
@@ -63,7 +63,6 @@ impl<'hir> Typecker<'hir> {
                     .as_kind_ex()
                     .unwrap();
                 self.solve_kind_ex(conv_def_ty, Kind::new_ty(value_ty));
-                self.type_term(item.name(), value_ty);
                 value_ty
             },
             &ItemKind::Func(body) => {
@@ -75,7 +74,6 @@ impl<'hir> Typecker<'hir> {
                     .as_kind_ex()
                     .unwrap();
                 self.solve_kind_ex(conv_def_ty, Kind::new_ty(value_ty));
-                self.type_term(item.name(), value_ty);
                 value_ty
             },
             ItemKind::ExternItem(extern_item) => {
@@ -84,7 +82,6 @@ impl<'hir> Typecker<'hir> {
                     .get_conv(extern_item.ty)
                     .unwrap()
                     .maybe_add_func_def_id(item.def_id());
-                self.type_term(item.name(), ty);
                 ty
             },
             ItemKind::Adt(_) => self.tyctx().node_type(hir_id).unwrap(),
@@ -116,8 +113,6 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
         let local_ty = self.synth_expr(local.value)?.apply_ctx(self.ctx());
-        self.tyctx_mut().type_node(local.id, local_ty);
-        self.type_term(local.name, local_ty);
         self.type_inferring_node(local.id, local_ty);
         Ok(Ty::unit())
     }
@@ -140,7 +135,7 @@ impl<'hir> Typecker<'hir> {
 
         let expr_ty = expr_ty.apply_ctx(self.ctx());
 
-        self.type_inferring_node(expr_id.into(), expr_ty);
+        self.type_inferring_node(expr_id, expr_ty);
 
         Ok(expr_ty)
     }
@@ -248,7 +243,7 @@ impl<'hir> Typecker<'hir> {
                 .map_or(Ok(Ty::unit()), |&expr| this.synth_expr(expr));
 
             this.default_number_exes();
-            this.verify_ctx();
+            // this.verify_ctx();
 
             res_ty
         })
@@ -272,24 +267,23 @@ impl<'hir> Typecker<'hir> {
     // }
 
     // TODO: Update if type annotations added
-    fn get_param_type(&mut self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
+    fn get_param_type(&mut self, pat: Pat) -> Vec<(Pat, Ty)> {
         match self.hir.pat(pat).kind() {
-            hir::pat::PatKind::Unit => vec![(None, Ty::unit())],
-            &hir::pat::PatKind::Ident(name) => {
-                vec![(Some(name), self.add_fresh_kind_ex().1)]
+            hir::pat::PatKind::Unit => vec![(pat, Ty::unit())],
+            &hir::pat::PatKind::Ident(_) => {
+                vec![(pat, self.add_fresh_kind_ex().1)]
             },
         }
     }
 
-    /// Get pattern type based on current context, applying context to
-    ///  typed terms that appear in pattern as identifiers (Ident pattern)
-    fn get_typed_pat(&self, pat: Pat) -> Ty {
+    fn get_typed_pat(&mut self, pat: Pat) -> Ty {
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => Ty::unit(),
 
             // Assumed that all names in pattern are typed, at least as existentials
-            &hir::pat::PatKind::Ident(name) => self
-                .lookup_typed_term_ty(name)
+            &hir::pat::PatKind::Ident(_) => self
+                .tyctx_mut()
+                .node_type(pat)
                 .unwrap()
                 .apply_ctx(self.ctx()),
         }
@@ -307,7 +301,7 @@ impl<'hir> Typecker<'hir> {
             return self.synth_value_body(*value);
         }
 
-        let params_names_tys = params
+        let params_pats_tys = params
             .iter()
             .copied()
             .map(|param| self.get_param_type(param))
@@ -316,10 +310,8 @@ impl<'hir> Typecker<'hir> {
         let body_ex = self.add_fresh_kind_ex();
 
         self.under_new_ctx(|this| {
-            params_names_tys.iter().flatten().for_each(|&(name, ty)| {
-                if let Some(name) = name {
-                    this.type_term(name, ty);
-                }
+            params_pats_tys.iter().flatten().for_each(|&(pat, ty)| {
+                this.type_inferring_node(pat, ty);
             });
 
             let body_ty = this.check_discard_err(self.hir.body_value(body_id), body_ex.1);
@@ -343,18 +335,18 @@ impl<'hir> Typecker<'hir> {
                 .iter()
                 .copied()
                 .zip(params_tys.iter().copied())
-                .for_each(|(param, ty)| this.type_inferring_node(param.into(), ty));
+                .for_each(|(param, ty)| this.type_inferring_node(param, ty));
 
             // FIXME: Clone
             let func_ty = params_tys.iter().fold(
                 Ty::func(Some(owner_def_id), params_tys.clone(), body_ty),
                 |func_ty, &param_ty| {
                     if let Some(ex) = this.is_unsolved_ex(param_ty) {
-                        let ty_var = Ty::next_ty_var_id();
+                        let ty_var = Ty::next_ty_var_id(None);
                         this.solve(ex, Ty::var(ty_var).mono());
                         Ty::forall(ty_var, func_ty)
                     } else if let Some(ex) = this.is_unsolved_kind_ex(param_ty) {
-                        let kind_var = Kind::next_kind_var_id();
+                        let kind_var = Kind::next_kind_var_id(None);
                         this.solve_kind_ex(ex, Kind::new_var(kind_var));
                         Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
                     } else {

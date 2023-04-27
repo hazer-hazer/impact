@@ -61,7 +61,7 @@ impl<'hir> Typecker<'hir> {
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         match self._check(expr_id, ty) {
             Ok(ok) => {
-                self.type_inferring_node(expr_id.into(), ty);
+                self.type_inferring_node(expr_id, ty);
                 Ok(ok.apply_ctx(self.ctx()))
             },
             Err(_) => {
@@ -125,25 +125,24 @@ impl<'hir> Typecker<'hir> {
                 }
             },
 
-            (
-                &ExprKind::Lambda(Lambda { body_id: body, .. }),
-                TyKind::FuncDef(_, params_tys, body_ty),
-            ) => {
-                let param_names = self
-                    .hir
-                    .body(body)
-                    .params
-                    .iter()
-                    .filter_map(|param| self.hir.pat_names(*param))
-                    .flatten()
-                    .collect::<Vec<Ident>>();
+            // (
+            //     &ExprKind::Lambda(Lambda { body_id: body, .. }),
+            //     TyKind::FuncDef(_, params_tys, body_ty),
+            // ) => {
+            //     let param_names = self
+            //         .hir
+            //         .body(body)
+            //         .params
+            //         .iter()
+            //         .filter_map(|param| self.hir.pat_names(*param))
+            //         .flatten()
+            //         .collect::<Vec<Ident>>();
 
-                self.under_ctx(
-                    InferCtx::new_with_term_map(&param_names, &params_tys),
-                    |this| this._check(self.hir.body(body).value, *body_ty),
-                )
-            },
-
+            //     self.under_ctx(
+            //         InferCtx::new_with_term_map(&param_names, &params_tys),
+            //         |this| this._check(self.hir.body(body).value, *body_ty),
+            //     )
+            // },
             (_, &TyKind::Forall(alpha, body)) => {
                 self.under_ctx(InferCtx::new_with_var(alpha), |this| {
                     this._check(expr_id, body)?;
@@ -232,9 +231,6 @@ impl<'hir> Typecker<'hir> {
 
     /// Subtype logic starts here.
     pub fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
-        assert!(self.ty_wf(l_ty).is_ok());
-        assert!(self.ty_wf(r_ty).is_ok());
-
         match (l_ty.kind(), r_ty.kind()) {
             (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
 
@@ -249,9 +245,7 @@ impl<'hir> Typecker<'hir> {
 
             (TyKind::Var(var), TyKind::Var(var_)) if var == var_ => Ok(r_ty),
 
-            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => {
-                self.ty_wf(l_ty).and(self.ty_wf(r_ty))
-            },
+            (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => Ok(r_ty),
 
             // Int existentials //
             (&TyKind::Existential(int_ex), TyKind::Int(_)) if int_ex.is_int() => {
@@ -260,7 +254,9 @@ impl<'hir> Typecker<'hir> {
 
             (&TyKind::Existential(int_ex), &TyKind::Existential(ex)) if int_ex.is_int() => {
                 // FIXME: This is a test logic
-                Ok(self.solve(ex, Ty::default_int().mono()))
+                let sol = Ty::default_int();
+                self.solve(int_ex, sol.mono());
+                Ok(self.solve(ex, sol.mono()))
             },
 
             (TyKind::Existential(int_ex), _) if int_ex.is_int() => Err(TypeckErr::LateReport),

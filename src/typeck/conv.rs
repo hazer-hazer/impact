@@ -90,7 +90,7 @@ impl<'hir> TyConv<'hir> {
                 TyBuiltin::I32 => Ty::int(IntKind::I32),
                 TyBuiltin::Str => Ty::str(),
                 TyBuiltin::RefTy => {
-                    let kind_var = Kind::next_kind_var_id();
+                    let kind_var = Kind::next_kind_var_id(None);
                     Ty::ty_kind(Kind::new_forall(
                         kind_var,
                         Kind::new_abs(
@@ -207,7 +207,7 @@ impl<'hir> TyConv<'hir> {
             let v_def_id = variant_node.def_id;
 
             self.tyctx_mut().set_variant_id(v_def_id, vid);
-            self.tyctx_mut().type_node(v_hir_id.into(), adt_ty);
+            self.tyctx_mut().type_node(v_hir_id, adt_ty);
             self.tyctx_mut().type_def(v_def_id, adt_ty);
 
             let degeneralized_adt_ty = adt_ty.degeneralize();
@@ -279,7 +279,7 @@ impl<'hir> HirVisitor for TyConv<'hir> {
     fn visit_ty_param(&mut self, ty_param: &TyParam, _: &HIR) {
         assert!(self
             .ty_params
-            .insert(ty_param.def_id, Ty::next_ty_var_id())
+            .insert(ty_param.def_id, Ty::next_ty_var_id(Some(ty_param.name)))
             .is_none());
     }
 

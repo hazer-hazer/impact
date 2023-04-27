@@ -134,7 +134,11 @@ impl TyCtx {
         *self.kind_ex.inc()
     }
 
-    pub fn type_node(&mut self, id: HirId, ty: Ty) {
+    pub fn type_node<Id>(&mut self, id: Id, ty: Ty)
+    where
+        Id: Into<HirId>,
+    {
+        let id = id.into();
         verbose!("Type node {} with {}", id, ty);
         // assert!(
         //     self.typed.insert(id, ty).is_none(),

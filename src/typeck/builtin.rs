@@ -93,7 +93,8 @@ macro_rules! ty {
     (@inner $ctx: expr;
         $kind_var: lifetime -> $($cons: tt)+
     ) => {{
-        let kind_var = Kind::next_kind_var_id();
+        use crate::span::sym::{Internable, Ident};
+        let kind_var = Kind::next_kind_var_id(Some(Ident::synthetic(stringify!($kind_var).intern())));
         $ctx.add_kind_var(stringify!($kind_var), kind_var);
         Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_abs(Kind::new_var(kind_var), Kind::new_ty(ty!(@inner $ctx; $($cons)+)))))
     }};
@@ -107,7 +108,8 @@ macro_rules! ty {
     (@inner $ctx: expr;
         forall $alpha: ident. $($forall_body: tt)+
     ) => {{
-        let ty_var = Ty::next_ty_var_id();
+        use crate::span::sym::{Internable, Ident};
+        let ty_var = Ty::next_ty_var_id(Some(Ident::synthetic(stringify!($alpha).intern())));
         $ctx.add_ty_var(stringify!($alpha), ty_var);
         Ty::forall(ty_var, ty!(@inner $ctx; $($forall_body)+))
     }};

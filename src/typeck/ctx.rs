@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use super::{
     kind::{Kind, KindEx, KindExId, KindVarId},
-    ty::{Ex, ExId, ExKind, Ty, TyVarId},
+    ty::{Ex, ExId, ExKind, MonoTy, Ty, TyVarId},
 };
 use crate::{
+    cli::verbose,
     dt::idx::IndexVec,
     hir::HirId,
     span::sym::{Ident, Symbol},
@@ -22,7 +23,7 @@ pub struct GlobalCtx {
     // FIXME: This might be absolutely wrong
     existentials: IndexVec<ExId, Option<(usize, usize)>>,
 
-    kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
+    solved_kind_exes: IndexVec<KindExId, Option<Kind>>,
     kind_exes: IndexVec<KindExId, Option<(usize, usize)>>,
 }
 
@@ -32,7 +33,7 @@ impl AlgoCtx for GlobalCtx {
     }
 
     fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
-        self.kind_exes_sol.get_flat(ex.id()).copied()
+        self.solved_kind_exes.get_flat(ex.id()).copied()
     }
 }
 
@@ -42,15 +43,21 @@ impl GlobalCtx {
     /// because we need them to get a solution for solved types
     /// having either successfully inferred type or a typeck error.
     pub fn add(&mut self, depth: usize, ctx: InferCtx) {
+        ctx.solved().for_each(|(ex, &sol)| {
+            verbose!("Extract solution {ex} = {sol} to global ctx from [CTX {depth}]");
+            assert!(self.solved.insert(ex, sol).is_none());
+        });
+
+        ctx.solved_kind_exes().for_each(|(ex, &sol)| {
+            verbose!("Extract solution {ex} = {sol} to global ctx from [CTX {depth}]");
+            assert!(self.solved_kind_exes.insert(ex, sol).is_none());
+        });
+
         ctx.existentials()
             .iter()
             .enumerate()
             .for_each(|(index, &ex)| {
-                if let Some(sol) = ctx.get_solution(ex) {
-                    assert!(self.solved.insert(ex.id(), sol).is_none());
-                } else {
-                    assert!(self.existentials.insert(ex.id(), (depth, index)).is_none())
-                }
+                assert!(self.existentials.insert(ex.id(), (depth, index)).is_none())
             });
     }
 
@@ -62,7 +69,7 @@ impl GlobalCtx {
         self.kind_exes
             .iter_enumerated_flat()
             .any(|(ex_, _)| ex.id() == ex_)
-            || self.kind_exes_sol.has(ex.id())
+            || self.solved_kind_exes.has(ex.id())
     }
 
     pub fn get_ex_index(&self, ex: Ex) -> Option<(usize, usize)> {
@@ -135,11 +142,6 @@ pub struct InferCtx {
     /// context. Actually only used for well-formedness checks.
     vars: Vec<TyVarId>,
 
-    /// Typed terms. Do not leak to global context
-    /// FIXME: Possibly get rid of this. Could be replaced with `HirId -> Ty`
-    /// bindings globally.
-    terms: HashMap<Symbol, Ty>,
-
     /// Kind variables defined in current context. Do not leak to global
     /// context. As type variables only used for well-formedness checks.
     kind_vars: Vec<KindVarId>,
@@ -149,10 +151,9 @@ pub struct InferCtx {
 
     /// Kind existentials solved in current context. Have same properties as
     /// `solved`.
-    kind_exes_sol: IndexVec<KindExId, Option<Kind>>,
-
-    // TODO: Might be only Expr nodes
-    inferring_nodes: Vec<HirId>,
+    solved_kind_exes: IndexVec<KindExId, Option<Kind>>,
+    // // TODO: Might be only Expr nodes
+    // inferring_nodes: Vec<HirId>,
 }
 
 impl AlgoCtx for InferCtx {
@@ -161,7 +162,7 @@ impl AlgoCtx for InferCtx {
     }
 
     fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
-        self.kind_exes_sol.get_flat(ex.id()).copied()
+        self.solved_kind_exes.get_flat(ex.id()).copied()
     }
 }
 
@@ -181,25 +182,6 @@ impl InferCtx {
         }
     }
 
-    pub fn new_with_term(name: Ident, ty: Ty) -> Self {
-        Self {
-            terms: HashMap::from([(name.sym(), ty)]),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_term_map(names: &[Ident], tys: &[Ty]) -> Self {
-        assert_eq!(names.len(), tys.len());
-        Self {
-            terms: names
-                .iter()
-                .map(|name| name.sym())
-                .zip(tys.iter().copied())
-                .collect::<HashMap<_, _>>(),
-            ..Default::default()
-        }
-    }
-
     pub fn new_with_kind_ex(ex: KindEx) -> Self {
         Self {
             kind_exes: Vec::from([ex]),
@@ -214,20 +196,16 @@ impl InferCtx {
         }
     }
 
-    pub fn add_inferring_node(&mut self, id: HirId) {
-        // assert!(!self.inferring_nodes.contains(&id));
-        self.inferring_nodes.push(id);
-    }
+    // pub fn add_inferring_node(&mut self, id: HirId) {
+    //     // assert!(!self.inferring_nodes.contains(&id));
+    //     self.inferring_nodes.push(id);
+    // }
 
-    pub fn inferring_nodes(&self) -> &[HirId] {
-        self.inferring_nodes.as_ref()
-    }
+    // pub fn inferring_nodes(&self) -> &[HirId] {
+    //     self.inferring_nodes.as_ref()
+    // }
 
     // Getters //
-    pub fn get_term(&self, name: Ident) -> Option<Ty> {
-        self.terms.get(&name.sym()).copied()
-    }
-
     pub fn get_var(&self, var: TyVarId) -> Option<TyVarId> {
         self.vars.iter().find(|&&_var| var == _var).copied()
     }
@@ -283,34 +261,21 @@ impl InferCtx {
         self.kind_exes.push(ex);
     }
 
-    pub fn type_term(&mut self, name: Ident, ty: Ty) {
-        assert!(
-            self.terms.insert(name.sym(), ty).is_none(),
-            "{} is already typed as {}",
-            name,
-            ty,
-        )
-    }
-
     /// Returns solution if existential is in context.
-    pub fn solve(&mut self, ex: Ex, sol: Ty) -> Option<Ty> {
-        if self.has_ex(ex) {
-            assert!(
-                self.solved.insert(ex.id(), sol).is_none(),
-                "Tried to override solution of {} = {} to {}",
-                ex,
-                self.solved.get_unwrap(ex.id()),
-                sol
-            );
-            Some(sol)
-        } else {
-            None
-        }
+    pub fn solve(&mut self, ex: Ex, sol: MonoTy) {
+        let sol = sol.ty;
+        assert!(
+            self.solved.insert(ex.id(), sol).is_none(),
+            "Tried to override solution of {} = {} to {}",
+            ex,
+            self.solved.get_unwrap(ex.id()),
+            sol
+        );
     }
 
     pub fn solve_kind_ex(&mut self, ex: KindEx, sol: Kind) {
         // TODO: Can existentials out of context be solved here?
-        assert!(self.kind_exes_sol.insert(ex.id(), sol).is_none());
+        assert!(self.solved_kind_exes.insert(ex.id(), sol).is_none());
     }
 
     // Getters //
@@ -325,6 +290,14 @@ impl InferCtx {
                 }
             })
             .collect()
+    }
+
+    pub fn solved(&self) -> impl Iterator<Item = (ExId, &Ty)> {
+        self.solved.iter_enumerated_flat()
+    }
+
+    pub fn solved_kind_exes(&self) -> impl Iterator<Item = (KindExId, &Kind)> {
+        self.solved_kind_exes.iter_enumerated_flat()
     }
 
     pub fn int_exes(&self) -> Vec<Ex> {
@@ -345,10 +318,6 @@ impl InferCtx {
                 _ => None,
             })
             .collect()
-    }
-
-    pub fn terms(&self) -> &HashMap<Symbol, Ty> {
-        &self.terms
     }
 
     pub fn existentials(&self) -> &Vec<Ex> {
