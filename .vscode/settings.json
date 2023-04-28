@@ -2,6 +2,7 @@
   "cSpell.words": [
     "alloca",
     "arity",
+    "bidir",
     "builtins",
     "CIFR",
     "codegen",
@@ -49,6 +50,7 @@
     "tyof",
     "typeck",
     "Typecker",
+    "tyvars",
     "uncolorize",
     "uncurried",
     "uninferred",

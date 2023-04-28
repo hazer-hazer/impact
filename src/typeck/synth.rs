@@ -52,20 +52,8 @@ impl<'hir> Typecker<'hir> {
             },
             // Note: Actually, declaration type is a unit type, but we save it
             // TODO: Add encapsulation layer such as `get_def_ty` (with closed access to
-            // TyCtx::typed) which will check if definition CAN have a type TODO: Merge
-            // these branches?
-            &ItemKind::Value(value) => {
-                let value_ty = self.synth_body(item.def_id(), value)?;
-                let conv_def_ty = self
-                    .tyctx()
-                    .def_ty(item_id.def_id())
-                    .unwrap()
-                    .as_kind_ex()
-                    .unwrap();
-                self.solve_kind_ex(conv_def_ty, Kind::new_ty(value_ty));
-                value_ty
-            },
-            &ItemKind::Func(body) => {
+            // TyCtx::typed) which will check if definition CAN have a type
+            &ItemKind::Value(body) | &ItemKind::Func(body) => {
                 let value_ty = self.synth_body(item.def_id(), body)?;
                 let conv_def_ty = self
                     .tyctx()
@@ -178,7 +166,7 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_ty_expr(&mut self, ty_expr: &TyExpr) -> TyResult<Ty> {
         // FIXME: Check wf?
-        // FIXME: Do we need `try_to`?
+        // FIXME: Do we need `try_to` here?
         self.try_to(|this| {
             let anno_ty = this.tyctx().get_conv(ty_expr.ty).unwrap();
             this.check(ty_expr.expr, anno_ty)
@@ -193,7 +181,7 @@ impl<'hir> Typecker<'hir> {
     ) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(lhs)?;
 
-        // FIXME: Really bug if not data?
+        // FIXME: Really bug if not adt?
         let adt = lhs_ty.as_adt().unwrap();
         let variants = &adt.variants;
 
@@ -296,7 +284,7 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_body(&mut self, owner_def_id: DefId, body_id: BodyId) -> TyResult<Ty> {
         let Body { params, value } = self.hir.body(body_id);
-        // FIXME: Rewrite when `match` added
+        // FIXME: Rewrite when `match` added - WHY?
 
         if params.is_empty() {
             return self.synth_value_body(*value);
@@ -325,7 +313,8 @@ impl<'hir> Typecker<'hir> {
                 .collect::<Vec<_>>();
 
             // If we know of which type function parameter is -- check inferred one against
-            // it FIXME: Kinda useless
+            // it
+            // FIXME: Kinda useless
             // let param_ty = if let Some(early) = early_param_ty {
             //     this.check_ty_discard_err(Spanned::new(this.hir.pat(param).span(),
             // param_ty), early) } else {
@@ -413,13 +402,11 @@ impl<'hir> Typecker<'hir> {
         let lhs_ty = lhs.node().ty();
 
         match lhs_ty.kind() {
-            // FIXME: Or return Ok(lhs_ty)?
             TyKind::Error => Ok(lhs_ty),
             &TyKind::Existential(ex) => {
                 // // FIXME: Under context or `try_to` to escape types?
                 self.try_to(|this| {
-                    // FIXME: Add multiple arguments
-                    let params_exes = this.add_fresh_common_ex_list(1);
+                    let params_exes = this.add_fresh_common_ex_list(args.len());
 
                     let body_ex = this.add_fresh_common_ex();
                     let func_ty = Ty::func(
@@ -429,8 +416,8 @@ impl<'hir> Typecker<'hir> {
                     );
                     this.solve(ex, func_ty.mono());
 
-                    // TODO: Can we infer param type from application as below in Func?
-                    // FIXME: Add multiple args
+                    // TODO: Can we infer param type from application as below in Func? - Yes, read
+                    //  "Let arguments go first", but I don't like "from the outside in" inferring.
                     args.iter()
                         .copied()
                         .zip(params_exes.iter().copied())
@@ -468,7 +455,8 @@ impl<'hir> Typecker<'hir> {
 
                 body_ty
             },
-            // FIXME: Type variable can be a callee?
+            // FIXME: Type variable can be a callee? - "I'm pretty sure, that all tyvars here must
+            // be replaced with existentials"
             _ => {
                 MessageBuilder::error()
                     .text(format!("{} cannot be called", lhs_ty))

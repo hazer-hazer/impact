@@ -3,8 +3,8 @@ use std::fmt::Display;
 use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
     kind::{Kind, KindEx, KindExId, KindSort},
-    ty::{Ex, ExId, ExKind, ExPair, MonoTy, Ty, TyKind, TyVarId},
-    tyctx::TyCtx,
+    ty::{Ex, ExId, ExKind, ExPair, Ty, TyKind, TyVarId},
+    tyctx::TyCtx, ty_infer::MonoTy,
 };
 use crate::{
     cli::verbose,
@@ -14,7 +14,7 @@ use crate::{
     resolve::def::DefId,
     session::{stage_result, Session, Stage, StageResult},
     span::sym::Ident,
-    typeck::{conv::TyConv, ty::MonoTyKind},
+    typeck::{conv::TyConv, ty_infer::MonoTyKind},
 };
 
 pub mod builtin;
@@ -25,6 +25,7 @@ mod err;
 pub mod kind;
 mod synth;
 pub mod ty;
+mod ty_infer;
 pub mod tyctx;
 
 #[derive(Debug)]

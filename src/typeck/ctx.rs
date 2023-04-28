@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use super::{
     kind::{Kind, KindEx, KindExId, KindVarId},
-    ty::{Ex, ExId, ExKind, MonoTy, Ty, TyVarId},
+    ty::{Ex, ExId, ExKind, Ty, TyVarId},
+    ty_infer::MonoTy,
 };
 use crate::{
     cli::verbose,

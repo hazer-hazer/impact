@@ -18,6 +18,17 @@ macro_rules! match_expected {
 
 pub(crate) use match_expected;
 
+macro_rules! match_opt {
+    ($expr: expr, $($patterns: pat => $arms: expr),+) => {
+        match $expr {
+            $($patterns => Some($arms),)+
+            _ => None,
+        }
+    };
+}
+
+pub(crate) use match_opt;
+
 macro_rules! concat_string {
     () => { String::with_capacity(0) };
     ($($s:expr),+) => {{

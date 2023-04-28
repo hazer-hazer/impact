@@ -207,7 +207,7 @@ impl Kind {
     pub fn get_ty_vars(&self) -> HashSet<TyVarId> {
         match self.sort() {
             KindSort::Var(_) | KindSort::Ex(_) => HashSet::default(),
-            KindSort::Ty(ty) => ty.get_ty_vars(),
+            KindSort::Ty(ty) => ty.inner_ty_vars(),
             KindSort::Abs(param, body) => param
                 .get_ty_vars()
                 .into_iter()

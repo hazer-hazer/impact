@@ -491,7 +491,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn instantiate_func(&mut self, dir: InstantiateDir, ty: Ty, ex: Ex) -> TyResult<Ty> {
-        let (params, body) = ty.as_func_like();
+        let (params, body) = ty.as_func_like().unwrap();
 
         self.try_to(|this| {
             let range_ex = this.add_fresh_common_ex();
