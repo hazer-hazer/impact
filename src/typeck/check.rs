@@ -59,7 +59,8 @@ impl<'hir> Typecker<'hir> {
 
     /// Checks if expression is of type `ty`.
     /// Reports `Type mismatch` error.
-    /// expr_id == HirId::synth(18, 4) && ty.as_ex().map_or(false, |ex| ex.id == ExId::new(1))
+    /// expr_id == HirId::synth(18, 4) && ty.as_ex().map_or(false, |ex| ex.id ==
+    /// ExId::new(1))
     pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         verbose!("Check expr {expr_id} is of type {ty}");
         match self._check(expr_id, ty) {
@@ -127,7 +128,7 @@ impl<'hir> Typecker<'hir> {
 
                     // Unequal literals (not existentials as we not failed
                     //  to construct PrimTy of Lit without context)
-                    _ => Err(TypeckErr::LateReport),
+                    _ => self.expr_subtype(expr_id, ty),
                 }
             },
 
@@ -237,6 +238,7 @@ impl<'hir> Typecker<'hir> {
 
     /// Subtype logic starts here.
     pub fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
+        verbose!("subtype {l_ty} {r_ty}");
         match (l_ty.kind(), r_ty.kind()) {
             (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
 
@@ -262,7 +264,11 @@ impl<'hir> Typecker<'hir> {
 
             // int^a <: ^b
             // FIXME: Might not be valid logic
-            (&TyKind::Existential(int_ex), &TyKind::Existential(ex)) if int_ex.is_int() => {
+            (&TyKind::Existential(int_ex), &TyKind::Existential(ex))
+            | (&TyKind::Existential(ex), &TyKind::Existential(int_ex))
+                if int_ex.is_int() =>
+            {
+                verbose!("{ex} :=: {int_ex}");
                 // FIXME: This is a test logic
                 let sol = Ty::default_int();
                 self.solve(int_ex, sol.mono());

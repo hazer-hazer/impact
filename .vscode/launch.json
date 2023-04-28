@@ -18,13 +18,15 @@
       "request": "launch",
       "name": "Debug executable 'impact'",
       "cargo": {
-        "args": ["build", "--bin=impact", "--package=impact"],
+        "args": ["build", "--bin=impact", "--package=impact", "--features", "verbose_debug"],
         "filter": {
           "name": "impact",
           "kind": "bin"
         }
       },
-      "args": [],
+      "args": [
+        "--compilation-depth", "typeck"
+      ],
       "cwd": "${workspaceFolder}"
     },
     {

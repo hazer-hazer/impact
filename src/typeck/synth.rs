@@ -242,7 +242,8 @@ impl<'hir> Typecker<'hir> {
                 .expr()
                 .map_or(Ok(Ty::unit()), |&expr| this.synth_expr(expr));
 
-            this.default_number_exes();
+            // FIXME: Can we live without this?
+            // this.default_number_exes();
             // this.verify_ctx();
 
             res_ty
