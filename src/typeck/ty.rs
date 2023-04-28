@@ -1,26 +1,16 @@
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     fmt::Formatter,
     hash::{Hash, Hasher},
-    sync::RwLock,
 };
 
-use once_cell::sync::Lazy;
-
-use super::{
-    ctx::AlgoCtx,
-    kind::{Kind, KindEx, KindSort},
-};
+use super::kind::Kind;
 use crate::{
-    cli::{
-        color::{Color, ColorizedStruct},
-        verbose,
-    },
+    cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
     span::sym::Ident,
-    utils::macros::{match_expected, match_opt},
+    utils::macros::match_opt,
 };
 
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
@@ -382,9 +372,6 @@ impl std::fmt::Display for Adt {
     }
 }
 
-pub type FuncDefTyInner = (DefId, Vec<Ty>, Ty);
-pub type FuncTyInner = (Vec<Ty>, Ty);
-
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
     Error,
@@ -435,7 +422,7 @@ impl std::fmt::Display for TyKind {
                     .join(" - "),
                 body
             ),
-            TyKind::FuncDef(def_id, params, body) => {
+            TyKind::FuncDef(_def_id, params, body) => {
                 write!(
                     f,
                     "{} -> {}",
@@ -661,39 +648,6 @@ impl std::fmt::Display for Ty {
         self.kind().to_string().fmt(f)
     }
 }
-
-// #[derive(Clone, Copy, Debug)]
-// pub enum Subst {
-//     Existential(Existential),
-//     Var(TyVarId),
-// }
-
-// impl std::fmt::Display for Subst {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Subst::Existential(ex) => ex.fmt(f),
-//             Subst::Var(var) => var.fmt(f),
-//         }
-//     }
-// }
-
-// impl PartialEq<TyVarId> for Subst {
-//     fn eq(&self, other: &TyVarId) -> bool {
-//         match (self, other) {
-//             (Self::Var(var), other) => var == other,
-//             _ => false,
-//         }
-//     }
-// }
-
-// impl PartialEq<Existential> for Subst {
-//     fn eq(&self, other: &Existential) -> bool {
-//         match (self, other) {
-//             (Self::Existential(ex), other) => ex.id() == other.id(),
-//             _ => false,
-//         }
-//     }
-// }
 
 // TODO: Move some tests to `ty_infer` mod
 #[cfg(test)]

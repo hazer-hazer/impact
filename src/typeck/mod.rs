@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
-    kind::{Kind, KindEx, KindExId, KindSort},
-    ty::{Ex, ExId, ExKind, ExPair, Ty, TyKind, TyVarId},
+    kind::{Kind, KindEx, KindSort},
+    ty::{Ex, ExKind, ExPair, Ty, TyKind, TyVarId},
     tyctx::TyCtx, ty_infer::MonoTy,
 };
 use crate::{
@@ -13,7 +13,6 @@ use crate::{
     message::message::{MessageHolder, MessageStorage},
     resolve::def::DefId,
     session::{stage_result, Session, Stage, StageResult},
-    span::sym::Ident,
     typeck::{conv::TyConv, ty_infer::MonoTyKind},
 };
 

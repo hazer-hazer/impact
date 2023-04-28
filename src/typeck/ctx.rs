@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use super::{
     kind::{Kind, KindEx, KindExId, KindVarId},
@@ -8,8 +8,6 @@ use super::{
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::HirId,
-    span::sym::{Ident, Symbol},
 };
 
 pub trait AlgoCtx {

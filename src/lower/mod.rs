@@ -19,7 +19,7 @@ use crate::{
     message::message::{MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::{
-        builtin::{Builtin, DeclareBuiltin},
+        builtin::{DeclareBuiltin},
         def::{DefId, DefKind},
         res::{self, NamePath, ResKind},
     },

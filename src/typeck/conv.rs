@@ -1,13 +1,13 @@
 use super::{
     kind::{Kind, KindEx},
-    ty::{Adt, Ex, Field, FieldId, IntKind, TyVarId, Variant, VariantId},
+    ty::{Adt, Field, FieldId, IntKind, TyVarId, Variant, VariantId},
     tyctx::TyCtx,
 };
 use crate::{
     dt::idx::IndexVec,
     hir::{
         self,
-        item::{ExternItem, GenericParams, ItemId, TyAlias, TyParam},
+        item::{GenericParams, ItemId, TyAlias, TyParam},
         visitor::{walk_each, HirVisitor},
         BodyOwner, TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },

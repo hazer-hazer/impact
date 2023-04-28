@@ -50,9 +50,11 @@ impl<'ctx> ThirBuilder<'ctx> {
             hir::expr::ExprKind::Lit(lit) => {
                 let lit = match *lit {
                     hir::expr::Lit::Bool(val) => Lit::Bool(val),
-                    hir::expr::Lit::Int(val, _) => Lit::Int(val, self.tyctx.tyof(expr_id).as_int()),
+                    hir::expr::Lit::Int(val, _) => {
+                        Lit::Int(val, self.tyctx.tyof(expr_id).as_int().unwrap())
+                    },
                     hir::expr::Lit::Float(val, _) => {
-                        Lit::Float(val, self.tyctx.tyof(expr_id).as_float_kind())
+                        Lit::Float(val, self.tyctx.tyof(expr_id).as_float_kind().unwrap())
                     },
                     hir::expr::Lit::String(val) => Lit::String(val),
                 };

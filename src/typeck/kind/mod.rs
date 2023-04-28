@@ -1,13 +1,10 @@
 pub mod check;
 
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::HashSet,
     fmt::Display,
     hash::{Hash, Hasher},
-    sync::RwLock,
 };
-
-use once_cell::sync::Lazy;
 
 use self::interner::KIND_INTERNER;
 use super::{
@@ -16,7 +13,7 @@ use super::{
 };
 use crate::{
     cli::color::{Color, ColorizedStruct},
-    dt::idx::{declare_idx, Idx, IndexVec},
+    dt::idx::{declare_idx, Idx},
     span::sym::Ident,
     typeck::ty::{Ty, TyKind},
 };
@@ -265,8 +262,7 @@ impl Display for KindData {
 
 mod interner {
     use std::{
-        collections::{hash_map::DefaultHasher, HashMap, HashSet},
-        fmt::Display,
+        collections::{hash_map::DefaultHasher, HashMap},
         hash::{Hash, Hasher},
         sync::RwLock,
     };
@@ -275,10 +271,8 @@ mod interner {
 
     use super::{KindData, KindId, KindVarId};
     use crate::{
-        cli::color::{Color, ColorizedStruct},
-        dt::idx::{declare_idx, Idx, IndexVec},
+        dt::idx::{Idx, IndexVec},
         span::sym::Ident,
-        typeck::ty::{Ty, TyKind},
     };
 
     pub struct KindInterner {

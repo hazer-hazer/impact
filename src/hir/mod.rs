@@ -20,7 +20,6 @@ use crate::{
         new_type::new_type,
     },
     resolve::{
-        builtin::{TyBuiltin, ValueBuiltin},
         def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
     },
     span::{

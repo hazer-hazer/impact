@@ -130,7 +130,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         self.builder.position_at_end(body_bb);
 
         let alloca_builder = self.new_alloca_builder();
-        let return_local_ty = self.ctx.conv_basic_ty(self.func_ty.return_ty());
+        let return_local_ty = self.ctx.conv_basic_ty(self.func_ty.return_ty().unwrap());
         let return_local_value = alloca_builder.build_alloca(return_local_ty, "return_value");
         self.add_local(Local::return_local(), return_local_value);
 

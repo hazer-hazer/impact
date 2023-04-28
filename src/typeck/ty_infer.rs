@@ -1,13 +1,12 @@
 // Ty methods used only in typeck and unavailable outside of typeck
 
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{HashSet},
     fmt::Formatter,
     hash::{Hash, Hasher},
-    sync::RwLock,
 };
 
-use once_cell::sync::Lazy;
+
 
 use self::interner::TY_INTERNER;
 use super::{
@@ -17,18 +16,15 @@ use super::{
 };
 use crate::{
     cli::{
-        color::{Color, ColorizedStruct},
         verbose,
     },
-    dt::idx::{declare_idx, Idx, IndexVec},
-    hir::{self},
+    dt::idx::{Idx},
     resolve::def::DefId,
     span::sym::Ident,
     typeck::{
         kind::{Kind, KindEx, KindSort},
-        ty::{Ex, TyId, TyKind, TyVarId},
+        ty::{Ex, TyKind, TyVarId},
     },
-    utils::macros::match_expected,
 };
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -431,29 +427,20 @@ impl TryFrom<Ty> for MonoTy {
 
 mod interner {
     use std::{
-        collections::{hash_map::DefaultHasher, HashMap, HashSet},
-        fmt::Formatter,
+        collections::{hash_map::DefaultHasher, HashMap},
         hash::{Hash, Hasher},
         sync::RwLock,
     };
 
     use once_cell::sync::Lazy;
 
-    use super::{Ty, TyS};
+    use super::{TyS};
     use crate::{
-        cli::{
-            color::{Color, ColorizedStruct},
-            verbose,
-        },
-        dt::idx::{declare_idx, Idx, IndexVec},
-        hir::{self},
-        resolve::def::DefId,
+        dt::idx::{Idx, IndexVec},
         span::sym::Ident,
         typeck::{
-            kind::{Kind, KindEx, KindSort},
-            ty::{Ex, TyId, TyKind, TyVarId},
+            ty::{TyId, TyVarId},
         },
-        utils::macros::match_expected,
     };
 
     pub static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| RwLock::new(TyInterner::new()));

@@ -7,11 +7,11 @@ use crate::{
     cli::verbose,
     dt::idx::IndexVec,
     hir::{
-        expr::{ExprKind, Lambda, Lit},
+        expr::{ExprKind, Lit},
         Expr,
     },
     message::message::MessageBuilder,
-    span::{sym::Ident, Spanned, WithSpan},
+    span::{Spanned, WithSpan},
     typeck::{
         ty::{Adt, ExPair, Field, FieldId, Variant, VariantId},
         TypeckErr,
