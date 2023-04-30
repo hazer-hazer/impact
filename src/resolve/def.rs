@@ -102,9 +102,9 @@ pub type DefMap<T> = IndexVec<DefId, Option<T>>;
 /// Definition of item, e.g. type
 #[derive(Debug, Clone)]
 pub struct Def {
-    pub def_id: DefId,
-    pub kind: DefKind,
-    pub name: Ident,
+    def_id: DefId,
+    kind: DefKind,
+    name: Ident,
 }
 
 impl Def {
@@ -240,8 +240,8 @@ impl Display for ModuleId {
             f,
             "module{}",
             match self {
-                ModuleId::Block(node_id) => format!("{}", node_id),
-                ModuleId::Def(def_id) => format!("{}", def_id),
+                ModuleId::Block(node_id) => format!("{node_id}"),
+                ModuleId::Def(def_id) => format!("{def_id}"),
             }
         )
     }

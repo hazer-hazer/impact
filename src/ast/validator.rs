@@ -1,6 +1,6 @@
 use convert_case::Case;
 use lazy_static::lazy_static;
-use regex::Regex;
+use regex::{escape, Regex};
 
 use super::{
     item::{ExternItem, Field, Item, ItemKind, TyParam, Variant},
@@ -11,9 +11,10 @@ use crate::{
     message::{
         human_lang::items_are,
         message::{
-            MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution, SolutionKind,
+            MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution, SolutionKind, impl_message_holder,
         },
     },
+    parser::lexer::CUSTOM_OP_CHARS,
     session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Symbol},
@@ -23,8 +24,12 @@ use crate::{
 
 lazy_static! {
     static ref TYPENAME_REGEX: Regex = Regex::new(r"^[A-Z][A-z\d]*$").unwrap();
-    static ref VARNAME_REGEX: Regex =
-        Regex::new(r"^([a-z][A-z\d]*|[!\$\+\-\*/%\?\^\|\&\~=]+)|\(\)$").unwrap();
+    // Saved regex for custom op chars: !\$\+\-\*/%\?\^\|\&\~=
+    static ref VARNAME_REGEX: Regex = Regex::new(&format!(
+        r"^([a-z][A-z\d]*|[{}]+)|\(\)$",
+        CUSTOM_OP_CHARS.iter().map(|ch| escape(&ch.to_string())).collect::<String>()
+    ))
+    .unwrap();
     static ref SNAKE_CASE_REGEX: Regex = Regex::new(r"^[a-z]+(?:_[a-z\d]+)*$").unwrap();
     static ref KEBAB_CASE_REGEX: Regex = Regex::new(r"^[a-z]+(?:-[a-z\d]+)*$").unwrap();
     static ref SCREAMING_SNAKE_CASE_REGEX: Regex = Regex::new(r"^[A-Z]+(?:_[A-Z\d]+)*$").unwrap();
@@ -59,11 +64,7 @@ pub struct AstValidator<'ast> {
     msg: MessageStorage,
 }
 
-impl<'ast> MessageHolder for AstValidator<'ast> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(AstValidator<'ast>);
 
 impl<'ast> AstValidator<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {

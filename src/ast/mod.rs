@@ -41,8 +41,8 @@ where
     T: Display,
 {
     match pr {
-        Ok(ok) => format!("{}", ok),
-        Err(err) => format!("{}", err),
+        Ok(ok) => format!("{ok}"),
+        Err(err) => format!("{err}"),
     }
 }
 
@@ -83,6 +83,18 @@ pub const DUMMY_NODE_ID: NodeId = NodeId(u32::MAX);
 pub trait WithNodeId {
     fn id(&self) -> NodeId;
 }
+
+macro_rules! impl_with_node_id {
+    ($ty: ident $(<$($generic: ident)+>)?) => {
+        impl<$($($generic,)+)?> WithNodeId for $ty<$($($generic,)+)?> {
+            fn id(&self) -> NodeId {
+                self.id
+            }
+        }
+    };
+}
+
+pub(crate) use impl_with_node_id;
 
 pub type NodeMap<T> = IndexVec<NodeId, Option<T>>;
 
@@ -154,7 +166,7 @@ impl ErrorNode {
     {
         Self {
             span: node.span(),
-            parsed: Some(format!("{}", node)),
+            parsed: Some(format!("{node}")),
         }
     }
 
@@ -181,15 +193,11 @@ pub struct IdentNode {
     pub ident: Ident,
 }
 
+impl_with_node_id!(IdentNode);
+
 impl IdentNode {
     pub fn new(id: NodeId, ident: Ident) -> Self {
         Self { id, ident }
-    }
-}
-
-impl WithNodeId for IdentNode {
-    fn id(&self) -> NodeId {
-        self.id
     }
 }
 
@@ -219,6 +227,8 @@ pub struct PathSeg {
     span: Span,
 }
 
+impl_with_span!(PathSeg);
+
 impl PathSeg {
     pub fn new(name: PR<Ident>, span: Span) -> Self {
         Self { name, span }
@@ -241,14 +251,15 @@ impl Display for PathSeg {
     }
 }
 
-impl_with_span!(PathSeg);
-
 #[derive(Debug, Clone)]
 pub struct Path {
     id: NodeId,
     segments: Vec<PathSeg>,
     span: Span,
 }
+
+impl_with_node_id!(Path);
+impl_with_span!(Path);
 
 impl Path {
     pub fn new(id: NodeId, segments: Vec<PathSeg>, span: Span) -> Self {
@@ -319,14 +330,6 @@ impl Path {
         self.segments.as_ref()
     }
 }
-
-impl WithNodeId for Path {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
-impl_with_span!(Path);
 
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

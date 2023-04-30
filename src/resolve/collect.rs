@@ -7,7 +7,7 @@ use crate::{
         ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
     cli::verbose,
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{builtin::DeclareBuiltin, def::Namespace},
     session::{stage_result, Session, Stage, StageResult},
     span::{
@@ -26,11 +26,7 @@ pub struct DefCollector<'ast> {
     msg: MessageStorage,
 }
 
-impl<'ast> MessageHolder for DefCollector<'ast> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(DefCollector<'ast>);
 
 impl<'ast> DefCollector<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {

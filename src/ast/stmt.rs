@@ -1,7 +1,8 @@
 use std::fmt::Display;
 
 use super::{
-    expr::Expr, item::Item, pr_display, pr_node_kind_str, NodeId, NodeKindStr, WithNodeId, N, PR,
+    expr::Expr, impl_with_node_id, item::Item, pr_display, pr_node_kind_str, NodeId, NodeKindStr,
+    WithNodeId, N, PR,
 };
 use crate::span::{impl_with_span, Span, WithSpan};
 
@@ -12,6 +13,9 @@ pub struct Stmt {
     span: Span,
 }
 
+impl_with_node_id!(Stmt);
+impl_with_span!(Stmt);
+
 impl Stmt {
     pub fn new(id: NodeId, kind: StmtKind, span: Span) -> Self {
         Self { id, kind, span }
@@ -19,12 +23,6 @@ impl Stmt {
 
     pub fn kind(&self) -> &StmtKind {
         &self.kind
-    }
-}
-
-impl WithNodeId for Stmt {
-    fn id(&self) -> NodeId {
-        self.id
     }
 }
 
@@ -39,8 +37,6 @@ impl NodeKindStr for Stmt {
         self.kind().kind_str()
     }
 }
-
-impl_with_span!(Stmt);
 
 #[derive(Debug)]
 pub enum StmtKind {

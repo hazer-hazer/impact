@@ -1,4 +1,4 @@
-use super::{BodyId, HirId, OwnerId, Ty, Variant, WithHirId, ROOT_OWNER_ID};
+use super::{BodyId, HirId, OwnerId, Ty, Variant, WithHirId, ROOT_OWNER_ID, impl_with_hir_id};
 use crate::{
     cli::color::{Color, ColorizedStruct},
     dt::idx::declare_idx,
@@ -32,11 +32,7 @@ pub struct TyParam {
     pub name: Ident,
 }
 
-impl WithHirId for TyParam {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
+impl_with_hir_id!(TyParam);
 
 #[derive(Debug)]
 pub struct GenericParams {
@@ -71,13 +67,8 @@ pub struct Field {
     pub span: Span,
 }
 
-impl WithHirId for Field {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
-
 impl_with_span!(Field);
+impl_with_hir_id!(Field);
 
 #[derive(Debug)]
 pub struct VariantNode {
@@ -89,13 +80,8 @@ pub struct VariantNode {
     pub span: Span,
 }
 
-impl WithHirId for VariantNode {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
-
 impl_with_span!(VariantNode);
+impl_with_hir_id!(VariantNode);
 
 #[derive(Debug)]
 pub struct Adt {
@@ -126,6 +112,8 @@ pub struct ItemNode {
     span: Span,
 }
 
+impl_with_span!(ItemNode);
+
 impl ItemNode {
     pub fn new(name: Ident, def_id: DefId, kind: ItemKind, span: Span) -> Self {
         Self {
@@ -152,8 +140,6 @@ impl ItemNode {
         self.owner_id
     }
 }
-
-impl_with_span!(ItemNode);
 
 macro_rules! specific_item_nodes {
     ($($variant: ident $method_name: ident $($ty: ty),+;)*) => {

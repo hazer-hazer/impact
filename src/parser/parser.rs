@@ -14,7 +14,7 @@ use crate::{
     },
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     session::{stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Kw},
@@ -100,11 +100,7 @@ pub struct Parser {
     block_ended: NodeMap<bool>,
 }
 
-impl<'ast> MessageHolder for Parser {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(Parser);
 
 macro_rules! parse_block_common {
     ($self: ident, $parse: ident) => {{
@@ -706,6 +702,8 @@ impl Parser {
         let pe = self.enter_entity(ParseEntryKind::Expect, "variant");
 
         let lo = self.span();
+
+        // TODO: Allow anonymous single variant structures
 
         let name = self.parse_ident_decl_name("variant name");
 

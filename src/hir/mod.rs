@@ -19,9 +19,7 @@ use crate::{
         idx::{declare_idx, Idx, IndexVec},
         new_type::new_type,
     },
-    resolve::{
-        def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
-    },
+    resolve::def::{DefId, DefKind, DefMap, ROOT_DEF_ID},
     span::{
         impl_with_span,
         sym::{Ident, Symbol},
@@ -112,6 +110,18 @@ pub type HirMap<T> = HashMap<HirId, T>;
 pub trait WithHirId {
     fn id(&self) -> HirId;
 }
+
+macro_rules! impl_with_hir_id {
+    ($ty: ident $(<$($generic: ident)+>)?) => {
+        impl<$($($generic,)+)?> WithHirId for $ty<$($($generic,)+)?> {
+            fn id(&self) -> HirId {
+                self.id
+            }
+        }
+    };
+}
+
+pub(crate) use impl_with_hir_id;
 
 #[derive(Debug)]
 pub struct ErrorNode {
@@ -698,6 +708,8 @@ pub struct PathNode<Res> {
     span: Span,
 }
 
+impl_with_span!(PathNode<Res>);
+
 impl<Res> PathNode<Res> {
     pub fn new(id: HirId, res: Res, segments: Vec<PathSeg>, span: Span) -> Self {
         Self {
@@ -721,11 +733,7 @@ impl<Res> PathNode<Res> {
     }
 }
 
-impl<Res> WithHirId for PathNode<Res> {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
+impl_with_hir_id!(PathNode<Res>);
 
 impl<Res> Display for PathNode<Res> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -734,11 +742,9 @@ impl<Res> Display for PathNode<Res> {
             "{}",
             self.segments()
                 .iter()
-                .map(|seg| format!("{}", seg))
+                .map(|seg| format!("{seg}"))
                 .collect::<Vec<_>>()
                 .join(".")
         )
     }
 }
-
-impl_with_span!(PathNode<Res>);

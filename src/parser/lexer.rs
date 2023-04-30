@@ -1,6 +1,6 @@
 use super::token::{ComplexSymbol, IntKind};
 use crate::{
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{Punct, Token, TokenKind, TokenStream},
     session::{stage_result, Session, Stage, StageResult},
     span::{
@@ -9,6 +9,10 @@ use crate::{
         Span, SpanLen, SpanPos,
     },
 };
+
+pub const CUSTOM_OP_CHARS: &[char] = &[
+    '!', '$', '+', '-', '*', '/', '%', '?', '^', '|', '&', '~', '=',
+];
 
 pub enum TokenStartMatch {
     Ident,
@@ -39,11 +43,7 @@ impl LexerCharCheck for char {
     }
 
     fn is_custom_op(&self) -> bool {
-        // Note: Relates to `CAMEL_CASE_REGEX`
-        [
-            '!', '$', '+', '-', '*', '/', '%', '?', '^', '|', '&', '~', '=',
-        ]
-        .contains(self)
+        CUSTOM_OP_CHARS.contains(self)
     }
 
     fn is_skippable(&self) -> bool {
@@ -76,12 +76,6 @@ impl LexerCharCheck for char {
     }
 }
 
-impl<'ast> MessageHolder for Lexer {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
-
 pub struct Lexer {
     source_id: SourceId,
     pos: SpanPos,
@@ -92,6 +86,8 @@ pub struct Lexer {
     indent_levels: Vec<usize>,
     last_line_begin: SpanPos,
 }
+
+impl_message_holder!(Lexer);
 
 impl Lexer {
     pub fn new(source_id: SourceId, sess: Session) -> Self {

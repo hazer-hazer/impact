@@ -165,6 +165,18 @@ pub trait MessageHolder {
     fn storage(&mut self) -> &mut MessageStorage;
 }
 
+macro_rules! impl_message_holder {
+    ($ty: ident $(<$($gen: tt),*>)?) => {
+        impl<$($($gen),*)?> MessageHolder for $ty<$($($gen),*)?> {
+            fn storage(&mut self) -> &mut MessageStorage {
+                &mut self.msg
+            }
+        }
+    };
+}
+
+pub(crate) use impl_message_holder;
+
 /// Result of execution producing any value, fallible with messages, preserving
 /// messages which can be warnings or notes
 pub type MessagesResult<T> = Result<(T, MessageStorage), MessageStorage>;

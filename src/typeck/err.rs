@@ -26,7 +26,7 @@ impl<'hir> Typecker<'hir> {
             MessageBuilder::error()
                 .span(span)
                 .text(format!("Failed to infer type of {kind}"))
-                .label(span, format!("{}", ty_str))
+                .label(span, format!("{ty_str}"))
                 // FIXME: Add and use `Debug` labels
                 .label(span, format!("[DEBUG] {}", ty.map_or(Self::uninferred_ty(), |ty| ty.to_string()))),
         )

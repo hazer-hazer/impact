@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{pr_display, NodeId, WithNodeId, PR};
+use super::{impl_with_node_id, pr_display, NodeId, WithNodeId, PR};
 use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 
 #[derive(Debug)]
@@ -28,6 +28,9 @@ pub struct Pat {
     span: Span,
 }
 
+impl_with_span!(Pat);
+impl_with_node_id!(Pat);
+
 impl Pat {
     pub fn new(id: NodeId, kind: PatKind, span: Span) -> Self {
         Self { id, kind, span }
@@ -35,14 +38,6 @@ impl Pat {
 
     pub fn kind(&self) -> &PatKind {
         &self.kind
-    }
-}
-
-impl_with_span!(Pat);
-
-impl WithNodeId for Pat {
-    fn id(&self) -> NodeId {
-        self.id
     }
 }
 

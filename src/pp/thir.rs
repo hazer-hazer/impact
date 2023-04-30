@@ -78,10 +78,10 @@ impl<'a> ThirPrinter<'a> {
             ExprKind::Builtin(bt) => {
                 self.pp.string(bt);
             },
-            &ExprKind::FieldAccess(lhs, field, _) => {
-                self.expr(lhs);
-                self.pp.punct(Punct::Dot).colorized(field);
-            },
+            // &ExprKind::FieldAccess(lhs, field, _) => {
+            //     self.expr(lhs);
+            //     self.pp.punct(Punct::Dot).colorized(field);
+            // },
         }
     }
 

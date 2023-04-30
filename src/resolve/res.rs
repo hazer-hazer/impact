@@ -61,8 +61,8 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
-            ResKind::Def(def_id) => write!(f, "{}", def_id),
-            ResKind::Local(node_id) => write!(f, "{}", node_id),
+            ResKind::Def(def_id) => write!(f, "{def_id}"),
+            ResKind::Local(node_id) => write!(f, "{node_id}"),
             ResKind::DeclareBuiltin => write!(f, "[`builtin`]"),
             ResKind::Error => write!(f, "[ERROR]"),
         }

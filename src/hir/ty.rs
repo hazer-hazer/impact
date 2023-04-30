@@ -1,6 +1,6 @@
-use super::{HirId, Ty, TyPath, WithHirId};
+use super::{HirId, Ty, TyPath, WithHirId, impl_with_hir_id};
 use crate::{
-    resolve::builtin::{TyBuiltin},
+    resolve::builtin::TyBuiltin,
     span::{impl_with_span, Span, WithSpan},
 };
 
@@ -10,6 +10,9 @@ pub struct TyNode {
     kind: TyKind,
     span: Span,
 }
+
+impl_with_span!(TyNode);
+impl_with_hir_id!(TyNode);
 
 impl TyNode {
     pub fn new(id: HirId, kind: TyKind, span: Span) -> Self {
@@ -21,13 +24,6 @@ impl TyNode {
     }
 }
 
-impl WithHirId for TyNode {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
-
-impl_with_span!(TyNode);
 
 #[derive(Debug)]
 pub enum TyKind {

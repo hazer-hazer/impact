@@ -19,7 +19,7 @@ use super::{
 use crate::{
     cli::{color::Colorize, verbose},
     hir::HIR,
-    message::message::{MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageHolder, MessageStorage},
     mir::MIR,
     session::{stage_result, Session, Stage, StageResult, StageResultImpl},
 };
@@ -34,11 +34,7 @@ pub struct CodeGen<'ink, 'ctx> {
     msg: MessageStorage,
 }
 
-impl<'ink, 'ctx> MessageHolder for CodeGen<'ink, 'ctx> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(CodeGen<'ink, 'ctx>);
 
 impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
     pub fn new(sess: Session, mir: &'ctx MIR, hir: &'ctx HIR, llvm_ctx: &'ink Context) -> Self {

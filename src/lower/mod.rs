@@ -16,10 +16,10 @@ use crate::{
         Body, BodyId, ExprDefKind, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind,
         TyRes, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{MessageBuilder, MessageHolder, MessageStorage, impl_message_holder},
     parser::token::{FloatKind, IntKind},
     resolve::{
-        builtin::{DeclareBuiltin},
+        builtin::DeclareBuiltin,
         def::{DefId, DefKind},
         res::{self, NamePath, ResKind},
     },
@@ -91,11 +91,7 @@ pub struct Lower<'ast> {
     msg: MessageStorage,
 }
 
-impl<'ast> MessageHolder for Lower<'ast> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(Lower<'ast>);
 
 #[derive(Debug)]
 enum LoweredOwner {

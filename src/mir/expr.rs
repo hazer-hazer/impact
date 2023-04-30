@@ -7,10 +7,7 @@ use super::{
 use crate::{
     cli::verbose,
     mir::{thir::Expr, InfixOp},
-    resolve::{
-        builtin::{ValueBuiltin},
-        def::DefKind,
-    },
+    resolve::{builtin::ValueBuiltin, def::DefKind},
     typeck::ty::{FloatKind, IntKind},
 };
 
@@ -65,11 +62,11 @@ impl<'ctx> MirBuilder<'ctx> {
         let expr = self.thir.expr(expr_id);
         match &expr.kind {
             &ExprKind::LocalRef(var) => bb.with(self.resolve_local_var(var).lvalue(None)),
-            &ExprKind::FieldAccess(lhs, vid, fid) => {
-                let field_ty = self.thir.expr(lhs).ty.as_adt().unwrap().field_ty(vid, fid);
-                let lhs = unpack!(bb = self.as_lvalue(bb, lhs));
-                bb.with(lhs.project(Projection::field(field_ty, vid, fid)))
-            },
+            // &ExprKind::FieldAccess(lhs, vid, fid) => {
+            //     let field_ty = self.thir.expr(lhs).ty.as_adt().unwrap().field_ty(vid, fid);
+            //     let lhs = unpack!(bb = self.as_lvalue(bb, lhs));
+            //     bb.with(lhs.project(Projection::field(field_ty, vid, fid)))
+            // },
             ExprKind::Lit(_)
             | ExprKind::Block(_)
             | ExprKind::Call { .. }
@@ -92,7 +89,8 @@ impl<'ctx> MirBuilder<'ctx> {
             // FIXME: We need to gen cast from ascription?
             &ExprKind::Ty(expr_id, _) => self.as_rvalue(bb, expr_id),
 
-            ExprKind::FieldAccess(..) | ExprKind::Block(_) | ExprKind::LocalRef(_) => {
+            // ExprKind::FieldAccess(..)  => {},
+            ExprKind::Block(_) | ExprKind::LocalRef(_) => {
                 assert!(!matches!(
                     expr.categorize(),
                     ExprCategory::AsRValue | ExprCategory::Const
@@ -239,7 +237,7 @@ impl<'ctx> MirBuilder<'ctx> {
             ExprKind::Lit(_)
             | ExprKind::Def(..)
             | ExprKind::Lambda { .. }
-            | ExprKind::FieldAccess(..)
+            // | ExprKind::FieldAccess(..)
             | ExprKind::Builtin(_) => {
                 assert!(!matches!(
                     expr.categorize(),

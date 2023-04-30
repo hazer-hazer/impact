@@ -15,7 +15,7 @@ use crate::{
         visitor::HirVisitor,
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
     session::{stage_result, Stage, StageResult},
@@ -141,11 +141,7 @@ pub struct FunctionsCodeGen<'ink, 'ctx> {
     msg: MessageStorage,
 }
 
-impl<'ink, 'ctx> MessageHolder for FunctionsCodeGen<'ink, 'ctx> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(FunctionsCodeGen<'ink, 'ctx>);
 
 impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
     fn visit_body(&mut self, &_body: &BodyId, owner: BodyOwner, _hir: &HIR) {
@@ -339,7 +335,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
     fn unused_instance_warning(&mut self, def_id: DefId) {
         let def = self.ctx.sess.def_table.get_def(def_id);
         MessageBuilder::warn()
-            .span(def.name.span())
+            .span(def.name().span())
             .text(format!("Unused {}", def.kind()))
             .emit_single_label(self);
     }

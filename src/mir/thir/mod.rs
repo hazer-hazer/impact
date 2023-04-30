@@ -6,10 +6,7 @@ use crate::{
     cli::color::{Color, ColorizedStruct},
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
-    resolve::{
-        builtin::{ValueBuiltin},
-        def::DefId,
-    },
+    resolve::{builtin::ValueBuiltin, def::DefId},
     span::{
         impl_with_span,
         sym::{Ident, Symbol},
@@ -96,7 +93,7 @@ pub enum ExprKind {
         body_id: BodyId,
     },
     Ty(ExprId, Ty),
-    FieldAccess(ExprId, VariantId, FieldId),
+    // FieldAccess(ExprId, VariantId, FieldId),
     Builtin(ValueBuiltin),
 }
 
@@ -121,9 +118,9 @@ impl Display for ExprKind {
             },
             ExprKind::Lambda { def_id, body_id } => write!(f, "λ{def_id} {{{body_id}}}"),
             ExprKind::Ty(expr, ty) => write!(f, "{expr}: {ty}"),
-            ExprKind::FieldAccess(lhs, variant, field) => {
-                write!(f, "{lhs}.{variant}.{field}")
-            },
+            // ExprKind::FieldAccess(lhs, variant, field) => {
+            //     write!(f, "{lhs}.{variant}.{field}")
+            // },
             ExprKind::Builtin(bt) => write!(f, "{bt}"),
         }
     }
@@ -135,11 +132,14 @@ pub struct Expr {
     pub span: Span,
 }
 
+impl_with_span!(Expr);
+
 impl Expr {
     pub fn categorize(&self) -> ExprCategory {
         match self.kind {
             ExprKind::Lit(_) => ExprCategory::Const,
-            ExprKind::FieldAccess(..) | ExprKind::LocalRef(_) => ExprCategory::LValue,
+            // ExprKind::FieldAccess(..) => ExprCategory::LValue,
+            ExprKind::LocalRef(_) => ExprCategory::LValue,
 
             ExprKind::Ref(_) | ExprKind::Call { .. } | ExprKind::Block(_) => {
                 ExprCategory::StoreRValue
@@ -159,8 +159,6 @@ impl Display for Expr {
         self.kind.fmt(f)
     }
 }
-
-impl_with_span!(Expr);
 
 #[derive(Clone, Copy)]
 pub enum PatKind {

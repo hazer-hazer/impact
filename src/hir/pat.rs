@@ -1,4 +1,4 @@
-use super::{HirId, WithHirId};
+use super::{HirId, WithHirId, impl_with_hir_id};
 use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 
 #[derive(Debug)]
@@ -14,6 +14,9 @@ pub struct PatNode {
     span: Span,
 }
 
+impl_with_span!(PatNode);
+impl_with_hir_id!(PatNode);
+
 impl PatNode {
     pub fn new(id: HirId, kind: PatKind, span: Span) -> Self {
         Self { id, kind, span }
@@ -24,10 +27,3 @@ impl PatNode {
     }
 }
 
-impl WithHirId for PatNode {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
-
-impl_with_span!(PatNode);

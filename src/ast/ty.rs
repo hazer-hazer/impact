@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use super::{
-    expr::Expr, pr_display, pr_node_kind_str, prs_display_join, IsBlockEnded,
+    expr::Expr, impl_with_node_id, pr_display, pr_node_kind_str, prs_display_join, IsBlockEnded,
     NodeId, NodeKindStr, Path, WithNodeId, N, PR,
 };
 use crate::span::{impl_with_span, Span, WithSpan};
@@ -13,6 +13,9 @@ pub struct Ty {
     span: Span,
     is_block_ended: bool,
 }
+
+impl_with_node_id!(Ty);
+impl_with_span!(Ty);
 
 impl Ty {
     pub fn new(id: NodeId, kind: TyKind, span: Span, is_block_ended: bool) -> Self {
@@ -35,19 +38,11 @@ impl IsBlockEnded for Ty {
     }
 }
 
-impl WithNodeId for Ty {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
 impl Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.kind())
     }
 }
-
-impl_with_span!(Ty);
 
 impl NodeKindStr for Ty {
     fn kind_str(&self) -> String {

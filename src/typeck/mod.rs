@@ -4,13 +4,14 @@ use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
     kind::{Kind, KindEx, KindSort},
     ty::{Ex, ExKind, ExPair, Ty, TyKind, TyVarId},
-    tyctx::TyCtx, ty_infer::MonoTy,
+    ty_infer::MonoTy,
+    tyctx::TyCtx,
 };
 use crate::{
     cli::verbose,
     hir::{HirId, HIR},
     interface::writer::outln,
-    message::message::{MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageHolder, MessageStorage},
     resolve::def::DefId,
     session::{stage_result, Session, Stage, StageResult},
     typeck::{conv::TyConv, ty_infer::MonoTyKind},
@@ -87,11 +88,7 @@ pub struct Typecker<'hir> {
     sess: Session,
 }
 
-impl<'hir> MessageHolder for Typecker<'hir> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(Typecker<'hir>);
 
 impl<'hir> Typecker<'hir> {
     pub fn new(sess: Session, hir: &'hir HIR) -> Self {
@@ -554,7 +551,7 @@ impl<'hir> Typecker<'hir> {
         let unsolved = exes
             .0
             .iter()
-            .map(|ex| format!("{}", ex))
+            .map(|ex| format!("{ex}"))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -570,7 +567,7 @@ impl<'hir> Typecker<'hir> {
             .global_ctx
             .existentials()
             .iter()
-            .map(|ex| format!("{}", ex))
+            .map(|ex| format!("{ex}"))
             .collect::<Vec<_>>()
             .join(", ");
 

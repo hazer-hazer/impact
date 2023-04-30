@@ -11,7 +11,7 @@ use crate::{
         visitor::{walk_each, HirVisitor},
         BodyOwner, TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },
-    message::message::{MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageHolder, MessageStorage},
     resolve::{
         builtin::TyBuiltin,
         def::{DefId, DefMap},
@@ -33,11 +33,7 @@ pub struct TyConv<'hir> {
     sess: Session,
 }
 
-impl<'hir> MessageHolder for TyConv<'hir> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
-    }
-}
+impl_message_holder!(TyConv<'hir>);
 
 impl<'hir> TyConv<'hir> {
     pub fn new(sess: Session, hir: &'hir HIR) -> Self {

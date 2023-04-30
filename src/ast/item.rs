@@ -1,14 +1,15 @@
 use std::fmt::Display;
 
 use super::{
-    expr::Expr, is_block_ended, pat::Pat, pr_display, prs_display_join, ty::Ty, IsBlockEnded,
-    NodeId, NodeKindStr, WithNodeId, N, PR,
+    expr::Expr, impl_with_node_id, is_block_ended, pat::Pat, pr_display, prs_display_join, ty::Ty,
+    IsBlockEnded, NodeId, NodeKindStr, WithNodeId, N, PR,
 };
 use crate::span::{
     impl_with_span,
     sym::{Ident, Internable},
     Span, WithSpan,
 };
+
 #[derive(Debug)]
 pub struct ExternItem {
     id: NodeId,
@@ -17,19 +18,14 @@ pub struct ExternItem {
     span: Span,
 }
 
+impl_with_node_id!(ExternItem);
+impl_with_span!(ExternItem);
+
 impl ExternItem {
     pub fn new(id: NodeId, name: PR<Ident>, ty: PR<N<Ty>>, span: Span) -> Self {
         Self { id, name, ty, span }
     }
 }
-
-impl WithNodeId for ExternItem {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
-impl_with_span!(ExternItem);
 
 impl Display for ExternItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -102,11 +98,8 @@ pub struct Variant {
     span: Span,
 }
 
-impl WithNodeId for Variant {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
+impl_with_node_id!(Variant);
+impl_with_span!(Variant);
 
 impl Variant {
     pub fn new(
@@ -125,8 +118,6 @@ impl Variant {
         }
     }
 }
-
-impl_with_span!(Variant);
 
 impl Display for Variant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -216,15 +207,11 @@ pub struct TyParam {
     pub name: PR<Ident>,
 }
 
+impl_with_node_id!(TyParam);
+
 impl TyParam {
     pub fn new(id: NodeId, name: PR<Ident>) -> Self {
         Self { id, name }
-    }
-}
-
-impl WithNodeId for TyParam {
-    fn id(&self) -> NodeId {
-        self.id
     }
 }
 
@@ -263,6 +250,9 @@ pub struct Item {
     span: Span,
     is_block_ended: bool,
 }
+
+impl_with_node_id!(Item);
+impl_with_span!(Item);
 
 impl Item {
     pub fn new(id: NodeId, kind: ItemKind, span: Span, is_block_ended: bool) -> Self {
@@ -310,12 +300,6 @@ impl IsBlockEnded for Item {
     }
 }
 
-impl WithNodeId for Item {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
 impl Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.kind())
@@ -327,5 +311,3 @@ impl NodeKindStr for Item {
         self.kind().kind_str()
     }
 }
-
-impl_with_span!(Item);

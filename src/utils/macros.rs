@@ -73,3 +73,28 @@ macro_rules! sub_enum_conversion {
 }
 
 pub(crate) use sub_enum_conversion;
+
+// Impossible in stable Rust :(
+// macro_rules! create_trait_with {
+//     ($impl_macro_name: ident; $vis: vis trait $trait_name: ident {
+//         fn $getter: ident (&self) -> $ty: ty;
+//     }) => {
+//         $vis trait $trait_name {
+//             fn $getter(&self) -> $ty;
+//         }
+
+//         macro_rules! $impl_macro_name {
+//             ($for_ty: ident $($gen: ident)?) => {
+//                 impl<$($($gen),*)?> $trait_name for $for_ty<$($($gen),*)?> {
+//                     fn $getter(&self) -> $ty {
+//                         self.$getter
+//                     }
+//                 }
+//             };
+//         }
+
+//         pub(crate) use $impl_macro_name;
+//     };
+// }
+
+// pub(crate) use create_trait_with;

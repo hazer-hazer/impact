@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
 use super::{
-    is_block_ended, pat::Pat, pr_display, stmt::Stmt, ty::Ty, IdentNode, IsBlockEnded, NodeId,
-    NodeKindStr, Path, WithNodeId, N, PR,
+    impl_with_node_id, is_block_ended, pat::Pat, pr_display, stmt::Stmt, ty::Ty, IdentNode,
+    IsBlockEnded, NodeId, NodeKindStr, Path, WithNodeId, N, PR,
 };
 use crate::{
     ast::prs_display_join,
@@ -39,15 +39,15 @@ impl IsBlockEnded for ExprKind {
 impl Display for ExprKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Lit(lit) => write!(f, "{}", lit),
+            Self::Lit(lit) => write!(f, "{lit}"),
             Self::Paren(expr) => write!(f, "({})", pr_display(expr)),
-            Self::Path(path) => write!(f, "{}", path),
+            Self::Path(path) => write!(f, "{path}"),
             Self::Block(block) => write!(f, "{}", pr_display(block)),
-            Self::Infix(infix) => write!(f, "{}", infix),
-            Self::Lambda(lambda) => write!(f, "{}", lambda),
-            Self::Call(call) => write!(f, "{}", call),
+            Self::Infix(infix) => write!(f, "{infix}"),
+            Self::Lambda(lambda) => write!(f, "{lambda}"),
+            Self::Call(call) => write!(f, "{call}"),
             Self::Let(block) => write!(f, "{}", pr_display(block)),
-            Self::Ty(ty_expr) => write!(f, "{}", ty_expr),
+            Self::Ty(ty_expr) => write!(f, "{ty_expr}"),
             Self::DotOp(expr, field) => {
                 write!(f, "{}.{}", pr_display(expr), pr_display(field))
             },
@@ -84,10 +84,10 @@ pub enum Lit {
 impl Display for Lit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Bool(val) => write!(f, "{}", if *val { "true" } else { "false" }),
-            Self::Int(val, kind) => write!(f, "{}{}", val, kind),
-            Self::Float(val, kind) => write!(f, "{}{}", val, kind),
-            Self::String(val) => write!(f, "\"{}\"", val),
+            Self::Bool(val) => write!(f, "{val}"),
+            Self::Int(val, kind) => write!(f, "{val}{kind}"),
+            Self::Float(val, kind) => write!(f, "{val}{kind}"),
+            Self::String(val) => write!(f, "\"{val}\""),
         }
     }
 }
@@ -118,6 +118,9 @@ pub struct Block {
     span: Span,
 }
 
+impl_with_node_id!(Block);
+impl_with_span!(Block);
+
 impl Block {
     pub fn new(id: NodeId, stmts: Vec<PR<N<Stmt>>>, span: Span) -> Self {
         Self { id, stmts, span }
@@ -127,14 +130,6 @@ impl Block {
         self.stmts.as_ref()
     }
 }
-
-impl WithNodeId for Block {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
-impl_with_span!(Block);
 
 impl Display for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -204,6 +199,9 @@ pub struct Expr {
     span: Span,
 }
 
+impl_with_node_id!(Expr);
+impl_with_span!(Expr);
+
 impl Expr {
     pub fn new(id: NodeId, kind: ExprKind, span: Span) -> Self {
         Self { id, kind, span }
@@ -220,12 +218,6 @@ impl IsBlockEnded for Expr {
     }
 }
 
-impl WithNodeId for Expr {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
 impl NodeKindStr for Expr {
     fn kind_str(&self) -> String {
         self.kind().kind_str()
@@ -237,5 +229,3 @@ impl Display for Expr {
         write!(f, "{}", self.kind())
     }
 }
-
-impl_with_span!(Expr);

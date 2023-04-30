@@ -191,16 +191,16 @@ impl Display for TokenKind {
             TokenKind::String(val) => write!(f, "\"{}\"", val),
             TokenKind::OpIdent(val) => write!(f, "({})", val),
             TokenKind::Ident(val) | TokenKind::Error(val) => {
-                write!(f, "{}", val)
+                write!(f, "{val}")
             },
             TokenKind::Float(val, kind) => write!(f, "{}{}", val, kind),
             &TokenKind::Bool(val) => write!(f, "{}", if val.into() { "true" } else { "false" }),
-            TokenKind::Kw(kw) => write!(f, "{}", kw),
+            TokenKind::Kw(kw) => write!(f, "{kw}"),
             TokenKind::BlockStart => write!(f, "{}", "[BLOCK START]"),
             TokenKind::BlockEnd => write!(f, "{}", "[BLOCK END]"),
-            TokenKind::Punct(punct) => write!(f, "{}", punct),
-            TokenKind::Op(op) => write!(f, "{}", op),
-            TokenKind::CustomOp(op) => write!(f, "{}", op),
+            TokenKind::Punct(punct) => write!(f, "{punct}"),
+            TokenKind::Op(op) => write!(f, "{op}"),
+            TokenKind::CustomOp(op) => write!(f, "{op}"),
         }
     }
 }
@@ -361,6 +361,8 @@ pub struct Token {
     pub kind: TokenKind,
 }
 
+impl_with_span!(Token);
+
 impl Token {
     pub fn new(span: Span, kind: TokenKind) -> Self {
         Self { span, kind }
@@ -378,8 +380,6 @@ impl Debug for Token {
         write!(f, "`{}` --> {}", self.kind, self.span)
     }
 }
-
-impl_with_span!(Token);
 
 #[derive(Default, Debug)]
 pub struct TokenStream(pub Vec<Token>);
@@ -409,7 +409,7 @@ impl Display for TokenStream {
             "{}",
             self.0
                 .iter()
-                .map(|t| format!("{}", t))
+                .map(|t| format!("{t}"))
                 .collect::<Vec<_>>()
                 .join(TOKEN_STREAM_DELIM)
         )

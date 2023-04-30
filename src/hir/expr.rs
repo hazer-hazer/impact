@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{Block, BodyId, Expr, ExprPath, HirId, Stmt, Ty, WithHirId};
+use super::{impl_with_hir_id, Block, BodyId, Expr, ExprPath, HirId, Stmt, Ty, WithHirId};
 use crate::{
     resolve::{builtin::ValueBuiltin, def::DefId},
     span::{impl_with_span, sym::Symbol, Span, WithSpan},
@@ -101,6 +101,7 @@ pub struct BlockNode {
 }
 
 impl_with_span!(BlockNode);
+impl_with_hir_id!(BlockNode);
 
 impl BlockNode {
     pub fn new(id: HirId, stmts: Vec<Stmt>, expr: Option<Expr>, span: Span) -> Self {
@@ -118,12 +119,6 @@ impl BlockNode {
 
     pub fn expr(&self) -> Option<&Expr> {
         self.expr.as_ref()
-    }
-}
-
-impl WithHirId for BlockNode {
-    fn id(&self) -> HirId {
-        self.id
     }
 }
 
@@ -165,6 +160,8 @@ pub struct ExprNode {
     span: Span,
 }
 
+impl_with_span!(ExprNode);
+
 impl ExprNode {
     pub fn new(id: HirId, kind: ExprKind, span: Span) -> Self {
         Self { id, kind, span }
@@ -179,10 +176,4 @@ impl ExprNode {
     }
 }
 
-impl WithHirId for ExprNode {
-    fn id(&self) -> HirId {
-        self.id
-    }
-}
-
-impl_with_span!(ExprNode);
+impl_with_hir_id!(ExprNode);

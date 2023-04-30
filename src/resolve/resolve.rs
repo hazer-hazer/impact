@@ -15,7 +15,7 @@ use crate::{
         ErrorNode, IdentNode, NodeId, NodeMap, Path, WithNodeId, AST, N, PR,
     },
     cli::verbose,
-    message::message::{MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{
         builtin::{TyBuiltin, ValueBuiltin},
         def::DefKind,
@@ -52,6 +52,8 @@ pub struct NameResolver<'ast> {
     msg: MessageStorage,
     sess: Session,
 }
+
+impl_message_holder!(NameResolver<'a>);
 
 impl<'ast> NameResolver<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
@@ -232,13 +234,13 @@ impl<'ast> NameResolver<'ast> {
             .and_then(|def_id| {
                 // TODO: Alternatives
                 let def = self.sess.def_table.get_def(def_id);
-                match def.kind {
+                match def.kind() {
                     // TODO: Review Adt + Variant as module
                     DefKind::Adt | DefKind::Variant | DefKind::Mod => Some(ModuleId::Def(def_id)),
                     DefKind::TyAlias => {
                         MessageBuilder::error()
                             .span(path.span())
-                            .text(format!("{} `{}` is not a module", def.kind, def.name))
+                            .text(format!("{} `{}` is not a module", def.kind(), def.name()))
                             .emit_single_label(self);
                         None
                     },
@@ -381,12 +383,6 @@ impl<'ast> NameResolver<'ast> {
         } else {
             None
         }
-    }
-}
-
-impl<'a> MessageHolder for NameResolver<'a> {
-    fn storage(&mut self) -> &mut MessageStorage {
-        &mut self.msg
     }
 }
 

@@ -409,8 +409,8 @@ impl std::fmt::Display for TyKind {
             TyKind::Error => write!(f, "[ERROR]"),
             TyKind::Unit => write!(f, "()"),
             TyKind::Bool => write!(f, "bool"),
-            TyKind::Int(kind) => write!(f, "{}", kind),
-            TyKind::Float(kind) => write!(f, "{}", kind),
+            TyKind::Int(kind) => write!(f, "{kind}"),
+            TyKind::Float(kind) => write!(f, "{kind}"),
             TyKind::Str => write!(f, "{}", "string"),
             TyKind::Func(params, body) => write!(
                 f,

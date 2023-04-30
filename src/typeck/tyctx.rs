@@ -323,6 +323,6 @@ impl TyCtx {
     // Debug //
     pub fn pp_typed_node(&self, id: HirId) -> String {
         self.node_type(id)
-            .map_or("(?)".to_string(), |ty| format!("{}", ty))
+            .map_or("(?)".to_string(), |ty| format!("{ty}"))
     }
 }
