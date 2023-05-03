@@ -12,3 +12,5 @@ SomeType
 non-corelative
 Builtins
 existentials
+monokind
+monokinds

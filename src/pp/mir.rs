@@ -73,9 +73,7 @@ impl<'ctx> MirPrinter<'ctx> {
         if let Some(proj) = lvalue.proj {
             match proj.kind {
                 ProjectionKind::Field(vid, fid) => {
-                    self.pp.string(vid);
-                    self.pp.punct(Punct::Dot);
-                    self.pp.string(fid);
+                    self.pp.string(vid).punct(Punct::Dot).string(fid);
                 },
             }
         }
@@ -104,7 +102,7 @@ impl<'ctx> MirPrinter<'ctx> {
                 // self.pp.string(format!(" -> {}", target));
             },
             &RValue::FuncRef(def_id, ty) => {
-                let def = self.sess.def_table.get_def(def_id);
+                let def = self.sess.def_table.def(def_id);
                 // match def.kind() {
                 //     DefKind::Func => todo!(),
                 //     DefKind::Value => todo!(),
@@ -112,7 +110,7 @@ impl<'ctx> MirPrinter<'ctx> {
                 self.pp.string(format!("{}: {}", def.name(), ty));
             },
             &RValue::ClosureRef(def_id) | &RValue::ValueRef(def_id) => {
-                let def = self.sess.def_table.get_def(def_id);
+                let def = self.sess.def_table.def(def_id);
                 self.pp.string(def);
             },
             RValue::Ref(lv) => {

@@ -89,13 +89,13 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_kind_l(&mut self, ex: KindEx, r_kind: Kind) -> TyResult<Kind> {
         if let &KindSort::Ex(beta_ex) = r_kind.sort() {
             if self.find_unbound_kind_ex_depth(ex) < self.find_unbound_kind_ex_depth(beta_ex) {
-                return Ok(self.solve_kind_ex(beta_ex, Kind::new_ex(ex)));
+                return Ok(self.solve_kind_ex(beta_ex, Kind::new_ex(ex).mono()));
             }
         }
 
         match r_kind.sort() {
             KindSort::Ty(_) | KindSort::Var(_) | KindSort::Ex(_) => {
-                Ok(self.solve_kind_ex(ex, r_kind))
+                Ok(self.solve_kind_ex(ex, r_kind.mono()))
             },
             &KindSort::Abs(param, body) => self.try_to(|this| {
                 let param_ex = this.fresh_kind_ex();
@@ -103,7 +103,7 @@ impl<'hir> Typecker<'hir> {
 
                 let ex_abs_kind = Kind::new_abs(Kind::new_ex(param_ex), Kind::new_ex(body_ex));
 
-                this.solve_kind_ex(ex, ex_abs_kind);
+                this.solve_kind_ex(ex, ex_abs_kind.mono());
 
                 this.instantiate_kind_r(param, param_ex)?;
 
@@ -121,13 +121,13 @@ impl<'hir> Typecker<'hir> {
     fn instantiate_kind_r(&mut self, l_kind: Kind, ex: KindEx) -> TyResult<Kind> {
         if let &KindSort::Ex(beta_ex) = l_kind.sort() {
             if self.find_unbound_kind_ex_depth(ex) < self.find_unbound_kind_ex_depth(beta_ex) {
-                return Ok(self.solve_kind_ex(beta_ex, Kind::new_ex(ex)));
+                return Ok(self.solve_kind_ex(beta_ex, Kind::new_ex(ex).mono()));
             }
         }
 
         match l_kind.sort() {
             KindSort::Ty(_) | KindSort::Var(_) | KindSort::Ex(_) => {
-                Ok(self.solve_kind_ex(ex, l_kind))
+                Ok(self.solve_kind_ex(ex, l_kind.mono()))
             },
             &KindSort::Abs(param, body) => self.try_to(|this| {
                 let param_ex = this.fresh_kind_ex();
@@ -135,7 +135,7 @@ impl<'hir> Typecker<'hir> {
 
                 let ex_abs_kind = Kind::new_abs(Kind::new_ex(param_ex), Kind::new_ex(body_ex));
 
-                this.solve_kind_ex(ex, ex_abs_kind);
+                this.solve_kind_ex(ex, ex_abs_kind.mono());
 
                 this.instantiate_kind_l(ex, param)?;
 

@@ -10,6 +10,7 @@ use self::interner::KIND_INTERNER;
 use super::{
     ctx::AlgoCtx,
     ty::{Ex, TyVarId},
+    ty_infer::MonoTy,
 };
 use crate::{
     cli::color::{Color, ColorizedStruct},
@@ -19,7 +20,7 @@ use crate::{
 };
 
 declare_idx!(KindId, u32, "{}", Color::White);
-declare_idx!(KindExId, u32, "'^{}", Color::BrightMagenta);
+declare_idx!(KindExId, u32, "^'{}", Color::BrightMagenta);
 declare_idx!(KindVarId, u32, "'{}", Color::BrightCyan);
 
 impl KindVarId {
@@ -213,11 +214,26 @@ impl Kind {
             KindSort::Forall(_, kind) => kind.get_ty_vars(),
         }
     }
+
+    pub fn as_mono(self) -> Option<MonoKind> {
+        self.try_into().ok()
+    }
+
+    pub fn mono(self) -> MonoKind {
+        self.try_into()
+            .expect(&format!("Expected monokind, got kind {self}"))
+    }
 }
 
 impl Into<Ty> for Kind {
     fn into(self) -> Ty {
         Ty::ty_kind(self)
+    }
+}
+
+impl From<Ty> for Kind {
+    fn from(ty: Ty) -> Self {
+        Kind::new_ty(ty)
     }
 }
 
@@ -336,4 +352,43 @@ mod interner {
 
     pub static KIND_INTERNER: Lazy<RwLock<KindInterner>> =
         Lazy::new(|| RwLock::new(KindInterner::new()));
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MonoKindSort {
+    Ty(Ty),
+    Abs(Box<MonoKind>, Box<MonoKind>),
+    Var(KindVarId),
+    Ex(KindEx),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MonoKind {
+    pub sort: MonoKindSort,
+    pub kind: Kind,
+}
+
+impl TryFrom<Kind> for MonoKind {
+    type Error = ();
+
+    fn try_from(kind: Kind) -> Result<Self, Self::Error> {
+        let sort = match kind.sort() {
+            &KindSort::Ty(ty) => Ok(MonoKindSort::Ty(ty)),
+            &KindSort::Abs(param, body) => Ok(MonoKindSort::Abs(
+                Box::new(param.try_into()?),
+                Box::new(body.try_into()?),
+            )),
+            &KindSort::Var(var) => Ok(MonoKindSort::Var(var)),
+            &KindSort::Ex(ex) => Ok(MonoKindSort::Ex(ex)),
+            KindSort::Forall(..) => Err(()),
+        }?;
+
+        Ok(MonoKind { sort, kind })
+    }
+}
+
+impl Display for MonoKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.kind.fmt(f)
+    }
 }

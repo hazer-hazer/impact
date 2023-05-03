@@ -32,7 +32,7 @@ mod utils;
 
 fn main() {
     let config = CLI::new().config().clone();
-    verbose!("Config: {}", config);
+    verbose!("Config: {config}");
 
     let interface = Interface::new(config);
 

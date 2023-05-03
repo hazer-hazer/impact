@@ -62,3 +62,7 @@ enum KindKind {
 ```
 
 I want `Type` to be `Copy` type, thus we need `Kind::body` to be kind identifier. So `Kind` should be interned as `Type`.
+
+### Kind existentials
+
+As for type existential which can only be solved to some monotype, kind existential can only be solved to some monokind, i.e. kind containing only monokinds.

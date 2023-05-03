@@ -272,6 +272,10 @@ impl MessageBuilder {
         self
     }
 
+    pub fn map(mut self, mut f: impl FnMut(Self) -> Self) -> Self {
+        f(self)
+    }
+
     pub fn build(self) -> Message {
         let span = self.checked_span();
         let text = self.checked_text().clone();

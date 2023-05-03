@@ -53,7 +53,7 @@ pub struct TyCtx {
 
     converted: HashMap<hir::Ty, Ty>,
 
-    ty_defs: DefMap<Ty>,
+    def_tys: DefMap<Ty>,
 
     ex: ExId,
     kind_ex: KindExId,
@@ -84,7 +84,7 @@ impl TyCtx {
         Self {
             builtins: builtins(),
             converted: Default::default(),
-            ty_defs: Default::default(),
+            def_tys: Default::default(),
             ex: ExId::new(0),
             kind_ex: KindExId::new(0),
             typed: Default::default(),
@@ -105,22 +105,22 @@ impl TyCtx {
     }
 
     pub fn type_def(&mut self, def_id: DefId, ty: Ty) {
-        assert!(self.ty_defs.insert(def_id, ty).is_none());
+        assert!(self.def_tys.insert(def_id, ty).is_none());
     }
 
     pub fn def_ty(&self, def_id: DefId) -> Option<Ty> {
-        self.ty_defs.get_flat(def_id).copied()
+        self.def_tys.get_flat(def_id).copied()
     }
 
     pub fn def_ty_exes(&self) -> Vec<Ex> {
-        self.ty_defs
+        self.def_tys
             .iter_flat()
             .filter_map(|ty| ty.as_ex())
             .collect()
     }
 
     pub fn def_ty_kind_exes(&self) -> Vec<KindEx> {
-        self.ty_defs
+        self.def_tys
             .iter_flat()
             .filter_map(|ty| ty.as_kind_ex())
             .collect()
@@ -139,13 +139,14 @@ impl TyCtx {
         Id: Into<HirId>,
     {
         let id = id.into();
-        verbose!("Type node {} with {}", id, ty);
+        verbose!("Type node {id} with {ty}");
         // assert!(
         //     self.typed.insert(id, ty).is_none(),
         //     "{} is already typed with {}",
         //     id,
         //     ty
         // );
+        // assert!(ty.is_solved());
         match self.typed.entry(id) {
             Entry::Occupied(_) => {},
             Entry::Vacant(vacant) => {
@@ -160,7 +161,9 @@ impl TyCtx {
             // TODO: Error reporting instead of assertion
             // FIXME: We need somehow emit messages and then check for bugs like this
             // assert!(applied.is_solved(), "Unsolved type {applied} after typeck");
-            verbose!("Apply global ctx on ty {ty} => {applied}");
+            if applied != *ty {
+                verbose!("Applying global ctx on ty it is solved as {ty} => {applied}");
+            }
             *ty = applied;
         });
     }
@@ -270,7 +273,7 @@ impl TyCtx {
     }
 
     pub fn bind_ty_var(&mut self, def_id: Option<DefId>, expr: Expr, var: TyVarId, ty: Ty) {
-        verbose!("Bind type variable {} = {}", var, ty);
+        verbose!("Bind type variable {var} = {ty}");
         assert!(
             ty.is_mono(),
             "Cannot bind polytype {} to type variable {}",

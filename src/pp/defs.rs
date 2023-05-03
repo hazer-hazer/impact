@@ -43,14 +43,14 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
     }
 
     fn _pp_mod(&mut self, module: &Module) {
-        for ns in module.namespaces().iter() {
-            for (sym, def_id) in ns {
+        for (ns, defs) in module.namespaces().iter() {
+            for (sym, def_id) in defs {
                 self.out_indent();
                 self.string(sym.original_string());
                 self.string(def_id);
                 self.punct(Punct::Colon);
 
-                let def = self.sess.def_table.get_def(*def_id);
+                let def = self.sess.def_table.def(*def_id);
 
                 self.string(def.kind());
 

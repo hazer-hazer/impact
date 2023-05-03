@@ -16,7 +16,7 @@ use crate::{
         Body, BodyId, ExprDefKind, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind,
         TyRes, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
-    message::message::{MessageBuilder, MessageHolder, MessageStorage, impl_message_holder},
+    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::{
         builtin::DeclareBuiltin,
@@ -126,7 +126,7 @@ impl<'ast> Lower<'ast> {
         def_id: DefId,
         f: impl FnOnce(&mut Self) -> LoweredOwner,
     ) -> OwnerId {
-        verbose!("With owner {}", def_id);
+        verbose!("With owner {def_id}");
 
         let owner_id = OwnerId::new(def_id);
 
@@ -191,13 +191,13 @@ impl<'ast> Lower<'ast> {
 
     fn lower_node_id(&mut self, id: NodeId) -> HirId {
         if let Some(hir_id) = self.node_id_hir_id.get_flat(id) {
-            verbose!("Lower node id {} -> {}", id, hir_id);
+            verbose!("Lower node id {id} -> {}", hir_id);
             *hir_id
         } else {
             let hir_id = self.next_hir_id();
             self.node_id_hir_id.insert(id, hir_id);
 
-            verbose!("Lower node id {} -> {}", id, hir_id);
+            verbose!("Lower node id {id} -> {}", hir_id);
 
             hir_id
         }
@@ -247,7 +247,7 @@ impl<'ast> Lower<'ast> {
         match item.kind() {
             ItemKind::Decl(name, params, body) if params.is_empty() => {
                 let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
-                let def = self.sess.def_table.get_def(def_id);
+                let def = self.sess.def_table.def(def_id);
                 match def.kind() {
                     DefKind::Local => Some(Local {
                         id: self.lower_node_id(item.id()),
@@ -692,7 +692,7 @@ impl<'ast> Lower<'ast> {
                     .get_expect(node_id, &format!("Local resolution {}", res)),
             ),
             &res::ResKind::Def(def_id) => {
-                let def = self.sess.def_table.get_def(def_id);
+                let def = self.sess.def_table.def(def_id);
                 // assert!(self.sess.def_table.as_builtin(def_id).expect(&format!("{def} builtin
                 // must not appear in ")));
 
@@ -708,7 +708,7 @@ impl<'ast> Lower<'ast> {
                     def_id,
                 )
             },
-            ResKind::DeclareBuiltin | res::ResKind::Error => unreachable!(),
+            ResKind::DeclareBuiltin | res::ResKind::Err => unreachable!(),
         }
     }
 
@@ -718,7 +718,7 @@ impl<'ast> Lower<'ast> {
             &res::ResKind::Def(def_id) => {
                 // assert!(self.sess.def_table.as_builtin(def_id).is_none());
 
-                let def_kind = self.sess.def_table.get_def(def_id).kind();
+                let def_kind = self.sess.def_table.def(def_id).kind();
                 TyRes::Def(
                     match def_kind {
                         DefKind::TyAlias => TyDefKind::TyAlias,
@@ -729,7 +729,7 @@ impl<'ast> Lower<'ast> {
                     def_id,
                 )
             },
-            &res::ResKind::DeclareBuiltin | res::ResKind::Error => unreachable!(),
+            &res::ResKind::DeclareBuiltin | res::ResKind::Err => unreachable!(),
         }
     }
 

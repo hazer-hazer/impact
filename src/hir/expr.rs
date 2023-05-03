@@ -117,8 +117,8 @@ impl BlockNode {
         self.stmts.as_ref()
     }
 
-    pub fn expr(&self) -> Option<&Expr> {
-        self.expr.as_ref()
+    pub fn expr(&self) -> Option<Expr> {
+        self.expr
     }
 }
 

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
-    kind::{Kind, KindEx, KindSort},
+    kind::{Kind, KindEx, KindSort, MonoKind},
     ty::{Ex, ExKind, ExPair, Ty, TyKind, TyVarId},
     ty_infer::MonoTy,
     tyctx::TyCtx,
@@ -14,7 +14,7 @@ use crate::{
     message::message::{impl_message_holder, MessageHolder, MessageStorage},
     resolve::def::DefId,
     session::{stage_result, Session, Stage, StageResult},
-    typeck::{conv::TyConv, ty_infer::MonoTyKind},
+    typeck::{conv::TyConv, kind::MonoKindSort, ty_infer::MonoTyKind},
 };
 
 pub mod builtin;
@@ -27,6 +27,7 @@ mod synth;
 pub mod ty;
 mod ty_infer;
 pub mod tyctx;
+mod debug;
 
 #[derive(Debug)]
 pub enum TypeckErr {
@@ -315,10 +316,15 @@ impl<'hir> Typecker<'hir> {
         self.add_fresh_ex(ExKind::Common)
     }
 
-    fn add_fresh_kind_ex(&mut self) -> ExPair<KindEx> {
+    fn add_fresh_kind_ex(&mut self) -> (KindEx, Kind) {
         let kind_ex = self.fresh_kind_ex();
         self.add_kind_ex(kind_ex);
-        (kind_ex, Ty::ty_kind(Kind::new_ex(kind_ex)))
+        (kind_ex, Kind::new_ex(kind_ex))
+    }
+
+    fn add_fresh_kind_ex_as_ty(&mut self) -> ExPair<KindEx> {
+        let (ex, kind) = self.add_fresh_kind_ex();
+        (ex, Ty::ty_kind(kind))
     }
 
     fn is_unsolved_ex(&self, ty: Ty) -> Option<Ex> {
@@ -364,8 +370,8 @@ impl<'hir> Typecker<'hir> {
         // Some(ty))     .unwrap()
     }
 
-    fn solve_kind_ex(&mut self, ex: KindEx, sol: Kind) -> Kind {
-        if let &KindSort::Ex(sol_ex) = sol.sort() {
+    fn solve_kind_ex(&mut self, ex: KindEx, sol: MonoKind) -> Kind {
+        if let MonoKindSort::Ex(sol_ex) = sol.sort {
             assert_ne!(
                 sol_ex, ex,
                 "Tried to solve kind ex with itself {} / {}",
@@ -373,13 +379,14 @@ impl<'hir> Typecker<'hir> {
             );
         }
 
-        verbose!("Solve {} as {} in [CTX {}]", ex, sol, self.ctx_depth());
+        let kind = sol.kind;
+        verbose!("Solve {} as {} in [CTX {}]", ex, kind, self.ctx_depth());
         self.ctx_mut().solve_kind_ex(ex, sol);
-        sol
+        kind
     }
 
     fn add_ex(&mut self, ex: Ex) {
-        verbose!("Add ex {}", ex);
+        verbose!("Add ex {ex}");
         self.ctx_mut().add_ex(ex);
     }
 
@@ -388,7 +395,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn add_var(&mut self, var: TyVarId) -> Ty {
-        verbose!("Add var {}", var);
+        verbose!("Add var {var}");
         self.ctx_mut().add_var(var);
         Ty::var(var)
     }
@@ -495,7 +502,7 @@ impl<'hir> Typecker<'hir> {
             if let Some(_) = self.get_solution(ex) {
                 return;
             }
-            verbose!("Default int ex {}", ex);
+            verbose!("Default int ex {ex}");
             self.solve(ex, default_int.mono());
         });
 
@@ -503,14 +510,18 @@ impl<'hir> Typecker<'hir> {
             if let Some(_) = self.get_solution(ex) {
                 return;
             }
-            verbose!("Default float ex {}", ex);
+            verbose!("Default float ex {ex}");
             self.solve(ex, default_float.mono());
         });
     }
 
     /// Gets function type DefId applying context to substitute existentials.
     pub fn deep_func_def_id(&self, ty: Ty) -> Option<DefId> {
-        ty.apply_ctx(self.ctx()).func_def_id()
+        let mut maybe_func_ty = ty;
+        while let &TyKind::Forall(_, ty) = ty.apply_ctx(self.ctx()).kind() {
+            maybe_func_ty = ty;
+        }
+        maybe_func_ty.func_def_id()
     }
 
     // Debug //

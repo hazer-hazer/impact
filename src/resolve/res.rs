@@ -1,14 +1,68 @@
 use std::{collections::HashMap, fmt::Display};
 
-use super::def::DefId;
-use crate::ast::NodeId;
+use super::def::{Def, DefId, DefKind};
+use crate::{ast::NodeId, span::sym::Ident};
+
+// TODO: For now, candidates are useless, because we just suggest anything with
+// the same name, but for example, if we resolve module, we should suggest some
+// modules, not locals or something from value namespace.
+#[derive(Clone, Debug)]
+pub enum Candidate {
+    None,
+    Local(Ident),
+    Defs(Vec<Def>),
+}
+
+impl Candidate {
+    pub fn defs(defs: Vec<Def>) -> Self {
+        Self::Defs(defs)
+    }
+
+    pub fn set_if_none(&mut self, other: Candidate) {
+        match self {
+            Candidate::None => *self = other,
+            Candidate::Local(_) | Candidate::Defs(_) => {},
+        }
+    }
+
+    pub fn set_local(&mut self, local: Ident) {
+        match self {
+            Candidate::None => *self = Self::Local(local),
+            Candidate::Local(_) | Candidate::Defs(_) => {},
+        }
+    }
+
+    pub fn set_defs(&mut self, defs: Vec<Def>) {
+        match self {
+            Candidate::None => *self = Candidate::Defs(defs),
+            Candidate::Local(_) | Candidate::Defs(_) => {},
+        }
+    }
+}
+
+impl Display for Candidate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Candidate::None => write!(f, "NONE"),
+            Candidate::Local(local) => write!(f, "local{local}"),
+            Candidate::Defs(defs) => write!(
+                f,
+                "defs[{}]",
+                defs.iter()
+                    .map(|&def| format!("{def}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ResKind {
     Local(NodeId),
-    Def(DefId), // Definition, e.g. imported function
+    Def(DefId),
     DeclareBuiltin,
-    Error,
+    Err,
 }
 
 /// The unit of name resolution.
@@ -38,9 +92,7 @@ impl Res {
     }
 
     pub fn error() -> Self {
-        Self {
-            kind: ResKind::Error,
-        }
+        Self { kind: ResKind::Err }
     }
 
     pub fn expect_def(&self) -> DefId {
@@ -64,7 +116,7 @@ where
             ResKind::Def(def_id) => write!(f, "{def_id}"),
             ResKind::Local(node_id) => write!(f, "{node_id}"),
             ResKind::DeclareBuiltin => write!(f, "[`builtin`]"),
-            ResKind::Error => write!(f, "[ERROR]"),
+            ResKind::Err => write!(f, "[ERROR]"),
         }
     }
 }

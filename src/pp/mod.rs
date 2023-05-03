@@ -145,25 +145,25 @@ impl<'a, D> AstLikePP<'a, D> {
         self.out
     }
 
-    fn ch(&mut self, ch: char) -> &mut Self {
+    pub fn ch(&mut self, ch: char) -> &mut Self {
         self.out.push(ch);
         self
     }
 
-    fn sp(&mut self) -> &mut Self {
+    pub fn sp(&mut self) -> &mut Self {
         self.ch(' ')
     }
 
-    fn nl(&mut self) -> &mut Self {
+    pub fn nl(&mut self) -> &mut Self {
         self.ch('\n')
     }
 
-    fn str(&mut self, str: &str) -> &mut Self {
+    pub fn str(&mut self, str: &str) -> &mut Self {
         self.out.push_str(str);
         self
     }
 
-    fn string<T>(&mut self, value: T) -> &mut Self
+    pub fn string<T>(&mut self, value: T) -> &mut Self
     where
         T: ToString,
     {
@@ -171,11 +171,11 @@ impl<'a, D> AstLikePP<'a, D> {
         self
     }
 
-    fn colorized<T: ColorizedStruct>(&mut self, value: T) -> &mut Self {
+    pub fn colorized<T: ColorizedStruct>(&mut self, value: T) -> &mut Self {
         self.string(value.colorized())
     }
 
-    fn join<T>(&mut self, values: impl Iterator<Item = T>, sep: &str) -> &mut Self
+    pub fn join<T>(&mut self, values: impl Iterator<Item = T>, sep: &str) -> &mut Self
     where
         T: ToString,
     {
@@ -188,31 +188,31 @@ impl<'a, D> AstLikePP<'a, D> {
         )
     }
 
-    fn indent(&mut self) -> &mut Self {
+    pub fn indent(&mut self) -> &mut Self {
         self.indent_level += 1;
         self
     }
 
-    fn dedent(&mut self) -> &mut Self {
+    pub fn dedent(&mut self) -> &mut Self {
         assert_ne!(self.indent_level, 0);
         self.indent_level -= 1;
         self
     }
 
-    fn cur_indent(&self) -> String {
+    pub fn cur_indent(&self) -> String {
         "  ".repeat(self.indent_level as usize)
     }
 
-    fn out_indent(&mut self) -> &mut Self {
+    pub fn out_indent(&mut self) -> &mut Self {
         self.str(&self.cur_indent())
     }
 
-    fn line(&mut self, str: &str) -> &mut Self {
+    pub fn line(&mut self, str: &str) -> &mut Self {
         self.out.push_str(str);
         self.nl()
     }
 
-    fn kw(&mut self, kw: Kw) -> &mut Self {
+    pub fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
             Kw::Data | Kw::Extern | Kw::Type | Kw::Mod => ("", " "),
@@ -224,7 +224,7 @@ impl<'a, D> AstLikePP<'a, D> {
         self.str(post)
     }
 
-    fn punct(&mut self, punct: Punct) -> &mut Self {
+    pub fn punct(&mut self, punct: Punct) -> &mut Self {
         let (pre, post) = match punct {
             Punct::Arrow => (" ", " "),
             Punct::Colon => ("", " "),
@@ -241,7 +241,7 @@ impl<'a, D> AstLikePP<'a, D> {
         self.str(post)
     }
 
-    fn op(&mut self, op: Op) -> &mut Self {
+    pub fn op(&mut self, op: Op) -> &mut Self {
         let (pre, post) = match op {
             Op::Plus | Op::Minus | Op::Mul | Op::Div | Op::Mod | Op::BitOr | Op::Assign => {
                 (" ", " ")
@@ -253,7 +253,7 @@ impl<'a, D> AstLikePP<'a, D> {
         self.str(post)
     }
 
-    fn ident(&mut self, ident: &Ident) -> &mut Self {
+    pub fn ident(&mut self, ident: &Ident) -> &mut Self {
         if ident.is_op() {
             self.str("(");
             self.string(ident);
@@ -337,7 +337,7 @@ impl<'a, D> AstLikePP<'a, D> {
                 self.string("[`builtin`]".fg_color(BUILTIN_COLOR));
                 return;
             },
-            ResKind::Error => None,
+            ResKind::Err => None,
         };
 
         let color = self.name_color(node_id);

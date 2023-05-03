@@ -22,15 +22,6 @@ use crate::{
     },
 };
 
-macro_rules! pr_call {
-    ($error: expr, $pr: expr, $method: ident $(,$args: expr)*) => {
-        match &$pr {
-            Ok(ok) => ok.$method($($args),*),
-            Err(_) => $error,
-        }
-    };
-}
-
 #[derive(Debug, PartialEq)]
 enum ParseEntryKind {
     Opt,
@@ -426,15 +417,28 @@ impl Parser {
         })
     }
 
+    fn parse_many_until<T>(
+        &mut self,
+        cmp: TokenCmp,
+        mut parse: impl FnMut(&mut Self) -> T,
+    ) -> Vec<T> {
+        let mut entities = vec![];
+        while !self.eof() {
+            if self.is(cmp) {
+                break;
+            }
+            entities.push(parse(self));
+        }
+        entities
+    }
+
     // Statements //
     fn parse_stmt(&mut self) -> PR<N<Stmt>> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "statement");
 
         let stmt = self._parse_stmt();
 
-        self.exit_entity(pe, &stmt);
-
-        stmt
+        self.exit_entity(pe, stmt)
     }
 
     fn _parse_stmt(&mut self) -> PR<N<Stmt>> {
@@ -487,12 +491,14 @@ impl Parser {
         let item = self.parse_item();
 
         if !is_block_ended!(item) {
-            self.expect_semis(&pr_call!("item".to_string(), item, kind_str))?;
+            self.expect_semis(
+                &item
+                    .as_ref()
+                    .map_or("item".to_string(), |item| item.kind_str()),
+            );
         }
 
-        self.exit_entity(pe, &item);
-
-        item
+        self.exit_entity(pe, item)
     }
 
     fn parse_opt_item(&mut self) -> Option<PR<N<Item>>> {
@@ -502,49 +508,29 @@ impl Parser {
 
         if self.is(TokenCmp::Kw(Kw::Mod)) {
             let mod_item = self.parse_mod_item();
-
-            self.exit_entity(pe, &mod_item);
-
-            Some(mod_item)
+            Some(self.exit_entity(pe, mod_item))
         } else if self.is(TokenCmp::Kw(Kw::Type)) {
             let ty_item = self.parse_ty_item();
-
-            self.exit_entity(pe, &ty_item);
-
-            Some(ty_item)
+            Some(self.exit_entity(pe, ty_item))
         } else if self.lookup_after_many1(TokenCmp::DeclName, TokenCmp::Op(Op::Assign)) {
             let decl = self.parse_decl_item();
-
-            self.exit_entity(pe, &decl);
-
-            Some(decl)
+            Some(self.exit_entity(pe, decl))
         } else if self.is(TokenCmp::Kw(Kw::Extern)) {
             let extern_block = self.parse_extern_block();
-
-            self.exit_entity(pe, &extern_block);
-
-            Some(extern_block)
+            Some(self.exit_entity(pe, extern_block))
         } else if self.is(TokenCmp::Kw(Kw::Data)) {
             let adt = self.parse_adt_item();
-            self.exit_entity(pe, &adt);
-            Some(adt)
+            Some(self.exit_entity(pe, adt))
         } else {
             self.exit_parsed_entity(pe);
-
             None
         }
     }
 
     fn parse_generic_params(&mut self) -> GenericParams {
-        let mut type_params = vec![];
-        while !self.eof() {
-            if self.is(TokenCmp::Op(Op::Assign)) {
-                break;
-            }
-            type_params.push(self.parse_type_param());
-        }
-
-        GenericParams::new(type_params)
+        GenericParams::new(
+            self.parse_many_until(TokenCmp::Op(Op::Assign), |this| this.parse_type_param()),
+        )
     }
 
     fn parse_type_param(&mut self) -> PR<TyParam> {
@@ -609,13 +595,9 @@ impl Parser {
         // `parse_ident_in_path` is used to allow `() = ()`
         let name = self.parse_ident_decl_name("function name");
 
-        let mut params = vec![];
-        while !self.eof() {
-            if self.is(TokenCmp::Op(Op::Assign)) {
-                break;
-            }
-            params.push(self.parse_pat("function parameter (pattern)"));
-        }
+        let params = self.parse_many_until(TokenCmp::Op(Op::Assign), |this| {
+            this.parse_pat("function parameter (pattern)")
+        });
 
         self.expect(TokenCmp::Op(Op::Assign))?;
 
@@ -1020,7 +1002,7 @@ impl Parser {
                     ),
                     self.close_span(lo),
                 )));
-                self.exit_entity(pe, &lhs);
+                self.exit_parsed_entity(pe);
             }
 
             Some(lhs)
@@ -1159,10 +1141,9 @@ impl Parser {
 
         self.skip(TokenCmp::Punct(Punct::Backslash));
 
-        let mut params = vec![];
-        while !self.is(TokenCmp::Punct(Punct::Arrow)) {
-            params.push(self.parse_pat("lambda parameter (pattern)"));
-        }
+        let params = self.parse_many_until(TokenCmp::Punct(Punct::Arrow), |this| {
+            this.parse_pat("lambda parameter (pattern)")
+        });
 
         self.skip(TokenCmp::Punct(Punct::Arrow));
 
@@ -1322,15 +1303,12 @@ impl Parser {
     }
 
     fn parse<'ast>(&mut self) -> AST {
-        let mut items = vec![];
-
         let pe = self.enter_entity(ParseEntryKind::Expect, "top-level item list");
 
         self.skip_opt_nls();
 
-        while !self.eof() {
-            items.push(self.parse_item_semi());
-        }
+        let items = self.parse_many_until(TokenCmp::Eof, |this| this.parse_item_semi());
+
         self.exit_parsed_entity(pe);
 
         self.print_parse_entries();
@@ -1397,8 +1375,9 @@ impl Parser {
         self._exit_entity(id, false)
     }
 
-    fn exit_entity<T, E>(&mut self, id: Option<usize>, pr: &Result<T, E>) {
+    fn exit_entity<T, E>(&mut self, id: Option<usize>, pr: Result<T, E>) -> Result<T, E> {
         self._exit_entity(id, pr.is_err());
+        pr
     }
 
     fn _exit_entity(&mut self, id: Option<usize>, failed: bool) {

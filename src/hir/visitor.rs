@@ -216,6 +216,6 @@ pub trait HirVisitor {
         let block = hir.block(*block);
         walk_each!(self, block.stmts(), visit_stmt, hir);
 
-        block.expr().map(|expr| self.visit_expr(expr, hir));
+        block.expr().map(|expr| self.visit_expr(&expr, hir));
     }
 }

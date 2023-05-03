@@ -1,14 +1,9 @@
-
-
 use super::{
-    kind::{Kind, KindEx, KindExId, KindVarId},
+    kind::{Kind, KindEx, KindExId, KindVarId, MonoKind},
     ty::{Ex, ExId, ExKind, Ty, TyVarId},
     ty_infer::MonoTy,
 };
-use crate::{
-    cli::verbose,
-    dt::idx::IndexVec,
-};
+use crate::{cli::verbose, dt::idx::IndexVec};
 
 pub trait AlgoCtx {
     fn get_solution(&self, ex: Ex) -> Option<Ty>;
@@ -272,9 +267,9 @@ impl InferCtx {
         );
     }
 
-    pub fn solve_kind_ex(&mut self, ex: KindEx, sol: Kind) {
+    pub fn solve_kind_ex(&mut self, ex: KindEx, sol: MonoKind) {
         // TODO: Can existentials out of context be solved here?
-        assert!(self.solved_kind_exes.insert(ex.id(), sol).is_none());
+        assert!(self.solved_kind_exes.insert(ex.id(), sol.kind).is_none());
     }
 
     // Getters //

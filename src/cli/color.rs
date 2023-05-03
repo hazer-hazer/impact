@@ -101,6 +101,7 @@ impl Display for ColorizedString {
 }
 
 pub trait Colorize {
+    fn colorize(self, fg: Option<Color>, bg: Option<Color>) -> ColorizedString;
     fn fg_color(self, color: Color) -> ColorizedString;
     fn bg_color(self, color: Color) -> ColorizedString;
 
@@ -204,6 +205,14 @@ pub trait Colorize {
 }
 
 impl<'a> Colorize for &'a str {
+    fn colorize(self, fg: Option<Color>, bg: Option<Color>) -> ColorizedString {
+        ColorizedString {
+            string: String::from(self),
+            fg,
+            bg,
+        }
+    }
+
     fn fg_color(self, color: Color) -> ColorizedString {
         ColorizedString {
             string: String::from(self),
@@ -222,6 +231,14 @@ impl<'a> Colorize for &'a str {
 }
 
 impl Colorize for String {
+    fn colorize(self, fg: Option<Color>, bg: Option<Color>) -> ColorizedString {
+        ColorizedString {
+            string: self,
+            fg,
+            bg,
+        }
+    }
+
     fn fg_color(self, color: Color) -> ColorizedString {
         ColorizedString {
             string: self,

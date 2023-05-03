@@ -237,7 +237,7 @@ impl Display for NodeKind {
                 NodeKind::Stmt => "statement",
                 NodeKind::Pat => "pattern",
                 NodeKind::Block => "block",
-                NodeKind::Ty => "ty",
+                NodeKind::Ty => "type",
                 NodeKind::ExprPath => "expression path",
                 NodeKind::TyPath => "type path",
                 NodeKind::Variant => "variant",
@@ -481,7 +481,7 @@ impl HIR {
                     .span()
                     .point_after_hi()
             },
-            |&expr| self.expr_result_span(expr),
+            |expr| self.expr_result_span(expr),
         )
     }
 

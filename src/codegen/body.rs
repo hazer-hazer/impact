@@ -110,12 +110,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             }
             .to_string();
         }
-        self.ctx
-            .sess
-            .def_table
-            .get_def(def_id)
-            .name()
-            .original_string()
+        self.ctx.sess.def_table.def(def_id).name().original_string()
     }
 
     // Generators //
@@ -160,7 +155,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn gen_bb(&mut self, bb: BB) -> BasicBlock<'ink> {
-        verbose!("Gen bb {}", bb);
+        verbose!("Gen bb {bb}");
 
         let ll_bb = self
             .ctx
@@ -177,7 +172,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn gen_stmt(&mut self, stmt: &Stmt) {
-        verbose!("Gen stmt {}", stmt);
+        verbose!("Gen stmt {stmt}");
 
         match &stmt.kind {
             StmtKind::Assign(lv, rv) => {
@@ -190,7 +185,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn gen_terminator(&mut self, terminator: &Terminator) {
-        verbose!("Gen terminator {}", terminator);
+        verbose!("Gen terminator {terminator}");
 
         match terminator.kind {
             TerminatorKind::Goto(bb) => {
@@ -209,7 +204,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
 
     // To-value converters //
     fn rvalue_to_value(&mut self, rvalue: &RValue) -> BasicValueEnum<'ink> {
-        verbose!("Convert RValue to BasicValue {}", rvalue);
+        verbose!("Convert RValue to BasicValue {rvalue}");
 
         match rvalue {
             RValue::Operand(operand) => self.operand_to_value(operand),
@@ -273,7 +268,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn operand_to_value(&mut self, operand: &Operand) -> BasicValueEnum<'ink> {
-        verbose!("Convert operand {} to BasicValue", operand);
+        verbose!("Convert operand {operand} to BasicValue");
 
         match operand {
             Operand::LValue(lv) => self.builder.build_load(
@@ -294,7 +289,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     // }
 
     fn const_to_value(&mut self, const_: &Const) -> BasicValueEnum<'ink> {
-        verbose!("Convert const {} to BasicValue", const_);
+        verbose!("Convert const {const_} to BasicValue");
 
         match &const_.kind {
             ConstKind::Scalar(scalar) => match const_.ty.kind() {

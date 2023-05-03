@@ -158,7 +158,7 @@ impl<'ctx> ThirBuilder<'ctx> {
             .iter()
             .filter_map(|&stmt| self.stmt(stmt))
             .collect();
-        let expr = block.expr().map(|&expr| self.expr(expr));
+        let expr = block.expr().map(|expr| self.expr(expr));
 
         self.thir.add_block(Block { stmts, expr })
     }

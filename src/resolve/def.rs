@@ -1,6 +1,9 @@
 use std::{array, collections::HashMap, fmt::Display};
 
-use super::builtin::{Builtin, DeclareBuiltin};
+use super::{
+    builtin::{Builtin, DeclareBuiltin},
+    res::Candidate,
+};
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::{
@@ -9,6 +12,9 @@ use crate::{
     },
     dt::idx::{declare_idx, Idx, IndexVec},
     message::message::MessageBuilder,
+    parser::token::Punct,
+    pp::AstLikePP,
+    session::Session,
     span::{
         source::SourceId,
         sym::{Ident, IdentKind, Internable, Kw, Symbol},
@@ -100,11 +106,11 @@ pub const ROOT_DEF_ID: DefId = DefId(0);
 pub type DefMap<T> = IndexVec<DefId, Option<T>>;
 
 /// Definition of item, e.g. type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Def {
-    def_id: DefId,
-    kind: DefKind,
-    name: Ident,
+    pub def_id: DefId,
+    pub kind: DefKind,
+    pub name: Ident,
 }
 
 impl Def {
@@ -116,8 +122,8 @@ impl Def {
         self.def_id
     }
 
-    pub fn kind(&self) -> &DefKind {
-        &self.kind
+    pub fn kind(&self) -> DefKind {
+        self.kind
     }
 
     pub fn name(&self) -> Ident {
@@ -186,8 +192,8 @@ impl<T> PerNS<T> {
         }
     }
 
-    pub fn iter(&self) -> array::IntoIter<&T, 2> {
-        [&self.value, &self.ty].into_iter()
+    pub fn iter(&self) -> impl Iterator<Item = (Namespace, &T)> {
+        [(Namespace::Value, &self.value), (Namespace::Type, &self.ty)].into_iter()
     }
 }
 
@@ -208,6 +214,16 @@ pub enum ModuleKind {
     Root,
     Block(NodeId),
     Def(DefId),
+}
+
+impl Display for ModuleKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleKind::Root => write!(f, "[ROOT]"),
+            ModuleKind::Block(block) => write!(f, "block{block}"),
+            ModuleKind::Def(def) => write!(f, "def{def}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -291,9 +307,13 @@ impl Module {
         self.per_ns.get_mut(ns).insert(sym, def_id)
     }
 
-    // FIXME: Use `Symbol` instead of `Ident`
-    pub fn get_from_ns(&self, ns: Namespace, ident: &Ident) -> Option<DefId> {
-        self.per_ns.get(ns).get(&ident.sym()).copied()
+    pub fn get_from_ns(&self, ns: Namespace, sym: Symbol) -> Result<DefId, Vec<DefId>> {
+        self.per_ns.get(ns).get(&sym).copied().ok_or_else(|| {
+            self.per_ns
+                .iter()
+                .filter_map(|(_, defs)| defs.get(&sym).copied())
+                .collect()
+        })
     }
 
     #[deprecated = "Fails on `()` as it can be both in value and type namespace. Use `get_from_ns`"]
@@ -301,6 +321,29 @@ impl Module {
         self.per_ns
             .get(Namespace::from_ident(ident))
             .get(&ident.sym())
+    }
+}
+
+impl Display for Module {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} module with parent {}: {{{}}}",
+            self.kind(),
+            self.parent
+                .map_or("None".to_string(), |parent| parent.to_string()),
+            self.per_ns
+                .iter()
+                .map(|(ns, defs)| format!(
+                    "{ns} namespace: {{{}}}",
+                    defs.iter()
+                        .map(|(name, def)| format!("{}: {}", name, def))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
     }
 }
 
@@ -379,7 +422,7 @@ impl DefTable {
         let def_id = DefId(self.defs.len() as u32);
         self.defs.push(Def::new(def_id, kind, *name));
 
-        verbose!("def {} span {}", def_id, name.span());
+        verbose!("def {def_id} span {}", name.span());
         assert!(self.def_name_span.insert(def_id, name.span()).is_none());
 
         if node_id != DUMMY_NODE_ID {
@@ -390,8 +433,8 @@ impl DefTable {
         def_id
     }
 
-    pub fn get_def(&self, def_id: DefId) -> &Def {
-        self.defs.get(def_id.as_usize()).as_ref().unwrap()
+    pub fn def(&self, def_id: DefId) -> Def {
+        self.defs.get(def_id.as_usize()).copied().unwrap()
     }
 
     pub fn get_def_id(&self, node_id: NodeId) -> Option<DefId> {
@@ -462,11 +505,11 @@ impl DefTable {
         }
 
         let root_mod = self.modules.get_unwrap(ROOT_DEF_ID);
-        let main = root_mod.get_from_ns(Namespace::Value, &Ident::synthetic("main".intern()));
+        let main = root_mod.get_from_ns(Namespace::Value, "main".intern());
 
         match main {
-            Some(def_id) => {
-                let def = self.get_def(def_id);
+            Ok(def_id) => {
+                let def = self.def(def_id);
                 match def.kind() {
                     DefKind::Func => {
                         self.main_func = Some(def_id);
@@ -487,7 +530,8 @@ impl DefTable {
                         )),
                 }
             },
-            None => Err(MessageBuilder::error()
+            // TODO: Can we use Candidate?
+            Err(_) => Err(MessageBuilder::error()
                 .span(self.root_span())
                 .text(format!("'main' function is not defined"))
                 .label(self.root_span(), format!("Define function 'main'"))),
@@ -496,5 +540,90 @@ impl DefTable {
 
     pub fn expect_main_func(&self) -> DefId {
         self.main_func.unwrap()
+    }
+}
+
+pub struct DebugModuleTree<'a> {
+    sess: &'a Session,
+    pp: AstLikePP<'a>,
+    begin: ModuleId,
+    looking_up_for: Option<Symbol>,
+    stop_at: Option<ModuleId>,
+}
+
+impl<'a> DebugModuleTree<'a> {
+    pub fn new(
+        sess: &'a Session,
+        begin: ModuleId,
+        looking_up_for: Option<Symbol>,
+        stop_at: Option<ModuleId>,
+    ) -> Self {
+        Self {
+            sess,
+            pp: AstLikePP::new(sess, crate::pp::AstPPMode::Normal),
+            begin,
+            looking_up_for,
+            stop_at,
+        }
+    }
+
+    pub fn debug(mut self) -> String {
+        self.module(self.begin);
+        self.pp.get_string()
+    }
+
+    fn module(&mut self, id: ModuleId) {
+        if self.stop_at == Some(id) {
+            self.pp.string("❌\n").indent();
+        }
+
+        for (ns, defs) in self.sess.def_table.get_module(id).namespaces().iter() {
+            self.pp
+                .out_indent()
+                .string(format!("{ns} namespace:"))
+                .nl()
+                .indent();
+            for (&sym, &def_id) in defs {
+                self.pp.out_indent();
+
+                let def = self.sess.def_table.def(def_id);
+
+                self.pp
+                    .string(def.kind())
+                    .sp()
+                    .string(sym.original_string())
+                    .string(def_id);
+
+                if self.looking_up_for == Some(sym) {
+                    self.pp.sp().string("[search candidate]");
+                }
+
+                match def.kind() {
+                    // TODO: Review Variant as module
+                    DefKind::Variant | DefKind::Adt | DefKind::Root | DefKind::Mod => {
+                        self.pp.punct(Punct::Colon).nl().indent();
+                        self.module(ModuleId::Def(def.def_id()));
+                        self.pp.dedent();
+                    },
+                    DefKind::Lambda
+                    | DefKind::DeclareBuiltin
+                    | DefKind::Value
+                    | DefKind::TyAlias
+                    | DefKind::Local
+                    | DefKind::External
+                    | DefKind::Ctor
+                    | DefKind::FieldAccessor
+                    | DefKind::TyParam
+                    | DefKind::Func => {
+                        self.pp.nl();
+                    },
+                }
+            }
+            self.pp.dedent();
+        }
+
+        if self.stop_at == Some(id) {
+            self.pp.dedent();
+        }
     }
 }

@@ -1,24 +1,21 @@
 // Ty methods used only in typeck and unavailable outside of typeck
 
 use std::{
-    collections::{HashSet},
+    collections::HashSet,
     fmt::Formatter,
     hash::{Hash, Hasher},
 };
 
-
-
 use self::interner::TY_INTERNER;
 use super::{
     ctx::AlgoCtx,
+    kind::MonoKind,
     ty::{Adt, FloatKind, IntKind, MapTy},
     Ty,
 };
 use crate::{
-    cli::{
-        verbose,
-    },
-    dt::idx::{Idx},
+    cli::verbose,
+    dt::idx::Idx,
     resolve::def::DefId,
     span::sym::Ident,
     typeck::{
@@ -255,7 +252,7 @@ impl Ty {
     }
 
     pub fn substitute(&self, subst: TyVarId, with: Ty) -> Ty {
-        verbose!("Substitute {} in {} with {}", subst, self, with);
+        verbose!("Substitute {subst} in {self} with {with}");
 
         match self.kind() {
             TyKind::Error
@@ -304,11 +301,11 @@ impl Ty {
     }
 
     // MonoTy API //
-    pub fn as_mono(&self) -> Option<MonoTy> {
-        (*self).try_into().ok()
+    pub fn as_mono(self) -> Option<MonoTy> {
+        self.try_into().ok()
     }
 
-    pub fn mono(&self) -> MonoTy {
+    pub fn mono(self) -> MonoTy {
         self.as_mono()
             .expect(&format!("{} expected to be a mono type", self))
     }
@@ -319,9 +316,11 @@ impl Ty {
     }
 
     // Working with context //
-    pub fn apply_ctx(&self, ctx: &impl AlgoCtx) -> Ty {
+    pub fn apply_ctx(self, ctx: &impl AlgoCtx) -> Ty {
         let ty = self._apply_ctx(ctx);
-        // verbose!("Apply ctx on {} => {}", self, ty);
+        if self != ty {
+            verbose!("Applying ctx on type it is solved as {self} => {ty}");
+        }
         ty
     }
 
@@ -375,7 +374,7 @@ pub enum MonoTyKind {
     Func(Vec<Box<MonoTy>>, Box<MonoTy>),
     Ref(Box<MonoTy>),
     Adt(Adt<MonoTy>),
-    Kind(Box<MonoTy>),
+    Kind(Box<MonoKind>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -410,14 +409,8 @@ impl TryFrom<Ty> for MonoTy {
             TyKind::Adt(adt) => Some(MonoTyKind::Adt(adt.map_ty(&mut |ty| ty.try_into())?)),
             &TyKind::Existential(ex) => Some(MonoTyKind::Ex(ex)),
             &TyKind::Var(var) => Some(MonoTyKind::Var(var)),
+            &TyKind::Kind(kind) => Some(MonoTyKind::Kind(Box::new(kind.try_into()?))),
             TyKind::Forall(..) => None,
-            TyKind::Kind(kind) => match kind.sort() {
-                &KindSort::Ty(ty) => Some(MonoTyKind::Kind(Box::new(ty.try_into()?))),
-
-                KindSort::Abs(..) | KindSort::Var(_) | KindSort::Ex(_) | KindSort::Forall(..) => {
-                    None
-                },
-            },
         }
         .ok_or(())?;
 
@@ -434,13 +427,11 @@ mod interner {
 
     use once_cell::sync::Lazy;
 
-    use super::{TyS};
+    use super::TyS;
     use crate::{
         dt::idx::{Idx, IndexVec},
         span::sym::Ident,
-        typeck::{
-            ty::{TyId, TyVarId},
-        },
+        typeck::ty::{TyId, TyVarId},
     };
 
     pub static TY_INTERNER: Lazy<RwLock<TyInterner>> = Lazy::new(|| RwLock::new(TyInterner::new()));

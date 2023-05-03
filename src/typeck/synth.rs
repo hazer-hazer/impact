@@ -14,13 +14,13 @@ use crate::{
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
     span::{sym::Ident, Spanned, WithSpan},
-    typeck::kind::Kind,
+    typeck::kind::{Kind, KindSort},
 };
 
 impl<'hir> Typecker<'hir> {
     pub fn synth_item(&mut self, item_id: ItemId) -> TyResult<Ty> {
         let hir_id = item_id.hir_id();
-        match self.sess.def_table.get_def(item_id.def_id()).kind() {
+        match self.sess.def_table.def(item_id.def_id()).kind() {
             DefKind::DeclareBuiltin => {
                 self.type_inferring_node(
                     hir_id,
@@ -61,7 +61,7 @@ impl<'hir> Typecker<'hir> {
                     .unwrap()
                     .as_kind_ex()
                     .unwrap();
-                self.solve_kind_ex(conv_def_ty, Kind::new_ty(value_ty));
+                self.solve_kind_ex(conv_def_ty, Kind::new_ty(value_ty).mono());
                 value_ty
             },
             ItemKind::ExternItem(extern_item) => {
@@ -106,8 +106,6 @@ impl<'hir> Typecker<'hir> {
     }
 
     pub fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
-        verbose!("Synth type of expression {}", expr_id);
-
         let expr_ty = match self.hir.expr(expr_id).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             &ExprKind::Path(path) => self.synth_path(path),
@@ -120,6 +118,8 @@ impl<'hir> Typecker<'hir> {
             // expr_id),
             &ExprKind::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
         }?;
+
+        verbose!("Synthesized type of expression {expr_id} = {expr_ty}");
 
         let expr_ty = expr_ty.apply_ctx(self.ctx());
 
@@ -157,7 +157,7 @@ impl<'hir> Typecker<'hir> {
                 | ExprDefKind::Func
                 | ExprDefKind::Value => Ok(self.tyctx().def_ty(def_id).expect(&format!(
                     "Expected type of def {} ty be collected at conv stage",
-                    self.sess.def_table.get_def(def_id)
+                    self.sess.def_table.def(def_id)
                 ))),
             },
             &ExprRes::Local(local) => Ok(self.tyctx().node_type(local).unwrap()),
@@ -228,7 +228,7 @@ impl<'hir> Typecker<'hir> {
 
             let res_ty = block
                 .expr()
-                .map_or(Ok(Ty::unit()), |&expr| this.synth_expr(expr));
+                .map_or(Ok(Ty::unit()), |expr| this.synth_expr(expr));
 
             // FIXME: Can we live without this?
             // this.default_number_exes();
@@ -260,7 +260,7 @@ impl<'hir> Typecker<'hir> {
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![(pat, Ty::unit())],
             &hir::pat::PatKind::Ident(_) => {
-                vec![(pat, self.add_fresh_kind_ex().1)]
+                vec![(pat, self.add_fresh_kind_ex_as_ty().1)]
             },
         }
     }
@@ -296,7 +296,7 @@ impl<'hir> Typecker<'hir> {
             .map(|param| self.get_param_type(param))
             .collect::<Vec<_>>();
 
-        let body_ex = self.add_fresh_kind_ex();
+        let body_ex = self.add_fresh_kind_ex_as_ty();
 
         self.under_new_ctx(|this| {
             params_pats_tys.iter().flatten().for_each(|&(pat, ty)| {
@@ -304,6 +304,10 @@ impl<'hir> Typecker<'hir> {
             });
 
             let body_ty = this.check_discard_err(self.hir.body_value(body_id), body_ex.1);
+            verbose!(
+                "Body ty {body_ty} checked against body existential {}",
+                body_ex.1
+            );
 
             // Apply context to function parameter to get its inferred type.
             let params_tys = params
@@ -337,7 +341,7 @@ impl<'hir> Typecker<'hir> {
                         Ty::forall(ty_var, func_ty)
                     } else if let Some(ex) = this.is_unsolved_kind_ex(param_ty) {
                         let kind_var = Kind::next_kind_var_id(None);
-                        this.solve_kind_ex(ex, Kind::new_var(kind_var));
+                        this.solve_kind_ex(ex, Kind::new_var(kind_var).as_mono().unwrap());
                         Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
                     } else {
                         func_ty
@@ -395,7 +399,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn _synth_call(&mut self, lhs: Spanned<Typed<Expr>>, args: &[Expr]) -> TyResult<Ty> {
-        verbose!("Synthesize call {} with args {:?}", lhs, args);
+        verbose!("Synthesize call {lhs} with args {:?}", args);
 
         let span = lhs.span();
         let lhs_expr = *lhs.node().node();
@@ -455,8 +459,59 @@ impl<'hir> Typecker<'hir> {
 
                 body_ty
             },
+            &TyKind::Kind(kind) => match kind.sort() {
+                &KindSort::Ty(ty) => {
+                    self._synth_call(Spanned::new(span, Typed::new(lhs_expr, ty)), args)
+                },
+                &KindSort::Ex(ex) => {
+                    self.try_to(|this| {
+                        let params_exes = this.add_fresh_common_ex_list(args.len());
+
+                        let body_ex = this.add_fresh_common_ex();
+                        let func_ty: Kind = Ty::func(
+                            None,
+                            params_exes.iter().map(|&(_, ty)| ty).collect(),
+                            body_ex.1,
+                        )
+                        .into();
+                        this.solve_kind_ex(ex, func_ty.mono());
+
+                        // TODO: Can we infer param type from application as below in Func? - Yes,
+                        // read  "Let arguments go first", but I don't like
+                        // "from the outside in" inferring.
+                        args.iter()
+                            .copied()
+                            .zip(params_exes.iter().copied())
+                            .try_for_each(|(arg, (_, param_ex_ty))| {
+                                this.check(arg, param_ex_ty)?;
+                                Ok(())
+                            })?;
+
+                        Ok(body_ex.1)
+                    })
+                },
+                &KindSort::Forall(alpha, kind) => {
+                    let alpha_ex = self.add_fresh_kind_ex();
+                    let subst_kind = kind.substitute(alpha, alpha_ex.1);
+                    let body_ty = self._synth_call(
+                        Spanned::new(span, Typed::new(lhs_expr, subst_kind.into())),
+                        args,
+                    );
+
+                    body_ty
+                },
+                KindSort::Abs(..) | KindSort::Var(_) => {
+                    MessageBuilder::error()
+                        .text(format!("{} cannot be called", lhs_ty))
+                        .span(span)
+                        .label(span, format!("has type {} which cannot be called", lhs_ty))
+                        .emit(self);
+
+                    Err(TypeckErr::Reported)
+                },
+            },
             // FIXME: Type variable can be a callee? - "I'm pretty sure, that all tyvars here must
-            // be replaced with existentials"
+            // already be replaced with existentials"
             _ => {
                 MessageBuilder::error()
                     .text(format!("{} cannot be called", lhs_ty))

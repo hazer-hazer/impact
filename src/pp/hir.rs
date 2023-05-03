@@ -1,5 +1,6 @@
 use super::{AstLikePP, AstPPMode};
 use crate::{
+    cli::color::Colorize,
     hir::{
         expr::{Call, ExprKind, Lambda, Lit, TyExpr},
         item::{Adt, ExternItem, Field, GenericParams, ItemId, Mod, TyAlias, ROOT_ITEM_ID},
@@ -13,6 +14,7 @@ use crate::{
     resolve::builtin::{TyBuiltin, ValueBuiltin},
     session::Session,
     span::sym::{Ident, Kw},
+    typeck::ty,
 };
 
 macro_rules! walk_block {
@@ -63,9 +65,7 @@ impl<'a> HirPP<'a> {
 
 impl<'a> HirVisitor for HirPP<'a> {
     fn visit_hir(&mut self, hir: &HIR) {
-        self.pp.line("== HIR ==");
-        self.pp.item_id(ROOT_ITEM_ID);
-        self.pp.nl();
+        self.pp.line("== HIR ==").item_id(ROOT_ITEM_ID).nl();
         walk_each_delim!(self, hir.root().items, visit_item_stmt, "\n", hir)
     }
 
@@ -82,7 +82,7 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_local_stmt(&mut self, local: &Local, hir: &HIR) {
         self.visit_ident(&local.name, hir);
-        self.pp.op(Op::Assign);
+        self.pp.ty_anno(local.id).op(Op::Assign);
         self.visit_expr(&local.value, hir);
     }
 
@@ -110,72 +110,88 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
-        self.pp.kw(Kw::Type);
-        self.pp.item_id(id);
+        self.pp.kw(Kw::Type).item_id(id);
         self.visit_ident(&name, hir);
-        self.pp.ty_anno(id.hir_id());
-        self.pp.op(Op::Assign);
+        self.pp.ty_anno(id.hir_id()).op(Op::Assign);
         self.visit_ty(&ty_item.ty, hir);
     }
 
     fn visit_mod_item(&mut self, name: Ident, mod_item: &Mod, item_id: ItemId, hir: &HIR) {
-        self.pp.kw(Kw::Mod);
-        self.pp.item_id(item_id);
+        self.pp.kw(Kw::Mod).item_id(item_id);
         self.visit_ident(&name, hir);
         self.pp.nl();
         walk_block!(self, mod_item.items, visit_item, hir);
     }
 
     fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId, hir: &HIR) {
-        self.pp.string(name.original_string());
-        self.pp.item_id(id);
-        self.pp.ty_anno(id.hir_id());
-        self.pp.op(Op::Assign);
+        self.pp
+            .string(name.original_string())
+            .item_id(id)
+            .ty_anno(id.hir_id())
+            .op(Op::Assign);
         self.visit_body(&value, BodyOwner::value(id.def_id()), hir);
     }
 
     fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId, hir: &HIR) {
-        self.pp.string(name.original_string());
-        self.pp.item_id(id);
-        self.pp.ty_anno(id.hir_id());
-        self.pp.sp();
+        self.pp
+            .string(name.original_string())
+            .item_id(id)
+            .ty_anno(id.hir_id())
+            .sp();
         walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
         self.pp.op(Op::Assign);
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
     fn visit_adt_item(&mut self, name: Ident, data: &Adt, id: ItemId, hir: &HIR) {
-        self.pp.kw(Kw::Data);
-        self.pp.string(name.original_string());
-        self.pp.item_id(id);
-        self.pp.ty_anno(id.hir_id());
+        self.pp
+            .kw(Kw::Data)
+            .string(name.original_string())
+            .item_id(id)
+            .ty_anno(id.hir_id());
         self.pp.op(Op::Assign);
         walk_each_delim!(self, data.variants, visit_variant, " | ", hir);
     }
 
     fn visit_variant(&mut self, &variant: &Variant, hir: &HIR) {
         let variant = hir.variant(variant);
-        self.pp.string(variant.name);
-        self.pp.def_id(&variant.def_id);
-        self.pp.ty_anno(variant.id);
+        self.pp
+            .string(variant.name)
+            .def_id(&variant.def_id)
+            .ty_anno(variant.id);
+
+        if self.pp.mode == AstPPMode::TyAnno {
+            // FIXME: Can be optional?
+            let ctor_ty = self.pp.sess.tyctx.def_ty(variant.ctor_def_id).unwrap();
+            self.pp
+                .string(format!("(constructor: {ctor_ty})").colorize(ty::TyId::color(), None));
+        }
+
         self.pp.sp();
         walk_each_delim!(self, &variant.fields, visit_field, " ", hir);
     }
 
     fn visit_field(&mut self, field: &Field, hir: &HIR) {
         field.name.as_ref().map(|name| {
-            self.pp.string(name.original_string());
-            self.pp.punct(Punct::Colon);
+            self.pp.string(name.original_string()).punct(Punct::Colon);
         });
         self.visit_ty(&field.ty, hir);
         self.pp.ty_anno(field.id);
+
+        if self.pp.mode == AstPPMode::TyAnno {
+            // FIXME: Can be optional?
+            let accessor_ty = self.pp.sess.tyctx.def_ty(field.accessor_def_id).unwrap();
+            self.pp
+                .string(format!("(accessor: {accessor_ty})").colorize(ty::TyId::color(), None));
+        }
     }
 
     fn visit_extern_item(&mut self, name: Ident, extern_item: &ExternItem, id: ItemId, hir: &HIR) {
-        self.pp.string(name);
-        self.pp.item_id(id);
-        self.pp.ty_anno(id.hir_id());
-        self.pp.punct(Punct::Colon);
+        self.pp
+            .string(name)
+            .item_id(id)
+            .ty_anno(id.hir_id())
+            .punct(Punct::Colon);
         self.visit_ty(&extern_item.ty, hir);
     }
 
@@ -200,8 +216,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             // ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
             ExprKind::Builtin(bt) => self.visit_builtin_expr(bt),
         }
-        self.pp.ty_anno(expr_id);
-        self.pp.hir_id(expr);
+        self.pp.ty_anno(expr_id).hir_id(expr);
     }
 
     fn visit_lit_expr(&mut self, lit: &Lit, _hir: &HIR) {
@@ -212,8 +227,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         let path = hir.expr_path(*path);
 
         // TODO: Operator name in parentheses
-        self.pp.string(path);
-        self.pp.hir_id(path);
+        self.pp.string(path).hir_id(path);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
@@ -266,8 +280,7 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_ty_path(&mut self, path: &TyPath, hir: &HIR) {
         let path = hir.ty_path(*path);
-        self.pp.string(path);
-        self.pp.hir_id(path);
+        self.pp.string(path).hir_id(path);
     }
 
     fn visit_func_ty(&mut self, params: &[Ty], body: &Ty, hir: &HIR) {
@@ -313,10 +326,8 @@ impl<'a> HirVisitor for HirPP<'a> {
 
         self.pp.nl();
         walk_block!(self, block.stmts(), visit_stmt, hir);
-        self.pp.indent();
-        self.pp.out_indent();
+        self.pp.indent().out_indent();
         block.expr().map(|expr| self.visit_expr(&expr, hir));
-        self.pp.dedent();
-        self.pp.hir_id(block);
+        self.pp.dedent().hir_id(block);
     }
 }

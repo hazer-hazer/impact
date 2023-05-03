@@ -452,6 +452,10 @@ macro_rules! declare_idx {
             pub fn inner(&self) -> $inner_ty {
                 self.0
             }
+
+            pub fn color() -> Option<Color> {
+                $color
+            }
         }
 
         // impl crate::dt::idx::Idx for $name {

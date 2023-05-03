@@ -23,6 +23,8 @@
     "Kinded",
     "lval",
     "lvalue",
+    "monokind",
+    "monokinds",
     "monomorphize",
     "monomorphized",
     "Monomorphizer",

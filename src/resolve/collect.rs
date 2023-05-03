@@ -17,12 +17,11 @@ use crate::{
 };
 
 pub struct DefCollector<'ast> {
-    sess: Session,
     ast: &'ast AST,
 
-    declare_builtin_func_mod: Option<ModuleId>,
-
     current_module: ModuleId,
+
+    sess: Session,
     msg: MessageStorage,
 }
 
@@ -33,7 +32,6 @@ impl<'ast> DefCollector<'ast> {
         Self {
             sess,
             ast,
-            declare_builtin_func_mod: None,
             current_module: ModuleId::Def(ROOT_DEF_ID),
             msg: Default::default(),
         }
@@ -44,12 +42,12 @@ impl<'ast> DefCollector<'ast> {
     }
 
     fn enter_def_module(&mut self, def_id: DefId) {
-        verbose!("Enter def module {}", def_id);
+        verbose!("Enter def module {def_id}");
         self.current_module = self.sess.def_table.add_module(def_id, self.current_module);
     }
 
     fn enter_block_module(&mut self, node_id: NodeId) {
-        verbose!("Enter block module {}", node_id);
+        verbose!("Enter block module {node_id}");
         self.current_module = self.sess.def_table.add_block(node_id, self.current_module)
     }
 
@@ -67,10 +65,13 @@ impl<'ast> DefCollector<'ast> {
         let def_id = self.sess.def_table.define(node_id, kind, ident);
         let old_def = self.module().define(kind.namespace(), ident.sym(), def_id);
 
-        verbose!("Define {} {} {} - {}", node_id, kind, ident, def_id);
+        verbose!(
+            "Define {node_id} {kind} {ident} => {def_id} inside {}",
+            self.module()
+        );
 
         if let Some(old_def) = old_def {
-            let old_def = self.sess.def_table.get_def(old_def);
+            let old_def = self.sess.def_table.def(old_def);
             MessageBuilder::error()
                 .span(ident.span())
                 .text(format!("Tried to redefine `{}`", ident.sym()))
@@ -101,8 +102,6 @@ impl<'ast> DefCollector<'ast> {
             .define(Namespace::Type, DeclareBuiltin::sym(), def_id)
             .is_none());
 
-        self.declare_builtin_func_mod = Some(self.current_module);
-
         self.sess
             .def_table
             .set_declare_builtin(DeclareBuiltin::new(def_id));
@@ -115,29 +114,6 @@ impl<'ast> DefCollector<'ast> {
             false
         }
     }
-
-    // /// Checks if expression is `builtin` path
-    // fn check_expr_for_builtin(&mut self, expr: &Expr) -> bool {
-    //     if !self.in_declare_builtin_func_scope {
-    //         return false;
-    //     }
-
-    //     match expr.kind() {
-    //         ExprKind::Path(PathExpr(path)) =>
-    // Self::check_path_is_declare_builtin(path),         _ => false,
-    //     }
-    // }
-
-    // fn check_ty_for_builtin(&mut self, ty: &Ty) -> bool {
-    //     if !self.in_declare_builtin_func_scope {
-    //         return false;
-    //     }
-
-    //     match ty.kind() {
-    //         TyKind::Path(TyPath(path)) =>
-    // Self::check_path_is_declare_builtin(path),         _ => false,
-    //     }
-    // }
 }
 
 impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {

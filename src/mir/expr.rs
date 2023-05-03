@@ -126,7 +126,7 @@ impl<'ctx> MirBuilder<'ctx> {
                 bb.with(RValue::Closure(def_id))
             },
             &ExprKind::Def(def_id, ty) => {
-                let rvalue = match self.sess.def_table.get_def(def_id).kind() {
+                let rvalue = match self.sess.def_table.def(def_id).kind() {
                     DefKind::External => {
                         if ty.is_func_like() {
                             RValue::FuncRef(def_id, ty)

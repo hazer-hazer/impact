@@ -282,6 +282,10 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         self.ident(ident);
     }
 
+    fn visit_ident_node(&mut self, ident: &'ast IdentNode) {
+        self.name(&ident.ident, ident.id, false);
+    }
+
     fn visit_path(&mut self, path: &'ast Path) {
         self.path(path)
     }

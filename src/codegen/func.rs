@@ -153,7 +153,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 
         // Do not codegen `builtin` func
         if matches!(
-            self.ctx.sess.def_table.get_def(def_id).kind(),
+            self.ctx.sess.def_table.def(def_id).kind(),
             DefKind::DeclareBuiltin
         ) {
             return;
@@ -333,7 +333,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
     }
 
     fn unused_instance_warning(&mut self, def_id: DefId) {
-        let def = self.ctx.sess.def_table.get_def(def_id);
+        let def = self.ctx.sess.def_table.def(def_id);
         MessageBuilder::warn()
             .span(def.name().span())
             .text(format!("Unused {}", def.kind()))

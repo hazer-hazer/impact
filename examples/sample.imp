@@ -16,7 +16,11 @@ extern
 data String =
     String field: str
 
+field = String.String.field
+
 main () =
-    a = String 123
+    a = String.String "a"
+
+    field a
 
     ()
