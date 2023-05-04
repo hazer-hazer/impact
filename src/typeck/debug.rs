@@ -1,6 +1,14 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
+use super::{
+    ctx::InferCtx,
+    kind::{Kind, KindEx},
+    ty::Ex,
+    TyResult, TypeckErr,
+};
 use crate::{
+    cli::color::{Color, ColorizedStruct},
+    dt::idx::{declare_idx, IndexVec},
     hir::{
         expr::{ExprKind, TyExpr},
         pat::PatKind,
@@ -11,99 +19,170 @@ use crate::{
     typeck::ty::Ty,
 };
 
+declare_idx!(InferEntryId, u32, "{}", Color::Blue);
+
 pub enum InferEntryKind {
-    Try(String),
-    Body(BodyId),
+    TryTo,
+    ForExpr(Expr),
 }
 
 pub struct InferEntry {
+    parent: Option<InferEntryId>,
     kind: InferEntryKind,
-    exprs: Vec<(Expr, Vec<InferStep>)>,
+    children: Vec<InferEntryId>,
+    steps: Vec<InferStep>,
 }
 
-pub enum InferStep {
+pub enum InferStepKind {
+    /// Result of type synthesis which will be type of the inferred expression.
     Synthesized(Ty),
 
     /// Before and after context application
     CtxApplied(Ty, Ty),
+
+    /// Check whether expr is of a specific type or not
+    Check(Expr, Ty, TyResult<Ty>),
+
+    /// Check if lhs type is subtype of rhs type
+    Subtype(Ty, Ty, TyResult<Ty>),
+
+    /// Check if lhs kind is subtype of rhs kind
+    SubtypeKind(Kind, Kind, TyResult<Kind>),
+
+    Solve(Ex, Ty),
+    SolveKind(KindEx, Ty),
 }
 
-pub struct InferDebug<'hir> {
-    hir: &'hir HIR,
-    pp: AstLikePP<'hir>,
+pub struct InferStep {
+    pub kind: InferStepKind,
 }
 
-impl<'hir> InferDebug<'hir> {
-    fn entry(&mut self, entry: &InferEntry) {
-        match entry.kind {
-            InferEntryKind::Try(to) => self.pp.string(format!("Try to {to}")),
-            InferEntryKind::Body(body) => ,
+type Entries = IndexVec<InferEntryId, InferEntry>;
+struct IDCtx<'ctx> {
+    hir: &'ctx HIR,
+    entries: &'ctx Entries,
+}
+
+pub struct InferDebug<'ctx> {
+    hir: &'ctx HIR,
+    pp: AstLikePP<'ctx>,
+    entries: Entries,
+}
+
+impl<'ctx> AstLikePP<'ctx> {
+    fn ty_result<T>(&mut self, res: &TyResult<T>) -> &mut AstLikePP<'ctx>
+    where
+        T: Display,
+    {
+        match res {
+            Ok(ok) => self.string(format!("Ok({ok})")),
+            Err(err) => self.string(match err {
+                TypeckErr::Check => "check failed",
+                TypeckErr::LateReport => "error (unreported)",
+                TypeckErr::Reported => "error (reported)",
+            }),
         }
-        self.pp.indent();
-        self.pp.dedent();
     }
 
-    fn expr(&mut self, expr: Expr, steps: &[InferStep]) {
-        self.pp_expr(expr);
-        self.pp.indent();
-        self.pp.out_indent();
-        steps.iter().for_each(|step| self.step(step));
-        self.pp.dedent();
-    }
-
-    fn step(&mut self, step: &InferStep) {
-        match step {
-            InferStep::Synthesized(ty) => {
-                self.pp.string(format!("Synthesized {ty}"));
-            },
-            InferStep::CtxApplied(..) => todo!(),
-        }
-    }
-
-    fn pp_expr(&mut self, expr: Expr) -> &mut AstLikePP<'hir> {
-        match self.hir.expr(expr).kind() {
-            ExprKind::Lit(lit) => self.pp.string(lit),
-            &ExprKind::Path(path) => self.pp.string(self.hir.expr_path(path)),
-            &ExprKind::Block(block) => self.pp_block(block),
-            ExprKind::Lambda(lambda) => self.pp_body(lambda.body_id),
+    fn expr(&mut self, expr: Expr, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        match ctx.hir.expr(expr).kind() {
+            ExprKind::Lit(lit) => self.string(lit),
+            &ExprKind::Path(path) => self.string(ctx.hir.expr_path(path)),
+            &ExprKind::Block(block) => self.block(block, ctx),
+            ExprKind::Lambda(lambda) => self.body(lambda.body_id, ctx),
             ExprKind::Call(call) => {
-                self.pp_expr(call.lhs).sp();
+                self.expr(call.lhs, ctx).sp();
                 call.args.iter().copied().for_each(|arg| {
-                    self.pp_expr(arg);
+                    self.expr(arg, ctx);
                 });
-                &mut self.pp
+                self
             },
-            &ExprKind::Let(block) => self.pp_block(block),
-            ExprKind::Ty(ty_expr) => self.pp_expr(ty_expr.expr).str(": [ty]"),
-            &ExprKind::Builtin(bt) => self.pp.string(bt),
+            &ExprKind::Let(block) => self.block(block, ctx),
+            ExprKind::Ty(ty_expr) => self.expr(ty_expr.expr, ctx).str(": [ty]"),
+            &ExprKind::Builtin(bt) => self.string(bt),
         }
     }
 
-    fn pp_block(&mut self, block: Block) -> &mut AstLikePP<'hir> {
-        self.pp.str("{...;");
-        if let Some(expr) = self.hir.block(block).expr() {
-            self.pp_expr(expr);
+    fn block(&mut self, block: Block, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        self.str("{...;");
+        if let Some(expr) = ctx.hir.block(block).expr() {
+            self.expr(expr, ctx);
         }
-        self.pp.str("}")
+        self.str("}")
     }
 
-    fn pp_body(&mut self, body: BodyId) -> &mut AstLikePP<'hir> {
-        let body = self.hir.body(body);
+    fn body(&mut self, body: BodyId, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        let body = ctx.hir.body(body);
 
-        self.pp.str("\\");
+        self.str("\\");
         body.params.iter().copied().for_each(|pat| {
-            self.pp_pat(pat).sp();
+            self.pat(pat, ctx).sp();
         });
-        self.pp.str("-> ");
 
-        self.pp_expr(body.value)
+        self.str("-> ").expr(body.value, ctx)
     }
 
-    fn pp_pat(&mut self, pat: Pat) -> &mut AstLikePP<'hir> {
-        let pat = self.hir.pat(pat);
+    fn pat(&mut self, pat: Pat, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        let pat = ctx.hir.pat(pat);
         match pat.kind() {
-            PatKind::Unit => self.pp.str("()"),
-            PatKind::Ident(name) => self.pp.string(name),
+            PatKind::Unit => self.str("()"),
+            PatKind::Ident(name) => self.string(name),
         }
     }
+
+    fn entry(&mut self, entry: &InferEntry, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        match entry.kind {
+            InferEntryKind::TryTo => {
+                self.string("Enter \"try\" context");
+            },
+            InferEntryKind::ForExpr(expr) => {
+                self.str("For expr `").expr(expr, ctx).str("`");
+            },
+        }
+
+        self.indent();
+
+        entry.steps.iter().for_each(|step| {
+            self.step(step, ctx);
+        });
+
+        if !entry.children.is_empty() {
+            self.line("and then");
+        }
+
+        entry.children.iter().copied().for_each(|child| {
+            self.entry(ctx.entries.get(child).unwrap(), ctx);
+        });
+
+        self.dedent()
+    }
+
+    fn step(&mut self, step: &InferStep, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        match &step.kind {
+            InferStepKind::Synthesized(ty) => self.string(format!("Synthesized {ty}")),
+            InferStepKind::CtxApplied(before, after) => {
+                self.string(format!("Applying current context on {before} => {after}"))
+            },
+            InferStepKind::Check(expr, ty, res) => self
+                .str("Check ")
+                .expr(*expr, ctx)
+                .string(format!("is of type {ty}"))
+                .ty_result(res),
+            InferStepKind::Subtype(..) => todo!(),
+            InferStepKind::SubtypeKind(..) => todo!(),
+            InferStepKind::Solve(ex, ty) => self.string(format!("Solve {ex} = {ty}")),
+            InferStepKind::SolveKind(ex, kind) => self.string(format!("Solve {ex} = {kind}")),
+        }
+    }
+}
+
+impl<'ctx> InferDebug<'ctx> {
+    // Show mode //
+    // fn expr(&mut self, expr: Expr, steps: &[InferStep]) {
+    //     self.expr(expr, ctx);
+    //     self.indent();
+    //     self.out_indent();
+    //     steps.iter().for_each(|step| self.step(step));
+    //     self.dedent();
+    // }
 }

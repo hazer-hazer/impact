@@ -237,7 +237,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     /// Subtype logic starts here.
-    pub fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
+    pub(super) fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         verbose!("subtype {l_ty} {r_ty}");
         match (l_ty.kind(), r_ty.kind()) {
             (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
