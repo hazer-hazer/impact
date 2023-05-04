@@ -15,6 +15,7 @@ pub mod ast;
 pub mod defs;
 pub mod hir;
 pub mod mir;
+pub mod pp;
 pub mod thir;
 
 #[derive(PartialEq)]
@@ -40,6 +41,7 @@ const ALLOWED_COLORS: &[Color] = &[
 
 const BUILTIN_COLOR: Color = Color::Cyan;
 
+// FIXME: USE PP!!!!
 pub struct AstLikePP<'a, D = ()> {
     out: String,
     indent_level: u32,

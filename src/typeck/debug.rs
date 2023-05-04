@@ -15,7 +15,11 @@ use crate::{
         Block, BodyId, Expr, Pat, HIR,
     },
     interface::writer::{out, Writer},
-    pp::AstLikePP,
+    pp::{
+        pp::{pp, PP},
+        AstLikePP, AstPPMode,
+    },
+    session::Session,
     typeck::ty::Ty,
 };
 
@@ -31,6 +35,17 @@ pub struct InferEntry {
     kind: InferEntryKind,
     children: Vec<InferEntryId>,
     steps: Vec<InferStep>,
+}
+
+impl InferEntry {
+    pub fn new(parent: Option<InferEntryId>, kind: InferEntryKind) -> Self {
+        Self {
+            parent,
+            kind,
+            children: Default::default(),
+            steps: Default::default(),
+        }
+    }
 }
 
 pub enum InferStepKind {
@@ -65,8 +80,9 @@ struct IDCtx<'ctx> {
 
 pub struct InferDebug<'ctx> {
     hir: &'ctx HIR,
-    pp: AstLikePP<'ctx>,
+    pp: PP,
     entries: Entries,
+    entry: Option<InferEntryId>,
 }
 
 impl<'ctx> AstLikePP<'ctx> {
@@ -104,6 +120,8 @@ impl<'ctx> AstLikePP<'ctx> {
     }
 
     fn block(&mut self, block: Block, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        pp!(self, "{...;" "}");
+
         self.str("{...;");
         if let Some(expr) = ctx.hir.block(block).expr() {
             self.expr(expr, ctx);
@@ -168,8 +186,12 @@ impl<'ctx> AstLikePP<'ctx> {
                 .expr(*expr, ctx)
                 .string(format!("is of type {ty}"))
                 .ty_result(res),
-            InferStepKind::Subtype(..) => todo!(),
-            InferStepKind::SubtypeKind(..) => todo!(),
+            InferStepKind::Subtype(ty, subtype_of, res) => self
+                .string(format!("{ty} is a subtype of {subtype_of} => "))
+                .ty_result(res),
+            InferStepKind::SubtypeKind(kind, subkind_of, res) => self
+                .string(format!("{kind} is a subkind of {subkind_of} => "))
+                .ty_result(res),
             InferStepKind::Solve(ex, ty) => self.string(format!("Solve {ex} = {ty}")),
             InferStepKind::SolveKind(ex, kind) => self.string(format!("Solve {ex} = {kind}")),
         }
@@ -177,12 +199,45 @@ impl<'ctx> AstLikePP<'ctx> {
 }
 
 impl<'ctx> InferDebug<'ctx> {
-    // Show mode //
-    // fn expr(&mut self, expr: Expr, steps: &[InferStep]) {
-    //     self.expr(expr, ctx);
-    //     self.indent();
-    //     self.out_indent();
-    //     steps.iter().for_each(|step| self.step(step));
-    //     self.dedent();
-    // }
+    pub fn new(hir: &'ctx HIR) -> Self {
+        Self {
+            hir,
+            pp: PP::new(),
+            entries: Default::default(),
+            entry: None,
+        }
+    }
+
+    fn entry_mut(&mut self) -> &mut InferEntry {
+        self.entries.get_mut(self.entry.unwrap()).unwrap()
+    }
+
+    pub fn step(&mut self, step: InferStep) {
+        self.entry_mut().steps.push(step)
+    }
+
+    pub fn enter(&mut self, kind: InferEntryKind) -> InferEntryId {
+        let id = self.entries.push(InferEntry::new(self.entry, kind));
+
+        self.entry_mut().children.push(id);
+
+        self.entry = Some(id);
+
+        id
+    }
+
+    pub fn exit(&mut self, id: InferEntryId) {
+        let mut unwind_to = Some(id);
+        while let Some(id) = unwind_to {
+            let entry = self.entries.get(id).unwrap();
+
+            unwind_to = entry.parent;
+
+            if self.entry == unwind_to {
+                break;
+            }
+        }
+
+        self.entry = unwind_to;
+    }
 }

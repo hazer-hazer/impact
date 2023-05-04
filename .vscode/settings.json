@@ -45,6 +45,7 @@
     "sess",
     "skippable",
     "smallvec",
+    "subkind",
     "substeps",
     "Subtyping",
     "thir",

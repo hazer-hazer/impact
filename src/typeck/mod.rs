@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
+    debug::InferDebug,
     kind::{Kind, KindEx, KindSort, MonoKind},
     ty::{Ex, ExKind, ExPair, Ty, TyKind, TyVarId},
     ty_infer::MonoTy,
@@ -21,13 +22,13 @@ pub mod builtin;
 mod check;
 mod conv;
 pub mod ctx;
+mod debug;
 mod err;
 pub mod kind;
 mod synth;
 pub mod ty;
 mod ty_infer;
 pub mod tyctx;
-mod debug;
 
 #[derive(Debug)]
 pub enum TypeckErr {
@@ -87,6 +88,9 @@ pub struct Typecker<'hir> {
     //
     msg: MessageStorage,
     sess: Session,
+
+    // Debug //
+    dbg: InferDebug<'hir>,
 }
 
 impl_message_holder!(Typecker<'hir>);
@@ -102,6 +106,8 @@ impl<'hir> Typecker<'hir> {
 
             sess,
             msg: Default::default(),
+
+            dbg: InferDebug::new(hir),
         }
     }
 
