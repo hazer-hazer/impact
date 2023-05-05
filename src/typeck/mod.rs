@@ -15,7 +15,12 @@ use crate::{
     message::message::{impl_message_holder, MessageHolder, MessageStorage},
     resolve::def::DefId,
     session::{stage_result, Session, Stage, StageResult},
-    typeck::{conv::TyConv, kind::MonoKindSort, ty_infer::MonoTyKind},
+    typeck::{
+        conv::TyConv,
+        debug::{InferEntryKind, InferStepKind},
+        kind::MonoKindSort,
+        ty_infer::MonoTyKind,
+    },
 };
 
 pub mod builtin;
@@ -30,7 +35,7 @@ pub mod ty;
 mod ty_infer;
 pub mod tyctx;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum TypeckErr {
     // TypeckErr used as condition
     Check,
@@ -229,9 +234,14 @@ impl<'hir> Typecker<'hir> {
         self.under_ctx(InferCtx::default(), f)
     }
 
-    fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T> {
+    fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T>
+    where
+        T: Display + Copy,
+    {
         let restore = self.enter_try_mode();
+        let ie = self.dbg.enter(InferEntryKind::TryTo);
         let res = f(self);
+        self.dbg.exit(ie);
         self.exit_try_mode(res, restore)
     }
 
@@ -360,6 +370,7 @@ impl<'hir> Typecker<'hir> {
 
     // // TODO: Solutions must be stored just in the current context, DO NOT ASCEND
     fn solve(&mut self, ex: Ex, sol: MonoTy) -> Ty {
+        self.dbg.step(InferStepKind::Solve(ex, sol.ty));
         if let &MonoTyKind::Ex(sol_ex) = &sol.sort {
             assert_ne!(
                 sol_ex, ex,
@@ -377,6 +388,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn solve_kind_ex(&mut self, ex: KindEx, sol: MonoKind) -> Kind {
+        self.dbg.step(InferStepKind::SolveKind(ex, sol.kind));
         if let MonoKindSort::Ex(sol_ex) = sol.sort {
             assert_ne!(
                 sol_ex, ex,

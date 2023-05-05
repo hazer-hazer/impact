@@ -1,5 +1,6 @@
 use super::{
     ctx::InferCtx,
+    debug::InferStepKind,
     ty::{Ex, ExKind, FloatKind, IntKind, MapTy, Ty, TyKind},
     TyResult, Typecker,
 };
@@ -36,8 +37,8 @@ impl InstantiateDir {
 impl<'hir> Typecker<'hir> {
     /// Checks if expression is of type `ty` assuming that returned error is
     /// reported.
-    pub fn check_discard_err(&mut self, expr_id: Expr, ty: Ty) -> Ty {
-        match self.check(expr_id, ty) {
+    pub fn check_discard_err(&mut self, expr: Expr, ty: Ty) -> Ty {
+        match self.check(expr, ty) {
             Ok(ok) => ok,
             Err(err) => {
                 err.assert_reported();
@@ -61,25 +62,30 @@ impl<'hir> Typecker<'hir> {
     /// Reports `Type mismatch` error.
     /// expr_id == HirId::synth(18, 4) && ty.as_ex().map_or(false, |ex| ex.id ==
     /// ExId::new(1))
-    pub fn check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
-        verbose!("Check expr {expr_id} is of type {ty}");
-        match self._check(expr_id, ty) {
+    pub fn check(&mut self, expr: Expr, ty: Ty) -> TyResult<Ty> {
+        verbose!("Check expr {expr} is of type {ty}");
+
+        let checked = self._check(expr, ty);
+
+        self.dbg.step(InferStepKind::Check(expr, ty, checked));
+
+        match checked {
             Ok(ok) => {
-                verbose!("Expr {expr_id} is of type {ty}");
-                self.type_inferring_node(expr_id, ty);
+                verbose!("Expr {expr} is of type {ty}");
+                self.type_inferring_node(expr, ty);
                 Ok(ok.apply_ctx(self.ctx()))
             },
             Err(_) => {
-                verbose!("Failed: Expr {expr_id} is NOT of type {ty}");
+                verbose!("Failed: Expr {expr} is NOT of type {ty}");
 
-                let span = self.hir.expr_result_span(expr_id);
+                let span = self.hir.expr_result_span(expr);
 
                 MessageBuilder::error()
                     .span(span)
                     .text(format!(
                         "Type mismatch: expected {}{}",
                         ty,
-                        if let Some(got) = self.tyctx().node_type(expr_id) {
+                        if let Some(got) = self.tyctx().node_type(expr) {
                             format!(", got {}", got)
                         } else {
                             "".to_string()
@@ -161,37 +167,37 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    /// Checks if `l_ty` is a subtype of `r_ty` assuming that returned error is
-    /// reported.
-    pub fn check_ty_discard_err(&mut self, l_ty: Spanned<Ty>, ty: Ty) -> Ty {
-        match self.check_ty(l_ty, ty) {
-            Ok(ok) => ok,
-            Err(err) => {
-                err.assert_reported();
-                Ty::error()
-            },
-        }
-    }
+    // /// Checks if `l_ty` is a subtype of `r_ty` assuming that returned error is
+    // /// reported.
+    // pub fn check_ty_discard_err(&mut self, l_ty: Spanned<Ty>, ty: Ty) -> Ty {
+    //     match self.check_ty(l_ty, ty) {
+    //         Ok(ok) => ok,
+    //         Err(err) => {
+    //             err.assert_reported();
+    //             Ty::error()
+    //         },
+    //     }
+    // }
 
-    /// Checks if `l_ty` is a subtype of `r_ty`.
-    /// Reports `Type mismatch` error.
-    pub fn check_ty(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
-        match self.subtype(l_ty, r_ty) {
-            Ok(ok) => Ok(ok),
-            Err(_) => {
-                let span = l_ty.span();
-                let l_ty = l_ty.node();
+    // /// Checks if `l_ty` is a subtype of `r_ty`.
+    // /// Reports `Type mismatch` error.
+    // pub fn check_ty(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
+    //     match self.subtype(l_ty, r_ty) {
+    //         Ok(ok) => Ok(ok),
+    //         Err(_) => {
+    //             let span = l_ty.span();
+    //             let l_ty = l_ty.node();
 
-                MessageBuilder::error()
-                    .span(span)
-                    .text(format!("{} is not a subtype of {}", l_ty, r_ty))
-                    .label(span, format!("Must be of type {}", r_ty))
-                    .emit(self);
+    //             MessageBuilder::error()
+    //                 .span(span)
+    //                 .text(format!("{} is not a subtype of {}", l_ty, r_ty))
+    //                 .label(span, format!("Must be of type {}", r_ty))
+    //                 .emit(self);
 
-                Err(TypeckErr::Reported)
-            },
-        }
-    }
+    //             Err(TypeckErr::Reported)
+    //         },
+    //     }
+    // }
 
     // Subtyping //
     /// Checks if expression's type is a subtype of `ty`.
@@ -239,7 +245,7 @@ impl<'hir> Typecker<'hir> {
     /// Subtype logic starts here.
     pub(super) fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
         verbose!("subtype {l_ty} {r_ty}");
-        match (l_ty.kind(), r_ty.kind()) {
+        let subtype = match (l_ty.kind(), r_ty.kind()) {
             (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
 
             // FIXME: Are these pats ok?
@@ -347,7 +353,11 @@ impl<'hir> Typecker<'hir> {
             },
 
             _ => Err(TypeckErr::LateReport),
-        }
+        };
+
+        self.dbg.step(InferStepKind::Subtype(l_ty, r_ty, subtype));
+
+        subtype
     }
 
     fn _subtype_lists(&mut self, l_tys: &[Ty], r_tys: &[Ty]) -> TyResult<Vec<Ty>> {
@@ -357,13 +367,7 @@ impl<'hir> Typecker<'hir> {
             l_tys
                 .iter()
                 .zip(r_tys.iter())
-                .map(|(&a, &b)| {
-                    if a == b {
-                        Ok(b)
-                    } else {
-                        Err(TypeckErr::LateReport)
-                    }
-                })
+                .map(|(&a, &b)| self._subtype(a, b))
                 .collect()
         }
     }

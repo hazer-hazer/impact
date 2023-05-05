@@ -190,6 +190,11 @@ impl<'a, D> AstLikePP<'a, D> {
         )
     }
 
+    pub fn set_indent(&mut self, level: usize) -> &mut Self {
+        self.indent_level = level;
+        self
+    }
+
     pub fn indent(&mut self) -> &mut Self {
         self.indent_level += 1;
         self

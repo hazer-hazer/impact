@@ -29,21 +29,24 @@ pub enum InferEntryKind {
     TryTo,
     ForExpr(Expr),
 }
-
 pub struct InferEntry {
+    id: InferEntryId,
     parent: Option<InferEntryId>,
     kind: InferEntryKind,
     children: Vec<InferEntryId>,
     steps: Vec<InferStep>,
+    failed: bool,
 }
 
 impl InferEntry {
-    pub fn new(parent: Option<InferEntryId>, kind: InferEntryKind) -> Self {
+    pub fn new(id: InferEntryId, parent: Option<InferEntryId>, kind: InferEntryKind) -> Self {
         Self {
+            id,
             parent,
             kind,
             children: Default::default(),
             steps: Default::default(),
+            failed: false,
         }
     }
 }
@@ -65,7 +68,7 @@ pub enum InferStepKind {
     SubtypeKind(Kind, Kind, TyResult<Kind>),
 
     Solve(Ex, Ty),
-    SolveKind(KindEx, Ty),
+    SolveKind(KindEx, Kind),
 }
 
 pub struct InferStep {
@@ -149,12 +152,14 @@ impl<'ctx> AstLikePP<'ctx> {
     }
 
     fn entry(&mut self, entry: &InferEntry, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
-        match entry.kind {
+        self.out_indent();
+
+        match &entry.kind {
             InferEntryKind::TryTo => {
-                self.string("Enter \"try\" context");
+                self.line("Try to");
             },
-            InferEntryKind::ForExpr(expr) => {
-                self.str("For expr `").expr(expr, ctx).str("`");
+            &InferEntryKind::ForExpr(expr) => {
+                self.str("For expr `").expr(expr, ctx).str("`").nl();
             },
         }
 
@@ -176,6 +181,7 @@ impl<'ctx> AstLikePP<'ctx> {
     }
 
     fn step(&mut self, step: &InferStep, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+        self.out_indent();
         match &step.kind {
             InferStepKind::Synthesized(ty) => self.string(format!("Synthesized {ty}")),
             InferStepKind::CtxApplied(before, after) => {
@@ -212,12 +218,13 @@ impl<'ctx> InferDebug<'ctx> {
         self.entries.get_mut(self.entry.unwrap()).unwrap()
     }
 
-    pub fn step(&mut self, step: InferStep) {
-        self.entry_mut().steps.push(step)
+    pub fn step(&mut self, kind: InferStepKind) {
+        self.entry_mut().steps.push(InferStep { kind })
     }
 
     pub fn enter(&mut self, kind: InferEntryKind) -> InferEntryId {
-        let id = self.entries.push(InferEntry::new(self.entry, kind));
+        let id = self.entries.len().into();
+        self.entries.push(InferEntry::new(id, self.entry, kind));
 
         self.entry_mut().children.push(id);
 
@@ -226,8 +233,9 @@ impl<'ctx> InferDebug<'ctx> {
         id
     }
 
-    pub fn exit(&mut self, id: InferEntryId) {
-        let mut unwind_to = Some(id);
+    pub fn exit(&mut self, ie: InferEntryId) {
+        let mut unwind_to = Some(ie);
+
         while let Some(id) = unwind_to {
             let entry = self.entries.get(id).unwrap();
 
@@ -236,6 +244,8 @@ impl<'ctx> InferDebug<'ctx> {
             if self.entry == unwind_to {
                 break;
             }
+
+            self.entries.get_mut(id)
         }
 
         self.entry = unwind_to;

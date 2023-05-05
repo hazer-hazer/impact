@@ -14,7 +14,10 @@ use crate::{
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
     span::{sym::Ident, Spanned, WithSpan},
-    typeck::kind::{Kind, KindSort},
+    typeck::{
+        debug::{InferEntryKind, InferStepKind},
+        kind::{Kind, KindSort},
+    },
 };
 
 impl<'hir> Typecker<'hir> {
@@ -105,13 +108,15 @@ impl<'hir> Typecker<'hir> {
         Ok(Ty::unit())
     }
 
-    pub fn synth_expr(&mut self, expr_id: Expr) -> TyResult<Ty> {
-        let expr_ty = match self.hir.expr(expr_id).kind() {
+    pub fn synth_expr(&mut self, expr: Expr) -> TyResult<Ty> {
+        let ie = self.dbg.enter(InferEntryKind::ForExpr(expr));
+
+        let expr_ty = match self.hir.expr(expr).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             &ExprKind::Path(path) => self.synth_path(path),
             &ExprKind::Block(block) => self.synth_block(block),
             ExprKind::Lambda(lambda) => self.synth_body(lambda.def_id, lambda.body_id),
-            ExprKind::Call(call) => self.synth_call(&call, expr_id),
+            ExprKind::Call(call) => self.synth_call(&call, expr),
             &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
             // &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field,
@@ -119,13 +124,19 @@ impl<'hir> Typecker<'hir> {
             &ExprKind::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
         }?;
 
-        verbose!("Synthesized type of expression {expr_id} = {expr_ty}");
+        verbose!("Synthesized type of expression {expr} = {expr_ty}");
 
-        let expr_ty = expr_ty.apply_ctx(self.ctx());
+        self.dbg.step(InferStepKind::Synthesized(expr_ty));
 
-        self.type_inferring_node(expr_id, expr_ty);
+        let ty = expr_ty.apply_ctx(self.ctx());
 
-        Ok(expr_ty)
+        self.dbg.step(InferStepKind::CtxApplied(expr_ty, ty));
+
+        self.type_inferring_node(expr, ty);
+
+        self.dbg.exit(ie);
+
+        Ok(ty)
     }
 
     fn synth_lit(&mut self, lit: &Lit) -> TyResult<Ty> {

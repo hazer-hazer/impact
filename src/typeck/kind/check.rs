@@ -1,6 +1,6 @@
 use super::{super::ty::TyKind, Kind, KindEx, KindSort, Ty};
 use crate::{
-    typeck::{ctx::InferCtx, TyResult, TypeckErr, Typecker},
+    typeck::{ctx::InferCtx, TyResult, TypeckErr, Typecker, debug::InferStepKind},
     utils::macros::match_expected,
 };
 
@@ -11,22 +11,18 @@ impl<'hir> Typecker<'hir> {
             (TyKind::Kind(_), TyKind::Kind(_)) => {
                 let l_kind = match_expected!(l_ty.kind(), &TyKind::Kind(kind) => kind);
                 let r_kind = match_expected!(r_ty.kind(), &TyKind::Kind(kind) => kind);
-                self._subtype_kinds(l_kind, r_kind)
+                self._subtype_kind(l_kind, r_kind)
                     .map(|kind| Ty::ty_kind(kind))
             },
 
             (&TyKind::Kind(l_kind), _) => match l_kind.sort() {
                 &KindSort::Ty(l_ty) => self._subtype(l_ty, r_ty),
-                _ => Ok(Ty::ty_kind(
-                    self._subtype_kinds(l_kind, Kind::new_ty(r_ty))?,
-                )),
+                _ => Ok(Ty::ty_kind(self._subtype_kind(l_kind, Kind::new_ty(r_ty))?)),
             },
 
             (_, &TyKind::Kind(r_kind)) => match r_kind.sort() {
                 &KindSort::Ty(r_ty) => self._subtype(l_ty, r_ty),
-                _ => Ok(Ty::ty_kind(
-                    self._subtype_kinds(Kind::new_ty(l_ty), r_kind)?,
-                )),
+                _ => Ok(Ty::ty_kind(self._subtype_kind(Kind::new_ty(l_ty), r_kind)?)),
             },
 
             _ => Err(TypeckErr::LateReport),
@@ -34,8 +30,8 @@ impl<'hir> Typecker<'hir> {
     }
 
     /// Subtype of kinds
-    pub fn _subtype_kinds(&mut self, l_kind: Kind, r_kind: Kind) -> TyResult<Kind> {
-        match (l_kind.sort(), r_kind.sort()) {
+    pub fn _subtype_kind(&mut self, l_kind: Kind, r_kind: Kind) -> TyResult<Kind> {
+        let subkind = match (l_kind.sort(), r_kind.sort()) {
             (&KindSort::Ty(_), &KindSort::Ty(_)) => unreachable!("Type subtyping goes first"),
 
             (&KindSort::Var(var), &KindSort::Var(var_)) if var == var_ => Ok(r_kind),
@@ -44,7 +40,7 @@ impl<'hir> Typecker<'hir> {
             (&KindSort::Ex(ex), &KindSort::Ex(ex_)) if ex == ex_ => Ok(r_kind),
 
             (&KindSort::Abs(param1, body1), &KindSort::Abs(param2, body2)) => {
-                let param = self._subtype_kinds(param1, param2)?;
+                let param = self._subtype_kind(param1, param2)?;
                 let body1 = body1.apply_ctx(self.ctx()).into();
                 let body2 = body2.apply_ctx(self.ctx()).into();
                 let body = self.subtype_kind(body1, body2)?.expect_kind();
@@ -57,13 +53,13 @@ impl<'hir> Typecker<'hir> {
                 let with_var_substituted = body.substitute(var, ex_kind);
 
                 self.under_ctx(InferCtx::new_with_kind_ex(ex), |this| {
-                    this._subtype_kinds(with_var_substituted, r_kind)
+                    this._subtype_kind(with_var_substituted, r_kind)
                 })
             },
 
             (_, &KindSort::Forall(var, body)) => self
                 .under_ctx(InferCtx::new_with_kind_var(var), |this| {
-                    this._subtype_kinds(l_kind, body)
+                    this._subtype_kind(l_kind, body)
                 }),
 
             (&KindSort::Ex(ex), _) => {
@@ -83,7 +79,14 @@ impl<'hir> Typecker<'hir> {
             },
 
             _ => Err(TypeckErr::LateReport),
-        }
+        };
+
+        self.dbg
+            .step(InferStepKind::SubtypeKind(
+                l_kind, r_kind, subkind,
+            ));
+
+        subkind
     }
 
     fn instantiate_kind_l(&mut self, ex: KindEx, r_kind: Kind) -> TyResult<Kind> {
