@@ -120,6 +120,9 @@ impl<'ctx> MirPrinter<'ctx> {
             RValue::Ctor(def_id, ty) => {
                 self.pp.string(format!("ctor{def_id}: {ty}"));
             },
+            RValue::FieldAccessor(def_id, ty) => {
+                self.pp.string(format!("field_accessor{def_id}: {ty}"));
+            },
         }
     }
 

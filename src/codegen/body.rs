@@ -214,28 +214,14 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 .as_global_value()
                 .as_pointer_value()
                 .into(),
-            &RValue::Closure(def_id) => self
-                .function_map
-                .expect_mono(def_id)
-                .as_global_value()
-                .as_pointer_value()
-                .into(),
+            &RValue::Closure(def_id) => self.function_map.mono_basic_value(def_id),
             &RValue::FuncRef(def_id, ty) => {
                 assert!(ty.is_func_like());
                 assert!(ty.is_instantiated());
 
-                self.function_map
-                    .instance(def_id, ty)
-                    .as_global_value()
-                    .as_pointer_value()
-                    .into()
+                self.function_map.instance_basic_value(def_id, ty)
             },
-            &RValue::ClosureRef(def_id) => self
-                .function_map
-                .expect_mono(def_id)
-                .as_global_value()
-                .as_pointer_value()
-                .into(),
+            &RValue::ClosureRef(def_id) => self.function_map.mono_basic_value(def_id),
             &RValue::ValueRef(def_id) => self
                 .builder
                 .build_call(
@@ -248,22 +234,22 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             RValue::Call { lhs, args } => {
                 let func = CallableValue::try_from(self.operand_to_value(lhs).into_pointer_value())
                     .unwrap();
+
                 let args = args
                     .iter()
                     .map(|arg| self.operand_to_value(arg).into())
                     .collect::<Vec<_>>();
+
                 self.builder
                     .build_call(func, &args, "call")
                     .try_as_basic_value()
                     .unwrap_left()
             },
             RValue::Ref(lv) => self.local_value(lv.local).into(),
-            &RValue::Ctor(def_id, ty) => self
-                .function_map
-                .instance(def_id, ty)
-                .as_global_value()
-                .as_pointer_value()
-                .into(),
+            &RValue::Ctor(def_id, ty) => self.function_map.instance_basic_value(def_id, ty),
+            &RValue::FieldAccessor(def_id, ty) => {
+                self.function_map.instance_basic_value(def_id, ty)
+            },
         }
     }
 

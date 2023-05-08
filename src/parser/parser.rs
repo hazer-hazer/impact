@@ -1037,6 +1037,8 @@ impl Parser {
         let (kind, advance) = if let Some(_) = self.skip(TokenCmp::Punct(Punct::LParen)) {
             let expr = self.parse_expr();
 
+            self.expect(TokenCmp::Punct(Punct::RParen));
+
             (Some(Ok(ExprKind::Paren(expr))), false)
         } else {
             match kind {

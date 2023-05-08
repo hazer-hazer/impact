@@ -3,7 +3,7 @@ use std::fmt::Display;
 use self::{
     ctx::{AlgoCtx, GlobalCtx, InferCtx},
     debug::InferDebug,
-    kind::{Kind, KindEx, KindSort, MonoKind},
+    kind::{Kind, KindEx, KindSort, KindVarId, MonoKind},
     ty::{Ex, ExKind, ExPair, Ty, TyKind, TyVarId},
     ty_infer::MonoTy,
     tyctx::TyCtx,
@@ -17,7 +17,7 @@ use crate::{
     session::{stage_result, Session, Stage, StageResult},
     typeck::{
         conv::TyConv,
-        debug::{InferEntryKind, InferStepKind},
+        debug::{tcdbg, InferEntryKind, InferStepKind},
         kind::MonoKindSort,
         ty_infer::MonoTyKind,
     },
@@ -26,7 +26,7 @@ use crate::{
 pub mod builtin;
 mod check;
 mod conv;
-pub mod ctx;
+mod ctx;
 mod debug;
 mod err;
 pub mod kind;
@@ -220,18 +220,18 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    pub fn under_ctx<T>(&mut self, ctx: InferCtx, mut f: impl FnMut(&mut Self) -> T) -> T {
+    pub fn under_ctx<T>(&mut self, mut f: impl FnMut(&mut Self) -> T) -> T {
         verbose!("> [ENTER CTX {}]", self.ctx_depth() + 1);
 
-        self.enter_ctx(ctx);
+        let ie = tcdbg!(self, enter InferEntryKind::UnderCtx(self.ctx_depth()));
+
+        self.enter_ctx(InferCtx::default());
         let res = f(self);
         self.exit_ctx();
 
-        res
-    }
+        tcdbg!(self, exit ie);
 
-    pub fn under_new_ctx<T>(&mut self, f: impl FnMut(&mut Self) -> T) -> T {
-        self.under_ctx(InferCtx::default(), f)
+        res
     }
 
     fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T>
@@ -239,9 +239,9 @@ impl<'hir> Typecker<'hir> {
         T: Display + Copy,
     {
         let restore = self.enter_try_mode();
-        let ie = self.dbg.enter(InferEntryKind::TryTo);
+        let ie = tcdbg!(self, enter InferEntryKind::TryTo);
         let res = f(self);
-        self.dbg.exit(ie);
+        tcdbg!(self, exit ie);
         self.exit_try_mode(res, restore)
     }
 
@@ -370,7 +370,7 @@ impl<'hir> Typecker<'hir> {
 
     // // TODO: Solutions must be stored just in the current context, DO NOT ASCEND
     fn solve(&mut self, ex: Ex, sol: MonoTy) -> Ty {
-        self.dbg.step(InferStepKind::Solve(ex, sol.ty));
+        tcdbg!(self, step InferStepKind::Solve(ex, sol.ty));
         if let &MonoTyKind::Ex(sol_ex) = &sol.sort {
             assert_ne!(
                 sol_ex, ex,
@@ -388,7 +388,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn solve_kind_ex(&mut self, ex: KindEx, sol: MonoKind) -> Kind {
-        self.dbg.step(InferStepKind::SolveKind(ex, sol.kind));
+        tcdbg!(self, step InferStepKind::SolveKind(ex, sol.kind));
         if let MonoKindSort::Ex(sol_ex) = sol.sort {
             assert_ne!(
                 sol_ex, ex,
@@ -418,14 +418,10 @@ impl<'hir> Typecker<'hir> {
         Ty::var(var)
     }
 
-    fn get_solution(&self, ex: Ex) -> Option<Ty> {
-        self.ascend_ctx(|ctx| ctx.get_solution(ex))
-            .or_else(|| self.global_ctx.get_solution(ex))
-    }
-
-    fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
-        self.ascend_ctx(|ctx| ctx.get_kind_ex_solution(ex))
-            .or_else(|| self.global_ctx.get_kind_ex_solution(ex))
+    fn add_kind_var(&mut self, var: KindVarId) -> Kind {
+        verbose!("Add kind var {var}");
+        self.ctx_mut().add_kind_var(var);
+        Kind::new_var(var)
     }
 
     fn is_unsolved(&self, ex: Ex) -> bool {
@@ -494,9 +490,10 @@ impl<'hir> Typecker<'hir> {
                     self.kind_illformed(kind)
                 }
             },
-            &KindSort::Forall(var, body) => {
-                self.under_ctx(InferCtx::new_with_kind_var(var), |this| this.kind_wf(body))
-            },
+            &KindSort::Forall(var, body) => self.under_ctx(|this| {
+                this.add_kind_var(var);
+                this.kind_wf(body)
+            }),
         }
     }
 
@@ -536,7 +533,7 @@ impl<'hir> Typecker<'hir> {
     /// Gets function type DefId applying context to substitute existentials.
     pub fn deep_func_def_id(&self, ty: Ty) -> Option<DefId> {
         let mut maybe_func_ty = ty;
-        while let &TyKind::Forall(_, ty) = ty.apply_ctx(self.ctx()).kind() {
+        while let &TyKind::Forall(_, ty) = ty.apply_ctx(self).kind() {
             maybe_func_ty = ty;
         }
         maybe_func_ty.func_def_id()
@@ -642,25 +639,44 @@ impl<'hir> Typecker<'hir> {
     }
 }
 
+impl<'hir> AlgoCtx for Typecker<'hir> {
+    fn get_solution(&self, ex: Ex) -> Option<Ty> {
+        self.ascend_ctx(|ctx| ctx.get_solution(ex))
+            .or_else(|| self.global_ctx.get_solution(ex))
+    }
+
+    fn get_kind_ex_solution(&self, ex: KindEx) -> Option<Kind> {
+        self.ascend_ctx(|ctx| ctx.get_kind_ex_solution(ex))
+            .or_else(|| self.global_ctx.get_kind_ex_solution(ex))
+    }
+}
+
 impl<'hir> Stage<()> for Typecker<'hir> {
     fn run(mut self) -> StageResult<()> {
         let conv = TyConv::new(self.sess, self.hir);
         let ((), sess) = conv.run()?.merged(&mut self.msg);
         self.sess = sess;
 
-        self.under_new_ctx(|this| {
+        self.under_ctx(|this| {
             // Add existentials defined in conv for definitions, so initial context is
             // well-formed
             this.tyctx()
                 .def_ty_exes()
                 .iter()
                 .copied()
-                .for_each(|ex| this.add_ex(ex));
+                .for_each(|(def_id, ex)| {
+                    tcdbg!(this, add ex, format!("def#{def_id}"));
+                    this.add_ex(ex);
+                });
+
             this.tyctx()
                 .def_ty_kind_exes()
                 .iter()
                 .copied()
-                .for_each(|kind_ex| this.add_kind_ex(kind_ex));
+                .for_each(|(def_id, kind_ex)| {
+                    tcdbg!(this, add kind_ex, format!("def#{def_id}"));
+                    this.add_kind_ex(kind_ex);
+                });
 
             this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);
@@ -685,6 +701,15 @@ impl<'hir> Stage<()> for Typecker<'hir> {
         );
 
         self.sess.tyctx.apply_ctx_on_typed_nodes(&self.global_ctx);
+
+        if self.sess.config().typeck_debug() {
+            outln!(
+                dbg,
+                self.sess.writer,
+                "Typeck debug tree:\n {}",
+                self.dbg.get_string()
+            );
+        }
 
         stage_result(self.sess, (), self.msg)
     }

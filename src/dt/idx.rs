@@ -453,7 +453,7 @@ macro_rules! declare_idx {
                 self.0
             }
 
-            pub fn color() -> Option<Color> {
+            pub fn color() -> Option<crate::cli::color::Color> {
                 $color
             }
         }
@@ -491,8 +491,8 @@ macro_rules! declare_idx {
             }
         }
 
-        impl ColorizedStruct for $name {
-            fn fg_color() -> Option<Color> {
+        impl crate::cli::color::WithColor for $name {
+            fn fg_color() -> Option<crate::cli::color::Color> {
                 $color
             }
         }
@@ -512,7 +512,7 @@ mod tests {
     use std::{collections::HashMap, time::Instant};
 
     use super::*;
-    use crate::cli::color::{Color, ColorizedStruct};
+    use crate::cli::color::Color;
 
     declare_idx!(BenchIdx, u32, "BenchIdx#{}", Color::Black);
 

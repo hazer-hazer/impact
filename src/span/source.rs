@@ -1,5 +1,5 @@
 use crate::{
-    cli::color::{Color, ColorizedStruct},
+    cli::color::{Color, WithColor},
     dt::idx::{declare_idx, Idx},
     span::{Span, SpanPos},
 };

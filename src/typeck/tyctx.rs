@@ -44,7 +44,10 @@ impl TyBindings {
 pub enum InstantiatedTy<T = Ty, E = ()> {
     /// Type does not have instances because is never used
     None,
+    /// Monomorphic function instance
     Mono(T),
+    /// Polymorphic function instance. List of results of instances with T
+    /// (almost always a type) and callee expression id
     Poly(Vec<Result<(T, Expr), E>>),
 }
 
@@ -69,10 +72,7 @@ pub struct TyCtx {
     def_ty_bindings: DefMap<HashSet<Expr>>,
 
     variant_indices: DefMap<VariantId>,
-
-    // FIXME: Unused
-    /// Mapping HirId of field access expression such as `data.field` to FieldId
-    field_indices: HashMap<Expr, FieldId>,
+    field_accessor_field_id: DefMap<FieldId>,
 
     // Metadata //
     // FIXME: Never set
@@ -91,7 +91,7 @@ impl TyCtx {
             expr_ty_bindings: Default::default(),
             def_ty_bindings: Default::default(),
             variant_indices: Default::default(),
-            field_indices: Default::default(),
+            field_accessor_field_id: Default::default(),
             ty_names: Default::default(),
         }
     }
@@ -112,17 +112,17 @@ impl TyCtx {
         self.def_tys.get_flat(def_id).copied()
     }
 
-    pub fn def_ty_exes(&self) -> Vec<Ex> {
+    pub fn def_ty_exes(&self) -> Vec<(DefId, Ex)> {
         self.def_tys
-            .iter_flat()
-            .filter_map(|ty| ty.as_ex())
+            .iter_enumerated_flat()
+            .filter_map(|(def_id, ty)| ty.as_ex().map(|ex| (def_id, ex)))
             .collect()
     }
 
-    pub fn def_ty_kind_exes(&self) -> Vec<KindEx> {
+    pub fn def_ty_kind_exes(&self) -> Vec<(DefId, KindEx)> {
         self.def_tys
-            .iter_flat()
-            .filter_map(|ty| ty.as_kind_ex())
+            .iter_enumerated_flat()
+            .filter_map(|(def_id, ty)| ty.as_kind_ex().map(|ex| (def_id, ex)))
             .collect()
     }
 
@@ -191,12 +191,16 @@ impl TyCtx {
         self.variant_indices.get_copied_unwrap(def_id)
     }
 
-    pub fn set_field_index(&mut self, expr: Expr, id: FieldId) {
-        assert!(self.field_indices.insert(expr, id).is_none());
+    pub fn set_field_accessor_field_id(&mut self, field_accessor_def_id: DefId, id: FieldId) {
+        assert!(self
+            .field_accessor_field_id
+            .insert(field_accessor_def_id, id)
+            .is_none());
     }
 
-    pub fn field_index(&self, expr: Expr) -> Option<FieldId> {
-        self.field_indices.get(&expr).copied()
+    pub fn field_accessor_field_id(&self, field_accessor_def_id: DefId) -> FieldId {
+        self.field_accessor_field_id
+            .get_copied_unwrap(field_accessor_def_id)
     }
 
     /// Unwrap-version of `node_type` with a short name.

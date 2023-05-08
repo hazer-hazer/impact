@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     cli::{color::Colorize, verbose},
-    hir::HIR,
+    hir::{ExprDefKind, HIR},
     message::message::{impl_message_holder, MessageHolder, MessageStorage},
     mir::MIR,
     session::{stage_result, Session, Stage, StageResult, StageResultImpl},
@@ -48,6 +48,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
     }
 
     fn codegen(mut self) -> StageResult<(), CodeGenCtx<'ink, 'ctx>> {
+        // Get main function to cache it
         let _main_func = self
             .sess
             .def_table
@@ -76,24 +77,37 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
 
         let ctx = function_map
             .iter_internal()
-            .try_fold(ctx, |ctx, (def_id, inst)| match inst {
-                &FuncInstance::Mono(ty, func) => {
-                    let ((), ctx) =
-                        BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map)
-                            .run()?
-                            .merged(&mut self.msg);
-                    Ok(ctx)
-                },
-                FuncInstance::Poly(poly) => {
-                    poly.iter_enumerated_flat()
-                        .try_fold(ctx, |ctx, (_, &(ty, func))| {
+            .try_fold(ctx, |ctx, (def_id, inst)| {
+                match ctx.sess.def_table.def(def_id).kind().try_into().unwrap() {
+                    ExprDefKind::Value | ExprDefKind::Func => match inst {
+                        &FuncInstance::Mono(ty, func) => {
                             let ((), ctx) =
                                 BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map)
                                     .run()?
                                     .merged(&mut self.msg);
                             Ok(ctx)
-                        })
-                },
+                        },
+                        FuncInstance::Poly(poly) => {
+                            poly.iter_enumerated_flat()
+                                .try_fold(ctx, |ctx, (_, &(ty, func))| {
+                                    let ((), ctx) = BodyCodeGen::new(
+                                        ctx,
+                                        def_id,
+                                        ty,
+                                        func,
+                                        &function_map,
+                                        &value_map,
+                                    )
+                                    .run()?
+                                    .merged(&mut self.msg);
+                                    Ok(ctx)
+                                })
+                        },
+                    },
+                    ExprDefKind::Ctor | ExprDefKind::FieldAccessor | ExprDefKind::External => {
+                        return Ok(ctx)
+                    },
+                }
             })?;
 
         verbose!("LLVM Module:\n{}", ctx.llvm_module.to_string());

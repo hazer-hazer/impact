@@ -42,7 +42,8 @@ impl Into<Config> for Args {
             })
             .pp_ast_ids(self.pp_ast_ids)
             .verbose_messages(self.verbose_messages)
-            .parser_debug(self.parser_debug);
+            .parser_debug(self.parser_debug)
+            .typeck_debug(self.typeck_debug);
 
         let b = if let Some(compilation_depth) = self.compilation_depth {
             b.compilation_depth(compilation_depth)

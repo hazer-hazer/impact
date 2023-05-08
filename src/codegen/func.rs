@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use inkwell::{
     types::BasicType,
-    values::{CallableValue, FunctionValue},
+    values::{BasicValueEnum, CallableValue, FunctionValue},
     AddressSpace,
 };
 
@@ -12,7 +12,7 @@ use crate::{
     hir::{
         self,
         item::{ExternItem, ItemId},
-        visitor::HirVisitor,
+        visitor::{HirVisitor, walk_each},
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
@@ -27,7 +27,9 @@ use crate::{
 // TODO: Rename `FunctionsCodeGen` to `BodyOwnersCodeGen`?
 
 pub enum FuncInstance<'ink> {
+    /// Monomorphic function instance (its type, its function value)
     Mono(Ty, FunctionValue<'ink>),
+    /// polymorphic function instances, map []
     Poly(TyMap<(Ty, FunctionValue<'ink>)>),
 }
 
@@ -90,14 +92,37 @@ impl<'ink> FunctionMap<'ink> {
 
     pub fn instance(&self, def_id: DefId, ty: Ty) -> FunctionValue<'ink> {
         assert!(ty.is_instantiated());
-        if let Some(inst) = self.instances.get_flat(def_id) {
-            match inst {
+
+        self.instances
+            .get_flat(def_id)
+            .map(|inst| match inst {
                 &FuncInstance::Mono(_, mono) => mono,
                 FuncInstance::Poly(poly) => poly.get_copied_unwrap(ty.id()).1,
-            }
-        } else {
-            self.externals.get_copied_unwrap(def_id)
-        }
+            })
+            .or_else(|| self.externals.get_flat(def_id).copied())
+            .expect(&format!("Instance for function {def_id}: ({ty}) not found"))
+    }
+
+    pub fn instance_callable(&self, def_id: DefId, ty: Ty) -> CallableValue<'ink> {
+        self.instance(def_id, ty)
+            .as_global_value()
+            .as_pointer_value()
+            .try_into()
+            .unwrap()
+    }
+
+    pub fn instance_basic_value(&self, def_id: DefId, ty: Ty) -> BasicValueEnum<'ink> {
+        self.instance(def_id, ty)
+            .as_global_value()
+            .as_pointer_value()
+            .into()
+    }
+
+    pub fn mono_basic_value(&self, def_id: DefId) -> BasicValueEnum<'ink> {
+        self.expect_mono(def_id)
+            .as_global_value()
+            .as_pointer_value()
+            .into()
     }
 
     fn insert_mono(&mut self, ty: Ty, value: FunctionValue<'ink>) {
@@ -151,14 +176,6 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 
         let def_id = owner.def_id;
 
-        // Do not codegen `builtin` func
-        if matches!(
-            self.ctx.sess.def_table.def(def_id).kind(),
-            DefKind::DeclareBuiltin
-        ) {
-            return;
-        }
-
         let owner_ty = self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id));
 
         // For Func or Lambda owner we get its type (possibly polymorphic, in which case
@@ -194,13 +211,18 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
 
     fn visit_variant(&mut self, &hir_vid: &hir::Variant, hir: &HIR) {
         let variant = hir.variant(hir_vid);
+
+        self.visit_ident(&variant.name, hir);
+        walk_each!(self, variant.fields, visit_field, hir);
+
+        // TODO: Will be used to get ADT variant by id
         let vid = self.ctx.sess.tyctx.variant_id(variant.def_id);
 
-        // Here `Ty::generalize` is used, to generate constructor function monomorphized
-        // by ADT type parameters.
-        // E.g. `Some a` has constructor of type `forall a. a -> Some a`
-        let ctor_ty = self.ctx.sess.tyctx.tyof(hir_vid).generalize();
+        let ctor_ty = self.ctx.sess.tyctx.def_ty(variant.ctor_def_id).unwrap();
         let ctor_func_ty = self.ctx.inst_ty(ctor_ty, variant.ctor_def_id);
+
+        // TODO: Somehow canonicalize fields order, maybe FieldId from type <=>
+        //  parameter index?
 
         self.function_map
             .add_instance(variant.ctor_def_id, ctor_func_ty, |_def_id, ty| {
@@ -217,6 +239,31 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
                         let variant_struct_ty = self.ctx.llvm_ctx.struct_type(&fields_tys, false);
 
                         Some(variant_struct_ty.const_named_struct(params).into())
+                    },
+                )
+            })
+            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
+    }
+
+    fn visit_field(&mut self, field: &hir::item::Field, _hir: &HIR) {
+        let accessor_def_id = field.accessor_def_id;
+        let accessor_ty = self.ctx.sess.tyctx.def_ty(accessor_def_id).unwrap();
+        let accessor_func_ty = self.ctx.inst_ty(accessor_ty, accessor_def_id);
+        let field_id = self.ctx.sess.tyctx.field_accessor_field_id(accessor_def_id);
+
+        self.function_map
+            .add_instance(accessor_def_id, accessor_func_ty, |_def_id, ty| {
+                // TODO: ADT variants fields
+                self.ctx.simple_func(
+                    &format!("field_accessor_{field_id}"),
+                    self.ctx.conv_ty(ty).into_function_type(),
+                    |builder, params| {
+                        let adt = params.get(0).unwrap().into_struct_value();
+                        builder.build_extract_value(
+                            adt,
+                            field_id.inner(),
+                            &format!("field_{field_id}"),
+                        )
                     },
                 )
             })
@@ -299,16 +346,9 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
             // Ty::func(Some(def_id), vec![], Ty::int(IntKind::I32)),
             |builder, _params| {
                 let main_ty = self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id));
-                let main_func: CallableValue<'ink> = self
-                    .function_map
-                    .instance(def_id, main_ty)
-                    .as_global_value()
-                    .as_pointer_value()
-                    .try_into()
-                    .unwrap();
                 builder
                     .build_call(
-                        main_func,
+                        self.function_map.instance_callable(def_id, main_ty),
                         &[self.ctx.unit_value().into()],
                         &format!("main_func_call"),
                     )

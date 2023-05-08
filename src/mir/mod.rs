@@ -14,7 +14,7 @@ use std::{
 use self::scalar::Scalar;
 pub use crate::typeck::ty::Ty;
 use crate::{
-    cli::color::{Color, ColorizedStruct},
+    cli::color::{Color, WithColor},
     dt::idx::{declare_idx, IndexVec},
     hir::BodyId,
     resolve::{
@@ -269,6 +269,7 @@ pub enum RValue {
 
     ValueRef(DefId),
     Ctor(DefId, Ty),
+    FieldAccessor(DefId, Ty),
 
     // TODO: Maybe move to terminator only when doing algebraic effects.
     Call {
@@ -298,6 +299,7 @@ impl Display for RValue {
                     .join(", ")
             ),
             RValue::Ctor(def_id, ty) => write!(f, "ctor{def_id}: {ty}"),
+            RValue::FieldAccessor(def_id, ty) => write!(f, "field_accessor{def_id}: {ty}"),
         }
     }
 }

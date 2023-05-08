@@ -210,6 +210,7 @@ impl<'hir> TyConv<'hir> {
             let fields_tys = degeneralized_adt_ty.as_adt().unwrap().field_tys(vid);
 
             // Constructor type
+            // FIXME: replace tight_func with () -> ...
             let ctor_def_id = variant_node.ctor_def_id;
             let ctor_ty = adt_ty.substituted_forall_body(Ty::tight_func(
                 Some(ctor_def_id),
@@ -237,6 +238,8 @@ impl<'hir> TyConv<'hir> {
 
                     self.tyctx_mut()
                         .type_def(field_accessor_def_id, field_accessor_ty);
+                    self.tyctx_mut()
+                        .set_field_accessor_field_id(field_accessor_def_id, field_id);
                 });
 
             self.tyctx_mut().type_def(ctor_def_id, ctor_ty)
@@ -293,6 +296,20 @@ impl<'hir> HirVisitor for TyConv<'hir> {
 
         let ex = Ty::ty_kind(Kind::new_ex(KindEx::new(self.tyctx_mut().fresh_kind_ex())));
         self.tyctx_mut().type_def(id.def_id(), ex);
+    }
+
+    fn visit_extern_item(
+        &mut self,
+        name: Ident,
+        extern_item: &hir::item::ExternItem,
+        id: ItemId,
+        hir: &HIR,
+    ) {
+        self.visit_ident(&name, hir);
+        self.visit_ty(&extern_item.ty, hir);
+
+        let ty = self.conv(extern_item.ty, None);
+        self.tyctx_mut().type_def(id.def_id(), ty);
     }
 
     fn visit_ty(&mut self, &hir_ty: &hir::Ty, _: &HIR) {

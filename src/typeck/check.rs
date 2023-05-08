@@ -1,11 +1,11 @@
 use super::{
     ctx::InferCtx,
-    debug::InferStepKind,
+    debug::{tcdbg, InferStepKind},
     ty::{Ex, ExKind, FloatKind, IntKind, MapTy, Ty, TyKind},
     TyResult, Typecker,
 };
 use crate::{
-    cli::verbose,
+    cli::{color::WithColor, verbose},
     dt::idx::IndexVec,
     hir::{
         expr::{ExprKind, Lit},
@@ -14,6 +14,7 @@ use crate::{
     message::message::MessageBuilder,
     span::{Spanned, WithSpan},
     typeck::{
+        ctx::AlgoCtx,
         ty::{Adt, ExPair, Field, FieldId, Variant, VariantId},
         TypeckErr,
     },
@@ -67,13 +68,13 @@ impl<'hir> Typecker<'hir> {
 
         let checked = self._check(expr, ty);
 
-        self.dbg.step(InferStepKind::Check(expr, ty, checked));
+        tcdbg!(self, step InferStepKind::Check(expr, ty, checked));
 
         match checked {
             Ok(ok) => {
                 verbose!("Expr {expr} is of type {ty}");
                 self.type_inferring_node(expr, ty);
-                Ok(ok.apply_ctx(self.ctx()))
+                Ok(ok.apply_ctx(self))
             },
             Err(_) => {
                 verbose!("Failed: Expr {expr} is NOT of type {ty}");
@@ -156,12 +157,12 @@ impl<'hir> Typecker<'hir> {
             //         |this| this._check(self.hir.body(body).value, *body_ty),
             //     )
             // },
-            (_, &TyKind::Forall(alpha, body)) => {
-                self.under_ctx(InferCtx::new_with_var(alpha), |this| {
-                    this._check(expr_id, body)?;
-                    Ok(ty)
-                })
-            },
+            (_, &TyKind::Forall(alpha, body)) => self.under_ctx(|this| {
+                tcdbg!(this, add alpha, format!("(?) <: forall {}. {body}", alpha.colorized()));
+                this.add_var(alpha);
+                this._check(expr_id, body)?;
+                Ok(ty)
+            }),
 
             _ => self.expr_subtype(expr_id, ty),
         }
@@ -205,8 +206,8 @@ impl<'hir> Typecker<'hir> {
         let expr_ty = self.synth_expr(expr_id)?;
 
         let span = self.hir.expr(expr_id).span();
-        let l = expr_ty.apply_ctx(self.ctx());
-        let r = ty.apply_ctx(self.ctx());
+        let l = expr_ty.apply_ctx(self);
+        let r = ty.apply_ctx(self);
 
         self.subtype(Spanned::new(span, l), r)
     }
@@ -217,7 +218,7 @@ impl<'hir> Typecker<'hir> {
     /// error. This logic might be invalid and should be verified.
     fn subtype(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
         match self._subtype(*l_ty.node(), r_ty) {
-            Ok(ty) => Ok(ty.apply_ctx(self.ctx())),
+            Ok(ty) => Ok(ty.apply_ctx(self)),
             Err(err) => {
                 // let span = check_ty.span();
                 // let l_ty = *check_ty.node();
@@ -302,8 +303,8 @@ impl<'hir> Typecker<'hir> {
                 // self.under_new_ctx(|this| {
                 // Enter Θ
                 let params = self._subtype_lists(&params, &params_)?;
-                let body1 = body1.apply_ctx(self.ctx());
-                let body2 = body2.apply_ctx(self.ctx());
+                let body1 = body1.apply_ctx(self);
+                let body2 = body2.apply_ctx(self);
                 let body = self._subtype(body1, body2)?;
                 Ok(Ty::func(r_ty.func_def_id(), params, body))
                 // })
@@ -320,16 +321,19 @@ impl<'hir> Typecker<'hir> {
                 let ex_ty = Ty::ex(ex);
                 let with_substituted_alpha = body.substitute(alpha, ex_ty);
 
-                self.under_ctx(InferCtx::new_with_ex(ex), |this| {
+                self.under_ctx(|this| {
+                    tcdbg!(this, add ex, format!("forall {}. {body} => {with_substituted_alpha}", alpha.colorized()));
+                    this.add_ex(ex);
                     this._subtype(with_substituted_alpha, r_ty)
                 })
             },
 
             // (?) <: forall a. body
-            (_, &TyKind::Forall(alpha, body)) => self
-                .under_ctx(InferCtx::new_with_var(alpha), |this| {
-                    this._subtype(l_ty, body)
-                }),
+            (_, &TyKind::Forall(alpha, body)) => self.under_ctx(|this| {
+                tcdbg!(this, add alpha, format!("(?) <: forall {}. {body}", alpha.colorized()));
+                this.add_var(alpha);
+                this._subtype(l_ty, body)
+            }),
 
             // adt₁ <: adt₂
             (TyKind::Adt(adt), TyKind::Adt(adt_)) if adt.def_id == adt_.def_id => Ok(r_ty),
@@ -355,7 +359,7 @@ impl<'hir> Typecker<'hir> {
             _ => Err(TypeckErr::LateReport),
         };
 
-        self.dbg.step(InferStepKind::Subtype(l_ty, r_ty, subtype));
+        tcdbg!(self, step InferStepKind::Subtype(l_ty, r_ty, subtype));
 
         subtype
     }
@@ -389,7 +393,7 @@ impl<'hir> Typecker<'hir> {
                     let ex_ty = Ty::ex(ex);
 
                     self.solve(ty_ex, ex_ty.mono());
-                    return Ok(ex_ty.apply_ctx(self.ctx()));
+                    return Ok(ex_ty.apply_ctx(self));
                 }
             },
             _ => {},
@@ -399,7 +403,7 @@ impl<'hir> Typecker<'hir> {
         if let Some(mono) = ty.as_mono() {
             // FIXME: check WF?
             self.solve(ex, mono);
-            return Ok(ty.apply_ctx(self.ctx()));
+            return Ok(ty.apply_ctx(self));
         }
 
         Err(TypeckErr::Check)
@@ -433,7 +437,9 @@ impl<'hir> Typecker<'hir> {
                 self.instantiate_func(InstantiateDir::Left, r_ty, ex)
             },
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
-                this.under_ctx(InferCtx::new_with_var(alpha), |this| {
+                this.under_ctx(|this| {
+                    tcdbg!(this, add alpha, format!("InstL {} <: forall {}. {body}", ex.colorized(), alpha.colorized()));
+                    this.add_var(alpha);
                     this.instantiate_l(ex, body)
                 })
             }),
@@ -474,7 +480,9 @@ impl<'hir> Typecker<'hir> {
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 let alpha_ex = this.fresh_ex(ExKind::Common);
 
-                this.under_ctx(InferCtx::new_with_ex(alpha_ex), |this| {
+                this.under_ctx(|this| {
+                    tcdbg!(this, add ex, format!("InstR forall {}. {body} <: {}", alpha.colorized(), ex.colorized()));
+                    this.add_ex(alpha_ex);
                     let alpha_ex_ty = Ty::ex(alpha_ex);
                     let body_ty = body.substitute(alpha, alpha_ex_ty);
                     this.instantiate_r(body_ty, ex)
@@ -499,7 +507,10 @@ impl<'hir> Typecker<'hir> {
 
         self.try_to(|this| {
             let range_ex = this.add_fresh_common_ex();
+            tcdbg!(this, add range_ex.0, "function body existential");
+
             let domain_exes = this.add_fresh_common_ex_list(params.len());
+            tcdbg!(this, add_list domain_exes.iter().map(|(ex, _)| ex), "function parameters existentials");
 
             let func_ty = Ty::func(
                 ty.func_def_id(),
@@ -525,6 +536,8 @@ impl<'hir> Typecker<'hir> {
 
     fn instantiate_adt(&mut self, dir: InstantiateDir, ty: Ty, ex: Ex) -> TyResult<Ty> {
         let adt = ty.as_adt().unwrap();
+
+        // TODO: Debug
 
         self.try_to(|this| {
             let variant_exes = adt

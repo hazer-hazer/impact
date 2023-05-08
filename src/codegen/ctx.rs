@@ -12,7 +12,10 @@ use crate::{
     cli::verbose,
     hir::{item::ItemId, HIR},
     mir::{Ty, MIR},
-    resolve::{builtin::Builtin, def::DefId},
+    resolve::{
+        builtin::Builtin,
+        def::{DefId, DefKind},
+    },
     session::Session,
     typeck::{
         ty::{self, FloatKind, TyKind, VariantId},
@@ -32,6 +35,13 @@ pub struct CodeGenCtx<'ink, 'ctx> {
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     pub fn should_be_built(&self, body_owner: DefId) -> bool {
+        if matches!(
+            self.sess.def_table.def(body_owner).kind(),
+            DefKind::DeclareBuiltin
+        ) {
+            return false;
+        }
+
         match self.sess.def_table.as_builtin(body_owner) {
             Some(bt) => match bt {
                 Builtin::RefCons => false,

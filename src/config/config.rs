@@ -17,6 +17,7 @@ pub struct Config {
     interruption_reason: Option<InterruptionReason>,
     verbose_messages: bool,
     parser_debug: bool,
+    typeck_debug: bool,
 }
 
 impl Config {
@@ -48,6 +49,10 @@ impl Config {
         self.parser_debug
     }
 
+    pub fn typeck_debug(&self) -> bool {
+        self.typeck_debug
+    }
+
     pub fn compilation_depth(&self) -> StageName {
         self.compilation_depth
     }
@@ -57,13 +62,14 @@ impl Display for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "compilation_depth='{}', pp_stages='{}', expected_output='{}', interruption_reason='{}', verbose_messages={}, parser_debug={}, pp_ast_ids={}",
+            "compilation_depth='{}', pp_stages='{}', expected_output='{}', interruption_reason='{}', verbose_messages={}, parser_debug={}, typeck_debug={}, pp_ast_ids={}",
             self.compilation_depth,
             self.pp_stages,
             self.expected_output.as_ref().map_or("none", |o| o.as_str()),
             self.interruption_reason.as_ref().map_or("none".to_string(), ToString::to_string),
             if self.verbose_messages {"yes"} else {"no"},
             if self.parser_debug {"yes"} else {"no"},
+            if self.typeck_debug {"yes"} else {"no"},
             if self.pp_ast_ids {"yes"} else {"no"},
         )
     }
@@ -83,6 +89,7 @@ pub struct ConfigBuilder {
     interruption_reason: Option<InterruptionReason>,
     verbose_messages: bool,
     parser_debug: bool,
+    typeck_debug: bool,
 }
 
 impl ConfigBuilder {
@@ -96,6 +103,7 @@ impl ConfigBuilder {
             interruption_reason: None,
             verbose_messages: false,
             parser_debug: false,
+            typeck_debug: false,
         }
     }
 
@@ -109,6 +117,7 @@ impl ConfigBuilder {
             interruption_reason: self.interruption_reason,
             verbose_messages: self.verbose_messages,
             parser_debug: self.parser_debug,
+            typeck_debug: self.typeck_debug,
         }
     }
 
@@ -144,6 +153,11 @@ impl ConfigBuilder {
 
     pub fn parser_debug(mut self, parser_debug: bool) -> Self {
         self.parser_debug = parser_debug;
+        self
+    }
+
+    pub fn typeck_debug(mut self, typeck_debug: bool) -> Self {
+        self.typeck_debug = typeck_debug;
         self
     }
 }

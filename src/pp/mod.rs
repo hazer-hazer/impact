@@ -1,6 +1,6 @@
 use crate::{
     ast::{NodeId, NodeMap, Path, WithNodeId},
-    cli::color::{Color, Colorize, ColorizedStruct},
+    cli::color::{Color, Colorize, WithColor},
     hir::{item::ItemId, HirId, WithHirId, WithNodeKind},
     parser::token::{Op, Punct},
     resolve::{
@@ -173,7 +173,7 @@ impl<'a, D> AstLikePP<'a, D> {
         self
     }
 
-    pub fn colorized<T: ColorizedStruct>(&mut self, value: T) -> &mut Self {
+    pub fn color<T: WithColor>(&mut self, value: T) -> &mut Self {
         self.string(value.colorized())
     }
 
@@ -188,11 +188,6 @@ impl<'a, D> AstLikePP<'a, D> {
                 .collect::<Vec<String>>()
                 .join(sep),
         )
-    }
-
-    pub fn set_indent(&mut self, level: usize) -> &mut Self {
-        self.indent_level = level;
-        self
     }
 
     pub fn indent(&mut self) -> &mut Self {

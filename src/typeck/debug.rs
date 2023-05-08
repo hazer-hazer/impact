@@ -2,12 +2,12 @@ use std::{collections::HashMap, fmt::Display};
 
 use super::{
     ctx::InferCtx,
-    kind::{Kind, KindEx},
-    ty::Ex,
+    kind::{Kind, KindEx, KindVarId},
+    ty::{Ex, TyVarId},
     TyResult, TypeckErr,
 };
 use crate::{
-    cli::color::{Color, ColorizedStruct},
+    cli::color::{Color, Colorize, WithColor},
     dt::idx::{declare_idx, IndexVec},
     hir::{
         expr::{ExprKind, TyExpr},
@@ -25,10 +25,51 @@ use crate::{
 
 declare_idx!(InferEntryId, u32, "{}", Color::Blue);
 
+macro_rules! tcdbg {
+    ($self: expr, step $kind: expr) => {
+        $self.dbg.step($kind)
+    };
+
+    ($self: expr, add $el: expr, $usage: expr) => {{
+        use crate::cli::color::{WithColor};
+        tcdbg!($self, step InferStepKind::AddCtxEl($el.colorized().to_string(), $usage.to_string()))
+    }};
+
+    ($self: expr, add_list $els_iter: expr, $usage: expr) => {{
+        use crate::cli::color::{WithColor};
+        tcdbg!($self, step InferStepKind::AddCtxElList($els_iter.map(|el| el.colorized().to_string()).collect(), $usage.to_string()))
+    }};
+
+    ($self: expr, enter $entry_kind: expr) => {
+        $self.dbg.enter($entry_kind)
+    };
+
+    ($self: expr, exit $ie: expr) => {
+        $self.dbg.exit($ie);
+    };
+
+    // ($self: expr, add_kind_var $var: expr, $usage: expr) => {
+    //     tcdbg!($self, step InferStepKind::AddKindVar($var, $usage.to_string()))
+    // };
+
+    // ($self: expr, add_ex $ex: expr, $usage: expr) => {
+    //     tcdbg!($self, step InferStepKind::AddEx($ex, $usage.to_string()))
+    // };
+
+    // ($self: expr, add_kind_ex $ex: expr, $usage: expr) => {
+    //     tcdbg!($self, step InferStepKind::AddKindEx($ex, $usage.to_string()))
+    // };
+
+}
+
+pub(super) use tcdbg;
+
 pub enum InferEntryKind {
     TryTo,
+    UnderCtx(usize),
     ForExpr(Expr),
 }
+
 pub struct InferEntry {
     id: InferEntryId,
     parent: Option<InferEntryId>,
@@ -69,6 +110,9 @@ pub enum InferStepKind {
 
     Solve(Ex, Ty),
     SolveKind(KindEx, Kind),
+
+    AddCtxEl(String, String),
+    AddCtxElList(Vec<String>, String),
 }
 
 pub struct InferStep {
@@ -88,22 +132,25 @@ pub struct InferDebug<'ctx> {
     entry: Option<InferEntryId>,
 }
 
-impl<'ctx> AstLikePP<'ctx> {
-    fn ty_result<T>(&mut self, res: &TyResult<T>) -> &mut AstLikePP<'ctx>
+impl PP {
+    fn ty_result<T>(&mut self, res: &TyResult<T>) -> &mut PP
     where
-        T: Display,
+        T: Display + WithColor,
     {
         match res {
-            Ok(ok) => self.string(format!("Ok({ok})")),
-            Err(err) => self.string(match err {
+            Ok(ok) => {
+                pp!(self, { "Ok({})", ok.colorized() });
+            },
+            Err(err) => pp!(self, {str: match err {
                 TypeckErr::Check => "check failed",
                 TypeckErr::LateReport => "error (unreported)",
                 TypeckErr::Reported => "error (reported)",
-            }),
+            }}),
         }
+        self
     }
 
-    fn expr(&mut self, expr: Expr, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+    fn expr(&mut self, expr: Expr, ctx: &IDCtx) -> &mut PP {
         match ctx.hir.expr(expr).kind() {
             ExprKind::Lit(lit) => self.string(lit),
             &ExprKind::Path(path) => self.string(ctx.hir.expr_path(path)),
@@ -122,28 +169,24 @@ impl<'ctx> AstLikePP<'ctx> {
         }
     }
 
-    fn block(&mut self, block: Block, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
-        pp!(self, "{...;" "}");
-
-        self.str("{...;");
-        if let Some(expr) = ctx.hir.block(block).expr() {
-            self.expr(expr, ctx);
-        }
-        self.str("}")
+    fn block(&mut self, block: Block, ctx: &IDCtx) -> &mut PP {
+        pp!(self, "{...;", {expr?: ctx.hir.block(block).expr(), ctx}, "}", ...)
     }
 
-    fn body(&mut self, body: BodyId, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+    fn body(&mut self, body: BodyId, ctx: &IDCtx) -> &mut PP {
         let body = ctx.hir.body(body);
 
-        self.str("\\");
-        body.params.iter().copied().for_each(|pat| {
-            self.pat(pat, ctx).sp();
-        });
-
-        self.str("-> ").expr(body.value, ctx)
+        pp!(
+            self,
+            "\\",
+            {delim " " / pat: body.params.iter().copied(), ctx},
+            " -> ",
+            {expr: body.value, ctx},
+            ...
+        )
     }
 
-    fn pat(&mut self, pat: Pat, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+    fn pat(&mut self, pat: Pat, ctx: &IDCtx) -> &mut PP {
         let pat = ctx.hir.pat(pat);
         match pat.kind() {
             PatKind::Unit => self.str("()"),
@@ -151,56 +194,92 @@ impl<'ctx> AstLikePP<'ctx> {
         }
     }
 
-    fn entry(&mut self, entry: &InferEntry, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
-        self.out_indent();
+    fn entry(&mut self, entry: InferEntryId, ctx: &IDCtx) -> &mut PP {
+        let entry = ctx.entries.get(entry).unwrap();
+
+        pp!(self, { out_indent }, {if (entry.failed) "❌"}, {str: "> "});
 
         match &entry.kind {
             InferEntryKind::TryTo => {
-                self.line("Try to");
+                pp!(self, {line: "Try to"});
             },
             &InferEntryKind::ForExpr(expr) => {
-                self.str("For expr `").expr(expr, ctx).str("`").nl();
+                pp!(self, "For expr `", {expr: expr, ctx}, "`", {nl});
+            },
+            InferEntryKind::UnderCtx(depth) => {
+                pp!(
+                    self,
+                    { "Under new context [depth: {}]", depth },
+                    { nl }
+                );
             },
         }
 
-        self.indent();
-
-        entry.steps.iter().for_each(|step| {
-            self.step(step, ctx);
-        });
-
-        if !entry.children.is_empty() {
-            self.line("and then");
-        }
-
-        entry.children.iter().copied().for_each(|child| {
-            self.entry(ctx.entries.get(child).unwrap(), ctx);
-        });
-
-        self.dedent()
+        pp!(
+            self,
+            {indent},
+            {delim {nl} / step: entry.steps.iter(), ctx},
+            {if (entry.steps.is_empty()) [out_indent, "[Nothing done]"]},
+            {nl, out_indent, indent},
+            {if (!entry.children.is_empty()) {line: "and then"} else {line: "[No subentries]"}},
+            {delim {nl} / entry: entry.children.iter().copied(), ctx},
+            {dedent, dedent},
+            ...
+        )
     }
 
-    fn step(&mut self, step: &InferStep, ctx: &IDCtx) -> &mut AstLikePP<'ctx> {
+    fn step(&mut self, step: &InferStep, ctx: &IDCtx) -> &mut PP {
         self.out_indent();
         match &step.kind {
-            InferStepKind::Synthesized(ty) => self.string(format!("Synthesized {ty}")),
-            InferStepKind::CtxApplied(before, after) => {
-                self.string(format!("Applying current context on {before} => {after}"))
+            &InferStepKind::Synthesized(ty) => pp!(self, "Synthesized ", { color: ty }),
+            &InferStepKind::CtxApplied(before, after) => {
+                pp!(
+                    self,
+                    "Applying current context on ",
+                    { color: before },
+                    " => ",
+                    { color: after },
+                    {if (before == after) {string: " (No difference)".yellow()}}
+                );
             },
-            InferStepKind::Check(expr, ty, res) => self
-                .str("Check ")
-                .expr(*expr, ctx)
-                .string(format!("is of type {ty}"))
-                .ty_result(res),
-            InferStepKind::Subtype(ty, subtype_of, res) => self
-                .string(format!("{ty} is a subtype of {subtype_of} => "))
-                .ty_result(res),
-            InferStepKind::SubtypeKind(kind, subkind_of, res) => self
-                .string(format!("{kind} is a subkind of {subkind_of} => "))
-                .ty_result(res),
-            InferStepKind::Solve(ex, ty) => self.string(format!("Solve {ex} = {ty}")),
-            InferStepKind::SolveKind(ex, kind) => self.string(format!("Solve {ex} = {kind}")),
+            &InferStepKind::Check(expr, ty, ref res) => {
+                pp!(self, "Check ", {expr: expr, ctx}, " is of type ", {color: ty}, " => ", {ty_result: res});
+            },
+            &InferStepKind::Subtype(ty, subtype_of, ref res) => {
+                pp!(
+                    self,
+                    { color: ty },
+                    " is a subtype of ",
+                    { color: subtype_of },
+                    " => ",
+                    { ty_result: res }
+                );
+            },
+            &InferStepKind::SubtypeKind(kind, subkind_of, ref res) => {
+                pp!(
+                    self,
+                    { color: kind },
+                    " is a subkind of ",
+                    { color: subkind_of },
+                    " => ",
+                    { ty_result: res }
+                );
+            },
+            &InferStepKind::Solve(ex, ty) => {
+                pp!(self, "Solve ", { color: ex }, " = ", { color: ty });
+            },
+            &InferStepKind::SolveKind(ex, kind) => {
+                pp!(self, "Solve ", { color: ex }, " = ", { color: kind });
+            },
+            InferStepKind::AddCtxEl(el, usage) => {
+                pp!(self, "Add ", { string: el }, " for ", { string: usage });
+            },
+            InferStepKind::AddCtxElList(els, usage) => {
+                pp!(self, "Add [", { delim {", "} / string: els.iter() }, "] for ", { string: usage })
+            },
         }
+
+        self
     }
 }
 
@@ -214,6 +293,17 @@ impl<'ctx> InferDebug<'ctx> {
         }
     }
 
+    pub fn get_string(mut self) -> String {
+        self.pp.entry(
+            InferEntryId(0),
+            &IDCtx {
+                hir: self.hir,
+                entries: &self.entries,
+            },
+        );
+        self.pp.get_string()
+    }
+
     fn entry_mut(&mut self) -> &mut InferEntry {
         self.entries.get_mut(self.entry.unwrap()).unwrap()
     }
@@ -224,9 +314,12 @@ impl<'ctx> InferDebug<'ctx> {
 
     pub fn enter(&mut self, kind: InferEntryKind) -> InferEntryId {
         let id = self.entries.len().into();
+
         self.entries.push(InferEntry::new(id, self.entry, kind));
 
-        self.entry_mut().children.push(id);
+        if self.entry.is_some() {
+            self.entry_mut().children.push(id);
+        }
 
         self.entry = Some(id);
 
@@ -241,11 +334,11 @@ impl<'ctx> InferDebug<'ctx> {
 
             unwind_to = entry.parent;
 
-            if self.entry == unwind_to {
+            if id == entry.id {
                 break;
             }
 
-            self.entries.get_mut(id)
+            self.entries.get_mut(id);
         }
 
         self.entry = unwind_to;

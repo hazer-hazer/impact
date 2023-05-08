@@ -334,7 +334,6 @@ impl Ty {
             | TyKind::Float(_)
             | TyKind::Str => *self,
 
-            // FIXME: Can we panic on unwrap?
             &TyKind::Existential(ex) => ctx.get_solution(ex).map_or(*self, |ty| ty.apply_ctx(ctx)),
 
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {

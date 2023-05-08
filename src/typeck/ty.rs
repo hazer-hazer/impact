@@ -5,7 +5,7 @@ use std::{
 
 use super::kind::Kind;
 use crate::{
-    cli::color::{Color, ColorizedStruct},
+    cli::color::{Color, Colorize, WithColor},
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
@@ -92,6 +92,12 @@ impl Ex {
 impl std::fmt::Display for Ex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.kind(), self.id())
+    }
+}
+
+impl WithColor for Ex {
+    fn fg_color() -> Option<Color> {
+        Some(Color::Blue)
     }
 }
 
@@ -646,6 +652,12 @@ impl std::fmt::Debug for Ty {
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.kind().to_string().fmt(f)
+    }
+}
+
+impl WithColor for Ty {
+    fn fg_color() -> Option<Color> {
+        Some(Color::BrightBlue)
     }
 }
 

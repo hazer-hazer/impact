@@ -14,7 +14,7 @@ use self::{
     ty::TyNode,
 };
 use crate::{
-    cli::color::{Color, ColorizedStruct},
+    cli::color::{Color, WithColor},
     dt::{
         idx::{declare_idx, Idx, IndexVec},
         new_type::new_type,

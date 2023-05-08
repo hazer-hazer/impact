@@ -1,6 +1,10 @@
 use super::{super::ty::TyKind, Kind, KindEx, KindSort, Ty};
 use crate::{
-    typeck::{ctx::InferCtx, TyResult, TypeckErr, Typecker, debug::InferStepKind},
+    typeck::{
+        ctx::InferCtx,
+        debug::{tcdbg, InferStepKind},
+        TyResult, TypeckErr, Typecker,
+    },
     utils::macros::match_expected,
 };
 
@@ -41,8 +45,8 @@ impl<'hir> Typecker<'hir> {
 
             (&KindSort::Abs(param1, body1), &KindSort::Abs(param2, body2)) => {
                 let param = self._subtype_kind(param1, param2)?;
-                let body1 = body1.apply_ctx(self.ctx()).into();
-                let body2 = body2.apply_ctx(self.ctx()).into();
+                let body1 = body1.apply_ctx(self).into();
+                let body2 = body2.apply_ctx(self).into();
                 let body = self.subtype_kind(body1, body2)?.expect_kind();
                 Ok(Kind::new_abs(param, body))
             },
@@ -52,15 +56,16 @@ impl<'hir> Typecker<'hir> {
                 let ex_kind = Kind::new_ex(ex);
                 let with_var_substituted = body.substitute(var, ex_kind);
 
-                self.under_ctx(InferCtx::new_with_kind_ex(ex), |this| {
+                self.under_ctx(|this| {
+                    this.add_kind_ex(ex);
                     this._subtype_kind(with_var_substituted, r_kind)
                 })
             },
 
-            (_, &KindSort::Forall(var, body)) => self
-                .under_ctx(InferCtx::new_with_kind_var(var), |this| {
-                    this._subtype_kind(l_kind, body)
-                }),
+            (_, &KindSort::Forall(var, body)) => self.under_ctx(|this| {
+                this.add_kind_var(var);
+                this._subtype_kind(l_kind, body)
+            }),
 
             (&KindSort::Ex(ex), _) => {
                 if !r_kind.contains_ex(ex) {
@@ -81,10 +86,7 @@ impl<'hir> Typecker<'hir> {
             _ => Err(TypeckErr::LateReport),
         };
 
-        self.dbg
-            .step(InferStepKind::SubtypeKind(
-                l_kind, r_kind, subkind,
-            ));
+        tcdbg!(self, step InferStepKind::SubtypeKind(l_kind, r_kind, subkind));
 
         subkind
     }
@@ -114,7 +116,8 @@ impl<'hir> Typecker<'hir> {
                 this.instantiate_kind_l(param_ex, body_kind)
             }),
             &KindSort::Forall(var, body) => self.try_to(|this| {
-                this.under_ctx(InferCtx::new_with_kind_var(var), |this| {
+                this.under_ctx(|this| {
+                    this.add_kind_var(var);
                     this.instantiate_kind_l(ex, body)
                 })
             }),
@@ -148,7 +151,8 @@ impl<'hir> Typecker<'hir> {
             &KindSort::Forall(var, body) => self.try_to(|this| {
                 let var_ex = this.fresh_kind_ex();
 
-                this.under_ctx(InferCtx::new_with_kind_ex(var_ex), |this| {
+                this.under_ctx(|this| {
+                    this.add_kind_ex(var_ex);
                     let var_ex_kind = Kind::new_ex(var_ex);
                     let body_kind = body.substitute(var, var_ex_kind);
                     this.instantiate_kind_r(body_kind, ex)

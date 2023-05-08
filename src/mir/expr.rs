@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{
     cli::verbose,
+    hir::ExprDefKind,
     mir::{thir::Expr, InfixOp},
     resolve::{builtin::ValueBuiltin, def::DefKind},
     typeck::ty::{FloatKind, IntKind},
@@ -126,32 +127,22 @@ impl<'ctx> MirBuilder<'ctx> {
                 bb.with(RValue::Closure(def_id))
             },
             &ExprKind::Def(def_id, ty) => {
-                let rvalue = match self.sess.def_table.def(def_id).kind() {
-                    DefKind::External => {
+                let rvalue = match self.sess.def_table.def(def_id).kind().try_into().unwrap() {
+                    ExprDefKind::External => {
                         if ty.is_func_like() {
                             RValue::FuncRef(def_id, ty)
                         } else {
                             RValue::ValueRef(def_id)
                         }
                     },
-                    DefKind::Func => RValue::FuncRef(def_id, ty),
-                    DefKind::Value => RValue::ValueRef(def_id),
-                    DefKind::Lambda => {
-                        assert!(ty.is_instantiated());
-                        RValue::ClosureRef(def_id)
-                    },
-                    DefKind::Ctor => RValue::Ctor(def_id, ty),
-                    DefKind::Local
-                    | DefKind::Root
-                    | DefKind::TyAlias
-                    | DefKind::Adt
-                    | DefKind::Variant
-                    | DefKind::Mod
-                    | DefKind::DeclareBuiltin => {
-                        unreachable!()
-                    },
-                    DefKind::FieldAccessor => todo!(),
-                    DefKind::TyParam => todo!(),
+                    ExprDefKind::Func => RValue::FuncRef(def_id, ty),
+                    ExprDefKind::Value => RValue::ValueRef(def_id),
+                    // ExprDefKind::Lambda => {
+                    //     assert!(ty.is_instantiated());
+                    //     RValue::ClosureRef(def_id)
+                    // },
+                    ExprDefKind::Ctor => RValue::Ctor(def_id, ty),
+                    ExprDefKind::FieldAccessor => RValue::FieldAccessor(def_id, ty),
                 };
                 bb.with(rvalue)
             },

@@ -62,11 +62,11 @@ impl<'ctx> ThirBuilder<'ctx> {
             },
             &hir::expr::ExprKind::Path(path) => match self.hir.expr_path(path).res() {
                 &hir::ExprRes::Def(kind, def_id) => match kind {
-                    ExprDefKind::External | ExprDefKind::Func | ExprDefKind::Value => {
-                        ExprKind::Def(def_id, self.tyctx.tyof(expr_id))
-                    },
-                    ExprDefKind::Ctor => todo!(),
-                    ExprDefKind::FieldAccessor => todo!(),
+                    ExprDefKind::Ctor
+                    | ExprDefKind::FieldAccessor
+                    | ExprDefKind::External
+                    | ExprDefKind::Func
+                    | ExprDefKind::Value => ExprKind::Def(def_id, self.tyctx.tyof(expr_id)),
                 },
                 &hir::ExprRes::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
             },

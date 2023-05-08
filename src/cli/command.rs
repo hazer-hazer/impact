@@ -136,6 +136,10 @@ pub struct Args {
     /// Prints tree view of parser entries
     #[arg(long, default_value_t = false, help_heading = "Debug options")]
     pub parser_debug: bool,
+
+    /// Prints tree view of typeck process
+    #[arg(long, default_value_t = false, help_heading = "Debug options")]
+    pub typeck_debug: bool,
 }
 
 #[cfg(test)]

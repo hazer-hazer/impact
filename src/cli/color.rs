@@ -102,7 +102,9 @@ impl Display for ColorizedString {
 
 pub trait Colorize {
     fn colorize(self, fg: Option<Color>, bg: Option<Color>) -> ColorizedString;
+
     fn fg_color(self, color: Color) -> ColorizedString;
+
     fn bg_color(self, color: Color) -> ColorizedString;
 
     fn black(self) -> ColorizedString
@@ -204,59 +206,81 @@ pub trait Colorize {
     }
 }
 
-impl<'a> Colorize for &'a str {
+impl<T> Colorize for T
+where
+    T: Sized,
+    String: From<T>,
+{
     fn colorize(self, fg: Option<Color>, bg: Option<Color>) -> ColorizedString {
         ColorizedString {
             string: String::from(self),
-            fg,
             bg,
+            fg,
         }
     }
 
     fn fg_color(self, color: Color) -> ColorizedString {
-        ColorizedString {
-            string: String::from(self),
-            bg: None,
-            fg: Some(color),
-        }
+        self.colorize(Some(color), None)
     }
 
     fn bg_color(self, color: Color) -> ColorizedString {
-        ColorizedString {
-            string: String::from(self),
-            bg: Some(color),
-            fg: None,
-        }
+        self.colorize(None, Some(color))
     }
 }
 
-impl Colorize for String {
-    fn colorize(self, fg: Option<Color>, bg: Option<Color>) -> ColorizedString {
-        ColorizedString {
-            string: self,
-            fg,
-            bg,
-        }
-    }
+// impl<'a> Colorize for &'a str {
+//     fn colorize(self, fg: Option<Color>, bg: Option<Color>) ->
+// ColorizedString {         ColorizedString {
+//             string: String::from(self),
+//             fg,
+//             bg,
+//         }
+//     }
 
-    fn fg_color(self, color: Color) -> ColorizedString {
-        ColorizedString {
-            string: self,
-            bg: None,
-            fg: Some(color),
-        }
-    }
+//     fn fg_color(self, color: Color) -> ColorizedString {
+//         ColorizedString {
+//             string: String::from(self),
+//             bg: None,
+//             fg: Some(color),
+//         }
+//     }
 
-    fn bg_color(self, color: Color) -> ColorizedString {
-        ColorizedString {
-            string: self,
-            bg: Some(color),
-            fg: None,
-        }
-    }
-}
+//     fn bg_color(self, color: Color) -> ColorizedString {
+//         ColorizedString {
+//             string: String::from(self),
+//             bg: Some(color),
+//             fg: None,
+//         }
+//     }
+// }
 
-pub trait ColorizedStruct: ToString {
+// impl Colorize for String {
+//     fn colorize(self, fg: Option<Color>, bg: Option<Color>) ->
+// ColorizedString {         ColorizedString {
+//             string: self,
+//             fg,
+//             bg,
+//         }
+//     }
+
+//     fn fg_color(self, color: Color) -> ColorizedString {
+//         ColorizedString {
+//             string: self,
+//             bg: None,
+//             fg: Some(color),
+//         }
+//     }
+
+//     fn bg_color(self, color: Color) -> ColorizedString {
+//         ColorizedString {
+//             string: self,
+//             bg: Some(color),
+//             fg: None,
+//         }
+//     }
+// }
+
+pub trait WithColor: ToString {
     fn fg_color() -> Option<Color> {
         None
     }

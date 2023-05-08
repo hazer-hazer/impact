@@ -7,7 +7,7 @@ use super::{
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
     cli::{
-        color::{Color, ColorizedStruct},
+        color::{Color, WithColor},
         verbose,
     },
     dt::idx::{declare_idx, Idx, IndexVec},

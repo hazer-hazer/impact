@@ -46,7 +46,7 @@ impl<'a> ThirPrinter<'a> {
                 self.pp.string(local);
             },
             &ExprKind::Def(def_id, ty) => {
-                self.pp.colorized(def_id).punct(Punct::Colon).string(ty);
+                self.pp.color(def_id).punct(Punct::Colon).string(ty);
             },
             &ExprKind::Block(id) => self.block(id),
             &ExprKind::Ref(expr) => {
@@ -66,7 +66,7 @@ impl<'a> ThirPrinter<'a> {
             &ExprKind::Lambda { def_id, body_id } => {
                 self.pp
                     .str("lambda")
-                    .colorized(def_id)
+                    .color(def_id)
                     .str("{")
                     .string(body_id)
                     .str("}");

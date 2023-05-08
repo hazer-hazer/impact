@@ -15,7 +15,7 @@ use crate::{
     resolve::def::{DefId, DefKind},
     span::{sym::Ident, Spanned, WithSpan},
     typeck::{
-        debug::{InferEntryKind, InferStepKind},
+        debug::{tcdbg, InferEntryKind, InferStepKind},
         kind::{Kind, KindSort},
     },
 };
@@ -78,7 +78,7 @@ impl<'hir> Typecker<'hir> {
             ItemKind::Adt(_) => self.tyctx().node_type(hir_id).unwrap(),
         };
 
-        let ty = ty.apply_ctx(self.ctx());
+        let ty = ty.apply_ctx(self);
         self.type_inferring_node(hir_id, ty);
 
         TyResult::Ok(Ty::unit())
@@ -103,13 +103,13 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
-        let local_ty = self.synth_expr(local.value)?.apply_ctx(self.ctx());
+        let local_ty = self.synth_expr(local.value)?.apply_ctx(self);
         self.type_inferring_node(local.id, local_ty);
         Ok(Ty::unit())
     }
 
     pub fn synth_expr(&mut self, expr: Expr) -> TyResult<Ty> {
-        let ie = self.dbg.enter(InferEntryKind::ForExpr(expr));
+        let ie = tcdbg!(self, enter InferEntryKind::ForExpr(expr));
 
         let expr_ty = match self.hir.expr(expr).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
@@ -117,7 +117,7 @@ impl<'hir> Typecker<'hir> {
             &ExprKind::Block(block) => self.synth_block(block),
             ExprKind::Lambda(lambda) => self.synth_body(lambda.def_id, lambda.body_id),
             ExprKind::Call(call) => self.synth_call(&call, expr),
-            &ExprKind::Let(block) => self.under_new_ctx(|this| this.synth_block(block)),
+            &ExprKind::Let(block) => self.under_ctx(|this| this.synth_block(block)),
             ExprKind::Ty(ty_expr) => self.synth_ty_expr(&ty_expr),
             // &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field,
             // expr_id),
@@ -126,15 +126,15 @@ impl<'hir> Typecker<'hir> {
 
         verbose!("Synthesized type of expression {expr} = {expr_ty}");
 
-        self.dbg.step(InferStepKind::Synthesized(expr_ty));
+        tcdbg!(self, step InferStepKind::Synthesized(expr_ty));
 
-        let ty = expr_ty.apply_ctx(self.ctx());
+        let ty = expr_ty.apply_ctx(self);
 
-        self.dbg.step(InferStepKind::CtxApplied(expr_ty, ty));
+        tcdbg!(self, step InferStepKind::CtxApplied(expr_ty, ty));
 
         self.type_inferring_node(expr, ty);
 
-        self.dbg.exit(ie);
+        tcdbg!(self, exit ie);
 
         Ok(ty)
     }
@@ -184,55 +184,55 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    fn synth_field_access_expr(
-        &mut self,
-        lhs: Expr,
-        field_name: Ident,
-        expr_id: Expr,
-    ) -> TyResult<Ty> {
-        let lhs_ty = self.synth_expr(lhs)?;
+    // fn synth_field_access_expr(
+    //     &mut self,
+    //     lhs: Expr,
+    //     field_name: Ident,
+    //     expr_id: Expr,
+    // ) -> TyResult<Ty> {
+    //     let lhs_ty = self.synth_expr(lhs)?;
 
-        // FIXME: Really bug if not adt?
-        let adt = lhs_ty.as_adt().unwrap();
-        let variants = &adt.variants;
+    //     // FIXME: Really bug if not adt?
+    //     let adt = lhs_ty.as_adt().unwrap();
+    //     let variants = &adt.variants;
 
-        assert!(!variants.is_empty());
+    //     assert!(!variants.is_empty());
 
-        if variants.len() > 1 {
-            // TODO: Better message
-            MessageBuilder::error()
-                .span(field_name.span())
-                .text("Cannot get field from enum".to_string())
-                .emit_single_label(self);
-        }
+    //     if variants.len() > 1 {
+    //         // TODO: Better message
+    //         MessageBuilder::error()
+    //             .span(field_name.span())
+    //             .text("Cannot get field from enum".to_string())
+    //             .emit_single_label(self);
+    //     }
 
-        let variant_id = VariantId::new(0);
-        let variant = &variants[variant_id];
-        let field = variant
-            .fields
-            .iter_enumerated()
-            .find(|(_, field)| field.name == field_name);
+    //     let variant_id = VariantId::new(0);
+    //     let variant = &variants[variant_id];
+    //     let field = variant
+    //         .fields
+    //         .iter_enumerated()
+    //         .find(|(_, field)| field.name == field_name);
 
-        if let Some(field) = field {
-            self.tyctx_mut().set_field_index(expr_id, field.0);
-            Ok(field.1.ty)
-        } else {
-            MessageBuilder::error()
-                .span(self.hir.expr(expr_id).span())
-                .text(format!(
-                    "Data type {} does not have field {}",
-                    self.tyctx().ty_name(lhs_ty).unwrap(),
-                    field_name
-                ))
-                .emit_single_label(self);
-            Err(TypeckErr::Reported)
-        }
-    }
+    //     if let Some(field) = field {
+    //         self.tyctx_mut().set_field_index(expr_id, field.0);
+    //         Ok(field.1.ty)
+    //     } else {
+    //         MessageBuilder::error()
+    //             .span(self.hir.expr(expr_id).span())
+    //             .text(format!(
+    //                 "Data type {} does not have field {}",
+    //                 self.tyctx().ty_name(lhs_ty).unwrap(),
+    //                 field_name
+    //             ))
+    //             .emit_single_label(self);
+    //         Err(TypeckErr::Reported)
+    //     }
+    // }
 
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
         let block = self.hir.block(block);
 
-        self.under_new_ctx(|this| {
+        self.under_ctx(|this| {
             block.stmts().iter().for_each(|&stmt| {
                 let _ignore_stmt_typeck_err = this.synth_stmt(stmt);
             });
@@ -270,8 +270,10 @@ impl<'hir> Typecker<'hir> {
     fn get_param_type(&mut self, pat: Pat) -> Vec<(Pat, Ty)> {
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![(pat, Ty::unit())],
-            &hir::pat::PatKind::Ident(_) => {
-                vec![(pat, self.add_fresh_kind_ex_as_ty().1)]
+            &hir::pat::PatKind::Ident(name) => {
+                let ex = self.add_fresh_kind_ex_as_ty();
+                tcdbg!(self, add ex.0, format!("parameter {name}: {}", ex.0.colorized()));
+                vec![(pat, ex.1)]
             },
         }
     }
@@ -281,11 +283,9 @@ impl<'hir> Typecker<'hir> {
             hir::pat::PatKind::Unit => Ty::unit(),
 
             // Assumed that all names in pattern are typed, at least as existentials
-            &hir::pat::PatKind::Ident(_) => self
-                .tyctx_mut()
-                .node_type(pat)
-                .unwrap()
-                .apply_ctx(self.ctx()),
+            &hir::pat::PatKind::Ident(_) => {
+                self.tyctx_mut().node_type(pat).unwrap().apply_ctx(self)
+            },
         }
     }
 
@@ -309,7 +309,9 @@ impl<'hir> Typecker<'hir> {
 
         let body_ex = self.add_fresh_kind_ex_as_ty();
 
-        self.under_new_ctx(|this| {
+        tcdbg!(self, add body_ex.0, "function body");
+
+        self.under_ctx(|this| {
             params_pats_tys.iter().flatten().for_each(|&(pat, ty)| {
                 this.type_inferring_node(pat, ty);
             });
@@ -402,7 +404,7 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_call(&mut self, call: &Call, _expr_id: Expr) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(call.lhs)?;
-        let lhs_ty = lhs_ty.apply_ctx(self.ctx());
+        let lhs_ty = lhs_ty.apply_ctx(self);
         self._synth_call(
             Spanned::new(self.hir.expr(call.lhs).span(), Typed::new(call.lhs, lhs_ty)),
             &call.args,
@@ -423,7 +425,12 @@ impl<'hir> Typecker<'hir> {
                 self.try_to(|this| {
                     let params_exes = this.add_fresh_common_ex_list(args.len());
 
+                    tcdbg!(this, add_list params_exes.iter().map(|(ex, _)| ex), format!("parameters of {} as callable", ex.colorized()));
+
                     let body_ex = this.add_fresh_common_ex();
+
+                    tcdbg!(this, add body_ex.0, format!("body of {} as callable", ex.colorized()));
+
                     let func_ty = Ty::func(
                         None,
                         params_exes.iter().map(|&(_, ty)| ty).collect(),
@@ -457,6 +464,8 @@ impl<'hir> Typecker<'hir> {
             },
             &TyKind::Forall(alpha, ty) => {
                 let alpha_ex = self.add_fresh_common_ex();
+                tcdbg!(self, add alpha_ex.0, format!("call forall {}. {ty}", alpha_ex.0.colorized()));
+
                 let substituted_ty = ty.substitute(alpha, alpha_ex.1);
                 let body_ty = self._synth_call(
                     Spanned::new(span, Typed::new(lhs_expr, substituted_ty)),

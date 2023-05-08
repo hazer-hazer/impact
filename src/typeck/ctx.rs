@@ -161,35 +161,6 @@ impl AlgoCtx for InferCtx {
 }
 
 impl InferCtx {
-    // Constructors //
-    pub fn new_with_var(var: TyVarId) -> Self {
-        Self {
-            vars: Vec::from([var]),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_ex(ex: Ex) -> Self {
-        Self {
-            existentials: Vec::from([ex]),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_kind_ex(ex: KindEx) -> Self {
-        Self {
-            kind_exes: Vec::from([ex]),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_kind_var(var: KindVarId) -> Self {
-        Self {
-            kind_vars: Vec::from([var]),
-            ..Default::default()
-        }
-    }
-
     // pub fn add_inferring_node(&mut self, id: HirId) {
     //     // assert!(!self.inferring_nodes.contains(&id));
     //     self.inferring_nodes.push(id);
@@ -243,6 +214,11 @@ impl InferCtx {
     pub fn add_var(&mut self, var: TyVarId) {
         assert!(!self.vars.contains(&var));
         self.vars.push(var);
+    }
+
+    pub fn add_kind_var(&mut self, var: KindVarId) {
+        assert!(!self.kind_vars.contains(&var));
+        self.kind_vars.push(var);
     }
 
     pub fn add_ex(&mut self, ex: Ex) {

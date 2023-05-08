@@ -24,9 +24,7 @@
           "kind": "bin"
         }
       },
-      "args": [
-        "--compilation-depth", "typeck"
-      ],
+      "args": [],
       "cwd": "${workspaceFolder}"
     },
     {

@@ -13,7 +13,7 @@ use super::{
     ty_infer::MonoTy,
 };
 use crate::{
-    cli::color::{Color, ColorizedStruct},
+    cli::color::{Color, WithColor},
     dt::idx::{declare_idx, Idx},
     span::sym::Ident,
     typeck::ty::{Ty, TyKind},
@@ -50,6 +50,12 @@ impl KindEx {
 impl Display for KindEx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl WithColor for KindEx {
+    fn fg_color() -> Option<Color> {
+        Some(Color::Blue)
     }
 }
 
@@ -240,6 +246,12 @@ impl From<Ty> for Kind {
 impl Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.data())
+    }
+}
+
+impl WithColor for Kind {
+    fn fg_color() -> Option<Color> {
+        Some(Color::BrightBlue)
     }
 }
 

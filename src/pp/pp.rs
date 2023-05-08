@@ -1,32 +1,77 @@
 use crate::{
-    cli::color::ColorizedStruct,
+    cli::color::WithColor,
     parser::token::{Op, Punct},
     span::sym::{Ident, Kw},
 };
 
+/// Mini-DSL for PP
 macro_rules! pp {
-    ($pp: expr) => {
+    ($pp: expr $(,$args: tt)* $(,)?) => {{
+        $(pp!(@inner $pp, $args));*
+    }};
+
+    (@inner $pp: expr, ...) => {
         $pp
     };
 
-    ($pp: expr, $($arg:tt)+) => {
-        pp!(@inner $pp, $($arg)+)
+    (@inner $pp: expr, {$first: ident $(,$rest: ident)+}) => {{
+        pp!(@inner $pp, {$first});
+        $(pp!(@inner $pp, {$rest}));*
+    }};
+
+    (@inner $pp: expr, [$first: tt $(,$rest: tt)+]) => {{
+        pp!(@inner $pp, {$first});
+        $(pp!(@inner $pp, {$rest}));*
+    }};
+
+    (@inner $pp: expr, {$fmt: ident: $expr: expr $(,$args: expr)*}) => {{
+        $pp.$fmt($expr, $($args),*);
+    }};
+
+    (@inner $pp: expr, $arg: literal) => {{
+        $pp.string($arg);
+    }};
+
+    (@inner $pp: expr, {$format: literal $(,$args: expr)*}) => {
+        $pp.string(format!($format $(,$args)*))
     };
 
-    (@inner $pp: expr, $($rest: expr)*) => {
-        $pp$(.string($rest))*
-    };
+    (@inner $pp: expr, {$fmt: ident $(:$first_arg: expr $(,$args: expr)*)?}) => {{
+        $pp.$fmt($($first_arg, $(,$args)*)?);
+    }};
 
-    (@inner $pp: expr, {$fmt: ident?: $expr: expr}) => {
+    (@inner $pp: expr, {$fmt: ident?: $expr: expr $(,$args: expr)*}) => {
         if let Some(expr) = $expr {
-            pp.$fmt(expr)
-        } else {
-            $pp
+            $pp.$fmt(expr, $($args),*);
         }
     };
 
-    (@inner $pp: expr, {$fmt: ident: $expr: expr}) => {
-        pp.$fmt($expr)
+    (@inner $pp: expr, {if ($cond: expr) $then: tt $(else $else: tt)?}) => {
+        if $cond {
+            pp!($pp, $then);
+        } $(else {
+            pp!($pp, $else);
+        })?
+    };
+
+    (@inner $pp: expr, {each / $fmt:ident: $expr: expr $(,$args: expr)*}) => {
+        $expr.for_each(|el| {
+            $pp.$fmt(el, $($args),*);
+        });
+    };
+
+    (@inner $pp: expr, {delim $delim: tt / $fmt:ident: $iter: expr $(,$args: expr)*}) => {
+        let mut iter = $iter;
+
+        if let Some(first) = iter.next() {
+            $pp.$fmt(first, $($args),*);
+
+            for el in iter {
+                pp!($pp, $delim);
+
+                $pp.$fmt(el, $($args),*);
+            }
+        }
     };
 }
 
@@ -77,7 +122,7 @@ impl PP {
         self
     }
 
-    pub fn colorized<T: ColorizedStruct>(&mut self, value: T) -> &mut Self {
+    pub fn color<T: WithColor>(&mut self, value: T) -> &mut Self {
         self.string(value.colorized())
     }
 
@@ -107,6 +152,11 @@ impl PP {
 
     pub fn cur_indent(&self) -> String {
         "  ".repeat(self.indent_level as usize)
+    }
+
+    pub fn set_indent(&mut self, level: u32) -> &mut Self {
+        self.indent_level = level;
+        self
     }
 
     pub fn out_indent(&mut self) -> &mut Self {

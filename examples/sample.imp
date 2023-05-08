@@ -21,6 +21,6 @@ field = String.String.field
 main () =
     a = String.String "a"
 
-    field a
+    puts (field a)
 
     ()
