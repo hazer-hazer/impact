@@ -179,10 +179,11 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.ty_anno(field.id);
 
         if self.pp.mode == AstPPMode::TyAnno {
-            // FIXME: Can be optional?
-            let accessor_ty = self.pp.sess.tyctx.def_ty(field.accessor_def_id).unwrap();
-            self.pp
-                .string(format!("(accessor: {accessor_ty})").colorize(ty::TyId::color(), None));
+            if let Some(accessor_def_id) = field.accessor_def_id {
+                let accessor_ty = self.pp.sess.tyctx.def_ty(accessor_def_id).unwrap();
+                self.pp
+                    .string(format!("(accessor: {accessor_ty})").colorize(ty::TyId::color(), None));
+            }
         }
     }
 

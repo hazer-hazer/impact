@@ -16,11 +16,9 @@ extern
 data String =
     String field: str
 
-field = String.String.field
-
 main () =
     a = String.String "a"
 
-    puts (field a)
+    puts (String.String.field a)
 
     ()

@@ -12,7 +12,7 @@ use crate::{
     hir::{
         self,
         item::{ExternItem, ItemId},
-        visitor::{HirVisitor, walk_each},
+        visitor::{walk_each, HirVisitor},
         BodyId, BodyOwner, BodyOwnerKind, HirId, HIR,
     },
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
@@ -246,28 +246,29 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
     }
 
     fn visit_field(&mut self, field: &hir::item::Field, _hir: &HIR) {
-        let accessor_def_id = field.accessor_def_id;
-        let accessor_ty = self.ctx.sess.tyctx.def_ty(accessor_def_id).unwrap();
-        let accessor_func_ty = self.ctx.inst_ty(accessor_ty, accessor_def_id);
-        let field_id = self.ctx.sess.tyctx.field_accessor_field_id(accessor_def_id);
+        if let Some(accessor_def_id) = field.accessor_def_id {
+            let accessor_ty = self.ctx.sess.tyctx.def_ty(accessor_def_id).unwrap();
+            let accessor_func_ty = self.ctx.inst_ty(accessor_ty, accessor_def_id);
+            let field_id = self.ctx.sess.tyctx.field_accessor_field_id(accessor_def_id);
 
-        self.function_map
-            .add_instance(accessor_def_id, accessor_func_ty, |_def_id, ty| {
-                // TODO: ADT variants fields
-                self.ctx.simple_func(
-                    &format!("field_accessor_{field_id}"),
-                    self.ctx.conv_ty(ty).into_function_type(),
-                    |builder, params| {
-                        let adt = params.get(0).unwrap().into_struct_value();
-                        builder.build_extract_value(
-                            adt,
-                            field_id.inner(),
-                            &format!("field_{field_id}"),
-                        )
-                    },
-                )
-            })
-            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
+            self.function_map
+                .add_instance(accessor_def_id, accessor_func_ty, |_def_id, ty| {
+                    // TODO: ADT variants fields
+                    self.ctx.simple_func(
+                        &format!("field_accessor_{field_id}"),
+                        self.ctx.conv_ty(ty).into_function_type(),
+                        |builder, params| {
+                            let adt = params.get(0).unwrap().into_struct_value();
+                            builder.build_extract_value(
+                                adt,
+                                field_id.inner(),
+                                &format!("field_{field_id}"),
+                            )
+                        },
+                    )
+                })
+                .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
+        }
     }
 }
 

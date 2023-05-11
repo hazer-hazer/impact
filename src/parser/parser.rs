@@ -672,6 +672,18 @@ impl Parser {
 
         self.exit_parsed_entity(pe);
 
+        if variants.len() == 1 {
+            variants.iter_mut().for_each(|v| {
+                v.map(|mut v| {
+                    v.fields.iter_mut().for_each(|f| {
+                        f.map(|mut f| {
+                            f.accessor_id = Some(self.next_node_id());
+                        });
+                    });
+                });
+            });
+        }
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
             ItemKind::Adt(name, generics, variants),
@@ -745,7 +757,6 @@ impl Parser {
         Ok(Field::new(
             self.next_node_id(),
             index,
-            self.next_node_id(),
             name,
             ty,
             self.close_span(lo),

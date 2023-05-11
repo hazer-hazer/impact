@@ -416,7 +416,9 @@ impl<'ast> Lower<'ast> {
                 .name
                 .as_ref()
                 .map(|name| lower_pr!(self, name, lower_ident)),
-            accessor_def_id: self.sess.def_table.get_def_id(field.accessor_id).unwrap(),
+            accessor_def_id: field
+                .accessor_id
+                .and_then(|id| self.sess.def_table.get_def_id(id)),
             ty: lower_pr!(self, &field.ty, lower_ty),
             span: field.span(),
         }

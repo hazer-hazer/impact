@@ -61,7 +61,8 @@ pub struct Func {
 #[derive(Debug)]
 pub struct Field {
     pub id: HirId,
-    pub accessor_def_id: DefId,
+    /// Accessor function definition, None for ADT, Some for structures.
+    pub accessor_def_id: Option<DefId>,
     pub name: Option<Ident>,
     pub ty: Ty,
     pub span: Span,

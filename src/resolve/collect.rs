@@ -184,14 +184,6 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
         self.exit_module();
     }
 
-    fn visit_field(&mut self, field: &'ast Field) {
-        self.define(
-            field.accessor_id,
-            DefKind::FieldAccessor,
-            &field.accessor_name(),
-        );
-    }
-
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {
         self.define(item.id(), DefKind::External, item.name.as_ref().unwrap());
     }

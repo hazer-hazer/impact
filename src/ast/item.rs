@@ -37,7 +37,7 @@ impl Display for ExternItem {
 pub struct Field {
     pub id: NodeId,
     pub index: usize,
-    pub accessor_id: NodeId,
+    pub accessor_id: Option<NodeId>,
     pub name: Option<PR<Ident>>,
     pub ty: PR<N<Ty>>,
     span: Span,
@@ -49,7 +49,6 @@ impl Field {
     pub fn new(
         id: NodeId,
         index: usize,
-        accessor_id: NodeId,
         name: Option<PR<Ident>>,
         ty: PR<N<Ty>>,
         span: Span,
@@ -57,7 +56,7 @@ impl Field {
         Self {
             id,
             index,
-            accessor_id,
+            accessor_id: None,
             name,
             ty,
             span,
