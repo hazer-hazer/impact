@@ -231,7 +231,7 @@ impl<'hir> TyConv<'hir> {
                     let field_accessor_def_id = field.accessor_def_id;
                     // Field accessor ty: `AdtTy -> FieldTy`
                     let field_accessor_ty = adt_ty.substituted_forall_body(Ty::tight_func(
-                        Some(field_accessor_def_id),
+                        field_accessor_def_id,
                         vec![degeneralized_adt_ty],
                         field_ty,
                     ));
