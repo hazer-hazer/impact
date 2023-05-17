@@ -528,8 +528,8 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id());
             },
-            ItemKind::Adt(name, generics, variants) => {
-                self.visit_adt_item(name, generics, variants, item.id())
+            ItemKind::Adt(is_adt, name, generics, variants) => {
+                self.visit_adt_item(is_adt, name, generics, variants, item.id())
             },
             ItemKind::Extern(_) => unreachable!(),
         }

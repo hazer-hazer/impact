@@ -198,6 +198,8 @@ impl<'hir> TyConv<'hir> {
             })
         });
 
+        let degeneralized_adt_ty = adt_ty.degeneralize();
+
         variants.iter_enumerated().for_each(|(vid, &v_hir_id)| {
             let variant_node = self.hir.variant(v_hir_id);
             let v_def_id = variant_node.def_id;
@@ -206,7 +208,6 @@ impl<'hir> TyConv<'hir> {
             self.tyctx_mut().type_node(v_hir_id, adt_ty);
             self.tyctx_mut().type_def(v_def_id, adt_ty);
 
-            let degeneralized_adt_ty = adt_ty.degeneralize();
             let fields_tys = degeneralized_adt_ty.as_adt().unwrap().field_tys(vid);
 
             // Constructor type
@@ -218,7 +219,13 @@ impl<'hir> TyConv<'hir> {
                 adt_ty,
             ));
 
+            self.tyctx_mut().type_def(ctor_def_id, ctor_ty)
+        });
+
+        if !adt.is_adt {
             // Field accessors types
+            let variant_node = self.hir.variant(variants[0.into()]);
+            let fields_tys = degeneralized_adt_ty.as_adt().unwrap().field_tys(0.into());
             variant_node
                 .fields
                 .iter()
@@ -228,10 +235,10 @@ impl<'hir> TyConv<'hir> {
                     let field_id = FieldId::new(index as u32);
                     let field_ty = fields_tys.get(field_id).copied().unwrap();
 
-                    let field_accessor_def_id = field.accessor_def_id;
+                    let field_accessor_def_id = field.accessor_def_id.unwrap();
                     // Field accessor ty: `AdtTy -> FieldTy`
                     let field_accessor_ty = adt_ty.substituted_forall_body(Ty::tight_func(
-                        field_accessor_def_id,
+                        Some(field_accessor_def_id),
                         vec![degeneralized_adt_ty],
                         field_ty,
                     ));
@@ -241,9 +248,7 @@ impl<'hir> TyConv<'hir> {
                     self.tyctx_mut()
                         .set_field_accessor_field_id(field_accessor_def_id, field_id);
                 });
-
-            self.tyctx_mut().type_def(ctor_def_id, ctor_ty)
-        });
+        }
 
         adt_ty
     }

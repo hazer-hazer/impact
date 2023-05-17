@@ -86,6 +86,7 @@ impl_with_hir_id!(VariantNode);
 
 #[derive(Debug)]
 pub struct Adt {
+    pub is_adt: bool,
     pub generics: GenericParams,
     pub variants: Vec<Variant>,
 }

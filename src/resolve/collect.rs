@@ -154,8 +154,8 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            ItemKind::Adt(name, generics, variants) => {
-                self.visit_adt_item(name, generics, variants, item.id())
+            ItemKind::Adt(is_adt, name, generics, variants) => {
+                self.visit_adt_item(is_adt, name, generics, variants, item.id())
             },
             ItemKind::Extern(_) => unreachable!(),
         }
@@ -182,6 +182,12 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
         self.enter_def_module(def_id);
         walk_each_pr!(self, &variant.fields, visit_field);
         self.exit_module();
+    }
+
+    fn visit_field(&mut self, field: &'ast Field) {
+        field.accessor_id.map(|accessor_id| {
+            self.define(accessor_id, DefKind::FieldAccessor, &field.accessor_name());
+        });
     }
 
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {

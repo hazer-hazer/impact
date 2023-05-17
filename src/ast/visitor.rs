@@ -73,8 +73,8 @@ pub trait AstVisitor<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            ItemKind::Adt(name, generics, variants) => {
-                self.visit_adt_item(name, generics, variants, item.id())
+            ItemKind::Adt(is_adt, name, generics, variants) => {
+                self.visit_adt_item(is_adt, name, generics, variants, item.id())
             },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
@@ -123,6 +123,7 @@ pub trait AstVisitor<'ast> {
 
     fn visit_adt_item(
         &mut self,
+        is_adt: &bool,
         name: &'ast PR<Ident>,
         generics: &'ast GenericParams,
         variants: &'ast [PR<Variant>],

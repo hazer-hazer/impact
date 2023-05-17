@@ -1,5 +1,6 @@
 //! HIR is nothing more than just an unwrapped version of AST, i.e. freed of
 //! parse results.
+
 use core::panic;
 use std::{
     collections::HashMap,

@@ -134,7 +134,7 @@ pub enum ItemKind {
     Type(PR<Ident>, GenericParams, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
-    Adt(PR<Ident>, GenericParams, Vec<PR<Variant>>),
+    Adt(bool, PR<Ident>, GenericParams, Vec<PR<Variant>>),
     Extern(Vec<PR<ExternItem>>),
 }
 
@@ -171,10 +171,11 @@ impl Display for ItemKind {
                     .join(" "),
                 pr_display(body)
             ),
-            ItemKind::Adt(name, generics, variants) => {
+            ItemKind::Adt(is_adt, name, generics, variants) => {
                 write!(
                     f,
-                    "data {} {} = {}",
+                    "data {} {} = {}{}",
+                    if *is_adt { "| " } else { "" },
                     pr_display(name),
                     generics,
                     prs_display_join(variants, " | ")
@@ -194,7 +195,7 @@ impl NodeKindStr for ItemKind {
                 format!("value `{}`", pr_display(name))
             },
             ItemKind::Decl(name, ..) => format!("function `{}`", pr_display(name)),
-            ItemKind::Adt(name, ..) => format!("data type `{}`", pr_display(name)),
+            ItemKind::Adt(_, name, ..) => format!("data type `{}`", pr_display(name)),
             ItemKind::Extern(_) => format!("extern block"),
         }
     }
@@ -272,7 +273,7 @@ impl Item {
             ItemKind::Type(name, ..)
             | ItemKind::Mod(name, _)
             | ItemKind::Decl(name, ..)
-            | ItemKind::Adt(name, ..) => {
+            | ItemKind::Adt(_, name, ..) => {
                 Some(name.as_ref().expect("Error Ident node in `Item::name`"))
             },
             ItemKind::Extern(_) => None,

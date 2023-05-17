@@ -72,6 +72,7 @@ impl<'ast> AstMapFiller<'ast> {
     }
 }
 
+// TODO: Remove 'cause unused
 pub struct MappedAst<'ast> {
     ast: &'ast AST,
     map: AstMap<'ast>,
@@ -110,8 +111,8 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             item::ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            item::ItemKind::Adt(name, generics, variants) => {
-                self.visit_adt_item(name, generics, variants, item.id())
+            item::ItemKind::Adt(is_adt, name, generics, variants) => {
+                self.visit_adt_item(is_adt, name, generics, variants, item.id())
             },
             item::ItemKind::Extern(items) => self.visit_extern_block(items),
         }

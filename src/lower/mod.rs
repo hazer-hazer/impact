@@ -280,8 +280,8 @@ impl<'ast> Lower<'ast> {
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
                 },
-                ItemKind::Adt(name, generics, variants) => {
-                    this.lower_data_item(name, generics, variants)
+                ItemKind::Adt(is_adt, name, generics, variants) => {
+                    this.lower_data_item(is_adt, name, generics, variants)
                 },
                 ItemKind::Extern(_) => unreachable!(),
             };
@@ -384,13 +384,27 @@ impl<'ast> Lower<'ast> {
 
     fn lower_data_item(
         &mut self,
+        &is_adt: &bool,
         _: &PR<Ident>,
         generics: &GenericParams,
         variants: &[PR<Variant>],
     ) -> hir::item::ItemKind {
+        let variants = lower_each_pr!(self, variants, lower_variant);
+
+        if is_adt {
+            assert!(variants.iter().copied().all(|v| {
+                self.get_current_owner_node(v)
+                    .variant()
+                    .fields
+                    .iter()
+                    .all(|f| f.accessor_def_id.is_none())
+            }));
+        }
+
         hir::item::ItemKind::Adt(Adt {
+            is_adt,
             generics: self.lower_generic_params(generics),
-            variants: lower_each_pr!(self, variants, lower_variant),
+            variants,
         })
     }
 

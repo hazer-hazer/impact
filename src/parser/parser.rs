@@ -495,7 +495,7 @@ impl Parser {
                 &item
                     .as_ref()
                     .map_or("item".to_string(), |item| item.kind_str()),
-            );
+            )?;
         }
 
         self.exit_entity(pe, item)
@@ -674,9 +674,9 @@ impl Parser {
 
         if variants.len() == 1 {
             variants.iter_mut().for_each(|v| {
-                v.map(|mut v| {
+                let _no_accessor_for_err = v.as_mut().map(|v| {
                     v.fields.iter_mut().for_each(|f| {
-                        f.map(|mut f| {
+                        let _no_accessor_for_err = f.as_mut().map(|f| {
                             f.accessor_id = Some(self.next_node_id());
                         });
                     });
@@ -684,9 +684,11 @@ impl Parser {
             });
         }
 
+        let is_adt = leading_pipe.is_some() || variants.len() > 1;
+
         Ok(Box::new(Item::new(
             self.next_node_id(),
-            ItemKind::Adt(name, generics, variants),
+            ItemKind::Adt(is_adt, name, generics, variants),
             self.close_span(lo),
             is_block_ended,
         )))
@@ -1048,7 +1050,7 @@ impl Parser {
         let (kind, advance) = if let Some(_) = self.skip(TokenCmp::Punct(Punct::LParen)) {
             let expr = self.parse_expr();
 
-            self.expect(TokenCmp::Punct(Punct::RParen));
+            self.expect(TokenCmp::Punct(Punct::RParen)).ok()?;
 
             (Some(Ok(ExprKind::Paren(expr))), false)
         } else {
@@ -1152,7 +1154,7 @@ impl Parser {
 
         let lo = self.span();
 
-        self.skip(TokenCmp::Punct(Punct::Backslash));
+        self.just_skip(TokenCmp::Punct(Punct::Backslash));
 
         let params = self.parse_many_until(TokenCmp::Punct(Punct::Arrow), |this| {
             this.parse_pat("lambda parameter (pattern)")
