@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
 use super::{
-    expr::Expr, impl_with_node_id, item::Item, pr_display, pr_node_kind_str, NodeId, NodeKindStr,
-    WithNodeId, N, PR,
+    expr::Expr, impl_with_node_id, item::Item, pat::Pat, pr_display, pr_node_kind_str, NodeId,
+    NodeKindStr, WithNodeId, N, PR,
 };
 use crate::span::{impl_with_span, Span, WithSpan};
 
@@ -42,6 +42,7 @@ impl NodeKindStr for Stmt {
 pub enum StmtKind {
     Expr(PR<N<Expr>>),
     Item(PR<N<Item>>),
+    Local(PR<N<Pat>>, PR<N<Expr>>),
 }
 
 impl WithSpan for StmtKind {
@@ -49,6 +50,7 @@ impl WithSpan for StmtKind {
         match self {
             StmtKind::Expr(expr) => expr.span(),
             StmtKind::Item(item) => item.span(),
+            StmtKind::Local(pat, expr) => pat.span().to(expr.span()),
         }
     }
 }
@@ -58,6 +60,9 @@ impl Display for StmtKind {
         match self {
             StmtKind::Expr(expr) => write!(f, "{}", pr_display(expr)),
             StmtKind::Item(item) => write!(f, "{}", pr_display(item)),
+            StmtKind::Local(pat, expr) => {
+                write!(f, "let {} = {}", pr_display(pat), pr_display(expr))
+            },
         }
     }
 }
@@ -67,6 +72,7 @@ impl NodeKindStr for StmtKind {
         match self {
             StmtKind::Expr(expr) => pr_node_kind_str(expr),
             StmtKind::Item(item) => pr_node_kind_str(item),
+            StmtKind::Local(pat, expr) => "let statement".to_string(),
         }
     }
 }

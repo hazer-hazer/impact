@@ -56,8 +56,16 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         match stmt.kind() {
             StmtKind::Expr(expr) => walk_pr!(self, expr, visit_expr),
             StmtKind::Item(item) => walk_pr!(self, item, visit_item),
+            StmtKind::Local(pat, value) => self.visit_local_stmt(pat, value),
         }
         self.node_id(stmt);
+    }
+
+    fn visit_local_stmt(&mut self, pat: &'ast PR<N<Pat>>, value: &'ast PR<N<Expr>>) {
+        self.kw(Kw::Let);
+        walk_pr!(self, pat, visit_pat);
+        self.op(Op::Assign);
+        walk_pr!(self, value, visit_expr);
     }
 
     // Items //
@@ -199,6 +207,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
             ExprKind::DotOp(expr, field) => self.visit_dot_op_expr(expr, field),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms),
         }
         self.node_id(expr);
     }
@@ -243,6 +252,13 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_pr!(self, expr, visit_expr);
         self.punct(Punct::Dot);
         walk_pr!(self, field, visit_ident_node);
+    }
+
+    fn visit_match_expr(
+        &mut self,
+        subject: &'ast PR<N<Expr>>,
+        arms: &'ast [PR<crate::ast::expr::Arm>],
+    ) {
     }
 
     // Types //

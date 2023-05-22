@@ -59,7 +59,7 @@ where
 {
     match pr {
         Ok(ok) => ok.kind_str(),
-        Err(_) => "I don't what is that...".to_string(),
+        Err(_) => "I don't know what is that...".to_string(),
     }
 }
 

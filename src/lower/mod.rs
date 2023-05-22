@@ -224,15 +224,16 @@ impl<'ast> Lower<'ast> {
             StmtKind::Expr(expr) => {
                 vec![hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr))]
             },
-            StmtKind::Item(item) => lower_pr!(self, item, maybe_lower_local).map_or_else(
-                || {
-                    lower_pr!(self, item, lower_item)
-                        .into_iter()
-                        .map(|item| hir::stmt::StmtKind::Item(item))
-                        .collect()
-                },
-                |local| vec![hir::stmt::StmtKind::Local(local)],
-            ),
+            StmtKind::Item(item) => lower_pr!(self, item, lower_item)
+                .into_iter()
+                .map(|item| hir::stmt::StmtKind::Item(item))
+                .collect(),
+            StmtKind::Local(pat, value) => vec![hir::stmt::StmtKind::Local(Local {
+                id: self.lower_node_id(stmt.id()),
+                pat: lower_pr!(self, pat, lower_pat),
+                value: lower_pr!(self, value, lower_expr),
+                span: stmt.span(),
+            })],
         }
         .into_iter()
         .map(|kind| {
@@ -241,25 +242,6 @@ impl<'ast> Lower<'ast> {
                 .into()
         })
         .collect()
-    }
-
-    fn maybe_lower_local(&mut self, item: &Item) -> Option<Local> {
-        match item.kind() {
-            ItemKind::Decl(name, params, body) if params.is_empty() => {
-                let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
-                let def = self.sess.def_table.def(def_id);
-                match def.kind() {
-                    DefKind::Local => Some(Local {
-                        id: self.lower_node_id(item.id()),
-                        name: lower_pr!(self, name, lower_ident),
-                        value: lower_pr!(self, body, lower_expr),
-                        span: item.span(),
-                    }),
-                    _ => None,
-                }
-            },
-            _ => None,
-        }
     }
 
     // Items //
@@ -775,7 +757,9 @@ impl<'ast> Lower<'ast> {
             .flatten()
             .collect::<Vec<_>>();
 
-        let expr = match block.stmts().last().unwrap().as_ref().unwrap().kind() {
+        let last_stmt = block.stmts().last().unwrap().as_ref().unwrap();
+
+        let expr = match last_stmt.kind() {
             StmtKind::Expr(expr) => Some(lower_pr!(self, expr, lower_expr)),
             StmtKind::Item(item) => {
                 let span = item.span();
@@ -784,6 +768,22 @@ impl<'ast> Lower<'ast> {
                         .into_iter()
                         .map(|item| self.stmt_item(span, item)),
                 );
+                None
+            },
+            StmtKind::Local(pat, value) => {
+                let span = last_stmt.span();
+                let id = self.lower_node_id(last_stmt.id());
+                let pat = lower_pr!(self, pat, lower_pat);
+                let value = lower_pr!(self, value, lower_expr);
+                stmts.push(self.stmt(
+                    span,
+                    hir::stmt::StmtKind::Local(hir::stmt::Local {
+                        id,
+                        pat,
+                        value,
+                        span,
+                    }),
+                ));
                 None
             },
         };

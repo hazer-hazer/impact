@@ -45,7 +45,7 @@ pub trait HirVisitor {
     }
 
     fn visit_local_stmt(&mut self, local: &Local, hir: &HIR) {
-        self.visit_ident(&local.name, hir);
+        self.visit_pat(&local.pat, hir);
         self.visit_expr(&local.value, hir);
     }
 

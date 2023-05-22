@@ -123,6 +123,9 @@ impl BlockNode {
 }
 
 #[derive(Debug)]
+pub struct Arm {}
+
+#[derive(Debug)]
 pub struct Lambda {
     pub def_id: DefId,
     pub body_id: BodyId,

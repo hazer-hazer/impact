@@ -98,6 +98,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
         match stmt.kind() {
             stmt::StmtKind::Expr(expr) => self.visit_expr_stmt(expr),
             stmt::StmtKind::Item(item) => self.visit_item_stmt(item),
+            stmt::StmtKind::Local(pat, value) => self.visit_local_stmt(pat, value),
         }
     }
 
@@ -139,6 +140,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
             ExprKind::DotOp(expr, field) => self.visit_dot_op_expr(expr, field),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms),
         }
     }
 

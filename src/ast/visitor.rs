@@ -1,5 +1,5 @@
 use super::{
-    expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+    expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
     item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
     pat::{Pat, PatKind},
     stmt::{Stmt, StmtKind},
@@ -54,6 +54,7 @@ pub trait AstVisitor<'ast> {
         match stmt.kind() {
             StmtKind::Expr(expr) => self.visit_expr_stmt(expr),
             StmtKind::Item(item) => self.visit_item_stmt(item),
+            StmtKind::Local(pat, value) => self.visit_local_stmt(pat, value),
         }
     }
 
@@ -63,6 +64,11 @@ pub trait AstVisitor<'ast> {
 
     fn visit_item_stmt(&mut self, item: &'ast PR<N<Item>>) {
         walk_pr!(self, item, visit_item)
+    }
+
+    fn visit_local_stmt(&mut self, pat: &'ast PR<N<Pat>>, value: &'ast PR<N<Expr>>) {
+        walk_pr!(self, pat, visit_pat);
+        walk_pr!(self, value, visit_expr);
     }
 
     // Items //
@@ -183,6 +189,7 @@ pub trait AstVisitor<'ast> {
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
             ExprKind::DotOp(lhs, field) => self.visit_dot_op_expr(lhs, field),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms),
         }
     }
 
@@ -226,6 +233,16 @@ pub trait AstVisitor<'ast> {
     fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast PR<IdentNode>) {
         walk_pr!(self, lhs, visit_expr);
         walk_pr!(self, field, visit_ident_node);
+    }
+
+    fn visit_match_expr(&mut self, subject: &'ast PR<N<Expr>>, arms: &'ast [PR<Arm>]) {
+        walk_pr!(self, subject, visit_expr);
+        walk_each_pr!(self, arms, visit_match_arm);
+    }
+
+    fn visit_match_arm(&mut self, arm: &'ast Arm) {
+        walk_pr!(self, &arm.pat, visit_pat);
+        walk_pr!(self, &arm.body, visit_expr);
     }
 
     // Types //

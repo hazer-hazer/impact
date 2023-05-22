@@ -11,6 +11,24 @@ use crate::{
 };
 
 #[derive(Debug)]
+pub struct Arm {
+    pub pat: PR<N<Pat>>,
+    pub body: PR<N<Expr>>,
+    span: Span,
+}
+
+impl Display for Arm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "  {} => {}\n",
+            pr_display(&self.pat),
+            pr_display(&self.body)
+        )
+    }
+}
+
+#[derive(Debug)]
 pub enum ExprKind {
     Lit(Lit),
     Paren(PR<N<Expr>>),
@@ -22,6 +40,7 @@ pub enum ExprKind {
     Let(PR<Block>),
     Ty(TyExpr),
     DotOp(PR<N<Expr>>, PR<IdentNode>),
+    Match(PR<N<Expr>>, Vec<PR<Arm>>),
 }
 
 impl IsBlockEnded for ExprKind {
@@ -32,6 +51,13 @@ impl IsBlockEnded for ExprKind {
             Self::Infix(infix) => is_block_ended!(infix.rhs),
             Self::Lambda(lambda) => is_block_ended!(lambda.body),
             Self::Call(call) => call.args.iter().any(|arg| is_block_ended!(arg)),
+            Self::Match(_, arms) => arms.last().as_ref().map_or(false, |arm| {
+                arm.as_ref().map_or(false, |arm| {
+                    arm.body
+                        .as_ref()
+                        .map_or(false, |body| body.is_block_ended())
+                })
+            }),
         }
     }
 }
@@ -51,6 +77,12 @@ impl Display for ExprKind {
             Self::DotOp(expr, field) => {
                 write!(f, "{}.{}", pr_display(expr), pr_display(field))
             },
+            Self::Match(subject, arms) => write!(
+                f,
+                "match {}\n{}",
+                pr_display(subject),
+                arms.iter().map(pr_display).collect::<String>()
+            ),
         }
     }
 }
@@ -68,6 +100,7 @@ impl NodeKindStr for ExprKind {
             Self::Ty(_) => "type ascription",
             Self::Infix(_) => "infix expression",
             Self::DotOp(..) => "member access",
+            Self::Match(..) => "match expression",
         }
         .to_string()
     }
