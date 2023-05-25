@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{impl_with_hir_id, Block, BodyId, Expr, ExprPath, HirId, Stmt, Ty, WithHirId};
+use super::{impl_with_hir_id, Block, BodyId, Expr, ExprPath, HirId, Pat, Stmt, Ty, WithHirId};
 use crate::{
     resolve::{builtin::ValueBuiltin, def::DefId},
     span::{impl_with_span, sym::Symbol, Span, WithSpan},
@@ -123,7 +123,10 @@ impl BlockNode {
 }
 
 #[derive(Debug)]
-pub struct Arm {}
+pub struct Arm {
+    pub pat: Pat,
+    pub body: Expr,
+}
 
 #[derive(Debug)]
 pub struct Lambda {
@@ -154,6 +157,7 @@ pub enum ExprKind {
     Ty(TyExpr),
     // FieldAccess(Expr, Ident),
     Builtin(ValueBuiltin),
+    Match(Expr, Vec<Arm>),
 }
 
 #[derive(Debug)]

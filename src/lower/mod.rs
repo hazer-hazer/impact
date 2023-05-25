@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+        expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -470,6 +470,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Let(block) => self.lower_let_expr(block),
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
             ExprKind::DotOp(lhs, field) => self.lower_dot_op_expr(lhs, field),
+            ExprKind::Match(subject, arms) => self.lower_match_expr(subject, arms),
         };
 
         let id = self.lower_node_id(expr.id());
@@ -591,6 +592,19 @@ impl<'ast> Lower<'ast> {
         //         args: vec![lhs],
         //     })
         // }
+    }
+
+    fn lower_match_expr(&mut self, subject: &PR<N<Expr>>, arms: &[PR<Arm>]) -> hir::expr::ExprKind {
+        let subject = lower_pr!(self, subject, lower_expr);
+        let arms = lower_each_pr!(self, arms, lower_match_arm);
+        hir::expr::ExprKind::Match(subject, arms)
+    }
+
+    fn lower_match_arm(&mut self, arm: &Arm) -> hir::expr::Arm {
+        hir::expr::Arm {
+            pat: lower_pr!(self, &arm.pat, lower_pat),
+            body: lower_pr!(self, &arm.body, lower_expr),
+        }
     }
 
     // Types //

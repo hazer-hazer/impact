@@ -6,7 +6,7 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        expr::{Call, ExprKind, Lit, TyExpr},
+        expr::{Arm, Call, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Local, StmtKind},
         Block, Body, BodyId, Expr, ExprDefKind, ExprPath, ExprRes, Pat, Stmt,
@@ -122,6 +122,7 @@ impl<'hir> Typecker<'hir> {
             // &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field,
             // expr_id),
             &ExprKind::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
+            ExprKind::Match(subject, arms) => todo!(),
         }?;
 
         verbose!("Synthesized type of expression {expr} = {expr_ty}");
@@ -228,6 +229,10 @@ impl<'hir> Typecker<'hir> {
     //         Err(TypeckErr::Reported)
     //     }
     // }
+
+    fn synth_match_expr(&mut self, subject: &Expr, arms: &[Arm]) -> TyResult<Ty> {
+        let subject_ty = self.synth_expr(subject);
+    }
 
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
         let block = self.hir.block(block);

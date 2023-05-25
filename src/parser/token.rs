@@ -35,6 +35,7 @@ enum_str_map! {
         RParen: ")",
         Comma: ",",
         Semi: ";",
+        FatArrow: "=>",
     }
 }
 
@@ -245,6 +246,7 @@ impl TokenKind {
             (';', _) => ComplexSymbol::Punct(Punct::Semi, 1),
 
             ('-', Some('>')) => ComplexSymbol::Punct(Punct::Arrow, 2),
+            ('=', Some('>')) => ComplexSymbol::Punct(Punct::FatArrow, 2),
 
             ('=', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Assign, 1),
             ('+', Some(next)) if !next.is_custom_op() => ComplexSymbol::Op(Op::Plus, 1),

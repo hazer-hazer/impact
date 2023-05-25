@@ -10,11 +10,12 @@ use crate::{
     cli::color::{Color, Colorize, WithColor},
     dt::idx::{declare_idx, IndexVec},
     hir::{
-        expr::{ExprKind, TyExpr},
+        expr::{Arm, ExprKind, TyExpr},
         pat::PatKind,
         Block, BodyId, Expr, Pat, HIR,
     },
     interface::writer::{out, Writer},
+    parser::token::Punct,
     pp::{
         pp::{pp, PP},
         AstLikePP, AstPPMode,
@@ -166,7 +167,14 @@ impl PP {
             &ExprKind::Let(block) => self.block(block, ctx),
             ExprKind::Ty(ty_expr) => self.expr(ty_expr.expr, ctx).str(": [ty]"),
             &ExprKind::Builtin(bt) => self.string(bt),
+            ExprKind::Match(subject, arms) => {
+                pp!(self, "match ", {expr: *subject, ctx}, {delim ", " / arm: arms.iter(), ctx}, ...)
+            },
         }
+    }
+
+    fn arm(&mut self, arm: &Arm, ctx: &IDCtx) -> &mut PP {
+        pp!(self, {pat: arm.pat, ctx}, {punct: Punct::FatArrow}, {expr: arm.body, ctx}, ...)
     }
 
     fn block(&mut self, block: Block, ctx: &IDCtx) -> &mut PP {

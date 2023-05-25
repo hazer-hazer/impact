@@ -219,6 +219,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
                 self.visit_lambda_expr(lambda);
             },
             ExprKind::DotOp(expr, field) => self.visit_dot_op_expr(expr, field),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms),
         }
     }
 }

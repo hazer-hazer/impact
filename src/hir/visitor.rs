@@ -1,5 +1,5 @@
 use super::{
-    expr::{Call, ExprKind, Lambda, Lit, TyExpr},
+    expr::{Arm, Call, ExprKind, Lambda, Lit, TyExpr},
     item::{Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, TyAlias, TyParam},
     pat::PatKind,
     stmt::{Local, StmtKind},
@@ -149,6 +149,7 @@ pub trait HirVisitor {
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
             // ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
             ExprKind::Builtin(bt) => self.visit_builtin_expr(bt),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms, hir),
         }
     }
 
@@ -184,6 +185,16 @@ pub trait HirVisitor {
     }
 
     fn visit_builtin_expr(&mut self, _bt: &ValueBuiltin) {}
+
+    fn visit_match_expr(&mut self, subject: &Expr, arms: &[Arm], hir: &HIR) {
+        self.visit_expr(subject, hir);
+        walk_each!(self, arms, visit_match_arm, hir);
+    }
+
+    fn visit_match_arm(&mut self, arm: &Arm, hir: &HIR) {
+        self.visit_pat(&arm.pat, hir);
+        self.visit_expr(&arm.body, hir);
+    }
 
     // Types //
     fn visit_ty(&mut self, ty: &Ty, hir: &HIR) {

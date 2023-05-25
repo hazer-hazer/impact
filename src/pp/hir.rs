@@ -2,7 +2,7 @@ use super::{AstLikePP, AstPPMode};
 use crate::{
     cli::color::Colorize,
     hir::{
-        expr::{Call, ExprKind, Lambda, Lit, TyExpr},
+        expr::{Arm, Call, ExprKind, Lambda, Lit, TyExpr},
         item::{Adt, ExternItem, Field, GenericParams, ItemId, Mod, TyAlias, ROOT_ITEM_ID},
         pat::PatKind,
         stmt::{Local, StmtKind},
@@ -216,6 +216,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
             // ExprKind::FieldAccess(lhs, field) => self.visit_field_access_expr(lhs, field, hir),
             ExprKind::Builtin(bt) => self.visit_builtin_expr(bt),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms, hir),
         }
         self.pp.ty_anno(expr_id).hir_id(expr);
     }
@@ -264,6 +265,18 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_builtin_expr(&mut self, bt: &ValueBuiltin) {
         self.pp.string(bt);
+    }
+
+    fn visit_match_expr(&mut self, subject: &Expr, arms: &[Arm], hir: &HIR) {
+        self.pp.kw(Kw::Match);
+        self.visit_expr(subject, hir);
+        walk_block!(self, &arms, visit_match_arm, hir);
+    }
+
+    fn visit_match_arm(&mut self, arm: &Arm, hir: &HIR) {
+        self.visit_pat(&arm.pat, hir);
+        self.pp.punct(Punct::FatArrow);
+        self.visit_expr(&arm.body, hir);
     }
 
     // Types //
