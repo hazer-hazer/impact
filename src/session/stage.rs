@@ -28,6 +28,7 @@ use crate::{
 pub trait Stage<T, Ctx = Session>
 where
     Self: Sized,
+    Self: SessionHolder
 {
     fn run(self) -> StageResult<T, Ctx>;
 

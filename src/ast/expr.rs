@@ -12,10 +12,12 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Arm {
-    pub pat: PR<N<Pat>>,
+    pub pat: PR<Pat>,
     pub body: PR<N<Expr>>,
-    span: Span,
+    pub span: Span,
 }
+
+impl_with_span!(Arm);
 
 impl Display for Arm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -51,13 +53,14 @@ impl IsBlockEnded for ExprKind {
             Self::Infix(infix) => is_block_ended!(infix.rhs),
             Self::Lambda(lambda) => is_block_ended!(lambda.body),
             Self::Call(call) => call.args.iter().any(|arg| is_block_ended!(arg)),
-            Self::Match(_, arms) => arms.last().as_ref().map_or(false, |arm| {
-                arm.as_ref().map_or(false, |arm| {
-                    arm.body
-                        .as_ref()
-                        .map_or(false, |body| body.is_block_ended())
-                })
-            }),
+            // Self::Match(_, arms) => arms.last().as_ref().map_or(false, |arm| {
+            //     arm.as_ref().map_or(false, |arm| {
+            //         arm.body
+            //             .as_ref()
+            //             .map_or(false, |body| body.is_block_ended())
+            //     })
+            // }),
+            Self::Match(..) => true,
         }
     }
 }

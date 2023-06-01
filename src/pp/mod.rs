@@ -235,6 +235,8 @@ impl<'a, D> AstLikePP<'a, D> {
             | Punct::Dot
             | Punct::LParen
             | Punct::RParen
+            | Punct::LBrace
+            | Punct::RBrace
             | Punct::Backslash => ("", ""),
         };
 

@@ -126,7 +126,10 @@ impl BlockNode {
 pub struct Arm {
     pub pat: Pat,
     pub body: Expr,
+    pub span: Span,
 }
+
+impl_with_span!(Arm);
 
 #[derive(Debug)]
 pub struct Lambda {

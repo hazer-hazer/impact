@@ -11,7 +11,7 @@ use crate::{
         Terminator, TerminatorKind, MIR,
     },
     parser::token::{Op, Punct},
-    session::Session,
+    session::{impl_session_holder, Session, SessionHolder},
     span::sym::{Ident, Kw},
 };
 
@@ -20,6 +20,8 @@ pub struct MirPrinter<'ctx> {
     sess: &'ctx Session,
     mir: &'ctx MIR,
 }
+
+impl_session_holder!(MirPrinter<'ctx>);
 
 impl<'ctx> MirPrinter<'ctx> {
     pub fn new(sess: &'ctx Session, mir: &'ctx MIR) -> Self {
@@ -158,28 +160,28 @@ impl<'ctx> MirPrinter<'ctx> {
 }
 
 impl<'ctx> HirVisitor for MirPrinter<'ctx> {
-    fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId, hir: &HIR) {
+    fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId) {
         if id.def_id() == self.sess.def_table.builtin_func().def_id() {
             return;
         }
 
         self.pp.str("func").sp().string(name.original_string()).sp();
-        self.visit_body(body, BodyOwner::func(id.def_id()), hir);
+        self.visit_body(body, BodyOwner::func(id.def_id()));
     }
 
-    fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
+    fn visit_lambda(&mut self, lambda: &Lambda) {
         self.pp.str("[lambda").string(lambda.def_id).str("]");
-        self.visit_body(&lambda.body_id, BodyOwner::lambda(lambda.def_id), hir);
+        self.visit_body(&lambda.body_id, BodyOwner::lambda(lambda.def_id));
     }
 
-    fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId, hir: &HIR) {
+    fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId) {
         self.pp.string(name.original_string()).op(Op::Assign);
-        self.visit_body(value, BodyOwner::value(id.def_id()), hir);
+        self.visit_body(value, BodyOwner::value(id.def_id()));
     }
 
     // Note: Only used for parameters
-    fn visit_pat(&mut self, &pat: &Pat, hir: &HIR) {
-        let pat = hir.pat(pat);
+    fn visit_pat(&mut self, &pat: &Pat) {
+        let pat = self.hir().pat(pat);
         match pat.kind() {
             PatKind::Unit => self.pp.kw(Kw::Unit),
             PatKind::Ident(ident) => self
@@ -190,8 +192,8 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         };
     }
 
-    fn visit_body(&mut self, body: &BodyId, _owner: BodyOwner, hir: &HIR) {
-        walk_each_delim!(self, hir.body(*body).params, visit_pat, " ", hir);
+    fn visit_body(&mut self, body: &BodyId, _owner: BodyOwner) {
+        walk_each_delim!(self, self.hir().body(*body).params, visit_pat, " ");
         self.pp.sp();
 
         if let Some(body) = self.mir.bodies.get(body) {

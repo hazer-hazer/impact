@@ -15,7 +15,7 @@ use crate::{
         Ty, BB, START_BB,
     },
     resolve::{builtin::Builtin, def::DefId},
-    session::{stage_result, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Stage, StageResult},
     typeck::ty::{FloatKind, TyKind},
 };
 
@@ -38,6 +38,8 @@ pub struct BodyCodeGen<'ink, 'ctx, 'a> {
     msg: MessageStorage,
 }
 
+impl_session_holder!(BodyCodeGen<'ink, 'ctx, 'a>; ctx.sess);
+
 impl<'ink, 'ctx, 'a> Stage<(), CodeGenCtx<'ink, 'ctx>> for BodyCodeGen<'ink, 'ctx, 'a> {
     fn run(mut self) -> StageResult<(), CodeGenCtx<'ink, 'ctx>> {
         self.gen_body();
@@ -54,7 +56,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         function_map: &'a FunctionMap<'ink>,
         value_map: &'a ValueMap<'ink>,
     ) -> Self {
-        let body_id = ctx.hir.owner_body(func_def_id.into()).unwrap();
+        let body_id = ctx.sess.hir.owner_body(func_def_id.into()).unwrap();
         let body = ctx.mir.expect(body_id);
 
         let builder = ctx.llvm_ctx.create_builder();

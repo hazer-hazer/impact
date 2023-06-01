@@ -14,7 +14,7 @@ use crate::{
     interface::writer::outln,
     message::message::{impl_message_holder, MessageHolder, MessageStorage},
     resolve::def::DefId,
-    session::{stage_result, Session, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Session, SessionHolder, Stage, StageResult},
     typeck::{
         conv::TyConv,
         debug::{tcdbg, InferEntryKind, InferStepKind},
@@ -88,8 +88,6 @@ pub struct Typecker<'hir> {
     ctx_stack: Vec<InferCtx>,
     try_mode: bool,
 
-    hir: &'hir HIR,
-
     //
     msg: MessageStorage,
     sess: Session,
@@ -99,20 +97,19 @@ pub struct Typecker<'hir> {
 }
 
 impl_message_holder!(Typecker<'hir>);
+impl_session_holder!(Typecker<'hir>);
 
 impl<'hir> Typecker<'hir> {
-    pub fn new(sess: Session, hir: &'hir HIR) -> Self {
+    pub fn new(sess: Session) -> Self {
         Self {
             global_ctx: Default::default(),
             ctx_stack: Default::default(),
             try_mode: false,
 
-            hir,
-
             sess,
             msg: Default::default(),
 
-            dbg: InferDebug::new(hir),
+            dbg: InferDebug::new(sess.hir()),
         }
     }
 
@@ -653,7 +650,7 @@ impl<'hir> AlgoCtx for Typecker<'hir> {
 
 impl<'hir> Stage<()> for Typecker<'hir> {
     fn run(mut self) -> StageResult<()> {
-        let conv = TyConv::new(self.sess, self.hir);
+        let conv = TyConv::new(self.sess);
         let ((), sess) = conv.run()?.merged(&mut self.msg);
         self.sess = sess;
 
@@ -678,7 +675,7 @@ impl<'hir> Stage<()> for Typecker<'hir> {
                     this.add_kind_ex(kind_ex);
                 });
 
-            this.hir.root().items.clone().iter().for_each(|&item| {
+            this.sess.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);
 
                 match res {

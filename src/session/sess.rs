@@ -81,3 +81,23 @@ impl SessionHolder for Session {
         &self.hir
     }
 }
+
+macro_rules! impl_session_holder {
+    ($ty: ident $(<$($gen: tt),*>)?; $($path: tt)+) => {
+        impl<$($($gen),*)?> crate::session::sess::SessionHolder for $ty<$($($gen),*)?> {
+            fn sess(&self) -> &crate::session::sess::Session {
+                &self.$($path)+
+            }
+
+            fn sess_mut(&mut self) -> &mut crate::session::sess::Session {
+                &mut self.$($path)+
+            }
+        }
+    };
+
+    ($ty: ident $(<$($gen: tt),*>)?) => {
+        impl_session_holder!($ty $(<$($gen),*>)?; sess);
+    };
+}
+
+pub(crate) use impl_session_holder;

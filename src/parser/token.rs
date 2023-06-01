@@ -33,6 +33,8 @@ enum_str_map! {
         Dot: ".",
         LParen: "(",
         RParen: ")",
+        LBrace: "{",
+        RBrace: "}",
         Comma: ",",
         Semi: ";",
         FatArrow: "=>",
@@ -233,6 +235,9 @@ impl TokenKind {
             ('(', Some(next)) if next.is_whitespace() => ComplexSymbol::MaybeUnit,
 
             ('(', Some(next)) if next.is_custom_op() => ComplexSymbol::OpIdent,
+
+            ('{', _) => ComplexSymbol::Punct(Punct::LBrace, 1),
+            ('}', _) => ComplexSymbol::Punct(Punct::RBrace, 1),
 
             ('/', Some('/')) => ComplexSymbol::LineComment,
             ('/', Some('*')) => ComplexSymbol::MultilineComment,

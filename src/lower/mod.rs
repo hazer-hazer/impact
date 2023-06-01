@@ -23,7 +23,7 @@ use crate::{
         def::{DefId, DefKind},
         res::{self, NamePath, ResKind},
     },
-    session::{stage_result, Session, Stage, StageResult},
+    session::{stage_result, Session, Stage, StageResult, impl_session_holder},
     span::{
         sym::{Ident, Internable, Kw},
         Span, WithSpan,
@@ -81,7 +81,6 @@ impl OwnerCollection {
 
 pub struct Lower<'ast> {
     ast: &'ast AST,
-    hir: HIR,
 
     // HirId
     owner_stack: Vec<OwnerCollection>,
@@ -92,6 +91,7 @@ pub struct Lower<'ast> {
 }
 
 impl_message_holder!(Lower<'ast>);
+impl_session_holder!(Lower<'ast>);
 
 #[derive(Debug)]
 enum LoweredOwner {
@@ -112,7 +112,6 @@ impl<'ast> Lower<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
-            hir: HIR::new(),
             owner_stack: Default::default(),
             node_id_hir_id: Default::default(),
             sess,
@@ -151,7 +150,7 @@ impl<'ast> Lower<'ast> {
             .insert(OWNER_SELF_CHILD_ID, owner_node.into());
 
         let owner = self.owner_stack.pop().unwrap().owner;
-        self.hir.add_owner(def_id, owner);
+        self.sess.hir.add_owner(def_id, owner);
         self.node_id_hir_id
             .insert(node_id, HirId::new_owner(def_id));
 
@@ -604,6 +603,7 @@ impl<'ast> Lower<'ast> {
         hir::expr::Arm {
             pat: lower_pr!(self, &arm.pat, lower_pat),
             body: lower_pr!(self, &arm.body, lower_expr),
+            span: arm.span(),
         }
     }
 
@@ -932,9 +932,9 @@ impl<'ast> Lower<'ast> {
     }
 }
 
-impl<'ast> Stage<HIR> for Lower<'ast> {
-    fn run(mut self) -> StageResult<HIR> {
+impl<'ast> Stage<()> for Lower<'ast> {
+    fn run(mut self) -> StageResult<()> {
         self.lower_ast();
-        stage_result(self.sess, self.hir, self.msg)
+        stage_result(self.sess, (), self.msg)
     }
 }

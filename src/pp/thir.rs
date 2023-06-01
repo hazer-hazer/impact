@@ -118,7 +118,7 @@ impl<'a> ThirPrinter<'a> {
 
 // TODO: Replace THIR building with `thir_built` query when query engine added
 // impl<'a> HirVisitor for ThirPrinter<'a> {
-//     fn visit_body(&mut self, &body: &BodyId, _owner: BodyOwner, hir: &HIR) {
+//     fn visit_body(&mut self, &body: &BodyId, _owner: BodyOwner) {
 
 //     }
 // }

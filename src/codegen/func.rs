@@ -18,7 +18,7 @@ use crate::{
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     mir::{InfixOp, Ty},
     resolve::def::{DefId, DefKind, DefMap},
-    session::{stage_result, Stage, StageResult},
+    session::{impl_session_holder, stage_result, SessionHolder, Stage, StageResult},
     span::sym::Ident,
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
     utils::macros::match_expected,
@@ -167,9 +167,10 @@ pub struct FunctionsCodeGen<'ink, 'ctx> {
 }
 
 impl_message_holder!(FunctionsCodeGen<'ink, 'ctx>);
+impl_session_holder!(FunctionsCodeGen<'ink, 'ctx>; ctx.sess);
 
 impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
-    fn visit_body(&mut self, &_body: &BodyId, owner: BodyOwner, _hir: &HIR) {
+    fn visit_body(&mut self, &_body: &BodyId, owner: BodyOwner) {
         if !self.ctx.should_be_built(owner.def_id) {
             return;
         }
@@ -195,7 +196,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
     }
 
-    fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, _: &HIR) {
+    fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId) {
         let def_id = item_id.def_id();
         let ty = self.ctx.sess.tyctx.tyof(item_id.hir_id());
 
@@ -209,23 +210,25 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         }
     }
 
-    fn visit_variant(&mut self, &hir_vid: &hir::Variant, hir: &HIR) {
-        let variant = hir.variant(hir_vid);
-
-        self.visit_ident(&variant.name, hir);
-        walk_each!(self, variant.fields, visit_field, hir);
+    fn visit_variant(&mut self, &hir_vid: &hir::Variant) {
+        let variant = self.hir().variant(hir_vid);
 
         // TODO: Will be used to get ADT variant by id
         let vid = self.ctx.sess.tyctx.variant_id(variant.def_id);
 
-        let ctor_ty = self.ctx.sess.tyctx.def_ty(variant.ctor_def_id).unwrap();
-        let ctor_func_ty = self.ctx.inst_ty(ctor_ty, variant.ctor_def_id);
+        let v_ctor_id = variant.ctor_def_id;
+
+        let ctor_ty = self.ctx.sess.tyctx.def_ty(v_ctor_id).unwrap();
+        let ctor_func_ty = self.ctx.inst_ty(ctor_ty, v_ctor_id);
+
+        self.visit_ident(&variant.name);
+        walk_each!(self, variant.fields, visit_field);
 
         // TODO: Somehow canonicalize fields order, maybe FieldId from type <=>
         //  parameter index?
 
         self.function_map
-            .add_instance(variant.ctor_def_id, ctor_func_ty, |_def_id, ty| {
+            .add_instance(v_ctor_id, ctor_func_ty, |_def_id, ty| {
                 self.ctx.simple_func(
                     &format!("ctor_{vid}"),
                     self.ctx.conv_ty(ty).into_function_type(),
@@ -245,7 +248,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
     }
 
-    fn visit_field(&mut self, field: &hir::item::Field, _hir: &HIR) {
+    fn visit_field(&mut self, field: &hir::item::Field) {
         if let Some(accessor_def_id) = field.accessor_def_id {
             let accessor_ty = self.ctx.sess.tyctx.def_ty(accessor_def_id).unwrap();
             let accessor_func_ty = self.ctx.inst_ty(accessor_ty, accessor_def_id);
@@ -362,7 +365,7 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
     }
 
     fn gen_functions(&mut self) {
-        self.visit_hir(self.ctx.hir);
+        self.visit_hir();
 
         // Add infix operators functions
         InfixOp::each().for_each(|op| {

@@ -167,8 +167,8 @@ pub trait MessageHolder {
 
 macro_rules! impl_message_holder {
     ($ty: ident $(<$($gen: tt),*>)?) => {
-        impl<$($($gen),*)?> MessageHolder for $ty<$($($gen),*)?> {
-            fn storage(&mut self) -> &mut MessageStorage {
+        impl<$($($gen),*)?> crate::message::message::MessageHolder for $ty<$($($gen),*)?> {
+            fn storage(&mut self) -> &mut crate::message::message::MessageStorage {
                 &mut self.msg
             }
         }

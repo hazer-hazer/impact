@@ -17,7 +17,7 @@ use crate::{
         ctx::AlgoCtx,
         ty::{Adt, ExPair, Field, FieldId, Variant, VariantId},
         TypeckErr,
-    },
+    }, session::SessionHolder,
 };
 
 #[derive(Clone, Copy)]
@@ -79,7 +79,7 @@ impl<'hir> Typecker<'hir> {
             Err(_) => {
                 verbose!("Failed: Expr {expr} is NOT of type {ty}");
 
-                let span = self.hir.expr_result_span(expr);
+                let span = self.hir().expr_result_span(expr);
 
                 MessageBuilder::error()
                     .span(span)
@@ -102,7 +102,7 @@ impl<'hir> Typecker<'hir> {
 
     /// Type check logic starts here.
     fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
-        let expr = self.hir.expr(expr_id);
+        let expr = self.hir().expr(expr_id);
 
         match (expr.kind(), ty.kind()) {
             (&ExprKind::Lit(lit), check) => {
@@ -148,13 +148,13 @@ impl<'hir> Typecker<'hir> {
             //         .body(body)
             //         .params
             //         .iter()
-            //         .filter_map(|param| self.hir.pat_names(*param))
+            //         .filter_map(|param| self.hir().pat_names(*param))
             //         .flatten()
             //         .collect::<Vec<Ident>>();
 
             //     self.under_ctx(
             //         InferCtx::new_with_term_map(&param_names, &params_tys),
-            //         |this| this._check(self.hir.body(body).value, *body_ty),
+            //         |this| this._check(self.hir().body(body).value, *body_ty),
             //     )
             // },
             (_, &TyKind::Forall(alpha, body)) => self.under_ctx(|this| {
@@ -205,7 +205,7 @@ impl<'hir> Typecker<'hir> {
     fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
         let expr_ty = self.synth_expr(expr_id)?;
 
-        let span = self.hir.expr(expr_id).span();
+        let span = self.hir().expr(expr_id).span();
         let l = expr_ty.apply_ctx(self);
         let r = ty.apply_ctx(self);
 

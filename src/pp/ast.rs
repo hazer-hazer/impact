@@ -1,7 +1,7 @@
 use super::AstLikePP;
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
+        expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
         item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -254,11 +254,17 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_pr!(self, field, visit_ident_node);
     }
 
-    fn visit_match_expr(
-        &mut self,
-        subject: &'ast PR<N<Expr>>,
-        arms: &'ast [PR<crate::ast::expr::Arm>],
-    ) {
+    fn visit_match_expr(&mut self, subject: &'ast PR<N<Expr>>, arms: &'ast [PR<Arm>]) {
+        self.kw(Kw::Match);
+        walk_pr!(self, subject, visit_expr);
+        self.nl();
+        walk_block!(self, arms, visit_match_arm);
+    }
+
+    fn visit_match_arm(&mut self, arm: &'ast Arm) {
+        walk_pr!(self, &arm.pat, visit_pat);
+        self.punct(Punct::FatArrow);
+        walk_pr!(self, &arm.body, visit_expr);
     }
 
     // Types //

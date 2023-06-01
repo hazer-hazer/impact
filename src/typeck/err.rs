@@ -1,5 +1,5 @@
 use super::{kind::KindSort, ty::TyKind, Ty, Typecker};
-use crate::{cli::color::Colorize, hir::HirId, message::message::MessageBuilder};
+use crate::{cli::color::Colorize, hir::HirId, message::message::MessageBuilder, session::SessionHolder};
 
 impl<'hir> Typecker<'hir> {
     pub fn must_be_inferred(&self, id: HirId) -> Option<MessageBuilder> {
@@ -18,7 +18,7 @@ impl<'hir> Typecker<'hir> {
 
         let ty_str = ty.map_or(Self::uninferred_ty(), |ty| self.ty_str(ty));
 
-        let node = self.hir.node(id);
+        let node = self.hir().node(id);
         let kind = node.kind();
         let span = node.span();
 

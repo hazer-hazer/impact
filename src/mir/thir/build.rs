@@ -92,6 +92,7 @@ impl<'ctx> ThirBuilder<'ctx> {
             //     )
             // },
             &hir::expr::ExprKind::Builtin(bt) => ExprKind::Builtin(bt),
+            hir::expr::ExprKind::Match(..) => todo!(),
         };
 
         self.thir.add_expr(Expr {

@@ -3,9 +3,9 @@ use inkwell::values::BasicValueEnum;
 use super::{ctx::CodeGenCtx, func::FunctionMap};
 use crate::{
     hir::visitor::HirVisitor,
-    message::message::MessageStorage,
+    message::message::{impl_message_holder, MessageStorage},
     resolve::def::{DefId, DefMap},
-    session::{stage_result, Stage, StageResult},
+    session::{impl_session_holder, stage_result, SessionHolder, Stage, StageResult},
 };
 
 #[derive(Default)]
@@ -29,6 +29,9 @@ pub struct ValueCodeGen<'ink, 'ctx, 'a> {
     msg: MessageStorage,
 }
 
+impl_message_holder!(ValueCodeGen<'ink, 'ctx, 'a>);
+impl_session_holder!(ValueCodeGen<'ink, 'ctx, 'a>; ctx.sess);
+
 impl<'ink, 'ctx, 'a> Stage<ValueMap<'ink>, CodeGenCtx<'ink, 'ctx>>
     for ValueCodeGen<'ink, 'ctx, 'a>
 {
@@ -48,7 +51,7 @@ impl<'ink, 'ctx, 'a> ValueCodeGen<'ink, 'ctx, 'a> {
     }
 
     fn gen_values(mut self) -> ValueMap<'ink> {
-        self.visit_hir(self.ctx.hir);
+        self.visit_hir();
 
         self.value_map
     }
@@ -60,7 +63,6 @@ impl<'ink, 'ctx, 'a> HirVisitor for ValueCodeGen<'ink, 'ctx, 'a> {
         _name: crate::span::sym::Ident,
         _value: &crate::hir::BodyId,
         _id: crate::hir::item::ItemId,
-        _hir: &crate::hir::HIR,
     ) {
         // let builder = self.ctx.llvm_ctx.create_builder();
         // self.value_map.insert(

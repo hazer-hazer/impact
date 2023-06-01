@@ -189,6 +189,8 @@ impl PP {
             | Punct::Dot
             | Punct::LParen
             | Punct::RParen
+            | Punct::LBrace
+            | Punct::RBrace
             | Punct::Backslash => ("", ""),
         };
 
