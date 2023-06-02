@@ -6,13 +6,14 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        expr::{Call, ExprKind, Lit, TyExpr},
+        expr::{Arm, Call, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Local, StmtKind},
         Block, Body, BodyId, Expr, ExprDefKind, ExprPath, ExprRes, Pat, Stmt,
     },
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
+    session::SessionHolder,
     span::{sym::Ident, Spanned, WithSpan},
     typeck::{
         debug::{tcdbg, InferEntryKind, InferStepKind},
@@ -38,7 +39,7 @@ impl<'hir> Typecker<'hir> {
             _ => {},
         }
 
-        let item = self.hir.item(item_id);
+        let item = self.hir().item(item_id);
 
         let ty = match item.kind() {
             ItemKind::TyAlias(_ty) => {
@@ -86,7 +87,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_stmt(&mut self, stmt: Stmt) -> TyResult<Ty> {
-        let stmt = self.hir.stmt(stmt);
+        let stmt = self.hir().stmt(stmt);
 
         match stmt.kind() {
             &StmtKind::Expr(expr) => {
@@ -112,7 +113,7 @@ impl<'hir> Typecker<'hir> {
     pub fn synth_expr(&mut self, expr: Expr) -> TyResult<Ty> {
         let ie = tcdbg!(self, enter InferEntryKind::ForExpr(expr));
 
-        let expr_ty = match self.hir.expr(expr).kind() {
+        let expr_ty = match self.hir().expr(expr).kind() {
             ExprKind::Lit(lit) => self.synth_lit(&lit),
             &ExprKind::Path(path) => self.synth_path(path),
             &ExprKind::Block(block) => self.synth_block(block),
@@ -123,6 +124,7 @@ impl<'hir> Typecker<'hir> {
             // &ExprKind::FieldAccess(lhs, field) => self.synth_field_access_expr(lhs, field,
             // expr_id),
             &ExprKind::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
+            ExprKind::Match(subject, arms) => self.synth_match_expr(subject, arms),
         }?;
 
         verbose!("Synthesized type of expression {expr} = {expr_ty}");
@@ -156,7 +158,7 @@ impl<'hir> Typecker<'hir> {
 
     // Note: This is a path **expression**
     fn synth_path(&mut self, path: ExprPath) -> TyResult<Ty> {
-        self.synth_res(self.hir.expr_path(path).res())
+        self.synth_res(self.hir().expr_path(path).res())
     }
 
     fn synth_res(&mut self, res: &ExprRes) -> TyResult<Ty> {
@@ -219,7 +221,7 @@ impl<'hir> Typecker<'hir> {
     //         Ok(field.1.ty)
     //     } else {
     //         MessageBuilder::error()
-    //             .span(self.hir.expr(expr_id).span())
+    //             .span(self.hir().expr(expr_id).span())
     //             .text(format!(
     //                 "Data type {} does not have field {}",
     //                 self.tyctx().ty_name(lhs_ty).unwrap(),
@@ -230,8 +232,52 @@ impl<'hir> Typecker<'hir> {
     //     }
     // }
 
+    fn synth_match_expr(&mut self, &subject: &Expr, arms: &[Arm]) -> TyResult<Ty> {
+        let subject_node = self.hir().expr(subject);
+        let subject_ty = self.synth_expr(subject);
+        let arms_tys = arms
+            .iter()
+            .map(|arm| Ok(self.synth_arm(arm)?))
+            .collect::<Result<Vec<_>, _>>()?;
+        if let Some(&first_arm_ty) = arms_tys.first() {
+            if !arms_tys
+                .iter()
+                .copied()
+                .all(|arm_ty| arm_ty == first_arm_ty)
+            {
+                MessageBuilder::error()
+                    .span(self.hir().expr(arms.first().unwrap().body).span())
+                    .text(format!("Match arms have incompatible types"))
+                    .label_iter(arms_tys.iter().zip(arms.iter()).map(|(arm_ty, arm)| {
+                        (self.hir().expr(arm.body).span(), format!("is {arm_ty}"))
+                    }))
+                    .emit(self);
+                Err(TypeckErr::Reported)
+            } else {
+                Ok(first_arm_ty)
+            }
+        } else if let Ok(subject_ty) = subject_ty {
+            MessageBuilder::error()
+                .span(subject_node.span())
+                .text(format!(
+                    "Not all possible values of match value with type {subject_ty} handled"
+                ))
+                .emit_single_label(self);
+            Err(TypeckErr::Reported)
+        } else {
+            // TODO: Idk what to do if failed to infer subject_ty
+            todo!();
+            // Err(TypeckErr::LateReport)
+        }
+    }
+
+    fn synth_arm(&mut self, arm: &Arm) -> TyResult<Ty> {
+        // TODO: Synth optional type of pattern
+        self.synth_expr(arm.body)
+    }
+
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
-        let block = self.hir.block(block);
+        let block = self.hir().block(block);
 
         self.under_ctx(|this| {
             block.stmts().iter().for_each(|&stmt| {
@@ -252,7 +298,7 @@ impl<'hir> Typecker<'hir> {
 
     // TODO: If needs to be used -- move to HIR methods
     // fn get_pat_names(&self, pat: Pat) -> Vec<Ident> {
-    //     match self.hir.pat(pat).kind() {
+    //     match self.hir().pat(pat).kind() {
     //         hir::pat::PatKind::Unit => vec![],
     //         &hir::pat::PatKind::Ident(name) => vec![name],
     //     }
@@ -261,7 +307,7 @@ impl<'hir> Typecker<'hir> {
     /// Get pattern type based on pattern, e.g. unit pattern `()` definitely is
     /// of unit type.
     // fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
-    //     match self.hir.pat(pat).kind() {
+    //     match self.hir().pat(pat).kind() {
     //         hir::pat::PatKind::Unit => Some(Ty::unit()),
     //         hir::pat::PatKind::Ident(_) => None,
     //     }
@@ -269,7 +315,7 @@ impl<'hir> Typecker<'hir> {
 
     // TODO: Update if type annotations added
     fn get_param_type(&mut self, pat: Pat) -> Vec<(Pat, Ty)> {
-        match self.hir.pat(pat).kind() {
+        match self.hir().pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![(pat, Ty::unit())],
             &hir::pat::PatKind::Ident(name) => {
                 let ex = self.add_fresh_kind_ex_as_ty();
@@ -280,7 +326,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn get_typed_pat(&mut self, pat: Pat) -> Ty {
-        match self.hir.pat(pat).kind() {
+        match self.hir().pat(pat).kind() {
             hir::pat::PatKind::Unit => Ty::unit(),
 
             // Assumed that all names in pattern are typed, at least as existentials
@@ -295,7 +341,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_body(&mut self, owner_def_id: DefId, body_id: BodyId) -> TyResult<Ty> {
-        let Body { params, value } = self.hir.body(body_id);
+        let Body { params, value } = self.hir().body(body_id);
         // FIXME: Rewrite when `match` added - WHY?
 
         if params.is_empty() {
@@ -317,7 +363,7 @@ impl<'hir> Typecker<'hir> {
                 this.type_inferring_node(pat, ty);
             });
 
-            let body_ty = this.check_discard_err(self.hir.body_value(body_id), body_ex.1);
+            let body_ty = this.check_discard_err(self.hir().body_value(body_id), body_ex.1);
             verbose!(
                 "Body ty {body_ty} checked against body existential {}",
                 body_ex.1
@@ -392,7 +438,7 @@ impl<'hir> Typecker<'hir> {
     // outside this context?             this.type_term(name, ex.1);
     //         });
 
-    //         let body_ty = this.check(self.hir.body_value(lambda.body),
+    //         let body_ty = this.check(self.hir().body_value(lambda.body),
     // body_ex.1)?;
 
     //         let param_ty = this.get_typed_pat(lambda.param);
@@ -407,7 +453,10 @@ impl<'hir> Typecker<'hir> {
         let lhs_ty = self.synth_expr(call.lhs)?;
         let lhs_ty = lhs_ty.apply_ctx(self);
         self._synth_call(
-            Spanned::new(self.hir.expr(call.lhs).span(), Typed::new(call.lhs, lhs_ty)),
+            Spanned::new(
+                self.hir().expr(call.lhs).span(),
+                Typed::new(call.lhs, lhs_ty),
+            ),
             &call.args,
         )
     }

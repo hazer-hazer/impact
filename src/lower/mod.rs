@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+        expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
@@ -23,7 +23,7 @@ use crate::{
         def::{DefId, DefKind},
         res::{self, NamePath, ResKind},
     },
-    session::{stage_result, Session, Stage, StageResult},
+    session::{stage_result, Session, Stage, StageResult, impl_session_holder},
     span::{
         sym::{Ident, Internable, Kw},
         Span, WithSpan,
@@ -81,7 +81,6 @@ impl OwnerCollection {
 
 pub struct Lower<'ast> {
     ast: &'ast AST,
-    hir: HIR,
 
     // HirId
     owner_stack: Vec<OwnerCollection>,
@@ -92,6 +91,7 @@ pub struct Lower<'ast> {
 }
 
 impl_message_holder!(Lower<'ast>);
+impl_session_holder!(Lower<'ast>);
 
 #[derive(Debug)]
 enum LoweredOwner {
@@ -112,7 +112,6 @@ impl<'ast> Lower<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
-            hir: HIR::new(),
             owner_stack: Default::default(),
             node_id_hir_id: Default::default(),
             sess,
@@ -151,7 +150,7 @@ impl<'ast> Lower<'ast> {
             .insert(OWNER_SELF_CHILD_ID, owner_node.into());
 
         let owner = self.owner_stack.pop().unwrap().owner;
-        self.hir.add_owner(def_id, owner);
+        self.sess.hir.add_owner(def_id, owner);
         self.node_id_hir_id
             .insert(node_id, HirId::new_owner(def_id));
 
@@ -224,15 +223,16 @@ impl<'ast> Lower<'ast> {
             StmtKind::Expr(expr) => {
                 vec![hir::stmt::StmtKind::Expr(lower_pr!(self, expr, lower_expr))]
             },
-            StmtKind::Item(item) => lower_pr!(self, item, maybe_lower_local).map_or_else(
-                || {
-                    lower_pr!(self, item, lower_item)
-                        .into_iter()
-                        .map(|item| hir::stmt::StmtKind::Item(item))
-                        .collect()
-                },
-                |local| vec![hir::stmt::StmtKind::Local(local)],
-            ),
+            StmtKind::Item(item) => lower_pr!(self, item, lower_item)
+                .into_iter()
+                .map(|item| hir::stmt::StmtKind::Item(item))
+                .collect(),
+            StmtKind::Local(pat, value) => vec![hir::stmt::StmtKind::Local(Local {
+                id: self.lower_node_id(stmt.id()),
+                pat: lower_pr!(self, pat, lower_pat),
+                value: lower_pr!(self, value, lower_expr),
+                span: stmt.span(),
+            })],
         }
         .into_iter()
         .map(|kind| {
@@ -241,25 +241,6 @@ impl<'ast> Lower<'ast> {
                 .into()
         })
         .collect()
-    }
-
-    fn maybe_lower_local(&mut self, item: &Item) -> Option<Local> {
-        match item.kind() {
-            ItemKind::Decl(name, params, body) if params.is_empty() => {
-                let def_id = self.sess.def_table.get_def_id(item.id()).unwrap();
-                let def = self.sess.def_table.def(def_id);
-                match def.kind() {
-                    DefKind::Local => Some(Local {
-                        id: self.lower_node_id(item.id()),
-                        name: lower_pr!(self, name, lower_ident),
-                        value: lower_pr!(self, body, lower_expr),
-                        span: item.span(),
-                    }),
-                    _ => None,
-                }
-            },
-            _ => None,
-        }
     }
 
     // Items //
@@ -491,6 +472,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Let(block) => self.lower_let_expr(block),
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
             ExprKind::DotOp(lhs, field) => self.lower_dot_op_expr(lhs, field),
+            ExprKind::Match(subject, arms) => self.lower_match_expr(subject, arms),
         };
 
         let id = self.lower_node_id(expr.id());
@@ -612,6 +594,20 @@ impl<'ast> Lower<'ast> {
         //         args: vec![lhs],
         //     })
         // }
+    }
+
+    fn lower_match_expr(&mut self, subject: &PR<N<Expr>>, arms: &[PR<Arm>]) -> hir::expr::ExprKind {
+        let subject = lower_pr!(self, subject, lower_expr);
+        let arms = lower_each_pr!(self, arms, lower_match_arm);
+        hir::expr::ExprKind::Match(subject, arms)
+    }
+
+    fn lower_match_arm(&mut self, arm: &Arm) -> hir::expr::Arm {
+        hir::expr::Arm {
+            pat: lower_pr!(self, &arm.pat, lower_pat),
+            body: lower_pr!(self, &arm.body, lower_expr),
+            span: arm.span(),
+        }
     }
 
     // Types //
@@ -778,7 +774,9 @@ impl<'ast> Lower<'ast> {
             .flatten()
             .collect::<Vec<_>>();
 
-        let expr = match block.stmts().last().unwrap().as_ref().unwrap().kind() {
+        let last_stmt = block.stmts().last().unwrap().as_ref().unwrap();
+
+        let expr = match last_stmt.kind() {
             StmtKind::Expr(expr) => Some(lower_pr!(self, expr, lower_expr)),
             StmtKind::Item(item) => {
                 let span = item.span();
@@ -787,6 +785,22 @@ impl<'ast> Lower<'ast> {
                         .into_iter()
                         .map(|item| self.stmt_item(span, item)),
                 );
+                None
+            },
+            StmtKind::Local(pat, value) => {
+                let span = last_stmt.span();
+                let id = self.lower_node_id(last_stmt.id());
+                let pat = lower_pr!(self, pat, lower_pat);
+                let value = lower_pr!(self, value, lower_expr);
+                stmts.push(self.stmt(
+                    span,
+                    hir::stmt::StmtKind::Local(hir::stmt::Local {
+                        id,
+                        pat,
+                        value,
+                        span,
+                    }),
+                ));
                 None
             },
         };
@@ -921,9 +935,9 @@ impl<'ast> Lower<'ast> {
     }
 }
 
-impl<'ast> Stage<HIR> for Lower<'ast> {
-    fn run(mut self) -> StageResult<HIR> {
+impl<'ast> Stage<()> for Lower<'ast> {
+    fn run(mut self) -> StageResult<()> {
         self.lower_ast();
-        stage_result(self.sess, self.hir, self.msg)
+        stage_result(self.sess, (), self.msg)
     }
 }

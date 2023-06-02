@@ -16,7 +16,7 @@ use crate::{
         },
     },
     parser::lexer::CUSTOM_OP_CHARS,
-    session::{stage_result, Session, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Symbol},
         WithSpan,
@@ -66,6 +66,7 @@ pub struct AstValidator<'ast> {
 }
 
 impl_message_holder!(AstValidator<'ast>);
+impl_session_holder!(AstValidator<'ast>);
 
 impl<'ast> AstValidator<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {

@@ -92,6 +92,7 @@ impl<'ctx> ThirBuilder<'ctx> {
             //     )
             // },
             &hir::expr::ExprKind::Builtin(bt) => ExprKind::Builtin(bt),
+            hir::expr::ExprKind::Match(..) => todo!(),
         };
 
         self.thir.add_expr(Expr {
@@ -137,17 +138,8 @@ impl<'ctx> ThirBuilder<'ctx> {
     }
 
     fn local(&mut self, local: &hir::stmt::Local) -> Stmt {
-        let ty = self.tyctx.tyof(local.id);
-        let pat = Pat {
-            ty,
-            kind: PatKind::Ident {
-                name: local.name,
-                var: LocalVar::new(local.id),
-                ty,
-            },
-            span: local.name.span(),
-        };
-        Stmt::Local(pat, self.expr(local.value))
+        let ty = self.tyctx.tyof(local.id());
+        Stmt::Local(self.pat(local.pat), self.expr(local.value))
     }
 
     fn block(&mut self, block_id: hir::Block) -> BlockId {

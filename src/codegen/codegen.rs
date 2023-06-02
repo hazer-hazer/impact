@@ -21,12 +21,11 @@ use crate::{
     hir::{ExprDefKind, HIR},
     message::message::{impl_message_holder, MessageHolder, MessageStorage},
     mir::MIR,
-    session::{stage_result, Session, Stage, StageResult, StageResultImpl},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult, StageResultImpl},
 };
 
 pub struct CodeGen<'ink, 'ctx> {
     mir: &'ctx MIR,
-    hir: &'ctx HIR,
 
     llvm_ctx: &'ink Context,
 
@@ -35,13 +34,13 @@ pub struct CodeGen<'ink, 'ctx> {
 }
 
 impl_message_holder!(CodeGen<'ink, 'ctx>);
+impl_session_holder!(CodeGen<'ink, 'ctx>);
 
 impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
-    pub fn new(sess: Session, mir: &'ctx MIR, hir: &'ctx HIR, llvm_ctx: &'ink Context) -> Self {
+    pub fn new(sess: Session, mir: &'ctx MIR, llvm_ctx: &'ink Context) -> Self {
         Self {
             sess,
             mir,
-            hir,
             llvm_ctx,
             msg: MessageStorage::default(),
         }
@@ -64,9 +63,9 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
         let ctx = CodeGenCtx {
             sess: self.sess,
             mir: self.mir,
-            hir: self.hir,
             llvm_ctx: self.llvm_ctx,
             llvm_module,
+            conv_cache: Default::default(),
         };
 
         let (function_map, ctx) = FunctionsCodeGen::new(ctx).run()?.merged(&mut self.msg);

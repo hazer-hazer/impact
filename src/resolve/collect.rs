@@ -1,15 +1,15 @@
 use super::def::{DefId, DefKind, Module, ModuleId, ModuleKind, ROOT_DEF_ID};
 use crate::{
     ast::{
-        expr::{Block, Expr, ExprKind},
+        expr::{Arm, Block, Expr, ExprKind},
         item::{ExternItem, Field, Item, ItemKind, TyParam, Variant},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
-        ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
+        ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, N, PR,
     },
     cli::verbose,
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     resolve::{builtin::DeclareBuiltin, def::Namespace},
-    session::{stage_result, Session, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         source::SourceId,
         sym::{Ident, Internable},
@@ -26,6 +26,7 @@ pub struct DefCollector<'ast> {
 }
 
 impl_message_holder!(DefCollector<'ast>);
+impl_session_holder!(DefCollector<'ast>);
 
 impl<'ast> DefCollector<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
@@ -220,6 +221,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
                 self.visit_lambda_expr(lambda);
             },
             ExprKind::DotOp(expr, field) => self.visit_dot_op_expr(expr, field),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms),
         }
     }
 }

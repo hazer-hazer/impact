@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display};
 use super::token::{IdentIntoTokenErr, Op, Punct, Token, TokenCmp, TokenKind, TokenStream};
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
+        expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         is_block_ended,
         item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
         pat::{Pat, PatKind},
@@ -15,7 +15,7 @@ use crate::{
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
-    session::{stage_result, Session, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Kw},
         Span, WithSpan,
@@ -92,12 +92,13 @@ pub struct Parser {
 }
 
 impl_message_holder!(Parser);
+impl_session_holder!(Parser);
 
 macro_rules! parse_block_common {
     ($self: ident, $parse: ident) => {{
         let mut entities = vec![];
 
-        $self.just_skip(TokenCmp::BlockStart);
+        $self.expect(TokenCmp::BlockStart)?;
 
         while !$self.eof() && !$self.is(TokenCmp::BlockEnd) {
             entities.push($self.$parse());
@@ -868,6 +869,8 @@ impl Parser {
 
         let expr = if self.is(TokenCmp::Kw(Kw::Let)) {
             Some(self.parse_let())
+        } else if self.is(TokenCmp::Kw(Kw::Match)) {
+            Some(self.parse_match_expr())
         } else {
             self.parse_infix()
         };
@@ -882,7 +885,7 @@ impl Parser {
 
         let lo = self.span();
 
-        self.expect_kw(Kw::Let)?;
+        self.just_skip(TokenCmp::Kw(Kw::Let));
 
         let block = self.parse_block();
 
@@ -894,6 +897,45 @@ impl Parser {
             ExprKind::Let(block),
             self.close_span(lo),
         )))
+    }
+
+    fn parse_match_expr(&mut self) -> PR<N<Expr>> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "match expression");
+
+        let lo = self.span();
+
+        self.just_skip(TokenCmp::Kw(Kw::Match));
+
+        let subject = self.parse_expr();
+
+        let arms = parse_block_common!(self, parse_match_arm);
+
+        self.exit_parsed_entity(pe);
+
+        Ok(Box::new(Expr::new(
+            self.next_node_id(),
+            ExprKind::Match(subject, arms),
+            self.close_span(lo),
+        )))
+    }
+
+    fn parse_match_arm(&mut self) -> PR<Arm> {
+        let lo = self.span();
+        let pat = self.parse_pat("match arm pattern");
+        self.expect(TokenCmp::Punct(Punct::FatArrow))?;
+        let body = self.parse_expr();
+
+        let span = self.close_span(lo);
+
+        if self.is(TokenCmp::BlockEnd) {
+        } else if body.as_ref().map_or(false, |body| body.is_block_ended()) {
+            self.skip_opt_nls();
+        } else {
+            let delim = self.skip_any(&[TokenCmp::Nl, TokenCmp::Punct(Punct::Comma)]);
+            self.expected(delim, "new-line or comma delimiter")?;
+        }
+
+        Ok(Arm { pat, body, span })
     }
 
     fn parse_block_expr(&mut self) -> PR<N<Expr>> {

@@ -470,6 +470,7 @@ impl HIR {
             // | ExprKind::FieldAccess(..)
             | ExprKind::Ty(_) => expr.span(),
             &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
+            ExprKind::Match(subject, arms) => arms.first().map_or(self.expr(*subject).span(), |arm| self.expr_result_span(arm.body)),
         }
     }
 

@@ -1,4 +1,4 @@
-use super::{item::ItemId, Expr, HirId, WithHirId, impl_with_hir_id};
+use super::{impl_with_hir_id, item::ItemId, Expr, HirId, Pat, WithHirId};
 use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 
 #[derive(Debug)]
@@ -21,14 +21,15 @@ impl StmtNode {
     }
 }
 
-
 #[derive(Debug)]
 pub struct Local {
     pub id: HirId,
-    pub name: Ident,
+    pub pat: Pat,
     pub value: Expr,
     pub span: Span,
 }
+
+impl_with_hir_id!(Local);
 
 #[derive(Debug)]
 pub enum StmtKind {

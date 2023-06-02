@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     ast::{
-        expr::{Block, Call, Expr, ExprKind, Lit, PathExpr},
+        expr::{Arm, Block, Call, Expr, ExprKind, Lit, PathExpr},
         item::{GenericParams, Item, ItemKind, Variant},
         pat::{Pat, PatKind},
         ty::{Ty, TyKind, TyPath},
@@ -21,7 +21,7 @@ use crate::{
         def::{DebugModuleTree, DefKind},
         res::ResKind,
     },
-    session::{stage_result, Session, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Internable, Symbol},
         Span, WithSpan,
@@ -136,6 +136,7 @@ pub struct NameResolver<'ast> {
 }
 
 impl_message_holder!(NameResolver<'a>);
+impl_session_holder!(NameResolver<'a>);
 
 impl<'ast> NameResolver<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
@@ -646,6 +647,13 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             PatKind::Unit => {},
             PatKind::Ident(ident) => self.define_local(pat.id(), ident.as_ref().unwrap()),
         }
+    }
+
+    fn visit_match_expr(&mut self, subject: &'ast PR<N<Expr>>, arms: &'ast [PR<Arm>]) {
+        self.enter_local_scope();
+        walk_pr!(self, subject, visit_expr);
+        walk_each_pr!(self, arms, visit_match_arm);
+        self.exit_scope();
     }
 
     fn visit_block(&mut self, block: &'ast Block) {

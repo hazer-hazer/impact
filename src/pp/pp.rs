@@ -171,7 +171,7 @@ impl PP {
     pub fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
-            Kw::Struct | Kw::Data | Kw::Extern | Kw::Type | Kw::Mod => ("", " "),
+            Kw::Struct | Kw::Data | Kw::Extern | Kw::Type | Kw::Mod | Kw::Match => ("", " "),
             Kw::Unit | Kw::Underscore | Kw::Let | Kw::Root | Kw::Unknown => ("", ""),
         };
 
@@ -182,13 +182,15 @@ impl PP {
 
     pub fn punct(&mut self, punct: Punct) -> &mut Self {
         let (pre, post) = match punct {
-            Punct::Arrow => (" ", " "),
+            Punct::Arrow | Punct::FatArrow => (" ", " "),
             Punct::Colon => ("", " "),
             Punct::Comma
             | Punct::Semi
             | Punct::Dot
             | Punct::LParen
             | Punct::RParen
+            | Punct::LBrace
+            | Punct::RBrace
             | Punct::Backslash => ("", ""),
         };
 

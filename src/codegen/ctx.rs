@@ -12,13 +12,14 @@ use inkwell::{
 
 use crate::{
     cli::verbose,
-    hir::{item::ItemId, HIR, self},
+    hir::{self, item::ItemId, HIR},
+    message::message::impl_message_holder,
     mir::{Ty, MIR},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefKind},
     },
-    session::Session,
+    session::{impl_session_holder, Session, SessionHolder},
     typeck::{
         ty::{self, FloatKind, TyKind, TyMap, VariantId},
         tyctx::InstantiatedTy,
@@ -28,7 +29,6 @@ use crate::{
 pub struct CodeGenCtx<'ink, 'ctx> {
     pub sess: Session,
     pub mir: &'ctx MIR,
-    pub hir: &'ctx HIR,
 
     // LLVM Context //
     pub llvm_ctx: &'ink Context,
@@ -36,6 +36,8 @@ pub struct CodeGenCtx<'ink, 'ctx> {
 
     pub conv_cache: TyMap<AnyTypeEnum<'ink>>,
 }
+
+impl_session_holder!(CodeGenCtx<'ink, 'ctx>);
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
     pub fn should_be_built(&self, body_owner: DefId) -> bool {
@@ -262,7 +264,8 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         }
         format!(
             "{}",
-            self.hir
+            self.sess
+                .hir()
                 .item_name(ItemId::new(def_id.into()))
                 .original_string(),
             // ty.id()

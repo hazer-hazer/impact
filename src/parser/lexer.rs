@@ -2,7 +2,7 @@ use super::token::{ComplexSymbol, IntKind};
 use crate::{
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{Punct, Token, TokenKind, TokenStream},
-    session::{stage_result, Session, Stage, StageResult},
+    session::{stage_result, Session, Stage, StageResult, impl_session_holder},
     span::{
         source::SourceId,
         sym::{Kw, Symbol},
@@ -88,6 +88,7 @@ pub struct Lexer {
 }
 
 impl_message_holder!(Lexer);
+impl_session_holder!(Lexer);
 
 impl Lexer {
     pub fn new(source_id: SourceId, sess: Session) -> Self {

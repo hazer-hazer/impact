@@ -18,7 +18,12 @@ data String =
 
 main () =
     a = String.String "a"
+    b = 123
 
     puts (String.String.field a)
+
+    match a
+        s => a
+        c => b
 
     ()

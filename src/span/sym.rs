@@ -21,6 +21,7 @@ enum_str_map! {
         Data: "data",
         Struct: "struct",
         Extern: "extern",
+        Match: "match",
 
         Underscore: "_",
         Unit: "()", // `()`, allowed is type or expression
