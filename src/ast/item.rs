@@ -49,6 +49,7 @@ impl Field {
     pub fn new(
         id: NodeId,
         index: usize,
+        accessor_id: Option<NodeId>,
         name: Option<PR<Ident>>,
         ty: PR<N<Ty>>,
         span: Span,
@@ -56,7 +57,7 @@ impl Field {
         Self {
             id,
             index,
-            accessor_id: None,
+            accessor_id,
             name,
             ty,
             span,
@@ -134,7 +135,8 @@ pub enum ItemKind {
     Type(PR<Ident>, GenericParams, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
-    Adt(bool, PR<Ident>, GenericParams, Vec<PR<Variant>>),
+    Adt(PR<Ident>, GenericParams, Vec<PR<Variant>>),
+    Struct(PR<Ident>, GenericParams, Vec<PR<Field>>),
     Extern(Vec<PR<ExternItem>>),
 }
 
@@ -171,17 +173,23 @@ impl Display for ItemKind {
                     .join(" "),
                 pr_display(body)
             ),
-            ItemKind::Adt(is_adt, name, generics, variants) => {
+            ItemKind::Adt(name, generics, variants) => {
                 write!(
                     f,
-                    "data {} {} = {}{}",
-                    if *is_adt { "| " } else { "" },
+                    "data {} {} = {}",
                     pr_display(name),
                     generics,
                     prs_display_join(variants, " | ")
                 )
             },
             ItemKind::Extern(items) => write!(f, "extern {{{}}}", prs_display_join(items, ", ")),
+            ItemKind::Struct(name, generics, fields) => write!(
+                f,
+                "struct {} {} = {}",
+                pr_display(name),
+                generics,
+                prs_display_join(fields, ", ")
+            ),
         }
     }
 }
@@ -195,7 +203,8 @@ impl NodeKindStr for ItemKind {
                 format!("value `{}`", pr_display(name))
             },
             ItemKind::Decl(name, ..) => format!("function `{}`", pr_display(name)),
-            ItemKind::Adt(_, name, ..) => format!("data type `{}`", pr_display(name)),
+            ItemKind::Adt(name, ..) => format!("data type `{}`", pr_display(name)),
+            ItemKind::Struct(name, ..) => format!("struct `{}`", pr_display(name)),
             ItemKind::Extern(_) => format!("extern block"),
         }
     }
@@ -270,10 +279,11 @@ impl Item {
 
     pub fn name(&self) -> Option<&Ident> {
         match self.kind() {
-            ItemKind::Type(name, ..)
+            ItemKind::Struct(name, ..)
+            | ItemKind::Type(name, ..)
             | ItemKind::Mod(name, _)
             | ItemKind::Decl(name, ..)
-            | ItemKind::Adt(_, name, ..) => {
+            | ItemKind::Adt(name, ..) => {
                 Some(name.as_ref().expect("Error Ident node in `Item::name`"))
             },
             ItemKind::Extern(_) => None,
@@ -292,7 +302,10 @@ impl IsBlockEnded for Item {
     fn is_block_ended(&self) -> bool {
         self.is_block_ended
             || match &self.kind {
+                // Note: false here does not mean that these structures are not block ended, but it
+                // is unknown so check `Item::is_block_ended`
                 ItemKind::Type(..) => false,
+                ItemKind::Struct(..) => false,
                 ItemKind::Adt(..) => false,
                 ItemKind::Mod(..) | ItemKind::Extern(_) => true,
                 ItemKind::Decl(_, _, body) => is_block_ended!(body),

@@ -19,6 +19,7 @@ enum_str_map! {
         Mod: "mod",
         Type: "type",
         Data: "data",
+        Struct: "struct",
         Extern: "extern",
 
         Underscore: "_",

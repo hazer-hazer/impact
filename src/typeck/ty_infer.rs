@@ -10,7 +10,7 @@ use self::interner::TY_INTERNER;
 use super::{
     ctx::AlgoCtx,
     kind::MonoKind,
-    ty::{Adt, FloatKind, IntKind, MapTy},
+    ty::{Adt, FloatKind, IntKind, MapTy, Struct},
     Ty,
 };
 use crate::{
@@ -130,6 +130,7 @@ impl Ty {
                 .map(|ty| ty.inner_ty_vars())
                 .flatten()
                 .collect(),
+            TyKind::Struct(data) => data.walk_tys().map(|ty| ty.inner_ty_vars()).flatten().collect(),
             TyKind::Ref(ty) => ty.inner_ty_vars(),
             &TyKind::Var(var) => HashSet::from([var]),
             // Forall type variable is ignored, as might be unused in body
@@ -164,6 +165,7 @@ impl Ty {
                 Box::new(params.iter().copied().chain(std::iter::once(*body)))
             },
             TyKind::Adt(adt) => Box::new(adt.walk_tys()),
+            TyKind::Struct(data) => Box::new(data.walk_tys()),
             TyKind::Ref(ty) => ty.walk_inner_tys(),
             TyKind::Forall(_, body) => body.walk_inner_tys(),
             TyKind::Kind(kind) => kind.walk_inner_tys(),
@@ -185,7 +187,8 @@ impl Ty {
             | TyKind::Ref(_)
             // TODO: Can existentials and vars be higher-kinded?
             | TyKind::Var(_)
-            | TyKind::Existential(_)
+            | TyKind::Existential(_)|
+            TyKind::Struct(_) 
             | TyKind::Forall(_, _) => true,
             TyKind::Kind(_) => false,
         }
@@ -207,6 +210,7 @@ impl Ty {
                 params.iter().all(Ty::is_solved) && body.is_solved()
             },
             TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_solved()),
+            TyKind::Struct(data) => data.walk_tys().all(|ty| ty.is_solved()),
             // TODO: Check that var is bound in ty_bindings?
             TyKind::Var(_) => true,
             TyKind::Existential(_) => false,
@@ -233,6 +237,7 @@ impl Ty {
             &TyKind::Ref(inner) => inner.contains_ex(ex),
             TyKind::Kind(kind) => kind.contains_ty_ex(ex),
             TyKind::Adt(adt) => adt.walk_tys().any(|ty| ty.contains_ex(ex)),
+            TyKind::Struct(data) => data.walk_tys().any(|ty| ty.contains_ex(ex)),
         }
     }
 
@@ -288,6 +293,7 @@ impl Ty {
             },
             TyKind::Kind(kind) => Ty::ty_kind(kind.substitute_ty(subst, Kind::new_ty(with))),
             TyKind::Adt(adt) => Ty::adt(adt.map_ty_pure(&mut |ty| Ok(ty.substitute(subst, with)))),
+            TyKind::Struct(data) => Ty::struct_(data.map_ty_pure(&mut |ty| Ok(ty.substitute(subst, with)))),
         }
     }
 
@@ -356,6 +362,7 @@ impl Ty {
                 }
             },
             TyKind::Adt(adt) => Ty::adt(adt.map_ty_pure(&mut |ty| Ok(ty._apply_ctx(ctx)))),
+            TyKind::Struct(data) => Ty::struct_(data.map_ty_pure(&mut |ty| Ok(ty._apply_ctx(ctx)))),
         }
     }
 }
@@ -373,6 +380,7 @@ pub enum MonoTyKind {
     Func(Vec<Box<MonoTy>>, Box<MonoTy>),
     Ref(Box<MonoTy>),
     Adt(Adt<MonoTy>),
+    Struct(Struct<MonoTy>),
     Kind(Box<MonoKind>),
 }
 
@@ -406,6 +414,7 @@ impl TryFrom<Ty> for MonoTy {
                 Some(MonoTyKind::Func(params, Box::new(body)))
             },
             TyKind::Adt(adt) => Some(MonoTyKind::Adt(adt.map_ty(&mut |ty| ty.try_into())?)),
+            TyKind::Struct(data) => Some(MonoTyKind::Struct(data.map_ty(&mut |ty| ty.try_into())?)),
             &TyKind::Existential(ex) => Some(MonoTyKind::Ex(ex)),
             &TyKind::Var(var) => Some(MonoTyKind::Var(var)),
             &TyKind::Kind(kind) => Some(MonoTyKind::Kind(Box::new(kind.try_into()?))),

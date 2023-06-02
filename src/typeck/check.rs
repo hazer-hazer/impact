@@ -15,7 +15,7 @@ use crate::{
     span::{Spanned, WithSpan},
     typeck::{
         ctx::AlgoCtx,
-        ty::{Adt, ExPair, Field, FieldId, Variant, VariantId},
+        ty::{Adt, ExPair, Field, FieldId, Struct, Variant, VariantId},
         TypeckErr,
     },
 };
@@ -444,6 +444,7 @@ impl<'hir> Typecker<'hir> {
                 })
             }),
 
+            TyKind::Struct(_) => self.instantiate_struct(InstantiateDir::Left, r_ty, ex),
             TyKind::Adt(_) => self.instantiate_adt(InstantiateDir::Left, r_ty, ex),
 
             TyKind::Kind(_) => unreachable!(),
@@ -489,6 +490,7 @@ impl<'hir> Typecker<'hir> {
                 })
             }),
 
+            TyKind::Struct(_) => self.instantiate_struct(InstantiateDir::Right, l_ty, ex),
             TyKind::Adt(_) => self.instantiate_adt(InstantiateDir::Right, l_ty, ex),
 
             TyKind::Kind(_) => unreachable!(),
@@ -564,7 +566,7 @@ impl<'hir> Typecker<'hir> {
                         fields: fields
                             .iter()
                             .map(|(field, (_, ex_ty))| field.map_ty_pure(&mut |_| Ok(*ex_ty)))
-                            .collect::<IndexVec<FieldId, _>>(),
+                            .collect(),
                     })
                     .collect(),
             });
@@ -576,6 +578,35 @@ impl<'hir> Typecker<'hir> {
                     this.instantiate(dir.alternate(), f.ty, variant_exes[vid].1[fid].1 .0)?;
                     Ok(())
                 })?;
+                Ok(())
+            })?;
+
+            Ok(ty)
+        })
+    }
+
+    fn instantiate_struct(&mut self, dir: InstantiateDir, ty: Ty, ex: Ex) -> TyResult<Ty> {
+        let struct_ = ty.as_struct().unwrap();
+
+        self.try_to(|this| {
+            let field_exes = struct_
+                .fields
+                .iter()
+                .map(|&f| (f, this.add_fresh_common_ex()))
+                .collect::<IndexVec<FieldId, (Field, ExPair)>>();
+
+            let struct_ex = Ty::struct_(Struct {
+                def_id: struct_.def_id,
+                fields: field_exes
+                    .iter()
+                    .map(|(field, (_, ex_ty))| field.map_ty_pure(&mut |_| Ok(*ex_ty)))
+                    .collect(),
+            });
+
+            this.solve(ex, struct_ex.mono());
+
+            struct_.fields.iter_enumerated().try_for_each(|(fid, f)| {
+                this.instantiate(dir.alternate(), f.ty, field_exes[fid].1 .0)?;
                 Ok(())
             })?;
 

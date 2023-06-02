@@ -1,6 +1,8 @@
 use super::{
     expr::{Call, ExprKind, Lambda, Lit, TyExpr},
-    item::{Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, TyAlias, TyParam},
+    item::{
+        Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, Struct, TyAlias, TyParam,
+    },
     pat::PatKind,
     stmt::{Local, StmtKind},
     ty::TyKind,
@@ -57,7 +59,8 @@ pub trait HirVisitor {
             ItemKind::Mod(m) => self.visit_mod_item(item.name(), m, id, hir),
             ItemKind::Value(value) => self.visit_value_item(item.name(), value, id, hir),
             ItemKind::Func(body) => self.visit_func_item(item.name(), body, id, hir),
-            ItemKind::Adt(data) => self.visit_adt_item(item.name(), data, id, hir),
+            ItemKind::Adt(adt) => self.visit_adt_item(item.name(), adt, id, hir),
+            ItemKind::Struct(data) => self.visit_struct_item(item.name(), data, id, hir),
             ItemKind::ExternItem(extern_item) => {
                 self.visit_extern_item(item.name(), extern_item, id, hir)
             },
@@ -103,6 +106,12 @@ pub trait HirVisitor {
         let variant = hir.variant(variant);
         self.visit_ident(&variant.name, hir);
         walk_each!(self, variant.fields, visit_field, hir);
+    }
+
+    fn visit_struct_item(&mut self, name: Ident, data: &Struct, _id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        self.visit_generic_params(&data.generics, hir);
+        walk_each!(self, data.fields, visit_field, hir);
     }
 
     fn visit_field(&mut self, field: &Field, hir: &HIR) {

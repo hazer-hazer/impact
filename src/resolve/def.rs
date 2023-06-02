@@ -32,6 +32,7 @@ pub enum DefKind {
     Lambda,
     Adt,
     Variant,
+    Struct,
     Ctor,
     FieldAccessor,
     TyParam,
@@ -50,6 +51,7 @@ impl DefKind {
             ItemKind::Decl(_, params, _) if params.is_empty() => DefKind::Value,
             ItemKind::Decl(..) => DefKind::Func,
             ItemKind::Adt(..) => DefKind::Adt,
+            ItemKind::Struct(..) => DefKind::Struct,
             ItemKind::Extern(_) => panic!(),
         }
     }
@@ -66,6 +68,7 @@ impl DefKind {
             DefKind::External => Namespace::Value,
             DefKind::Adt => Namespace::Type,
             DefKind::Variant => Namespace::Type,
+            DefKind::Struct => Namespace::Type,
             DefKind::Ctor => Namespace::Value,
             DefKind::FieldAccessor => Namespace::Value,
             DefKind::TyParam => Namespace::Type,
@@ -91,6 +94,7 @@ impl Display for DefKind {
                 DefKind::Local => "local",
                 DefKind::Adt => "data type",
                 DefKind::Variant => "variant",
+                DefKind::Struct => "struct",
                 DefKind::Ctor => "constructor",
                 DefKind::FieldAccessor => "field accessor",
                 DefKind::TyParam => "type parameter",
@@ -600,7 +604,11 @@ impl<'a> DebugModuleTree<'a> {
 
                 match def.kind() {
                     // TODO: Review Variant as module
-                    DefKind::Variant | DefKind::Adt | DefKind::Root | DefKind::Mod => {
+                    DefKind::Struct
+                    | DefKind::Variant
+                    | DefKind::Adt
+                    | DefKind::Root
+                    | DefKind::Mod => {
                         self.pp.punct(Punct::Colon).nl().indent();
                         self.module(ModuleId::Def(def.def_id()));
                         self.pp.dedent();

@@ -73,8 +73,11 @@ pub trait AstVisitor<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            ItemKind::Adt(is_adt, name, generics, variants) => {
-                self.visit_adt_item(is_adt, name, generics, variants, item.id())
+            ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
+            ItemKind::Struct(name, generics, fields) => {
+                self.visit_struct_item(name, generics, fields)
             },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
@@ -123,7 +126,6 @@ pub trait AstVisitor<'ast> {
 
     fn visit_adt_item(
         &mut self,
-        is_adt: &bool,
         name: &'ast PR<Ident>,
         generics: &'ast GenericParams,
         variants: &'ast [PR<Variant>],
@@ -137,6 +139,17 @@ pub trait AstVisitor<'ast> {
     fn visit_variant(&mut self, variant: &'ast Variant) {
         walk_pr!(self, &variant.name, visit_ident);
         walk_each_pr!(self, &variant.fields, visit_field);
+    }
+
+    fn visit_struct_item(
+        &mut self,
+        name: &'ast PR<Ident>,
+        generics: &'ast super::item::GenericParams,
+        fields: &'ast [PR<Field>],
+    ) {
+        walk_pr!(self, name, visit_ident);
+        self.visit_generic_params(generics);
+        walk_each_pr!(self, fields, visit_field);
     }
 
     fn visit_field(&mut self, field: &'ast Field) {

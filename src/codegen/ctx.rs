@@ -3,14 +3,16 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::{Linkage, Module},
-    types::{AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType, StructType},
-    values::{BasicValueEnum, FunctionValue, PointerValue},
+    types::{
+        AnyTypeEnum, BasicType, BasicTypeEnum, FunctionType, IntType, PointerType, StructType,
+    },
+    values::{BasicValueEnum, FunctionValue, IntValue, PointerValue},
     AddressSpace,
 };
 
 use crate::{
     cli::verbose,
-    hir::{item::ItemId, HIR},
+    hir::{item::ItemId, HIR, self},
     mir::{Ty, MIR},
     resolve::{
         builtin::Builtin,
@@ -18,7 +20,7 @@ use crate::{
     },
     session::Session,
     typeck::{
-        ty::{self, FloatKind, TyKind, VariantId},
+        ty::{self, FloatKind, TyKind, TyMap, VariantId},
         tyctx::InstantiatedTy,
     },
 };
@@ -31,6 +33,8 @@ pub struct CodeGenCtx<'ink, 'ctx> {
     // LLVM Context //
     pub llvm_ctx: &'ink Context,
     pub llvm_module: Module<'ink>,
+
+    pub conv_cache: TyMap<AnyTypeEnum<'ink>>,
 }
 
 impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
@@ -59,8 +63,31 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         self.llvm_ctx.i8_type().ptr_type(AddressSpace::default())
     }
 
+    /// Get uint type to fit sum number, e.g. count of variants in ADT
+    pub fn fitted_uint(&self, num: usize) -> IntType<'ink> {
+        let ranges: &[u32] = &[8, 16, 32, 64];
+
+        ranges
+            .iter()
+            .copied()
+            .find_map(|range| {
+                if (0..(range as usize * 8)).contains(&num) {
+                    Some(self.llvm_ctx.custom_width_int_type(range).into())
+                } else {
+                    None
+                }
+            })
+            .expect(&format!(
+                "Failed to fit number {num} in range of available int types"
+            ))
+    }
+
     // TODO: Cache
     pub fn conv_ty(&self, ty: Ty) -> AnyTypeEnum<'ink> {
+        if let Some(&conv) = self.conv_cache.get_flat(ty.id()) {
+            return conv;
+        }
+
         match ty.kind() {
             TyKind::Unit => self.unit_ty().into(),
             TyKind::Bool => self.llvm_ctx.bool_type().into(),
@@ -88,23 +115,40 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
                 unreachable!("Type {} must not exist on codegen stage", ty)
             },
             TyKind::Kind(_) => todo!(),
-            TyKind::Adt(adt) => self.conv_adt_ty(adt),
+            TyKind::Adt(_) => self.conv_adt_ty(ty),
+            TyKind::Struct(data) => self.conv_struct_ty(data),
+            // TyKind::Struct(data) => conv,
         }
     }
 
-    pub fn conv_adt_ty(&self, adt_ty: &ty::Adt) -> AnyTypeEnum<'ink> {
+    pub fn conv_adt_ty(&self, adt_ty: Ty) -> AnyTypeEnum<'ink> {
+        if let Some(&conv) = self.conv_cache.get_flat(adt_ty.id()) {
+            return conv;
+        }
+
+        let adt_ty = adt_ty.as_adt().unwrap();
+
         assert!(!adt_ty.variants.is_empty());
 
-        if adt_ty.variants.len() == 1 {
-            self.llvm_ctx
-                .struct_type(
-                    &self.conv_variant_fields_tys(adt_ty, VariantId::new(0)),
-                    false,
-                )
-                .into()
-        } else {
-            todo!()
-        }
+        let max_variant_size = adt_ty
+            .max_variant_size()
+            .expect("[BUG] Unknown size of ADT type must be checked before codegen");
+
+        let fitted_tag_ty = self.fitted_uint(adt_ty.variants.len());
+
+        self.llvm_ctx
+            .struct_type(
+                &[
+                    fitted_tag_ty.into(),
+                    self.llvm_ctx.i8_type().array_type(max_variant_size).into(),
+                ],
+                false,
+            )
+            .into()
+    }
+
+    pub fn adt_ty_fitted_tag_ty(&self, adt_ty: Ty) -> IntType<'ink> {
+        self.fitted_uint(adt_ty.as_adt().unwrap().variants.len())
     }
 
     pub fn conv_variant_fields_tys(
@@ -122,7 +166,25 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
             .collect()
     }
 
+    pub fn conv_struct_ty(&self, struct_ty: &ty::Struct) -> AnyTypeEnum<'ink> {
+        self.llvm_ctx
+            .struct_type(
+                &struct_ty
+                    .fields
+                    .iter()
+                    .copied()
+                    .map(|f| self.conv_basic_ty(f.ty))
+                    .collect::<Vec<_>>(),
+                false,
+            )
+            .into()
+    }
+
     pub fn conv_basic_ty(&self, ty: Ty) -> BasicTypeEnum<'ink> {
+        if let Some(&conv) = self.conv_cache.get_flat(ty.id()) {
+            return conv.try_into().unwrap();
+        }
+
         match self.conv_ty(ty) {
             AnyTypeEnum::FunctionType(func_ty) => func_ty.ptr_type(AddressSpace::default()).into(),
             conv @ _ => conv,
@@ -143,6 +205,18 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
             ),
             InstantiatedTy::None => InstantiatedTy::None,
         }
+    }
+
+    pub fn variant_id_by_tag(&self, value: IntValue<'ink>) -> VariantId {
+        (value
+            .get_zero_extended_constant()
+            .expect("[BUG] ADT with > 8 bytes variants are not supported") as usize)
+            .into()
+    }
+
+    pub fn tag_by_variant_id(&self, adt_ty: Ty, vid: VariantId) -> IntValue<'ink> {
+        self.adt_ty_fitted_tag_ty(adt_ty)
+            .const_int(vid.inner().into(), false)
     }
 
     // Functions //

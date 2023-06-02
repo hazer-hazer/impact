@@ -76,6 +76,7 @@ impl<'hir> Typecker<'hir> {
                 ty
             },
             ItemKind::Adt(_) => self.tyctx().node_type(hir_id).unwrap(),
+            ItemKind::Struct(_) => self.tyctx().node_type(hir_id).unwrap(),
         };
 
         let ty = ty.apply_ctx(self);

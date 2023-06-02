@@ -11,7 +11,7 @@ use crate::{
     cli::verbose,
     hir::{
         self,
-        item::{Adt, ItemId, ItemNode, Mod, TyAlias},
+        item::{Adt, ItemId, ItemNode, Mod, Struct, TyAlias},
         stmt::Local,
         Body, BodyId, ExprDefKind, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind,
         TyRes, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
@@ -280,8 +280,11 @@ impl<'ast> Lower<'ast> {
                 ItemKind::Decl(name, params, body) => {
                     this.lower_decl_item(name, params, body, def_id)
                 },
-                ItemKind::Adt(is_adt, name, generics, variants) => {
-                    this.lower_data_item(is_adt, name, generics, variants)
+                ItemKind::Adt(name, generics, variants) => {
+                    this.lower_data_item(name, generics, variants)
+                },
+                ItemKind::Struct(name, generics, fields) => {
+                    this.lower_struct_item(name, generics, fields)
                 },
                 ItemKind::Extern(_) => unreachable!(),
             };
@@ -384,25 +387,13 @@ impl<'ast> Lower<'ast> {
 
     fn lower_data_item(
         &mut self,
-        &is_adt: &bool,
         _: &PR<Ident>,
         generics: &GenericParams,
         variants: &[PR<Variant>],
     ) -> hir::item::ItemKind {
         let variants = lower_each_pr!(self, variants, lower_variant);
 
-        if is_adt {
-            assert!(variants.iter().copied().all(|v| {
-                self.get_current_owner_node(v)
-                    .variant()
-                    .fields
-                    .iter()
-                    .all(|f| f.accessor_def_id.is_none())
-            }));
-        }
-
         hir::item::ItemKind::Adt(Adt {
-            is_adt,
             generics: self.lower_generic_params(generics),
             variants,
         })
@@ -421,6 +412,18 @@ impl<'ast> Lower<'ast> {
             span: variant.span(),
         }))
         .into()
+    }
+
+    fn lower_struct_item(
+        &mut self,
+        _: &PR<Ident>,
+        generics: &GenericParams,
+        fields: &[PR<Field>],
+    ) -> hir::item::ItemKind {
+        hir::item::ItemKind::Struct(Struct {
+            generics: self.lower_generic_params(generics),
+            fields: lower_each_pr!(self, fields, lower_field),
+        })
     }
 
     fn lower_field(&mut self, field: &Field) -> hir::item::Field {

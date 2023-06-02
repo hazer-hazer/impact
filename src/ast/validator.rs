@@ -210,10 +210,11 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.validate_name(name.as_ref().unwrap(), name_kind);
                 self.visit_decl_item(name, params, body, item.id());
             },
-            ItemKind::Adt(is_adt, name, generics, variants) => {
+            ItemKind::Adt(name, generics, variants) => {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Type);
-                self.visit_adt_item(is_adt, name, generics, variants, item.id());
+                self.visit_adt_item(name, generics, variants, item.id());
             },
+            ItemKind::Struct(..) => todo!(),
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }
@@ -229,7 +230,6 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
 
     fn visit_adt_item(
         &mut self,
-        is_adt: &bool,
         name: &'ast PR<Ident>,
         generics: &'ast super::item::GenericParams,
         variants: &'ast [PR<Variant>],

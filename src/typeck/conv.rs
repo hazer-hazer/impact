@@ -1,6 +1,6 @@
 use super::{
     kind::{Kind, KindEx},
-    ty::{Adt, Field, FieldId, IntKind, TyVarId, Variant, VariantId},
+    ty::{Adt, Field, FieldId, IntKind, Struct, TyVarId, Variant, VariantId},
     tyctx::TyCtx,
 };
 use crate::{
@@ -208,47 +208,24 @@ impl<'hir> TyConv<'hir> {
             self.tyctx_mut().type_node(v_hir_id, adt_ty);
             self.tyctx_mut().type_def(v_def_id, adt_ty);
 
-            let fields_tys = degeneralized_adt_ty.as_adt().unwrap().field_tys(vid);
-
             // Constructor type
             // FIXME: replace tight_func with () -> ...
             let ctor_def_id = variant_node.ctor_def_id;
             let ctor_ty = adt_ty.substituted_forall_body(Ty::tight_func(
                 Some(ctor_def_id),
-                fields_tys.iter().copied().collect(),
+                adt_ty
+                    .as_adt()
+                    .unwrap()
+                    .variant(vid)
+                    .fields
+                    .iter()
+                    .map(|f| f.ty)
+                    .collect(),
                 adt_ty,
             ));
 
             self.tyctx_mut().type_def(ctor_def_id, ctor_ty)
         });
-
-        if !adt.is_adt {
-            // Field accessors types
-            let variant_node = self.hir.variant(variants[0.into()]);
-            let fields_tys = degeneralized_adt_ty.as_adt().unwrap().field_tys(0.into());
-            variant_node
-                .fields
-                .iter()
-                .enumerate()
-                .for_each(|(index, field)| {
-                    // Field indexing defined here. For now, just incremental sequencing.
-                    let field_id = FieldId::new(index as u32);
-                    let field_ty = fields_tys.get(field_id).copied().unwrap();
-
-                    let field_accessor_def_id = field.accessor_def_id.unwrap();
-                    // Field accessor ty: `AdtTy -> FieldTy`
-                    let field_accessor_ty = adt_ty.substituted_forall_body(Ty::tight_func(
-                        Some(field_accessor_def_id),
-                        vec![degeneralized_adt_ty],
-                        field_ty,
-                    ));
-
-                    self.tyctx_mut()
-                        .type_def(field_accessor_def_id, field_accessor_ty);
-                    self.tyctx_mut()
-                        .set_field_accessor_field_id(field_accessor_def_id, field_id);
-                });
-        }
 
         adt_ty
     }
@@ -265,6 +242,56 @@ impl<'hir> TyConv<'hir> {
                 .map(|(index, field)| self.conv_field(index, field, adt_def_id))
                 .collect(),
         }
+    }
+
+    fn conv_struct(&mut self, struct_def_id: DefId) -> Ty {
+        let struct_ = self.hir.item(ItemId::new(struct_def_id.into())).struct_();
+
+        let struct_ty = self.conv_ty_def(struct_def_id, &struct_.generics, |this| {
+            let fields = struct_
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(index, field)| this.conv_field(index, field, struct_def_id))
+                .collect();
+            Ty::struct_(Struct {
+                def_id: struct_def_id,
+                fields,
+            })
+        });
+
+        let degeneralized_struct_ty = struct_ty.degeneralize();
+
+        // Field accessors types
+        let fields_tys = degeneralized_struct_ty
+            .as_adt()
+            .unwrap()
+            .field_tys(0.into());
+
+        struct_
+            .fields
+            .iter()
+            .enumerate()
+            .for_each(|(index, field)| {
+                // Field indexing defined here. For now, just incremental sequencing.
+                let field_id = FieldId::new(index as u32);
+                let field_ty = fields_tys.get(field_id).copied().unwrap();
+
+                let field_accessor_def_id = field.accessor_def_id.unwrap();
+                // Field accessor ty: `AdtTy -> FieldTy`
+                let field_accessor_ty = struct_ty.substituted_forall_body(Ty::tight_func(
+                    Some(field_accessor_def_id),
+                    vec![degeneralized_struct_ty],
+                    field_ty,
+                ));
+
+                self.tyctx_mut()
+                    .type_def(field_accessor_def_id, field_accessor_ty);
+                self.tyctx_mut()
+                    .set_field_accessor_field_id(field_accessor_def_id, field_id);
+            });
+
+        struct_ty
     }
 
     fn conv_field(&mut self, index: usize, field: &hir::item::Field, adt_def_id: DefId) -> Field {
@@ -337,6 +364,15 @@ impl<'hir> HirVisitor for TyConv<'hir> {
         walk_each!(self, adt.variants, visit_variant, hir);
 
         let conv = self.conv_adt(id.def_id());
+        self.tyctx_mut().type_node(id.hir_id(), conv);
+    }
+
+    fn visit_struct_item(&mut self, name: Ident, data: &hir::item::Struct, id: ItemId, hir: &HIR) {
+        self.visit_ident(&name, hir);
+        self.visit_generic_params(&data.generics, hir);
+        walk_each!(self, data.fields, visit_field, hir);
+
+        let conv = self.conv_struct(id.def_id());
         self.tyctx_mut().type_node(id.hir_id(), conv);
     }
 }

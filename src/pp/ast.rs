@@ -68,8 +68,11 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            ItemKind::Adt(is_adt, name, generics, variants) => {
-                self.visit_adt_item(is_adt, name, generics, variants, item.id())
+            ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
+            ItemKind::Struct(name, generics, fields) => {
+                self.visit_struct_item(name, generics, fields)
             },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
@@ -126,7 +129,6 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     fn visit_adt_item(
         &mut self,
-        is_adt: &bool,
         name: &'ast PR<Ident>,
         generics: &'ast GenericParams,
         variants: &'ast [PR<Variant>],
@@ -136,9 +138,6 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_pr!(self, name, name, id, true);
         self.visit_generic_params(generics);
         self.op(Op::Assign);
-        if *is_adt {
-            self.str("| ");
-        }
         walk_each_pr_delim!(self, variants, visit_variant, " | ");
     }
 

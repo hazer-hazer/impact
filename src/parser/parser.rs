@@ -650,7 +650,8 @@ impl Parser {
             TokenCmp::Semi
         };
 
-        let mut variants = vec![self.parse_variant()];
+        let (first_variant, mut last_variant_block_ended) = self.parse_variant();
+        let mut variants = vec![first_variant];
 
         while !self.eof() {
             if self.is(end) {
@@ -665,54 +666,84 @@ impl Parser {
                 break;
             }
 
-            variants.push(self.parse_variant());
+            let (variant, block_ended) = self.parse_variant();
+            variants.push(variant);
+            last_variant_block_ended = block_ended;
         }
 
         self.expect(end)?;
 
         self.exit_parsed_entity(pe);
 
-        if variants.len() == 1 {
-            variants.iter_mut().for_each(|v| {
-                let _no_accessor_for_err = v.as_mut().map(|v| {
-                    v.fields.iter_mut().for_each(|f| {
-                        let _no_accessor_for_err = f.as_mut().map(|f| {
-                            f.accessor_id = Some(self.next_node_id());
-                        });
-                    });
-                });
-            });
-        }
+        Ok(Box::new(Item::new(
+            self.next_node_id(),
+            ItemKind::Adt(name, generics, variants),
+            self.close_span(lo),
+            is_block_ended || last_variant_block_ended,
+        )))
+    }
 
-        let is_adt = leading_pipe.is_some() || variants.len() > 1;
+    fn parse_variant(&mut self) -> (PR<Variant>, bool) {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "variant");
+
+        let lo = self.span();
+
+        let name = self.parse_ident_decl_name("variant name");
+
+        let (fields, is_block_ended) = self.parse_fields_block(false);
+
+        self.exit_parsed_entity(pe);
+
+        (
+            Ok(Variant::new(
+                self.next_node_id(),
+                self.next_node_id(),
+                name,
+                fields,
+                self.close_span(lo),
+            )),
+            is_block_ended,
+        )
+    }
+
+    fn parse_struct_item(&mut self) -> PR<N<Item>> {
+        let pe = self.enter_entity(ParseEntryKind::Expect, "struct");
+        let lo = self.span();
+
+        self.just_skip(TokenCmp::Kw(Kw::Struct));
+
+        let name = self.parse_ident_decl_name("struct name");
+
+        let generics = self.parse_generic_params();
+
+        self.expect(TokenCmp::Op(Op::Assign))?;
+
+        let (fields, is_block_ended) = self.parse_fields_block(true);
 
         Ok(Box::new(Item::new(
             self.next_node_id(),
-            ItemKind::Adt(is_adt, name, generics, variants),
+            ItemKind::Struct(name, generics, fields),
             self.close_span(lo),
             is_block_ended,
         )))
     }
 
-    fn parse_variant(&mut self) -> PR<Variant> {
-        let pe = self.enter_entity(ParseEntryKind::Expect, "variant");
-
-        let lo = self.span();
-
-        // TODO: Allow anonymous single variant structures
-
-        let name = self.parse_ident_decl_name("variant name");
-
-        let (end, field_delim): (&[TokenCmp], &[TokenCmp]) =
+    /// Parse either fields delimited by comma or block of fields delimited by
+    /// newlines. Returns list of list and `true` if it was a block of
+    /// fields, like `is_block_ended` property.
+    fn parse_fields_block(&mut self, is_struct_field: bool) -> (Vec<PR<Field>>, bool) {
+        let (end, field_delim, is_block_ended): (&[TokenCmp], &[TokenCmp], bool) =
             if self.skip(TokenCmp::BlockStart).is_some() {
                 (
                     &[TokenCmp::BlockEnd, TokenCmp::Semi],
                     &[TokenCmp::Nl, TokenCmp::Punct(Punct::Comma)],
+                    true,
                 )
             } else {
                 (
                     &[TokenCmp::BlockEnd, TokenCmp::Semi, TokenCmp::Op(Op::BitOr)],
                     &[TokenCmp::Punct(Punct::Comma)],
+                    false,
                 )
             };
 
@@ -722,24 +753,16 @@ impl Parser {
             if self.is_any(end) {
                 break;
             }
-            fields.push(self.parse_field(field_index));
+            fields.push(self.parse_field(false, field_index));
             if !self.skip_any(field_delim).is_some() {
                 break;
             }
         }
 
-        self.exit_parsed_entity(pe);
-
-        Ok(Variant::new(
-            self.next_node_id(),
-            self.next_node_id(),
-            name,
-            fields,
-            self.close_span(lo),
-        ))
+        (fields, is_block_ended)
     }
 
-    fn parse_field(&mut self, index: usize) -> PR<Field> {
+    fn parse_field(&mut self, is_struct_field: bool, index: usize) -> PR<Field> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "field");
 
         let lo = self.span();
@@ -759,6 +782,7 @@ impl Parser {
         Ok(Field::new(
             self.next_node_id(),
             index,
+            is_struct_field.then_some(self.next_node_id()),
             name,
             ty,
             self.close_span(lo),

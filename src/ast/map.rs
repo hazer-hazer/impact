@@ -111,8 +111,11 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             item::ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id())
             },
-            item::ItemKind::Adt(is_adt, name, generics, variants) => {
-                self.visit_adt_item(is_adt, name, generics, variants, item.id())
+            item::ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
+            item::ItemKind::Struct(name, generics, fields) => {
+                self.visit_struct_item(name, generics, fields)
             },
             item::ItemKind::Extern(items) => self.visit_extern_block(items),
         }

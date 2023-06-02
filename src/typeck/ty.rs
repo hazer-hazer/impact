@@ -281,6 +281,12 @@ pub struct Variant<T = Ty> {
     pub fields: IndexVec<FieldId, Field<T>>,
 }
 
+impl Variant<Ty> {
+    pub fn size(&self) -> Option<u32> {
+        self.fields.iter().map(|f| f.ty.size()).sum()
+    }
+}
+
 impl<To> MapTy<To, Variant<To>> for Variant {
     fn map_ty<E, F>(&self, f: &mut F) -> Result<Variant<To>, E>
     where
@@ -330,18 +336,22 @@ impl Adt {
             .flatten()
     }
 
+    pub fn variant(&self, vid: VariantId) -> &Variant {
+        self.variants.get(vid).unwrap()
+    }
+
     pub fn field_ty(&self, vid: VariantId, fid: FieldId) -> Ty {
         self.variants.get(vid).unwrap().fields.get(fid).unwrap().ty
     }
 
-    pub fn field_tys(&self, vid: VariantId) -> IndexVec<FieldId, Ty> {
+    pub fn max_variant_size(&self) -> Option<u32> {
         self.variants
-            .get(vid)
-            .unwrap()
-            .fields
             .iter()
-            .map(|field| field.ty)
-            .collect()
+            .map(|v| v.size())
+            .collect::<Option<Vec<_>>>()?
+            .iter()
+            .copied()
+            .max()
     }
 }
 
@@ -378,6 +388,55 @@ impl std::fmt::Display for Adt {
     }
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Struct<T = Ty> {
+    pub def_id: DefId,
+    pub fields: IndexVec<FieldId, Field<T>>,
+}
+
+impl Struct {
+    pub fn walk_tys<'a>(&'a self) -> impl Iterator<Item = Ty> + 'a {
+        self.fields.iter().map(|f| f.ty)
+    }
+
+    pub fn size(&self) -> Option<u32> {
+        self.fields.iter().map(|f| f.ty.size()).sum()
+    }
+}
+
+impl<To> MapTy<To, Struct<To>> for Struct {
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<Struct<To>, E>
+    where
+        F: FnMut(Ty) -> Result<To, E>,
+    {
+        let fields = self
+            .fields
+            .iter()
+            .map(|field| field.map_ty(f))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Struct {
+            def_id: self.def_id,
+            fields,
+        })
+    }
+}
+
+impl std::fmt::Display for Struct {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "struct {} = {}",
+            self.def_id,
+            self.fields
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
     Error,
@@ -397,6 +456,7 @@ pub enum TyKind {
     Func(Vec<Ty>, Ty),
 
     Adt(Adt),
+    Struct(Struct),
     Ref(Ty),
 
     Var(TyVarId),
@@ -442,6 +502,7 @@ impl std::fmt::Display for TyKind {
                 )
             },
             TyKind::Adt(adt) => adt.fmt(f),
+            TyKind::Struct(data) => data.fmt(f),
             TyKind::Ref(ty) => write!(f, "ref {ty}"),
             &TyKind::Var(id) => write!(f, "{}", id.pretty()),
             TyKind::Existential(ex) => write!(f, "{ex}"),
@@ -516,6 +577,10 @@ impl Ty {
         Self::new(TyKind::Adt(adt))
     }
 
+    pub fn struct_(struct_: Struct) -> Ty {
+        Self::new(TyKind::Struct(struct_))
+    }
+
     pub fn ref_to(ty: Ty) -> Ty {
         // assert!(ty.is_mono());
         Self::new(TyKind::Ref(ty))
@@ -555,6 +620,7 @@ impl Ty {
             TyKind::FuncDef(_, params, body) | TyKind::Func(params, body) => {
                 params.iter().all(Ty::is_mono) && body.is_mono()
             },
+            TyKind::Struct(s) => s.walk_tys().all(|ty| ty.is_mono()),
             TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_mono()),
             TyKind::Forall(..) => false,
             TyKind::Ref(ty) => ty.is_mono(),
@@ -582,6 +648,7 @@ impl Ty {
             TyKind::Func(params, body) | TyKind::FuncDef(_, params, body) => {
                 params.iter().all(Ty::is_instantiated) && body.is_instantiated()
             },
+            TyKind::Struct(s) => s.walk_tys().all(|ty| ty.is_instantiated()),
             TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_instantiated()),
             TyKind::Ref(ty) => ty.is_instantiated(),
             TyKind::Kind(_) => false,
@@ -590,10 +657,11 @@ impl Ty {
 
     // Getters //
     pub fn as_adt(&self) -> Option<&Adt> {
-        match self.kind() {
-            TyKind::Adt(adt) => Some(adt),
-            _ => None,
-        }
+        match_opt!(self.kind(), TyKind::Adt(adt) => adt)
+    }
+
+    pub fn as_struct(&self) -> Option<&Struct> {
+        match_opt!(self.kind(), TyKind::Struct(struct_) => struct_)
     }
 
     pub fn as_int(&self) -> Option<IntKind> {
@@ -640,6 +708,29 @@ impl Ty {
         self.inner_ty_vars()
             .into_iter()
             .fold(*self, |ty, var| Ty::forall(var, ty))
+    }
+
+    /// Get size of type in bytes, None if size is unknown at compile-time
+    pub fn size(self) -> Option<u32> {
+        match self.kind() {
+            TyKind::Error => panic!(),
+            // TODO: Review
+            TyKind::Unit => Some(0),
+            TyKind::Bool => Some(1),
+            TyKind::Int(kind) => Some(kind.bytes().into()),
+            TyKind::Float(kind) => Some(kind.bytes().into()),
+            TyKind::Str => None,
+            // TODO: Functions might be just usize
+            TyKind::FuncDef(..) => todo!(),
+            TyKind::Func(..) => todo!(),
+            TyKind::Adt(adt) => adt.max_variant_size(),
+            TyKind::Struct(data) => data.size(),
+            TyKind::Ref(_) => Some(IntKind::Uint.bytes().into()),
+            TyKind::Var(_) => panic!(),
+            TyKind::Existential(_) => panic!(),
+            TyKind::Forall(..) => panic!(),
+            TyKind::Kind(_) => panic!(),
+        }
     }
 }
 

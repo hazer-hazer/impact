@@ -245,6 +245,9 @@ impl TyCtx {
             TyKind::Adt(adt) => Ok(Ty::adt(
                 adt.map_ty(&mut |ty| self._instantiated_ty(expr, ty))?,
             )),
+            TyKind::Struct(data) => Ok(Ty::struct_(
+                data.map_ty(&mut |ty| self._instantiated_ty(expr, ty))?,
+            )),
         }
     }
 

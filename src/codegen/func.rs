@@ -224,6 +224,8 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         // TODO: Somehow canonicalize fields order, maybe FieldId from type <=>
         //  parameter index?
 
+        let adt_ty = self.ctx.sess.tyctx.tyof(hir_vid);
+
         self.function_map
             .add_instance(variant.ctor_def_id, ctor_func_ty, |_def_id, ty| {
                 self.ctx.simple_func(

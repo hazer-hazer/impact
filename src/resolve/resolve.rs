@@ -231,6 +231,7 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::External
             | DefKind::Adt
             | DefKind::Variant
+            | DefKind::Struct
             | DefKind::Ctor
             | DefKind::FieldAccessor
             | DefKind::Value
@@ -339,7 +340,9 @@ impl<'ast> NameResolver<'ast> {
         let def = self.sess.def_table.def(def_id);
         match def.kind() {
             // TODO: Review Adt + Variant as module
-            DefKind::Adt | DefKind::Variant | DefKind::Mod => Ok(ModuleId::Def(def_id)),
+            DefKind::Struct | DefKind::Adt | DefKind::Variant | DefKind::Mod => {
+                Ok(ModuleId::Def(def_id))
+            },
             DefKind::DeclareBuiltin | DefKind::TyAlias => {
                 MessageBuilder::error()
                     .span(name.span())
@@ -528,8 +531,11 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             ItemKind::Decl(name, params, body) => {
                 self.visit_decl_item(name, params, body, item.id());
             },
-            ItemKind::Adt(is_adt, name, generics, variants) => {
-                self.visit_adt_item(is_adt, name, generics, variants, item.id())
+            ItemKind::Adt(name, generics, variants) => {
+                self.visit_adt_item(name, generics, variants, item.id())
+            },
+            ItemKind::Struct(name, generics, fields) => {
+                self.visit_struct_item(name, generics, fields)
             },
             ItemKind::Extern(_) => unreachable!(),
         }

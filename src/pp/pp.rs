@@ -171,7 +171,7 @@ impl PP {
     pub fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
-            Kw::Data | Kw::Extern | Kw::Type | Kw::Mod => ("", " "),
+            Kw::Struct | Kw::Data | Kw::Extern | Kw::Type | Kw::Mod => ("", " "),
             Kw::Unit | Kw::Underscore | Kw::Let | Kw::Root | Kw::Unknown => ("", ""),
         };
 

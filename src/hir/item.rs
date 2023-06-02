@@ -86,9 +86,14 @@ impl_with_hir_id!(VariantNode);
 
 #[derive(Debug)]
 pub struct Adt {
-    pub is_adt: bool,
     pub generics: GenericParams,
     pub variants: Vec<Variant>,
+}
+
+#[derive(Debug)]
+pub struct Struct {
+    pub generics: GenericParams,
+    pub fields: Vec<Field>,
 }
 
 #[derive(Debug)]
@@ -103,6 +108,7 @@ pub enum ItemKind {
     Value(BodyId),
     Func(BodyId),
     Adt(Adt),
+    Struct(Struct),
     ExternItem(ExternItem),
 }
 
@@ -165,5 +171,6 @@ specific_item_nodes!(
     Value value BodyId;
     Func func BodyId;
     Adt adt Adt;
+    Struct struct_ Struct;
     ExternItem extern_item ExternItem;
 );
