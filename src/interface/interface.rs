@@ -165,7 +165,7 @@ impl<'ast> Interface {
 
         if sess.config().check_pp_stage(stage) {
             let mut pp = HirPP::new(&sess, AstPPMode::Normal);
-            pp.visit_hir();
+            pp.visit_hir(&hir);
             let hir = pp.pp.get_string();
             outln!(dbg, sess.writer, "Printing HIR\n{}", hir);
         }
@@ -175,11 +175,11 @@ impl<'ast> Interface {
         // Typeck //
         verbose!("=== Type checking ===");
         let stage = StageName::Typeck;
-        let mut typeck_result = Typecker::new(sess).run().recover()?;
+        let mut typeck_result = Typecker::new(sess, &hir).run().recover()?;
 
         if typeck_result.ctx().config().check_pp_stage(stage) {
             let mut pp = HirPP::new(typeck_result.ctx(), AstPPMode::TyAnno);
-            pp.visit_hir();
+            pp.visit_hir(&hir);
             let hir = pp.pp.get_string();
             outln!(
                 dbg,
@@ -197,11 +197,11 @@ impl<'ast> Interface {
         verbose!("=== MIR Construction ===");
         let stage = StageName::MirConstruction;
 
-        let (mir, mut sess) = BuildFullMir::new(sess).run_and_emit()?;
+        let (mir, mut sess) = BuildFullMir::new(sess, &hir).run_and_emit()?;
 
         if sess.config().check_pp_stage(stage) {
-            let mut pp = MirPrinter::new(&sess, &mir);
-            pp.visit_hir();
+            let mut pp = MirPrinter::new(&sess, &hir, &mir);
+            pp.visit_hir(&hir);
             let mir = pp.pp.get_string();
             outln!(dbg, sess.writer, "== MIR ==\n{}", mir);
         }
@@ -213,7 +213,7 @@ impl<'ast> Interface {
         let stage = StageName::Codegen;
 
         let llvm_ctx = Context::create();
-        let (_, sess) = CodeGen::new(sess, &mir, &llvm_ctx).run_and_emit()?;
+        let (_, sess) = CodeGen::new(sess, &hir, &mir, &llvm_ctx).run_and_emit()?;
 
         let sess = self.should_stop(sess, stage)?;
 

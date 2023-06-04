@@ -1,9 +1,12 @@
 use std::str::from_utf8;
 
-use super::{hir::walk_each_delim, AstLikePP};
+use super::{
+    hir::{self, walk_each_delim},
+    AstLikePP,
+};
 use crate::{
     hir::{
-        expr::Lambda, item::ItemId, pat::PatKind, visitor::HirVisitor, BodyId, BodyOwner, Pat,
+        expr::Lambda, item::ItemId, pat::PatKind, visitor::HirVisitor, BodyId, BodyOwner, Map, Pat,
         WithHirId, HIR,
     },
     mir::{
@@ -16,6 +19,7 @@ use crate::{
 };
 
 pub struct MirPrinter<'ctx> {
+    hir: &'ctx HIR,
     pub pp: AstLikePP<'ctx>,
     sess: &'ctx Session,
     mir: &'ctx MIR,
@@ -24,8 +28,9 @@ pub struct MirPrinter<'ctx> {
 impl_session_holder!(MirPrinter<'ctx>);
 
 impl<'ctx> MirPrinter<'ctx> {
-    pub fn new(sess: &'ctx Session, mir: &'ctx MIR) -> Self {
+    pub fn new(sess: &'ctx Session, hir: &'ctx HIR, mir: &'ctx MIR) -> Self {
         Self {
+            hir,
             pp: AstLikePP::new(&sess, super::AstPPMode::Normal),
             sess,
             mir,
@@ -99,7 +104,7 @@ impl<'ctx> MirPrinter<'ctx> {
                 self.pp.ch('(');
                 self.print_operand(lhs);
                 self.pp.sp();
-                walk_each_delim!(self, args, print_operand, " ");
+                walk_each_delim!(self, args.iter(), print_operand, " ");
                 self.pp.ch(')');
                 // self.pp.string(format!(" -> {}", target));
             },
@@ -160,28 +165,28 @@ impl<'ctx> MirPrinter<'ctx> {
 }
 
 impl<'ctx> HirVisitor for MirPrinter<'ctx> {
-    fn visit_func_item(&mut self, name: Ident, body: &BodyId, id: ItemId) {
+    fn visit_func_item(&mut self, name: Ident, body: BodyId, id: ItemId, hir: &HIR) {
         if id.def_id() == self.sess.def_table.builtin_func().def_id() {
             return;
         }
 
         self.pp.str("func").sp().string(name.original_string()).sp();
-        self.visit_body(body, BodyOwner::func(id.def_id()));
+        self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
-    fn visit_lambda(&mut self, lambda: &Lambda) {
+    fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
         self.pp.str("[lambda").string(lambda.def_id).str("]");
-        self.visit_body(&lambda.body_id, BodyOwner::lambda(lambda.def_id));
+        self.visit_body(lambda.body_id, BodyOwner::lambda(lambda.def_id), hir);
     }
 
-    fn visit_value_item(&mut self, name: Ident, value: &BodyId, id: ItemId) {
+    fn visit_value_item(&mut self, name: Ident, value: BodyId, id: ItemId, hir: &HIR) {
         self.pp.string(name.original_string()).op(Op::Assign);
-        self.visit_body(value, BodyOwner::value(id.def_id()));
+        self.visit_body(value, BodyOwner::value(id.def_id()), hir);
     }
 
     // Note: Only used for parameters
-    fn visit_pat(&mut self, &pat: &Pat) {
-        let pat = self.hir().pat(pat);
+    fn visit_pat(&mut self, pat: Pat, hir: &HIR) {
+        let pat = self.hir.pat(pat);
         match pat.kind() {
             PatKind::Unit => self.pp.kw(Kw::Unit),
             PatKind::Ident(ident) => self
@@ -192,11 +197,17 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         };
     }
 
-    fn visit_body(&mut self, body: &BodyId, _owner: BodyOwner) {
-        walk_each_delim!(self, self.hir().body(*body).params, visit_pat, " ");
+    fn visit_body(&mut self, body: BodyId, _owner: BodyOwner, hir: &HIR) {
+        walk_each_delim!(
+            self,
+            self.hir.body(body).params.iter().copied(),
+            visit_pat,
+            " ",
+            hir
+        );
         self.pp.sp();
 
-        if let Some(body) = self.mir.bodies.get(body) {
+        if let Some(body) = self.mir.bodies.get(&body) {
             self.print_body(body);
         } else {
             self.pp.str("[NO BODY]").nl();

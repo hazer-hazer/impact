@@ -1,10 +1,5 @@
-
-
 use super::{message::Message, MessageEmitter};
-use crate::{
-    interface::writer::{outln},
-    session::Session,
-};
+use crate::{interface::writer::outln, session::Session};
 
 pub struct DebugEmitter {}
 

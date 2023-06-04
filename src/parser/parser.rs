@@ -522,6 +522,9 @@ impl Parser {
         } else if self.is(TokenCmp::Kw(Kw::Data)) {
             let adt = self.parse_adt_item();
             Some(self.exit_entity(pe, adt))
+        } else if self.is(TokenCmp::Kw(Kw::Struct)) {
+            let struct_ = self.parse_struct_item();
+            Some(self.exit_entity(pe, struct_))
         } else {
             self.exit_parsed_entity(pe);
             None
@@ -651,7 +654,7 @@ impl Parser {
             TokenCmp::Semi
         };
 
-        let (first_variant, mut last_variant_block_ended) = self.parse_variant();
+        let (first_variant, mut last_variant_block_ended) = self.parse_variant()?;
         let mut variants = vec![first_variant];
 
         while !self.eof() {
@@ -667,7 +670,7 @@ impl Parser {
                 break;
             }
 
-            let (variant, block_ended) = self.parse_variant();
+            let (variant, block_ended) = self.parse_variant()?;
             variants.push(variant);
             last_variant_block_ended = block_ended;
         }
@@ -684,18 +687,18 @@ impl Parser {
         )))
     }
 
-    fn parse_variant(&mut self) -> (PR<Variant>, bool) {
+    fn parse_variant(&mut self) -> PR<(PR<Variant>, bool)> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "variant");
 
         let lo = self.span();
 
         let name = self.parse_ident_decl_name("variant name");
 
-        let (fields, is_block_ended) = self.parse_fields_block(false);
+        let (fields, is_block_ended) = self.parse_fields_block(false)?;
 
         self.exit_parsed_entity(pe);
 
-        (
+        Ok((
             Ok(Variant::new(
                 self.next_node_id(),
                 self.next_node_id(),
@@ -704,7 +707,7 @@ impl Parser {
                 self.close_span(lo),
             )),
             is_block_ended,
-        )
+        ))
     }
 
     fn parse_struct_item(&mut self) -> PR<N<Item>> {
@@ -719,7 +722,9 @@ impl Parser {
 
         self.expect(TokenCmp::Op(Op::Assign))?;
 
-        let (fields, is_block_ended) = self.parse_fields_block(true);
+        let (fields, is_block_ended) = self.parse_fields_block(true)?;
+
+        self.exit_parsed_entity(pe);
 
         Ok(Box::new(Item::new(
             self.next_node_id(),
@@ -732,17 +737,21 @@ impl Parser {
     /// Parse either fields delimited by comma or block of fields delimited by
     /// newlines. Returns list of list and `true` if it was a block of
     /// fields, like `is_block_ended` property.
-    fn parse_fields_block(&mut self, is_struct_field: bool) -> (Vec<PR<Field>>, bool) {
+    fn parse_fields_block(&mut self, is_struct_field: bool) -> PR<(Vec<PR<Field>>, bool)> {
         let (end, field_delim, is_block_ended): (&[TokenCmp], &[TokenCmp], bool) =
             if self.skip(TokenCmp::BlockStart).is_some() {
                 (
-                    &[TokenCmp::BlockEnd, TokenCmp::Semi],
+                    &[TokenCmp::BlockEnd],
                     &[TokenCmp::Nl, TokenCmp::Punct(Punct::Comma)],
                     true,
                 )
             } else {
                 (
-                    &[TokenCmp::BlockEnd, TokenCmp::Semi, TokenCmp::Op(Op::BitOr)],
+                    if is_struct_field {
+                        &[TokenCmp::Semi]
+                    } else {
+                        &[TokenCmp::Semi, TokenCmp::Op(Op::BitOr)]
+                    },
                     &[TokenCmp::Punct(Punct::Comma)],
                     false,
                 )
@@ -754,13 +763,17 @@ impl Parser {
             if self.is_any(end) {
                 break;
             }
-            fields.push(self.parse_field(false, field_index));
+            fields.push(self.parse_field(is_struct_field, field_index));
             if !self.skip_any(field_delim).is_some() {
                 break;
             }
         }
 
-        (fields, is_block_ended)
+        if is_block_ended {
+            self.expect(TokenCmp::BlockEnd)?;
+        }
+
+        Ok((fields, is_block_ended))
     }
 
     fn parse_field(&mut self, is_struct_field: bool, index: usize) -> PR<Field> {

@@ -9,7 +9,7 @@ use crate::{
         self,
         item::{GenericParams, ItemId, TyAlias, TyParam},
         visitor::{walk_each, HirVisitor},
-        BodyOwner, TyDefKind, TyPath, TyRes, WithHirId, HIR,
+        BodyOwner, Map, TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },
     message::message::{impl_message_holder, MessageHolder, MessageStorage},
     resolve::{
@@ -24,19 +24,22 @@ use crate::{
     typeck::Ty,
 };
 
-pub struct TyConv {
+pub struct TyConv<'hir> {
+    hir: &'hir HIR,
+
     ty_params: DefMap<TyVarId>,
 
     msg: MessageStorage,
     sess: Session,
 }
 
-impl_message_holder!(TyConv);
-impl_session_holder!(TyConv);
+impl_message_holder!(TyConv<'hir>);
+impl_session_holder!(TyConv<'hir>);
 
-impl TyConv {
-    pub fn new(sess: Session) -> Self {
+impl<'hir> TyConv<'hir> {
+    pub fn new(sess: Session, hir: &'hir HIR) -> Self {
         Self {
+            hir,
             ty_params: Default::default(),
             sess,
             msg: Default::default(),
@@ -52,7 +55,7 @@ impl TyConv {
     }
 
     fn conv(&mut self, ty: hir::Ty, ty_def_id: Option<DefId>) -> Ty {
-        let ty_node = self.hir().ty(ty);
+        let ty_node = self.hir.ty(ty);
 
         match ty_node.kind() {
             &hir::ty::TyKind::Path(path) => self.conv_ty_path(path, ty_def_id),
@@ -65,7 +68,7 @@ impl TyConv {
                 let body = self.conv(*body, ty_def_id);
                 Ty::func(None, params, body)
             },
-            hir::ty::TyKind::App(cons, args) => match self.hir().ty(*cons).kind() {
+            hir::ty::TyKind::App(cons, args) => match self.hir.ty(*cons).kind() {
                 hir::ty::TyKind::Builtin(bt) => match bt {
                     TyBuiltin::RefTy => {
                         let mut args = args
@@ -98,7 +101,7 @@ impl TyConv {
     }
 
     fn conv_ty_path(&mut self, path: TyPath, ty_def_id: Option<DefId>) -> Ty {
-        let path = self.hir().ty_path(path);
+        let path = self.hir.ty_path(path);
         match path.res() {
             &TyRes::Def(def_kind, def_id) => {
                 if let Some(ty_def_id) = ty_def_id {
@@ -159,7 +162,7 @@ impl TyConv {
 
     fn conv_ty_alias(&mut self, ty_alias_def_id: DefId) -> Ty {
         let &TyAlias { ty, ref generics } = self
-            .hir()
+            .hir
             .item(ItemId::new(ty_alias_def_id.into()))
             .ty_alias();
 
@@ -180,7 +183,7 @@ impl TyConv {
     }
 
     fn conv_adt(&mut self, adt_def_id: DefId) -> Ty {
-        let adt = self.hir().item(ItemId::new(adt_def_id.into())).adt();
+        let adt = self.hir.item(ItemId::new(adt_def_id.into())).adt();
 
         // Variant indexing defined here. For now, just incremental sequencing.
         let variants: IndexVec<VariantId, hir::Variant> = adt.variants.iter().copied().collect();
@@ -199,7 +202,7 @@ impl TyConv {
         let degeneralized_adt_ty = adt_ty.degeneralize();
 
         variants.iter_enumerated().for_each(|(vid, &v_hir_id)| {
-            let variant_node = self.hir().variant(v_hir_id);
+            let variant_node = self.hir.variant(v_hir_id);
             let v_def_id = variant_node.def_id;
 
             self.tyctx_mut().set_variant_id(v_def_id, vid);
@@ -229,7 +232,7 @@ impl TyConv {
     }
 
     fn conv_variant(&mut self, &variant: &hir::Variant, adt_def_id: DefId) -> Variant {
-        let variant = self.hir().variant(variant);
+        let variant = self.hir.variant(variant);
         Variant {
             def_id: variant.def_id,
             name: variant.name,
@@ -243,7 +246,7 @@ impl TyConv {
     }
 
     fn conv_struct(&mut self, struct_def_id: DefId) -> Ty {
-        let struct_ = self.hir().item(ItemId::new(struct_def_id.into())).struct_();
+        let struct_ = self.hir.item(ItemId::new(struct_def_id.into())).struct_();
 
         let struct_ty = self.conv_ty_def(struct_def_id, &struct_.generics, |this| {
             let fields = struct_
@@ -305,74 +308,80 @@ impl TyConv {
     }
 }
 
-impl HirVisitor for TyConv {
-    fn visit_ty_param(&mut self, ty_param: &TyParam) {
+impl<'hir> HirVisitor for TyConv<'hir> {
+    fn visit_ty_param(&mut self, ty_param: &TyParam, hir: &HIR) {
         assert!(self
             .ty_params
             .insert(ty_param.def_id, Ty::next_ty_var_id(Some(ty_param.name)))
             .is_none());
     }
 
-    fn visit_value_item(&mut self, name: Ident, value: &hir::BodyId, id: ItemId) {
-        self.visit_ident(&name);
-        self.visit_body(value, BodyOwner::value(id.def_id()));
+    fn visit_value_item(&mut self, name: Ident, value: hir::BodyId, id: ItemId, hir: &HIR) {
+        self.visit_ident(name, hir);
+        self.visit_body(value, BodyOwner::value(id.def_id()), hir);
 
         let ex = Ty::ty_kind(Kind::new_ex(KindEx::new(self.tyctx_mut().fresh_kind_ex())));
         self.tyctx_mut().type_def(id.def_id(), ex);
     }
 
-    fn visit_func_item(&mut self, name: Ident, body: &hir::BodyId, id: ItemId) {
-        self.visit_ident(&name);
-        self.visit_body(body, BodyOwner::func(id.def_id()));
+    fn visit_func_item(&mut self, name: Ident, body: hir::BodyId, id: ItemId, hir: &HIR) {
+        self.visit_ident(name, hir);
+        self.visit_body(body, BodyOwner::func(id.def_id()), hir);
 
         let ex = Ty::ty_kind(Kind::new_ex(KindEx::new(self.tyctx_mut().fresh_kind_ex())));
         self.tyctx_mut().type_def(id.def_id(), ex);
     }
 
-    fn visit_extern_item(&mut self, name: Ident, extern_item: &hir::item::ExternItem, id: ItemId) {
-        self.visit_ident(&name);
-        self.visit_ty(&extern_item.ty);
+    fn visit_extern_item(
+        &mut self,
+        name: Ident,
+        extern_item: &hir::item::ExternItem,
+        id: ItemId,
+        hir: &HIR,
+    ) {
+        self.visit_ident(name, hir);
+        self.visit_ty(extern_item.ty, hir);
 
         let ty = self.conv(extern_item.ty, None);
         self.tyctx_mut().type_def(id.def_id(), ty);
     }
 
-    fn visit_ty(&mut self, &hir_ty: &hir::Ty) {
+    fn visit_ty(&mut self, hir_ty: hir::Ty, hir: &HIR) {
         let conv = self.conv(hir_ty, None);
         self.tyctx_mut().add_conv(hir_ty, conv);
     }
 
-    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId) {
-        self.visit_ident(&name);
-        self.visit_generic_params(&ty_item.generics);
-        self.visit_ty(&ty_item.ty);
+    fn visit_type_item(&mut self, name: Ident, ty_item: &TyAlias, id: ItemId, hir: &HIR) {
+        self.visit_ident(name, hir);
+        self.visit_generic_params(&ty_item.generics, hir);
+        self.visit_ty(ty_item.ty, hir);
 
         let conv = self.conv_ty_alias(id.def_id());
         self.tyctx_mut().type_node(id.hir_id(), conv);
     }
 
-    fn visit_adt_item(&mut self, name: Ident, adt: &hir::item::Adt, id: ItemId) {
-        self.visit_ident(&name);
-        self.visit_generic_params(&adt.generics);
-        walk_each!(self, adt.variants, visit_variant);
+    fn visit_adt_item(&mut self, name: Ident, adt: &hir::item::Adt, id: ItemId, hir: &HIR) {
+        self.visit_ident(name, hir);
+        self.visit_generic_params(&adt.generics, hir);
+        walk_each!(self, adt.variants.iter(), visit_variant, hir);
 
         let conv = self.conv_adt(id.def_id());
         self.tyctx_mut().type_node(id.hir_id(), conv);
     }
 
-    fn visit_struct_item(&mut self, name: Ident, data: &hir::item::Struct, id: ItemId) {
-        self.visit_ident(&name);
-        self.visit_generic_params(&data.generics);
-        walk_each!(self, data.fields, visit_field);
+    fn visit_struct_item(&mut self, name: Ident, data: &hir::item::Struct, id: ItemId, hir: &HIR) {
+        self.visit_ident(name, hir);
+        self.visit_generic_params(&data.generics, hir);
+        walk_each!(self, data.fields.iter(), visit_field, hir);
 
         let conv = self.conv_struct(id.def_id());
         self.tyctx_mut().type_node(id.hir_id(), conv);
     }
 }
 
-impl Stage<()> for TyConv {
+impl<'hir> Stage<()> for TyConv<'hir> {
     fn run(mut self) -> StageResult<(), Session> {
-        self.visit_hir();
+        self.visit_hir(self.hir);
         stage_result(self.sess, (), self.msg)
     }
 }

@@ -12,7 +12,7 @@ use crate::{
     hir::{
         expr::{Arm, ExprKind, TyExpr},
         pat::PatKind,
-        Block, BodyId, Expr, Pat, HIR,
+        Block, BodyId, Expr, Map, Pat, HIR,
     },
     interface::writer::{out, Writer},
     parser::token::Punct,
@@ -126,11 +126,71 @@ struct IDCtx<'ctx> {
     entries: &'ctx Entries,
 }
 
-pub struct InferDebug<'ctx> {
-    hir: &'ctx HIR,
+pub struct InferDebug {
     pp: PP,
     entries: Entries,
     entry: Option<InferEntryId>,
+}
+
+impl InferDebug {
+    pub fn new() -> Self {
+        Self {
+            pp: PP::new(),
+            entries: Default::default(),
+            entry: None,
+        }
+    }
+
+    pub fn get_string(mut self, hir: &HIR) -> String {
+        self.pp.entry(
+            InferEntryId(0),
+            &IDCtx {
+                hir,
+                entries: &self.entries,
+            },
+        );
+        self.pp.get_string()
+    }
+
+    fn entry_mut(&mut self) -> &mut InferEntry {
+        self.entries.get_mut(self.entry.unwrap()).unwrap()
+    }
+
+    pub fn step(&mut self, kind: InferStepKind) {
+        self.entry_mut().steps.push(InferStep { kind })
+    }
+
+    pub fn enter(&mut self, kind: InferEntryKind) -> InferEntryId {
+        let id = self.entries.len().into();
+
+        self.entries.push(InferEntry::new(id, self.entry, kind));
+
+        if self.entry.is_some() {
+            self.entry_mut().children.push(id);
+        }
+
+        self.entry = Some(id);
+
+        id
+    }
+
+    pub fn exit(&mut self, ie: InferEntryId) {
+        let mut unwind_to = Some(ie);
+
+        while let Some(id) = unwind_to {
+            let entry = self.entries.get(id).unwrap();
+
+            unwind_to = entry.parent;
+
+            if id == entry.id {
+                break;
+            }
+
+            self.entries.get_mut(id);
+        }
+
+        self.entry = unwind_to;
+    }
 }
 
 impl PP {
@@ -288,67 +348,5 @@ impl PP {
         }
 
         self
-    }
-}
-
-impl<'ctx> InferDebug<'ctx> {
-    pub fn new(hir: &'ctx HIR) -> Self {
-        Self {
-            hir,
-            pp: PP::new(),
-            entries: Default::default(),
-            entry: None,
-        }
-    }
-
-    pub fn get_string(mut self) -> String {
-        self.pp.entry(
-            InferEntryId(0),
-            &IDCtx {
-                hir: self.hir,
-                entries: &self.entries,
-            },
-        );
-        self.pp.get_string()
-    }
-
-    fn entry_mut(&mut self) -> &mut InferEntry {
-        self.entries.get_mut(self.entry.unwrap()).unwrap()
-    }
-
-    pub fn step(&mut self, kind: InferStepKind) {
-        self.entry_mut().steps.push(InferStep { kind })
-    }
-
-    pub fn enter(&mut self, kind: InferEntryKind) -> InferEntryId {
-        let id = self.entries.len().into();
-
-        self.entries.push(InferEntry::new(id, self.entry, kind));
-
-        if self.entry.is_some() {
-            self.entry_mut().children.push(id);
-        }
-
-        self.entry = Some(id);
-
-        id
-    }
-
-    pub fn exit(&mut self, ie: InferEntryId) {
-        let mut unwind_to = Some(ie);
-
-        while let Some(id) = unwind_to {
-            let entry = self.entries.get(id).unwrap();
-
-            unwind_to = entry.parent;
-
-            if id == entry.id {
-                break;
-            }
-
-            self.entries.get_mut(id);
-        }
-
-        self.entry = unwind_to;
     }
 }

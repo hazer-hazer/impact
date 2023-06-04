@@ -23,7 +23,7 @@ use crate::{
         def::{DefId, DefKind},
         res::{self, NamePath, ResKind},
     },
-    session::{stage_result, Session, Stage, StageResult, impl_session_holder},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Internable, Kw},
         Span, WithSpan,
@@ -82,6 +82,8 @@ impl OwnerCollection {
 pub struct Lower<'ast> {
     ast: &'ast AST,
 
+    hir: HIR,
+
     // HirId
     owner_stack: Vec<OwnerCollection>,
     node_id_hir_id: NodeMap<HirId>,
@@ -112,6 +114,7 @@ impl<'ast> Lower<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {
         Self {
             ast,
+            hir: HIR::new(),
             owner_stack: Default::default(),
             node_id_hir_id: Default::default(),
             sess,
@@ -150,7 +153,7 @@ impl<'ast> Lower<'ast> {
             .insert(OWNER_SELF_CHILD_ID, owner_node.into());
 
         let owner = self.owner_stack.pop().unwrap().owner;
-        self.sess.hir.add_owner(def_id, owner);
+        self.hir.add_owner(def_id, owner);
         self.node_id_hir_id
             .insert(node_id, HirId::new_owner(def_id));
 
@@ -935,9 +938,9 @@ impl<'ast> Lower<'ast> {
     }
 }
 
-impl<'ast> Stage<()> for Lower<'ast> {
-    fn run(mut self) -> StageResult<()> {
+impl<'ast> Stage<HIR> for Lower<'ast> {
+    fn run(mut self) -> StageResult<HIR> {
         self.lower_ast();
-        stage_result(self.sess, (), self.msg)
+        stage_result(self.sess, self.hir, self.msg)
     }
 }

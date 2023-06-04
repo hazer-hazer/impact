@@ -12,7 +12,7 @@ use inkwell::{
 
 use crate::{
     cli::verbose,
-    hir::{self, item::ItemId, HIR},
+    hir::{self, item::ItemId, Map, HIR},
     message::message::impl_message_holder,
     mir::{Ty, MIR},
     resolve::{
@@ -28,6 +28,7 @@ use crate::{
 
 pub struct CodeGenCtx<'ink, 'ctx> {
     pub sess: Session,
+    pub hir: &'ctx HIR,
     pub mir: &'ctx MIR,
 
     // LLVM Context //
@@ -264,9 +265,9 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         }
         format!(
             "{}",
-            self.sess
-                .hir()
-                .item_name(ItemId::new(def_id.into()))
+            self.hir
+                .item(ItemId::new(def_id.into()))
+                .name()
                 .original_string(),
             // ty.id()
         )

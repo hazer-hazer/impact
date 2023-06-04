@@ -26,6 +26,7 @@ use crate::{
 
 pub struct CodeGen<'ink, 'ctx> {
     mir: &'ctx MIR,
+    hir: &'ctx HIR,
 
     llvm_ctx: &'ink Context,
 
@@ -37,10 +38,11 @@ impl_message_holder!(CodeGen<'ink, 'ctx>);
 impl_session_holder!(CodeGen<'ink, 'ctx>);
 
 impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
-    pub fn new(sess: Session, mir: &'ctx MIR, llvm_ctx: &'ink Context) -> Self {
+    pub fn new(sess: Session, hir: &'ctx HIR, mir: &'ctx MIR, llvm_ctx: &'ink Context) -> Self {
         Self {
             sess,
             mir,
+            hir,
             llvm_ctx,
             msg: MessageStorage::default(),
         }
@@ -62,6 +64,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
 
         let ctx = CodeGenCtx {
             sess: self.sess,
+            hir: self.hir,
             mir: self.mir,
             llvm_ctx: self.llvm_ctx,
             llvm_module,

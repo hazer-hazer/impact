@@ -135,8 +135,8 @@ pub struct NameResolver<'ast> {
     sess: Session,
 }
 
-impl_message_holder!(NameResolver<'a>);
-impl_session_holder!(NameResolver<'a>);
+impl_message_holder!(NameResolver<'ast>);
+impl_session_holder!(NameResolver<'ast>);
 
 impl<'ast> NameResolver<'ast> {
     pub fn new(sess: Session, ast: &'ast AST) -> Self {

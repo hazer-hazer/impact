@@ -8,14 +8,14 @@ use super::{ctx::CodeGenCtx, func::FunctionMap, value::ValueMap};
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::BodyId,
+    hir::{BodyId, Map},
     message::message::MessageStorage,
     mir::{
         Body, Const, ConstKind, Local, Operand, RValue, Stmt, StmtKind, Terminator, TerminatorKind,
         Ty, BB, START_BB,
     },
     resolve::{builtin::Builtin, def::DefId},
-    session::{impl_session_holder, stage_result, Stage, StageResult},
+    session::{impl_session_holder, stage_result, SessionHolder, Stage, StageResult},
     typeck::ty::{FloatKind, TyKind},
 };
 
@@ -56,7 +56,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
         function_map: &'a FunctionMap<'ink>,
         value_map: &'a ValueMap<'ink>,
     ) -> Self {
-        let body_id = ctx.sess.hir.owner_body(func_def_id.into()).unwrap();
+        let body_id = ctx.hir.owner_body(func_def_id.into()).unwrap();
         let body = ctx.mir.expect(body_id);
 
         let builder = ctx.llvm_ctx.create_builder();

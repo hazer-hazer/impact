@@ -92,7 +92,7 @@ impl<'ast> AstValidator<'ast> {
             },
             NameKind::Const => self.validate_const_name(name, kind),
             NameKind::File => self.validate_file_name(name, kind),
-            NameKind::Adt | NameKind::Variant | NameKind::Type => {
+            NameKind::Struct | NameKind::Adt | NameKind::Variant | NameKind::Type => {
                 self.validate_typename(name, kind)
             },
             NameKind::Mod => self.validate_mod_name(name, kind),
@@ -215,7 +215,10 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Type);
                 self.visit_adt_item(name, generics, variants, item.id());
             },
-            ItemKind::Struct(..) => todo!(),
+            ItemKind::Struct(name, generics, fields) => {
+                self.validate_name(name.as_ref().unwrap(), NameKind::Adt);
+                self.visit_struct_item(name, generics, fields);
+            },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
     }

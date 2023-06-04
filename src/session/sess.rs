@@ -22,7 +22,7 @@ pub struct Session {
     pub def_table: DefTable,
     pub res: Resolutions,
     pub tyctx: TyCtx,
-    pub hir: HIR,
+    // pub hir: HIR,
 }
 
 impl Session {
@@ -35,7 +35,7 @@ impl Session {
             def_table: Default::default(),
             res: Resolutions::default(),
             tyctx: TyCtx::new(),
-            hir: HIR::new(),
+            // hir: HIR::new(),
         }
     }
 
@@ -61,38 +61,53 @@ impl Session {
 
 pub trait SessionHolder {
     fn sess(&self) -> &Session;
-    fn sess_mut(&mut self) -> &mut Session;
 
-    fn hir(&self) -> &HIR {
-        &self.sess().hir
+    // fn hir(&self) -> &HIR {
+    //     &self.sess().hir
+    // }
+
+    fn tyctx(&self) -> &TyCtx {
+        &self.sess().tyctx
     }
+}
+
+pub trait SessionHolderMut {
+    fn sess_mut(&mut self) -> &mut Session;
 }
 
 impl SessionHolder for Session {
     fn sess(&self) -> &Session {
         self
     }
+}
 
+impl SessionHolderMut for Session {
     fn sess_mut(&mut self) -> &mut Session {
         self
-    }
-
-    fn hir(&self) -> &HIR {
-        &self.hir
     }
 }
 
 macro_rules! impl_session_holder {
+    ($ty: ident $(<$($gen: tt),*>)?; mut $($path: tt)+) => {
+        impl<$($($gen),*)?> crate::session::sess::SessionHolderMut for $ty<$($($gen),*)?> {
+            fn sess_mut(&mut self) -> &mut crate::session::sess::Session {
+                &mut self.$($path)+
+            }
+        }
+
+        impl_session_holder!($ty $(<$($gen),*>)?; $($path)+);
+    };
+
     ($ty: ident $(<$($gen: tt),*>)?; $($path: tt)+) => {
         impl<$($($gen),*)?> crate::session::sess::SessionHolder for $ty<$($($gen),*)?> {
             fn sess(&self) -> &crate::session::sess::Session {
                 &self.$($path)+
             }
-
-            fn sess_mut(&mut self) -> &mut crate::session::sess::Session {
-                &mut self.$($path)+
-            }
         }
+    };
+
+    ($ty: ident $(<$($gen: tt),*>)? mut) => {
+        impl_session_holder!($ty $(<$($gen),*>)?; mut sess);
     };
 
     ($ty: ident $(<$($gen: tt),*>)?) => {

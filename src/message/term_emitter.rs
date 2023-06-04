@@ -3,7 +3,7 @@ use super::{
     MessageEmitter,
 };
 use crate::{
-    cli::{color::Colorize},
+    cli::color::Colorize,
     interface::writer::{outln, Writer},
     session::Session,
     span::source::{LineInfo, SpanSourceInfo},

@@ -3,24 +3,26 @@ use super::{
     StmtId, THIR,
 };
 use crate::{
-    hir::{self, ExprDefKind, OwnerId, WithHirId, HIR},
+    hir::{self, ExprDefKind, Map, OwnerId, WithHirId, HIR},
     resolve::builtin::ValueBuiltin,
+    session::{impl_session_holder, Session, SessionHolder},
     span::WithSpan,
     typeck::tyctx::TyCtx,
 };
 
 pub struct ThirBuilder<'ctx> {
     hir: &'ctx HIR,
-    tyctx: &'ctx TyCtx,
-
+    sess: &'ctx Session,
     thir: THIR,
 }
 
+impl_session_holder!(ThirBuilder<'ctx>);
+
 impl<'ctx> ThirBuilder<'ctx> {
-    pub fn new(hir: &'ctx HIR, tyctx: &'ctx TyCtx, body_owner: OwnerId) -> Self {
+    pub fn new(sess: &'ctx Session, hir: &'ctx HIR, body_owner: OwnerId) -> Self {
         Self {
             hir,
-            tyctx,
+            sess,
             thir: THIR::new(body_owner),
         }
     }
@@ -51,10 +53,10 @@ impl<'ctx> ThirBuilder<'ctx> {
                 let lit = match *lit {
                     hir::expr::Lit::Bool(val) => Lit::Bool(val),
                     hir::expr::Lit::Int(val, _) => {
-                        Lit::Int(val, self.tyctx.tyof(expr_id).as_int().unwrap())
+                        Lit::Int(val, self.tyctx().tyof(expr_id).as_int().unwrap())
                     },
                     hir::expr::Lit::Float(val, _) => {
-                        Lit::Float(val, self.tyctx.tyof(expr_id).as_float_kind().unwrap())
+                        Lit::Float(val, self.tyctx().tyof(expr_id).as_float_kind().unwrap())
                     },
                     hir::expr::Lit::String(val) => Lit::String(val),
                 };
@@ -66,7 +68,7 @@ impl<'ctx> ThirBuilder<'ctx> {
                     | ExprDefKind::FieldAccessor
                     | ExprDefKind::External
                     | ExprDefKind::Func
-                    | ExprDefKind::Value => ExprKind::Def(def_id, self.tyctx.tyof(expr_id)),
+                    | ExprDefKind::Value => ExprKind::Def(def_id, self.tyctx().tyof(expr_id)),
                 },
                 &hir::ExprRes::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
             },
@@ -81,13 +83,13 @@ impl<'ctx> ThirBuilder<'ctx> {
             hir::expr::ExprKind::Call(call) => self.call(call),
             &hir::expr::ExprKind::Let(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Ty(hir::expr::TyExpr { expr, ty: _ }) => {
-                ExprKind::Ty(self.expr(expr), self.tyctx.tyof(expr_id))
+                ExprKind::Ty(self.expr(expr), self.tyctx().tyof(expr_id))
             },
             // &hir::expr::ExprKind::FieldAccess(lhs, _) => {
             //     // TODO: Maybe add field name?
             //     ExprKind::FieldAccess(
             //         self.expr(lhs),
-            //         self.tyctx.field_index(expr_id).unwrap(),
+            //         self.tyctx().field_index(expr_id).unwrap(),
             //         VariantId::new(0),
             //     )
             // },
@@ -96,7 +98,7 @@ impl<'ctx> ThirBuilder<'ctx> {
         };
 
         self.thir.add_expr(Expr {
-            ty: self.tyctx.tyof(expr_id),
+            ty: self.tyctx().tyof(expr_id),
             span: expr.span(),
             kind,
         })
@@ -121,7 +123,7 @@ impl<'ctx> ThirBuilder<'ctx> {
         ExprKind::Call {
             lhs: self.expr(lhs),
             args: args.iter().copied().map(|arg| self.expr(arg)).collect(),
-            func_ty: self.tyctx.instantiated_expr_ty(lhs).unwrap(),
+            func_ty: self.tyctx().instantiated_expr_ty(lhs).unwrap(),
         }
     }
 
@@ -138,7 +140,7 @@ impl<'ctx> ThirBuilder<'ctx> {
     }
 
     fn local(&mut self, local: &hir::stmt::Local) -> Stmt {
-        let ty = self.tyctx.tyof(local.id());
+        let ty = self.tyctx().tyof(local.id());
         Stmt::Local(self.pat(local.pat), self.expr(local.value))
     }
 
@@ -148,7 +150,8 @@ impl<'ctx> ThirBuilder<'ctx> {
         let stmts = block
             .stmts()
             .iter()
-            .filter_map(|&stmt| self.stmt(stmt))
+            .copied()
+            .filter_map(|stmt| self.stmt(stmt))
             .collect();
         let expr = block.expr().map(|expr| self.expr(expr));
 
@@ -157,7 +160,7 @@ impl<'ctx> ThirBuilder<'ctx> {
 
     fn pat(&mut self, pat: hir::Pat) -> Pat {
         let pat = self.hir.pat(pat);
-        let ty = self.tyctx.tyof(pat.id());
+        let ty = self.tyctx().tyof(pat.id());
 
         let kind = match pat.kind() {
             hir::pat::PatKind::Unit => PatKind::Unit,

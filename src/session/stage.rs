@@ -1,7 +1,5 @@
-use super::{Session, SessionHolder};
-use crate::{
-    message::{message::MessageStorage, term_emitter::TermEmitter, MessageEmitter},
-};
+use super::{Session, SessionHolder, SessionHolderMut};
+use crate::message::{message::MessageStorage, term_emitter::TermEmitter, MessageEmitter};
 
 /// Stage is a common trait implemented by all compilation stages and their
 /// substeps.
@@ -28,13 +26,13 @@ use crate::{
 pub trait Stage<T, Ctx = Session>
 where
     Self: Sized,
-    Self: SessionHolder
+    Self: SessionHolder,
 {
     fn run(self) -> StageResult<T, Ctx>;
 
     fn run_and_emit(self) -> Result<(T, Ctx), InterruptionErr<Ctx>>
     where
-        Ctx: SessionHolder,
+        Ctx: SessionHolderMut,
     {
         self.run().emit()
     }
@@ -147,7 +145,7 @@ pub struct RecoveredStageResult<T, Ctx = Session> {
     msg: MessageStorage,
 }
 
-impl<T, Ctx> RecoveredStageResult<T, Ctx> {
+impl<'sess, T, Ctx: 'sess> RecoveredStageResult<T, Ctx> {
     pub fn ctx(&self) -> &Ctx {
         &self.ctx
     }
@@ -162,7 +160,7 @@ impl<T, Ctx> RecoveredStageResult<T, Ctx> {
 
     pub fn emit(mut self) -> Result<(T, Ctx), InterruptionErr<Ctx>>
     where
-        Ctx: SessionHolder,
+        Ctx: SessionHolderMut,
     {
         let mut emitter = TermEmitter::new();
         let error_occurred = emitter.emit(self.msg, &mut self.ctx);
@@ -174,7 +172,7 @@ impl<T, Ctx> RecoveredStageResult<T, Ctx> {
     }
 }
 
-pub trait StageResultImpl<T, Ctx = Session> {
+pub trait StageResultImpl<'sess, T, Ctx = Session> {
     fn ctx(&self) -> &Ctx;
 
     fn map_ctx<U>(self, f: impl FnOnce(Ctx) -> U) -> StageResult<T, U>;
@@ -182,14 +180,14 @@ pub trait StageResultImpl<T, Ctx = Session> {
 
     fn recover(self) -> Result<RecoveredStageResult<T, Ctx>, InterruptionErr<Ctx>>
     where
-        Ctx: SessionHolder;
+        Ctx: SessionHolderMut;
 
     fn emit(self) -> Result<(T, Ctx), InterruptionErr<Ctx>>
     where
-        Ctx: SessionHolder;
+        Ctx: SessionHolderMut;
 }
 
-impl<T, Ctx> StageResultImpl<T, Ctx> for StageResult<T, Ctx> {
+impl<'sess, T, Ctx> StageResultImpl<'sess, T, Ctx> for StageResult<T, Ctx> {
     fn ctx(&self) -> &Ctx {
         match self {
             Ok(ok) => &ok.ctx,
@@ -210,7 +208,7 @@ impl<T, Ctx> StageResultImpl<T, Ctx> for StageResult<T, Ctx> {
 
     fn recover(self) -> Result<RecoveredStageResult<T, Ctx>, InterruptionErr<Ctx>>
     where
-        Ctx: SessionHolder,
+        Ctx: SessionHolderMut,
     {
         match self {
             Ok(StageOk { ctx, data, msg }) => Ok(RecoveredStageResult { ctx, data, msg }),
@@ -228,7 +226,7 @@ impl<T, Ctx> StageResultImpl<T, Ctx> for StageResult<T, Ctx> {
 
     fn emit(self) -> Result<(T, Ctx), InterruptionErr<Ctx>>
     where
-        Ctx: SessionHolder,
+        Ctx: SessionHolderMut,
     {
         let mut emitter = TermEmitter::new();
         match self {

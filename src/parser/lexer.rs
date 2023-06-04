@@ -2,7 +2,7 @@ use super::token::{ComplexSymbol, IntKind};
 use crate::{
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
     parser::token::{Punct, Token, TokenKind, TokenStream},
-    session::{stage_result, Session, Stage, StageResult, impl_session_holder},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         source::SourceId,
         sym::{Kw, Symbol},
@@ -361,7 +361,7 @@ impl Lexer {
     }
 }
 
-impl Stage<TokenStream> for Lexer {
+impl<'sess> Stage<TokenStream> for Lexer {
     fn run(mut self) -> StageResult<TokenStream> {
         while !self.eof() {
             self.token_start_pos = self.pos;

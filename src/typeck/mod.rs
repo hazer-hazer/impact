@@ -10,7 +10,7 @@ use self::{
 };
 use crate::{
     cli::verbose,
-    hir::{HirId, HIR},
+    hir::{HirId, Map, HIR},
     interface::writer::outln,
     message::message::{impl_message_holder, MessageHolder, MessageStorage},
     resolve::def::DefId,
@@ -83,6 +83,8 @@ where
 pub type TyResult<T> = Result<T, TypeckErr>;
 
 pub struct Typecker<'hir> {
+    hir: &'hir HIR,
+
     // Typecker context //
     global_ctx: GlobalCtx,
     ctx_stack: Vec<InferCtx>,
@@ -93,15 +95,17 @@ pub struct Typecker<'hir> {
     sess: Session,
 
     // Debug //
-    dbg: InferDebug<'hir>,
+    dbg: InferDebug,
 }
 
 impl_message_holder!(Typecker<'hir>);
 impl_session_holder!(Typecker<'hir>);
 
 impl<'hir> Typecker<'hir> {
-    pub fn new(sess: Session) -> Self {
+    pub fn new(sess: Session, hir: &'hir HIR) -> Self {
         Self {
+            hir,
+
             global_ctx: Default::default(),
             ctx_stack: Default::default(),
             try_mode: false,
@@ -109,7 +113,7 @@ impl<'hir> Typecker<'hir> {
             sess,
             msg: Default::default(),
 
-            dbg: InferDebug::new(sess.hir()),
+            dbg: InferDebug::new(),
         }
     }
 
@@ -650,7 +654,7 @@ impl<'hir> AlgoCtx for Typecker<'hir> {
 
 impl<'hir> Stage<()> for Typecker<'hir> {
     fn run(mut self) -> StageResult<()> {
-        let conv = TyConv::new(self.sess);
+        let conv = TyConv::new(self.sess, self.hir);
         let ((), sess) = conv.run()?.merged(&mut self.msg);
         self.sess = sess;
 
@@ -675,7 +679,7 @@ impl<'hir> Stage<()> for Typecker<'hir> {
                     this.add_kind_ex(kind_ex);
                 });
 
-            this.sess.hir.root().items.clone().iter().for_each(|&item| {
+            this.hir.root().items.clone().iter().for_each(|&item| {
                 let res = this.synth_item(item);
 
                 match res {
@@ -704,7 +708,7 @@ impl<'hir> Stage<()> for Typecker<'hir> {
                 dbg,
                 self.sess.writer,
                 "Typeck debug tree:\n {}",
-                self.dbg.get_string()
+                self.dbg.get_string(self.hir.into())
             );
         }
 
@@ -716,23 +720,23 @@ impl<'hir> Stage<()> for Typecker<'hir> {
 // mod tests {
 //     use crate::{config::config::ConfigBuilder, hir::HIR, session::Session};
 
-//     use super::Typecker<'hir>;
+//     use super::Typecker;
 
 //     fn get_hir() -> HIR {
 //         HIR::new()
 //     }
 
-//     // fn get_typecker<'a>(hir: &'a HIR) -> Typecker<'hir> {
-//     //     Typecker<'hir>::new(Session::new(ConfigBuilder::new().emit()),
+//     // fn get_typecker<'a>(hir: &'a HIR) -> Typecker {
+//     //     Typecker::new(Session::new(ConfigBuilder::new().emit()),
 // hir)     // }
 
 //     mod substitution {
 
 //         // fn basic() {
-//         //     let mut Typecker<'hir> = get_typecker(&get_hir());
-//         //     let tyctx = Typecker<'hir>.tyctx_mut();
+//         //     let mut Typecker = get_typecker(&get_hir());
+//         //     let tyctx = Typecker.tyctx_mut();
 //         //     let
-//         //     Typecker<'hir>.substitute(, subst, with)
+//         //     Typecker.substitute(, subst, with)
 //         // }
 //     }
 // }

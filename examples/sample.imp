@@ -13,14 +13,14 @@ ref = builtin "RefCons"
 extern
     puts: str -> i32
 
-data String =
-    String field: str
+struct String =
+    field: str
 
 main () =
-    a = String.String "a"
+    a = String "a"
     b = 123
 
-    puts (String.String.field a)
+    puts (String.field a)
 
     match a
         s => a

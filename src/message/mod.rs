@@ -2,7 +2,7 @@ use self::message::{Message, MessageStorage};
 use crate::{
     cli::{color::Colorize, verbose},
     dt::bool_enum::bool_enum,
-    session::{Session, SessionHolder},
+    session::{Session, SessionHolder, SessionHolderMut},
 };
 
 pub mod debug_emitter;
@@ -15,7 +15,7 @@ bool_enum!(ErrMessageOccurred);
 pub trait MessageEmitter {
     fn emit<Ctx>(&mut self, msg: MessageStorage, ctx: &mut Ctx) -> ErrMessageOccurred
     where
-        Ctx: SessionHolder,
+        Ctx: SessionHolderMut,
     {
         let sess = ctx.sess_mut();
         let messages = msg.extract();

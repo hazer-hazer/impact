@@ -226,7 +226,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
     }
 }
 
-impl<'ast> Stage<()> for DefCollector<'ast> {
+impl<'ast> Stage< ()> for DefCollector<'ast> {
     fn run(mut self) -> StageResult<()> {
         // FIXME: SourceId(0) is root file?
         assert_eq!(

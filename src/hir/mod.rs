@@ -3,6 +3,7 @@
 
 use core::panic;
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     fmt::{Debug, Display},
 };
@@ -184,15 +185,189 @@ macro_rules! hir_nodes {
             )*
         }
 
-        impl<'hir> HIR {
+        pub trait Map<'hir> {
             $(
-                pub fn $name(&self, $name: $id_name) -> &$ty {
+                fn $name(self, $name: $id_name) -> &'hir $ty;
+            )*
+
+            fn root(self) -> &'hir Mod;
+
+            fn node(self, id: HirId) -> &'hir Node;
+
+            fn item(self, item_id: ItemId) -> &'hir ItemNode;
+
+            fn body(self, id: BodyId) -> &'hir Body;
+
+            fn expect_owner(self, def_id: DefId) -> &'hir Owner;
+            fn expect_owner_node(self, def_id: DefId) -> OwnerNode<'hir>;
+            fn string_lit_value(self, expr: Expr) -> Option<Symbol>;
+            fn owner_body(self, owner_id: OwnerId) -> Option<BodyId>;
+            fn body_owner_kind(self, owner_id: OwnerId) -> BodyOwnerKind;
+            fn pat_names(self, pat: Pat) -> Option<Vec<Ident>>;
+            fn expr_result_span(self, expr_id: Expr) -> Span;
+            fn block_result_span(self, block: Block) -> Span;
+            fn return_ty_span(self, def_id: DefId) -> Span;
+            fn body_return_ty_span(self, def_id: DefId) -> Span;
+        }
+
+        impl<'hir> Map<'hir> for &'hir HIR {
+            $(
+                fn $name(self, $name: $id_name) -> &'hir $ty {
                     match self.node($name.into()) {
                         Node::$id_name(node) => node,
                         n @ _ => panic!("Expected {} HIR node, got {}", stringify!($name), n.name()),
                     }
                 }
             )*
+
+            fn root(self) -> &'hir Mod {
+                match self.expect_owner_node(ROOT_DEF_ID) {
+                    OwnerNode::Root(root) => root,
+                    OwnerNode::Item(_) => unreachable!(),
+                }
+            }
+
+            fn node(self, id: HirId) -> &'hir Node {
+                self.owners
+                    .get_unwrap(id.owner.inner())
+                    .nodes
+                    .get_unwrap(id.id)
+            }
+
+            fn item(self, item_id: ItemId) -> &'hir ItemNode {
+                match self.owners.get_unwrap(item_id.inner().inner()).owner_node() {
+                    OwnerNode::Item(item) => item,
+                    OwnerNode::Root(_) => todo!(),
+                }
+            }
+
+            fn body(self, id: BodyId) -> &'hir Body {
+                self.owners
+                    .get_unwrap(id.0.owner.inner())
+                    .bodies
+                    .get_unwrap(id.0.id)
+            }
+
+            fn expect_owner(self, def_id: DefId) -> &'hir Owner {
+                self.owners
+                    .get_expect(def_id, &format!("Expect owner {}", def_id))
+            }
+
+            fn expect_owner_node(self, def_id: DefId) -> OwnerNode<'hir> {
+                self.expect_owner(def_id).owner_node()
+            }
+
+            fn string_lit_value(self, expr: Expr) -> Option<Symbol> {
+                match self.expr(expr).kind() {
+                    ExprKind::Lit(lit) => match lit {
+                        &expr::Lit::String(val) => Some(val),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            }
+
+            fn owner_body(self, owner_id: OwnerId) -> Option<BodyId> {
+                match self.node(HirId::new_owner(owner_id.into())) {
+                    Node::Expr(ExprNode {
+                        kind: ExprKind::Lambda(Lambda { body_id: body, .. }),
+                        ..
+                    }) => Some(*body),
+                    Node::Item(ItemNode {
+                        kind: ItemKind::Func(body) | ItemKind::Value(body),
+                        ..
+                    }) => Some(*body),
+                    _ => None,
+                }
+            }
+
+            fn body_owner_kind(self, owner_id: OwnerId) -> BodyOwnerKind {
+                match self.node(HirId::new_owner(owner_id.into())) {
+                    Node::Expr(ExprNode {
+                        kind: ExprKind::Lambda(Lambda { .. }),
+                        ..
+                    }) => BodyOwnerKind::Lambda,
+                    Node::Item(ItemNode {
+                        kind: ItemKind::Func(_),
+                        ..
+                    }) => BodyOwnerKind::Func,
+                    Node::Item(ItemNode {
+                        kind: ItemKind::Value(_),
+                        ..
+                    }) => BodyOwnerKind::Value,
+                    _ => panic!(),
+                }
+            }
+
+            fn pat_names(self, pat: Pat) -> Option<Vec<Ident>> {
+                match self.pat(pat).kind() {
+                    pat::PatKind::Unit => None,
+                    &pat::PatKind::Ident(name) => Some(vec![name]),
+                }
+            }
+
+            fn expr_result_span(self, expr_id: Expr) -> Span {
+                let expr = self.expr(expr_id);
+                match expr.kind() {
+                    ExprKind::Lit(_)
+                    | ExprKind::Path(_)
+                    | ExprKind::Lambda(_)
+                    | ExprKind::Call(_)
+                    | ExprKind::Builtin(_)
+                    | ExprKind::Ty(_) => expr.span(),
+                    &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
+                    ExprKind::Match(subject, arms) => arms.first().map_or(self.expr(*subject).span(), |arm| self.expr_result_span(arm.body)),
+                }
+            }
+
+            fn block_result_span(self, block: Block) -> Span {
+                let block = self.block(block);
+
+                block.expr().map_or_else(
+                    || {
+                        self.stmt(*block.stmts().last().unwrap())
+                            .span()
+                            .point_after_hi()
+                    },
+                    |expr| self.expr_result_span(expr),
+                )
+            }
+
+            /// Assumes def_id points to Func or Lambda
+            fn return_ty_span(self, def_id: DefId) -> Span {
+                self.pat(
+                    self.body(self.owner_body(def_id.into()).unwrap())
+                        .params
+                        .last()
+                        .copied()
+                        .unwrap(),
+                )
+                .span()
+                .point_after_hi()
+                // match self.node(HirId::new_owner(def_id)) {
+                //     Node::ExprNode(expr) => match expr.kind() {
+                //         ExprKind::Lambda(Lambda { body }) => todo!(),
+                //         _ => panic!(),
+                //     },
+                //     Node::ItemNode(item) => todo!(),
+                //     _ => panic!(),
+                // }
+            }
+
+            /// Assumes that def_id points to a body owner.
+            /// Returns span pointing after parameter of the body with a parameter,
+            /// otherwise span pointing after name of the definition.
+            fn body_return_ty_span(self, def_id: DefId) -> Span {
+                let body = self.body(self.owner_body(def_id.into()).unwrap());
+                if let Some(param) = body.params.last().copied() {
+                    self.pat(param).span().point_after_hi()
+                } else {
+                    self.item(ItemId::new(def_id.into()))
+                        .name()
+                        .span()
+                        .point_after_hi()
+                }
+            }
         }
     };
 }
@@ -362,164 +537,6 @@ impl HIR {
 
     pub fn add_owner(&mut self, def_id: DefId, owner: Owner) {
         self.owners.insert(def_id, owner);
-    }
-
-    // Getters //
-    pub fn expect_owner(&self, def_id: DefId) -> &Owner {
-        self.owners
-            .get_expect(def_id, &format!("Expect owner {}", def_id))
-    }
-
-    pub fn expect_owner_node(&self, def_id: DefId) -> OwnerNode {
-        self.expect_owner(def_id).owner_node()
-    }
-
-    pub fn root(&self) -> &Mod {
-        match self.expect_owner_node(ROOT_DEF_ID) {
-            OwnerNode::Root(root) => root,
-            OwnerNode::Item(_) => unreachable!(),
-        }
-    }
-
-    pub fn item(&self, item_id: ItemId) -> &ItemNode {
-        match self.owners.get_unwrap(item_id.inner().inner()).owner_node() {
-            OwnerNode::Item(item) => item,
-            OwnerNode::Root(_) => todo!(),
-        }
-    }
-
-    pub fn item_name(&self, item_id: ItemId) -> Ident {
-        self.item(item_id).name()
-    }
-
-    pub fn string_lit_value(&self, expr: Expr) -> Option<Symbol> {
-        match self.expr(expr).kind() {
-            ExprKind::Lit(lit) => match lit {
-                &expr::Lit::String(val) => Some(val),
-                _ => None,
-            },
-            _ => None,
-        }
-    }
-
-    pub fn node(&self, id: HirId) -> &Node {
-        self.owners
-            .get_unwrap(id.owner.inner())
-            .nodes
-            .get_unwrap(id.id)
-    }
-
-    pub fn body(&self, id: BodyId) -> &Body {
-        self.owners
-            .get_unwrap(id.0.owner.inner())
-            .bodies
-            .get_unwrap(id.0.id)
-    }
-
-    pub fn body_value(&self, id: BodyId) -> Expr {
-        self.body(id).value
-    }
-
-    pub fn owner_body(&self, owner_id: OwnerId) -> Option<BodyId> {
-        match self.node(HirId::new_owner(owner_id.into())) {
-            Node::Expr(ExprNode {
-                kind: ExprKind::Lambda(Lambda { body_id: body, .. }),
-                ..
-            }) => Some(*body),
-            Node::Item(ItemNode {
-                kind: ItemKind::Func(body) | ItemKind::Value(body),
-                ..
-            }) => Some(*body),
-            _ => None,
-        }
-    }
-
-    pub fn body_owner_kind(&self, owner_id: OwnerId) -> BodyOwnerKind {
-        match self.node(HirId::new_owner(owner_id.into())) {
-            Node::Expr(ExprNode {
-                kind: ExprKind::Lambda(Lambda { .. }),
-                ..
-            }) => BodyOwnerKind::Lambda,
-            Node::Item(ItemNode {
-                kind: ItemKind::Func(_),
-                ..
-            }) => BodyOwnerKind::Func,
-            Node::Item(ItemNode {
-                kind: ItemKind::Value(_),
-                ..
-            }) => BodyOwnerKind::Value,
-            _ => panic!(),
-        }
-    }
-
-    pub fn pat_names(&self, pat: Pat) -> Option<Vec<Ident>> {
-        match self.pat(pat).kind() {
-            pat::PatKind::Unit => None,
-            &pat::PatKind::Ident(name) => Some(vec![name]),
-        }
-    }
-
-    pub fn expr_result_span(&self, expr_id: Expr) -> Span {
-        let expr = self.expr(expr_id);
-        match expr.kind() {
-            ExprKind::Lit(_)
-            | ExprKind::Path(_)
-            | ExprKind::Lambda(_)
-            | ExprKind::Call(_)
-            | ExprKind::Builtin(_)
-            // | ExprKind::FieldAccess(..)
-            | ExprKind::Ty(_) => expr.span(),
-            &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
-            ExprKind::Match(subject, arms) => arms.first().map_or(self.expr(*subject).span(), |arm| self.expr_result_span(arm.body)),
-        }
-    }
-
-    pub fn block_result_span(&self, block: Block) -> Span {
-        let block = self.block(block);
-
-        block.expr().map_or_else(
-            || {
-                self.stmt(*block.stmts().last().unwrap())
-                    .span()
-                    .point_after_hi()
-            },
-            |expr| self.expr_result_span(expr),
-        )
-    }
-
-    /// Assumes def_id points to Func or Lambda
-    pub fn return_ty_span(&self, def_id: DefId) -> Span {
-        self.pat(
-            self.body(self.owner_body(def_id.into()).unwrap())
-                .params
-                .last()
-                .copied()
-                .unwrap(),
-        )
-        .span()
-        .point_after_hi()
-        // match self.node(HirId::new_owner(def_id)) {
-        //     Node::ExprNode(expr) => match expr.kind() {
-        //         ExprKind::Lambda(Lambda { body }) => todo!(),
-        //         _ => panic!(),
-        //     },
-        //     Node::ItemNode(item) => todo!(),
-        //     _ => panic!(),
-        // }
-    }
-
-    /// Assumes that def_id points to a body owner.
-    /// Returns span pointing after parameter of the body with a parameter,
-    /// otherwise span pointing after name of the definition.
-    pub fn body_return_ty_span(&self, def_id: DefId) -> Span {
-        let body = self.body(self.owner_body(def_id.into()).unwrap());
-        if let Some(param) = body.params.last().copied() {
-            self.pat(param).span().point_after_hi()
-        } else {
-            self.item_name(ItemId::new(def_id.into()))
-                .span()
-                .point_after_hi()
-        }
     }
 
     // // Debug //
