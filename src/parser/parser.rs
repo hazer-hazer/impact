@@ -728,7 +728,7 @@ impl Parser {
 
         Ok(Box::new(Item::new(
             self.next_node_id(),
-            ItemKind::Struct(name, generics, fields),
+            ItemKind::Struct(name, generics, fields, self.next_node_id()),
             self.close_span(lo),
             is_block_ended,
         )))

@@ -215,9 +215,9 @@ impl<'ast> AstVisitor<'ast> for AstValidator<'ast> {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Type);
                 self.visit_adt_item(name, generics, variants, item.id());
             },
-            ItemKind::Struct(name, generics, fields) => {
+            ItemKind::Struct(name, generics, fields, ctor_id) => {
                 self.validate_name(name.as_ref().unwrap(), NameKind::Adt);
-                self.visit_struct_item(name, generics, fields);
+                self.visit_struct_item(name, generics, fields, *ctor_id, item.id());
             },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }

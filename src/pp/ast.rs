@@ -79,8 +79,8 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             ItemKind::Adt(name, generics, variants) => {
                 self.visit_adt_item(name, generics, variants, item.id())
             },
-            ItemKind::Struct(name, generics, fields) => {
-                self.visit_struct_item(name, generics, fields)
+            ItemKind::Struct(name, generics, fields, ctor_id) => {
+                self.visit_struct_item(name, generics, fields, *ctor_id, item.id())
             },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
@@ -161,6 +161,22 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             self.punct(Punct::Colon);
         });
         walk_pr!(self, &field.ty, visit_ty);
+    }
+
+    fn visit_struct_item(
+        &mut self,
+        name: &'ast PR<Ident>,
+        generics: &'ast crate::ast::item::GenericParams,
+        fields: &'ast [PR<Field>],
+        _ctor_def_id: NodeId,
+        id: NodeId,
+    ) {
+        self.kw(Kw::Struct);
+        self.sp();
+        walk_pr!(self, name, name, id, true);
+        self.visit_generic_params(generics);
+        self.op(Op::Assign);
+        walk_each_pr_delim!(self, fields, visit_field, ", ");
     }
 
     fn visit_extern_block(&mut self, items: &'ast [PR<ExternItem>]) {

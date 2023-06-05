@@ -267,8 +267,8 @@ impl<'ast> Lower<'ast> {
                 ItemKind::Adt(name, generics, variants) => {
                     this.lower_data_item(name, generics, variants)
                 },
-                ItemKind::Struct(name, generics, fields) => {
-                    this.lower_struct_item(name, generics, fields)
+                ItemKind::Struct(name, generics, fields, ctor_id) => {
+                    this.lower_struct_item(name, generics, fields, *ctor_id)
                 },
                 ItemKind::Extern(_) => unreachable!(),
             };
@@ -403,10 +403,12 @@ impl<'ast> Lower<'ast> {
         _: &PR<Ident>,
         generics: &GenericParams,
         fields: &[PR<Field>],
+        ctor_id: NodeId,
     ) -> hir::item::ItemKind {
         hir::item::ItemKind::Struct(Struct {
             generics: self.lower_generic_params(generics),
             fields: lower_each_pr!(self, fields, lower_field),
+            ctor_def_id: self.sess.def_table.get_def_id(ctor_id).unwrap(),
         })
     }
 

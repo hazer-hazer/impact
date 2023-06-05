@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Display};
 
 use super::{
     builtin::Builtin,
@@ -36,18 +36,48 @@ impl MessageBuilder {
             Candidate::Defs(defs) => defs.iter().fold(self, |this, def| {
                 this.label(
                     def.name().span(),
-                    format!("{} `{}`", def.kind(), def.name()),
+                    format!(
+                        "Found {} `{}` ({})",
+                        def.kind(),
+                        def.name(),
+                        def.kind().namespace()
+                    ),
                 )
             }),
         }
     }
 }
 
+enum SearchForKind {
+    Specific(DefKind),
+    FromNs(Namespace),
+}
+
+impl SearchForKind {
+    fn namespace(&self) -> Namespace {
+        match self {
+            SearchForKind::Specific(def_kind) => def_kind.namespace(),
+            &SearchForKind::FromNs(ns) => ns,
+        }
+    }
+}
+
+impl std::fmt::Display for SearchForKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SearchForKind::Specific(def_kind) => write!(f, "{def_kind}"),
+            SearchForKind::FromNs(ns) => write!(f, "{ns}"),
+        }
+    }
+}
+
+type SearchFor = (Ident, SearchForKind);
+
 /// The Err variant here is Path prefix (None if "current scope"), prefix and
 /// possible candidate for resolution.
 struct ResolutionErr {
     /// Target name attempted to resolve
-    target: Ident,
+    target: SearchFor,
     /// Path prefix string (None if "current scope")
     prefix_str: Option<String>,
     /// Path prefix span
@@ -58,7 +88,7 @@ struct ResolutionErr {
 
 impl ResolutionErr {
     fn absolute(
-        target: Ident,
+        target: SearchFor,
         prefix_str: Option<String>,
         prefix_span: Span,
         candidate: Candidate,
@@ -71,11 +101,11 @@ impl ResolutionErr {
         }
     }
 
-    pub fn relative(target: Ident, candidate: Candidate) -> Self {
+    pub fn relative(target: SearchFor, candidate: Candidate) -> Self {
         Self {
             target,
             prefix_str: None,
-            prefix_span: target.span(),
+            prefix_span: target.0.span(),
             candidate,
         }
     }
@@ -97,10 +127,20 @@ impl ResolutionResultImpl for ResolutionResult<Res> {
                 let prefix_str = err.prefix_str.unwrap_or("current scope".to_string());
                 MessageBuilder::error()
                     .span(err.prefix_span)
-                    .text(format!("Cannot find `{}` in {}", err.target, prefix_str))
+                    .text(format!(
+                        "Cannot find {} `{}` in {}",
+                        err.target.1.namespace(),
+                        err.target.0,
+                        prefix_str
+                    ))
                     .label(
-                        err.target.span(),
-                        format!("`{}` is not defined in {}", err.target, prefix_str),
+                        err.target.0.span(),
+                        format!(
+                            "{} `{}` is not defined in {}",
+                            err.target.1.namespace(),
+                            err.target.0,
+                            prefix_str
+                        ),
                     )
                     .candidate(err.candidate)
                     .emit(mh);
@@ -277,8 +317,11 @@ impl<'ast> NameResolver<'ast> {
     }
 
     /// Try to find a local variable or ascend scopes looking for a name
-    fn resolve_relative(&mut self, target_ns: Namespace, name: &Ident) -> ResolutionResult<Res> {
+    fn resolve_relative(&mut self, search_for: SearchFor) -> ResolutionResult<Res> {
         let mut candidate = Candidate::None;
+
+        let name = search_for.0;
+        let target_ns = search_for.1.namespace();
 
         for scope in self.scopes.iter().rev() {
             match scope {
@@ -324,7 +367,7 @@ impl<'ast> NameResolver<'ast> {
         //     .candidate(candidate)
         //     .emit_single_label(self);
 
-        Err(ResolutionErr::relative(*name, candidate))
+        Err(ResolutionErr::relative(*name, target_ns, candidate))
     }
 
     fn resolve_module_relative(&mut self, name: &Ident) -> ResolutionResult<ModuleId> {
@@ -350,7 +393,11 @@ impl<'ast> NameResolver<'ast> {
                     .text(format!("{} `{}` is not a module", def.kind(), def.name()))
                     .emit_single_label(self);
                 // Note: Do not suggest useless candidate which is not a module
-                Err(ResolutionErr::relative(*name, Candidate::None))
+                Err(ResolutionErr::relative(
+                    *name,
+                    Namespace::Type,
+                    Candidate::None,
+                ))
             },
             // FIXME: Really unreachable?
             DefKind::Root
@@ -535,8 +582,8 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             ItemKind::Adt(name, generics, variants) => {
                 self.visit_adt_item(name, generics, variants, item.id())
             },
-            ItemKind::Struct(name, generics, fields) => {
-                self.visit_struct_item(name, generics, fields)
+            ItemKind::Struct(name, generics, fields, ctor_id) => {
+                self.visit_struct_item(name, generics, fields, *ctor_id, item.id())
             },
             ItemKind::Extern(_) => unreachable!(),
         }

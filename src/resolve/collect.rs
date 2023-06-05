@@ -158,7 +158,9 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ItemKind::Adt(name, generics, variants) => {
                 self.visit_adt_item(name, generics, variants, item.id())
             },
-            ItemKind::Struct(name, generics, fields) => self.visit_struct_item(name, generics, fields),
+            ItemKind::Struct(name, generics, fields, ctor_id) => {
+                self.visit_struct_item(name, generics, fields, *ctor_id, item.id())
+            },
             ItemKind::Extern(_) => unreachable!(),
         }
 
@@ -190,6 +192,20 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
         field.accessor_id.map(|accessor_id| {
             self.define(accessor_id, DefKind::FieldAccessor, &field.accessor_name());
         });
+    }
+
+    fn visit_struct_item(
+        &mut self,
+        name: &'ast PR<Ident>,
+        generics: &'ast crate::ast::item::GenericParams,
+        fields: &'ast [PR<Field>],
+        ctor_def_id: NodeId,
+        _id: NodeId,
+    ) {
+        walk_pr!(self, name, visit_ident);
+        self.visit_generic_params(generics);
+        walk_each_pr!(self, fields, visit_field);
+        self.define(ctor_def_id, DefKind::Ctor, name.as_ref().unwrap());
     }
 
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {
@@ -226,7 +242,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
     }
 }
 
-impl<'ast> Stage< ()> for DefCollector<'ast> {
+impl<'ast> Stage<()> for DefCollector<'ast> {
     fn run(mut self) -> StageResult<()> {
         // FIXME: SourceId(0) is root file?
         assert_eq!(

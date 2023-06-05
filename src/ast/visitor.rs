@@ -82,8 +82,8 @@ pub trait AstVisitor<'ast> {
             ItemKind::Adt(name, generics, variants) => {
                 self.visit_adt_item(name, generics, variants, item.id())
             },
-            ItemKind::Struct(name, generics, fields) => {
-                self.visit_struct_item(name, generics, fields)
+            ItemKind::Struct(name, generics, fields, ctor_id) => {
+                self.visit_struct_item(name, generics, fields, *ctor_id, item.id())
             },
             ItemKind::Extern(items) => self.visit_extern_block(items),
         }
@@ -152,6 +152,8 @@ pub trait AstVisitor<'ast> {
         name: &'ast PR<Ident>,
         generics: &'ast super::item::GenericParams,
         fields: &'ast [PR<Field>],
+        _ctor_def_id: NodeId,
+        _id: NodeId,
     ) {
         walk_pr!(self, name, visit_ident);
         self.visit_generic_params(generics);

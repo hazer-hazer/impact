@@ -136,7 +136,13 @@ pub enum ItemKind {
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
     Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
     Adt(PR<Ident>, GenericParams, Vec<PR<Variant>>),
-    Struct(PR<Ident>, GenericParams, Vec<PR<Field>>),
+    Struct(
+        PR<Ident>,
+        GenericParams,
+        Vec<PR<Field>>,
+        /// Ctor id
+        NodeId,
+    ),
     Extern(Vec<PR<ExternItem>>),
 }
 
@@ -183,7 +189,7 @@ impl Display for ItemKind {
                 )
             },
             ItemKind::Extern(items) => write!(f, "extern {{{}}}", prs_display_join(items, ", ")),
-            ItemKind::Struct(name, generics, fields) => write!(
+            ItemKind::Struct(name, generics, fields, _ctor_id) => write!(
                 f,
                 "struct {} {} = {}",
                 pr_display(name),

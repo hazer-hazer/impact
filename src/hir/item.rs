@@ -92,6 +92,7 @@ pub struct Adt {
 
 #[derive(Debug)]
 pub struct Struct {
+    pub ctor_def_id: DefId,
     pub generics: GenericParams,
     pub fields: Vec<Field>,
 }
