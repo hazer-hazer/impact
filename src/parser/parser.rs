@@ -14,7 +14,7 @@ use crate::{
     },
     cli::color::{Color, Colorize},
     interface::writer::{out, outln},
-    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageStorage},
     session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Kw},

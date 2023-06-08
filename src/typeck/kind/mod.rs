@@ -10,7 +10,6 @@ use self::interner::KIND_INTERNER;
 use super::{
     ctx::AlgoCtx,
     ty::{Ex, TyVarId},
-    ty_infer::MonoTy,
 };
 use crate::{
     cli::color::{Color, WithColor},

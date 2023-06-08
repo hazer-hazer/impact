@@ -11,7 +11,7 @@ use crate::{
         visitor::{walk_each, HirVisitor},
         BodyOwner, Map, TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },
-    message::message::{impl_message_holder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageStorage},
     resolve::{
         builtin::TyBuiltin,
         def::{DefId, DefMap},
@@ -199,7 +199,7 @@ impl<'hir> TyConv<'hir> {
             })
         });
 
-        let degeneralized_adt_ty = adt_ty.degeneralize();
+        let _degeneralized_adt_ty = adt_ty.degeneralize();
 
         variants.iter_enumerated().for_each(|(vid, &v_hir_id)| {
             let variant_node = self.hir.variant(v_hir_id);
@@ -309,7 +309,7 @@ impl<'hir> TyConv<'hir> {
 }
 
 impl<'hir> HirVisitor for TyConv<'hir> {
-    fn visit_ty_param(&mut self, ty_param: &TyParam, hir: &HIR) {
+    fn visit_ty_param(&mut self, ty_param: &TyParam, _hir: &HIR) {
         assert!(self
             .ty_params
             .insert(ty_param.def_id, Ty::next_ty_var_id(Some(ty_param.name)))
@@ -346,7 +346,7 @@ impl<'hir> HirVisitor for TyConv<'hir> {
         self.tyctx_mut().type_def(id.def_id(), ty);
     }
 
-    fn visit_ty(&mut self, hir_ty: hir::Ty, hir: &HIR) {
+    fn visit_ty(&mut self, hir_ty: hir::Ty, _hir: &HIR) {
         let conv = self.conv(hir_ty, None);
         self.tyctx_mut().add_conv(hir_ty, conv);
     }

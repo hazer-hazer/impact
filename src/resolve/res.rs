@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use super::def::{Def, DefId, DefKind};
+use super::def::{Def, DefId};
 use crate::{ast::NodeId, span::sym::Ident};
 
 // TODO: For now, candidates are useless, because we just suggest anything with

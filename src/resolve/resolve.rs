@@ -1,8 +1,8 @@
-use std::{collections::HashMap, path::Display};
+use std::collections::HashMap;
 
 use super::{
     builtin::Builtin,
-    def::{DefId, DefTable, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
+    def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
     res::{Candidate, NamePath, Res},
 };
 use crate::{
@@ -23,7 +23,7 @@ use crate::{
     },
     session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
-        sym::{Ident, Internable, Symbol},
+        sym::{Ident, IdentKind, Symbol},
         Span, WithSpan,
     },
 };
@@ -48,16 +48,38 @@ impl MessageBuilder {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SearchForSpecific {
+    Op,
+}
+
+impl std::fmt::Display for SearchForSpecific {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SearchForSpecific::Op => "operator",
+            }
+        )
+    }
+}
+
+#[derive(Clone, Copy)]
 enum SearchForKind {
-    Specific(DefKind),
+    Specific(SearchForSpecific),
+    Def(DefKind),
     FromNs(Namespace),
 }
 
 impl SearchForKind {
     fn namespace(&self) -> Namespace {
         match self {
-            SearchForKind::Specific(def_kind) => def_kind.namespace(),
+            SearchForKind::Def(def_kind) => def_kind.namespace(),
             &SearchForKind::FromNs(ns) => ns,
+            SearchForKind::Specific(specific) => match specific {
+                SearchForSpecific::Op => Namespace::Value,
+            },
         }
     }
 }
@@ -65,13 +87,21 @@ impl SearchForKind {
 impl std::fmt::Display for SearchForKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SearchForKind::Specific(def_kind) => write!(f, "{def_kind}"),
+            SearchForKind::Def(def_kind) => write!(f, "{def_kind}"),
             SearchForKind::FromNs(ns) => write!(f, "{ns}"),
+            SearchForKind::Specific(specific) => write!(f, "{specific}"),
         }
     }
 }
 
-type SearchFor = (Ident, SearchForKind);
+#[derive(Clone, Copy)]
+struct SearchFor(Ident, SearchForKind);
+
+impl std::fmt::Display for SearchFor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} `{}`", self.1, self.0)
+    }
+}
 
 /// The Err variant here is Path prefix (None if "current scope"), prefix and
 /// possible candidate for resolution.
@@ -125,20 +155,24 @@ impl ResolutionResultImpl for ResolutionResult<Res> {
             Ok(ok) => ok,
             Err(err) => {
                 let prefix_str = err.prefix_str.unwrap_or("current scope".to_string());
+
                 MessageBuilder::error()
                     .span(err.prefix_span)
                     .text(format!(
                         "Cannot find {} `{}` in {}",
-                        err.target.1.namespace(),
-                        err.target.0,
-                        prefix_str
+                        err.target.1, err.target.0, prefix_str
                     ))
                     .label(
                         err.target.0.span(),
                         format!(
-                            "{} `{}` is not defined in {}",
-                            err.target.1.namespace(),
+                            "{} `{}`{} is not defined in {}",
+                            err.target.1,
                             err.target.0,
+                            if let Candidate::None = err.candidate {
+                                "".to_string()
+                            } else {
+                                format!(" ({})", err.target.1.namespace())
+                            },
                             prefix_str
                         ),
                     )
@@ -260,7 +294,7 @@ impl<'ast> NameResolver<'ast> {
         self.scopes.pop();
     }
 
-    fn def_res(&self, target_ns: Namespace, def_id: DefId) -> Res {
+    fn def_res(&self, search_for: SearchFor, def_id: DefId) -> Res {
         let def = self.sess.def_table.def(def_id);
 
         match def.kind() {
@@ -277,7 +311,7 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::FieldAccessor
             | DefKind::Value
             | DefKind::TyParam => {
-                assert_eq!(def.kind().namespace(), target_ns);
+                assert_eq!(def.kind().namespace(), search_for.1.namespace());
                 return Res::def(def_id);
             },
             DefKind::DeclareBuiltin => {
@@ -292,15 +326,14 @@ impl<'ast> NameResolver<'ast> {
     fn resolve_in_module(
         &self,
         module_id: ModuleId,
-        ns: Namespace,
-        name: &Ident,
+        search_for: SearchFor,
     ) -> Result<DefId, Candidate> {
-        verbose!("Resolve {name} from {ns} in {module_id}");
+        verbose!("Resolve {search_for} in {module_id}");
         match self
             .sess
             .def_table
             .get_module(module_id)
-            .get_from_ns(ns, name.sym())
+            .get_from_ns(search_for.1.namespace(), search_for.0.sym())
         {
             Ok(def_id) => Ok(def_id),
             Err(defs) => Err(if defs.is_empty() {
@@ -339,24 +372,22 @@ impl<'ast> NameResolver<'ast> {
                         ));
                     }
                 },
-                &Scope::Module(module_id) => {
-                    match self.resolve_in_module(module_id, target_ns, name) {
-                        Ok(def_id) => return Ok(self.def_res(target_ns, def_id)),
-                        Err(_candidate) => {
-                            verbose!(
-                                "Def {name} not found in, candidate: {_candidate}\n{}",
-                                DebugModuleTree::new(
-                                    &self.sess,
-                                    module_id,
-                                    Some(name.sym()),
-                                    Some(module_id),
-                                )
-                                .debug()
-                            );
+                &Scope::Module(module_id) => match self.resolve_in_module(module_id, search_for) {
+                    Ok(def_id) => return Ok(self.def_res(search_for, def_id)),
+                    Err(candidate_) => {
+                        verbose!(
+                            "Def {name} not found in, candidate: {candidate_}\n{}",
+                            DebugModuleTree::new(
+                                &self.sess,
+                                module_id,
+                                Some(name.sym()),
+                                Some(module_id),
+                            )
+                            .debug()
+                        );
 
-                            candidate.set_if_none(_candidate);
-                        },
-                    }
+                        candidate.set_if_none(candidate_);
+                    },
                 },
             }
         }
@@ -367,11 +398,21 @@ impl<'ast> NameResolver<'ast> {
         //     .candidate(candidate)
         //     .emit_single_label(self);
 
-        Err(ResolutionErr::relative(*name, target_ns, candidate))
+        Err(ResolutionErr::relative(search_for, candidate))
     }
 
-    fn resolve_module_relative(&mut self, name: &Ident) -> ResolutionResult<ModuleId> {
-        let relative_res = self.resolve_relative(Namespace::Type, name)?;
+    fn resolve_member(&mut self, field: &Ident) -> Res {
+        self.resolve_relative(SearchFor(
+            *field,
+            SearchForKind::Def(DefKind::FieldAccessor),
+        ))
+        .emit(self)
+    }
+
+    fn resolve_module_relative(&mut self, name: Ident) -> ResolutionResult<ModuleId> {
+        let search_for = SearchFor(name, SearchForKind::Def(DefKind::Mod));
+
+        let relative_res = self.resolve_relative(search_for)?;
 
         let def_id = match relative_res.kind() {
             // We cannot get local resolution from type namespace
@@ -393,11 +434,7 @@ impl<'ast> NameResolver<'ast> {
                     .text(format!("{} `{}` is not a module", def.kind(), def.name()))
                     .emit_single_label(self);
                 // Note: Do not suggest useless candidate which is not a module
-                Err(ResolutionErr::relative(
-                    *name,
-                    Namespace::Type,
-                    Candidate::None,
-                ))
+                Err(ResolutionErr::relative(search_for, Candidate::None))
             },
             // FIXME: Really unreachable?
             DefKind::Root
@@ -414,31 +451,30 @@ impl<'ast> NameResolver<'ast> {
 
     /// Resolution strategy is different for single-segment paths
     /// and multiple-segment paths.
-    fn resolve_path(&mut self, target_ns: Namespace, path: &Path) -> Res {
-        if path.segments().len() == 1 {
+    fn resolve_path(&mut self, path: &Path, search_for_kind: SearchForKind) {
+        let res = if path.segments().len() == 1 {
             // TODO: Assert that segment is lowercase for local variable?
-            self.resolve_relative(target_ns, path.segments()[0].expect_name())
+            let search_for = SearchFor(*path.segments()[0].expect_name(), search_for_kind);
+            self.resolve_relative(search_for)
         } else {
-            self.resolve_path_absolute(target_ns, path)
+            self.resolve_path_absolute(search_for_kind, path)
         }
-        .emit(self)
-    }
+        .emit(self);
 
-    fn resolve_member(&mut self, field: &Ident) -> Res {
-        self.resolve_relative(Namespace::Value, field).emit(self)
+        self.sess.res.set(NamePath::new(path.id()), res);
     }
 
     /// Relatively find definition of first segment then go by modules rest
     /// segments point to
     fn resolve_path_absolute(
         &mut self,
-        target_ns: Namespace,
+        search_for_kind: SearchForKind,
         path: &Path,
     ) -> ResolutionResult<Res> {
         assert!(path.segments().len() > 1);
 
         let mut search_mod =
-            self.resolve_module_relative(path.segments().first().as_ref().unwrap().expect_name())?;
+            self.resolve_module_relative(*path.segments().first().as_ref().unwrap().expect_name())?;
 
         for (index, seg) in path.segments().iter().enumerate().skip(1) {
             let is_target = index == path.segments().len() - 1;
@@ -460,10 +496,19 @@ impl<'ast> NameResolver<'ast> {
                 // return Res::error();
             }
 
-            let ns = if is_target {
-                target_ns
+            let search_for = if is_target {
+                SearchFor(name, search_for_kind)
             } else {
-                Namespace::Type
+                let search_for_kind = match name.kind() {
+                    Some(kind) => match kind {
+                        IdentKind::Var => SearchForKind::Def(DefKind::Mod),
+                        IdentKind::Ty => SearchForKind::FromNs(Namespace::Type),
+                        // Actually, operator cannot be prefix
+                        IdentKind::Op => SearchForKind::FromNs(Namespace::Value),
+                    },
+                    None => SearchForKind::Def(DefKind::Mod),
+                };
+                SearchFor(name, search_for_kind)
             };
 
             verbose!(
@@ -471,14 +516,14 @@ impl<'ast> NameResolver<'ast> {
                 DebugModuleTree::new(&self.sess, search_mod, Some(name.sym()), None).debug()
             );
 
-            let def_id = match self.resolve_in_module(search_mod, ns, &name) {
+            let def_id = match self.resolve_in_module(search_mod, search_for) {
                 Ok(def_id) => def_id,
                 Err(candidate) => {
                     verbose!(
-                        "Def {ns} {name} not found inside this module, prefix {prefix_str}, candidate: {candidate}",
+                        "Def {search_for} not found inside this module, prefix {prefix_str}, candidate: {candidate}",
                     );
                     return Err(ResolutionErr::absolute(
-                        name,
+                        search_for,
                         Some(prefix_str.clone()),
                         prefix_span,
                         candidate,
@@ -492,7 +537,7 @@ impl<'ast> NameResolver<'ast> {
             );
 
             if is_target {
-                return Ok(self.def_res(target_ns, def_id));
+                return Ok(self.def_res(search_for, def_id));
             } else {
                 search_mod = ModuleId::Def(def_id);
             }
@@ -543,6 +588,25 @@ impl<'ast> NameResolver<'ast> {
                     .emit_single_label(self);
                 None
             }
+        } else {
+            None
+        }
+    }
+
+    fn match_path_expr(expr: &PR<N<Expr>>) -> Option<&Path> {
+        if let Ok(ExprKind::Path(PathExpr(Ok(path)))) =
+            expr.as_ref().map_or(Err(()), |expr| Ok(expr.kind()))
+        {
+            Some(path)
+        } else {
+            None
+        }
+    }
+
+    fn match_ty_path(ty: &PR<N<Ty>>) -> Option<&Path> {
+        if let Ok(TyKind::Path(TyPath(Ok(path)))) = ty.as_ref().map_or(Err(()), |ty| Ok(ty.kind()))
+        {
+            Some(path)
         } else {
             None
         }
@@ -711,21 +775,18 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         self.exit_scope();
     }
 
-    fn visit_path_expr(&mut self, path: &'ast PathExpr) {
-        let path = path.0.as_ref().unwrap();
-        let res = self.resolve_path(Namespace::Value, path);
-
-        self.sess.res.set(NamePath::new(path.id()), res);
+    fn visit_path_expr(&mut self, _path: &'ast PathExpr) {
+        unreachable!();
     }
 
-    fn visit_ty_path(&mut self, path: &'ast TyPath) {
-        let path = path.0.as_ref().unwrap();
-        let res = self.resolve_path(Namespace::Type, path);
-
-        self.sess.res.set(NamePath::new(path.id()), res);
+    fn visit_ty_path(&mut self, _path: &'ast TyPath) {
+        unreachable!();
     }
 
-    // FIXME: Should resolve to field accessor NodeId
+    fn visit_path(&mut self, _: &'ast Path) {
+        unreachable!()
+    }
+
     fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast PR<IdentNode>) {
         walk_pr!(self, lhs, visit_expr);
         let field = field.as_ref().unwrap();
@@ -733,8 +794,91 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         self.sess.res.set(NamePath::new(field.id()), res);
     }
 
-    fn visit_path(&mut self, _: &'ast Path) {
-        unreachable!()
+    // FIXME: Should resolve to field accessor NodeId
+    // fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast
+    // PR<IdentNode>) {     walk_pr!(self, lhs, visit_expr);
+    //     let field = field.as_ref().unwrap();
+    //     let res = self.resolve_member(&field.ident);
+    //     self.sess.res.set(NamePath::new(field.id()), res);
+    // }
+
+    fn visit_expr(&mut self, expr: &'ast Expr) {
+        match expr.kind() {
+            ExprKind::Lit(_) => {},
+            ExprKind::Paren(inner) => walk_pr!(self, inner, visit_expr),
+            ExprKind::Path(path) => {
+                if let Ok(path) = &path.0 {
+                    let search_for_kind = match path.target_name().kind() {
+                        Some(kind) => match kind {
+                            IdentKind::Var => SearchForKind::FromNs(Namespace::Value),
+                            IdentKind::Ty => SearchForKind::Def(DefKind::Ctor),
+                            IdentKind::Op => SearchForKind::Specific(SearchForSpecific::Op),
+                        },
+                        None => SearchForKind::Def(DefKind::Value),
+                    };
+                    self.resolve_path(path, search_for_kind);
+                } else {
+                    walk_pr!(
+                        self,
+                        &path.0,
+                        resolve_path,
+                        SearchForKind::FromNs(Namespace::Value)
+                    );
+                }
+            },
+            ExprKind::Block(block) => self.visit_block_expr(block),
+            ExprKind::Infix(infix) => self.visit_infix_expr(infix),
+            ExprKind::Call(call) => {
+                if let Some(path) = Self::match_path_expr(&call.lhs) {
+                    let search_for_kind = match path.target_name().kind() {
+                        Some(kind) => match kind {
+                            IdentKind::Var => SearchForKind::Def(DefKind::Func),
+                            IdentKind::Ty => SearchForKind::Def(DefKind::Ctor),
+                            IdentKind::Op => SearchForKind::Specific(SearchForSpecific::Op),
+                        },
+                        None => SearchForKind::Def(DefKind::Func),
+                    };
+                    self.resolve_path(path, search_for_kind);
+                } else {
+                    self.visit_app_expr(call);
+                }
+            },
+            ExprKind::Let(block) => self.visit_let_expr(block),
+            ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
+            ExprKind::Ty(ty_expr) => {
+                self.visit_type_expr(ty_expr);
+            },
+            ExprKind::DotOp(lhs, field) => self.visit_dot_op_expr(lhs, field),
+            ExprKind::Match(subject, arms) => self.visit_match_expr(subject, arms),
+        }
+    }
+
+    fn visit_ty(&mut self, ty: &'ast Ty) {
+        match ty.kind() {
+            TyKind::Path(path) => {
+                if let Ok(path) = &path.0 {
+                    let search_for_kind = match path.target_name().kind() {
+                        Some(kind) => match kind {
+                            IdentKind::Var => SearchForKind::Def(DefKind::TyParam),
+                            IdentKind::Op | IdentKind::Ty => SearchForKind::FromNs(Namespace::Type),
+                        },
+                        None => SearchForKind::FromNs(Namespace::Type),
+                    };
+                    self.resolve_path(path, search_for_kind);
+                } else {
+                    walk_pr!(
+                        self,
+                        &path.0,
+                        resolve_path,
+                        SearchForKind::FromNs(Namespace::Type)
+                    );
+                }
+            },
+            TyKind::Func(params, body) => self.visit_func_ty(params, body),
+            TyKind::Paren(inner) => self.visit_paren_ty(inner),
+            TyKind::App(cons, args) => self.visit_ty_app(cons, args),
+            TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
+        }
     }
 }
 

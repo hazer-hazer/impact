@@ -1,13 +1,13 @@
 use super::def::{DefId, DefKind, Module, ModuleId, ModuleKind, ROOT_DEF_ID};
 use crate::{
     ast::{
-        expr::{Arm, Block, Expr, ExprKind},
+        expr::{Block, Expr, ExprKind},
         item::{ExternItem, Field, Item, ItemKind, TyParam, Variant},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
-        ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, N, PR,
+        ErrorNode, NodeId, Path, WithNodeId, AST, DUMMY_NODE_ID, PR,
     },
     cli::verbose,
-    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageStorage},
     resolve::{builtin::DeclareBuiltin, def::Namespace},
     session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
@@ -63,12 +63,36 @@ impl<'ast> DefCollector<'ast> {
     }
 
     fn define(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
+        self._define(self.current_module, node_id, kind, ident)
+    }
+
+    fn define_in_parent(&mut self, node_id: NodeId, kind: DefKind, ident: &Ident) -> DefId {
+        self._define(
+            self.sess
+                .def_table
+                .get_module(self.current_module)
+                .parent()
+                .unwrap(),
+            node_id,
+            kind,
+            ident,
+        )
+    }
+
+    fn _define(
+        &mut self,
+        module_id: ModuleId,
+        node_id: NodeId,
+        kind: DefKind,
+        ident: &Ident,
+    ) -> DefId {
         let def_id = self.sess.def_table.define(node_id, kind, ident);
-        let old_def = self.module().define(kind.namespace(), ident.sym(), def_id);
+        let module = self.sess.def_table.get_module_mut(module_id);
+        let old_def = module.define(kind.namespace(), ident.sym(), def_id);
 
         verbose!(
             "Define {node_id} {kind} {ident} => {def_id} inside {}",
-            self.module()
+            module
         );
 
         if let Some(old_def) = old_def {
@@ -177,7 +201,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
 
     fn visit_variant(&mut self, variant: &'ast Variant) {
         let def_id = self.define(variant.id, DefKind::Variant, variant.name.as_ref().unwrap());
-        self.define(
+        self.define_in_parent(
             variant.ctor_id,
             DefKind::Ctor,
             variant.name.as_ref().unwrap(),
@@ -205,7 +229,7 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
         walk_pr!(self, name, visit_ident);
         self.visit_generic_params(generics);
         walk_each_pr!(self, fields, visit_field);
-        self.define(ctor_def_id, DefKind::Ctor, name.as_ref().unwrap());
+        self.define_in_parent(ctor_def_id, DefKind::Ctor, name.as_ref().unwrap());
     }
 
     fn visit_extern_item(&mut self, item: &'ast ExternItem) {

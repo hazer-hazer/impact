@@ -1,15 +1,9 @@
-use std::{array, collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display};
 
-use super::{
-    builtin::{Builtin, DeclareBuiltin},
-    res::Candidate,
-};
+use super::builtin::{Builtin, DeclareBuiltin};
 use crate::{
     ast::{item::ItemKind, NodeId, NodeMap, DUMMY_NODE_ID, ROOT_NODE_ID},
-    cli::{
-        color::{Color, WithColor},
-        verbose,
-    },
+    cli::{color::Color, verbose},
     dt::idx::{declare_idx, Idx, IndexVec},
     message::message::MessageBuilder,
     parser::token::Punct,
@@ -141,7 +135,7 @@ impl Display for Def {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum Namespace {
     Value, // Value namespace used for locals
     Type,  // Type namespace used for types and modules

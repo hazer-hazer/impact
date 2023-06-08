@@ -15,9 +15,9 @@ use crate::{
         visitor::{walk_each, HirVisitor},
         BodyId, BodyOwner, BodyOwnerKind, HirId, Map, HIR,
     },
-    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageStorage},
     mir::{InfixOp, Ty},
-    resolve::def::{DefId, DefKind, DefMap},
+    resolve::def::{DefId, DefMap},
     session::{impl_session_holder, stage_result, SessionHolder, Stage, StageResult},
     span::sym::Ident,
     typeck::{ty::TyMap, tyctx::InstantiatedTy},
@@ -170,7 +170,7 @@ impl_message_holder!(FunctionsCodeGen<'ink, 'ctx>);
 impl_session_holder!(FunctionsCodeGen<'ink, 'ctx>; ctx.sess);
 
 impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
-    fn visit_body(&mut self, _body: BodyId, owner: BodyOwner, hir: &HIR) {
+    fn visit_body(&mut self, _body: BodyId, owner: BodyOwner, _hir: &HIR) {
         if !self.ctx.should_be_built(owner.def_id) {
             return;
         }
@@ -196,7 +196,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
     }
 
-    fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, hir: &HIR) {
+    fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, _hir: &HIR) {
         let def_id = item_id.def_id();
         let ty = self.ctx.sess.tyctx.tyof(item_id.hir_id());
 
@@ -227,7 +227,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
         // TODO: Somehow canonicalize fields order, maybe FieldId from type <=>
         //  parameter index?
 
-        let adt_ty = self.ctx.sess.tyctx.tyof(hir_vid);
+        let _adt_ty = self.ctx.sess.tyctx.tyof(hir_vid);
 
         self.function_map
             .add_instance(v_ctor_id, ctor_func_ty, |_def_id, ty| {
@@ -250,7 +250,7 @@ impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
             .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
     }
 
-    fn visit_field(&mut self, field: &hir::item::Field, hir: &HIR) {
+    fn visit_field(&mut self, field: &hir::item::Field, _hir: &HIR) {
         if let Some(accessor_def_id) = field.accessor_def_id {
             let accessor_ty = self.ctx.sess.tyctx.def_ty(accessor_def_id).unwrap();
             let accessor_func_ty = self.ctx.inst_ty(accessor_ty, accessor_def_id);

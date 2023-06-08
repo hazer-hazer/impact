@@ -2,7 +2,7 @@ use inkwell::values::BasicValueEnum;
 
 use super::{ctx::CodeGenCtx, func::FunctionMap};
 use crate::{
-    hir::{self, visitor::HirVisitor, HIR},
+    hir::{visitor::HirVisitor, HIR},
     message::message::{impl_message_holder, MessageStorage},
     resolve::def::{DefId, DefMap},
     session::{impl_session_holder, stage_result, SessionHolder, Stage, StageResult},
@@ -63,7 +63,7 @@ impl<'ink, 'ctx, 'a> HirVisitor for ValueCodeGen<'ink, 'ctx, 'a> {
         _name: crate::span::sym::Ident,
         _value: crate::hir::BodyId,
         _id: crate::hir::item::ItemId,
-        hir: &HIR,
+        _hir: &HIR,
     ) {
         // let builder = self.ctx.llvm_ctx.create_builder();
         // self.value_map.insert(

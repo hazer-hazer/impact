@@ -1,7 +1,6 @@
 use crate::{
     ast::{AstMetadata, NodeId},
     config::config::Config,
-    hir::HIR,
     interface::writer::Writer,
     resolve::{
         def::{DefId, DefKind, DefTable},

@@ -234,7 +234,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.ty_anno(expr_id).hir_id(expr);
     }
 
-    fn visit_lit_expr(&mut self, lit: &Lit, hir: &HIR) {
+    fn visit_lit_expr(&mut self, lit: &Lit, _hir: &HIR) {
         self.pp.string(lit);
     }
 
@@ -276,7 +276,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_ident(field, hir);
     }
 
-    fn visit_builtin_expr(&mut self, bt: &ValueBuiltin, hir: &HIR) {
+    fn visit_builtin_expr(&mut self, bt: &ValueBuiltin, _hir: &HIR) {
         self.pp.string(bt);
     }
 
@@ -323,7 +323,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_each_delim!(self, args.iter().copied(), visit_ty, " ", hir);
     }
 
-    fn visit_builtin_ty(&mut self, bt: &TyBuiltin, hir: &HIR) {
+    fn visit_builtin_ty(&mut self, bt: &TyBuiltin, _hir: &HIR) {
         self.pp.string(bt);
     }
 
@@ -345,7 +345,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     // Fragments //
-    fn visit_ident(&mut self, ident: Ident, hir: &HIR) {
+    fn visit_ident(&mut self, ident: Ident, _hir: &HIR) {
         self.pp.string(ident);
     }
 

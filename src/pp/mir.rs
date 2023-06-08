@@ -1,7 +1,7 @@
 use std::str::from_utf8;
 
 use super::{
-    hir::{self, walk_each_delim},
+    hir::{walk_each_delim},
     AstLikePP,
 };
 use crate::{
@@ -185,7 +185,7 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
     }
 
     // Note: Only used for parameters
-    fn visit_pat(&mut self, pat: Pat, hir: &HIR) {
+    fn visit_pat(&mut self, pat: Pat, _hir: &HIR) {
         let pat = self.hir.pat(pat);
         match pat.kind() {
             PatKind::Unit => self.pp.kw(Kw::Unit),

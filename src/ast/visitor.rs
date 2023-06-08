@@ -9,11 +9,7 @@ use super::{
 use crate::span::sym::Ident;
 
 macro_rules! walk_pr {
-    ($self: ident, $pr: expr, $ok_visitor: ident) => {
-        walk_pr!($self, $pr, $ok_visitor,)
-    };
-
-    ($self: ident, $pr: expr, $ok_visitor: ident, $($args: expr),*) => {
+    ($self: ident, $pr: expr, $ok_visitor: ident $(,$args: expr)*) => {
         match $pr {
             Ok(ok) => $self.$ok_visitor(ok, $($args),*),
             Err(err) => $self.visit_err(err),

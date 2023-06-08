@@ -1,6 +1,6 @@
 use super::{impl_with_hir_id, BodyId, HirId, OwnerId, Ty, Variant, WithHirId, ROOT_OWNER_ID};
 use crate::{
-    cli::color::{Color, WithColor},
+    cli::color::{Color},
     dt::idx::declare_idx,
     resolve::def::DefId,
     span::{impl_with_span, sym::Ident, Span, WithSpan},

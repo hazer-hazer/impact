@@ -1,5 +1,4 @@
 use super::{
-    ctx::InferCtx,
     debug::{tcdbg, InferStepKind},
     ty::{Ex, ExKind, FloatKind, IntKind, MapTy, Ty, TyKind},
     TyResult, Typecker,

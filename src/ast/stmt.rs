@@ -72,7 +72,7 @@ impl NodeKindStr for StmtKind {
         match self {
             StmtKind::Expr(expr) => pr_node_kind_str(expr),
             StmtKind::Item(item) => pr_node_kind_str(item),
-            StmtKind::Local(pat, expr) => "let statement".to_string(),
+            StmtKind::Local(_pat, _expr) => "let statement".to_string(),
         }
     }
 }

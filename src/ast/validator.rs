@@ -11,7 +11,7 @@ use crate::{
     message::{
         human_lang::items_are,
         message::{
-            impl_message_holder, MessageBuilder, MessageHolder, MessageStorage, NameKind, Solution,
+            impl_message_holder, MessageBuilder, MessageStorage, NameKind, Solution,
             SolutionKind,
         },
     },

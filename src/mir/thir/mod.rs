@@ -3,7 +3,7 @@ pub mod build;
 use std::fmt::Display;
 
 use crate::{
-    cli::color::{Color, WithColor},
+    cli::color::{Color},
     dt::idx::{declare_idx, IndexVec},
     hir::{BodyId, HirId, OwnerId},
     resolve::{builtin::ValueBuiltin, def::DefId},
@@ -12,7 +12,7 @@ use crate::{
         sym::{Ident, Symbol},
         Span, WithSpan,
     },
-    typeck::ty::{FieldId, FloatKind, IntKind, Ty, VariantId},
+    typeck::ty::{FloatKind, IntKind, Ty},
 };
 
 declare_idx!(ExprId, u32, "{}", Color::Green);

@@ -43,7 +43,7 @@ impl<'a> DefPrinter for AstLikePP<'a, ()> {
     }
 
     fn _pp_mod(&mut self, module: &Module) {
-        for (ns, defs) in module.namespaces().iter() {
+        for (_ns, defs) in module.namespaces().iter() {
             for (sym, def_id) in defs {
                 self.out_indent();
                 self.string(sym.original_string());

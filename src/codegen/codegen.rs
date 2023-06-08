@@ -19,7 +19,7 @@ use super::{
 use crate::{
     cli::{color::Colorize, verbose},
     hir::{ExprDefKind, HIR},
-    message::message::{impl_message_holder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageStorage},
     mir::MIR,
     session::{impl_session_holder, stage_result, Session, Stage, StageResult, StageResultImpl},
 };

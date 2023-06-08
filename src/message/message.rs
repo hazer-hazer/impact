@@ -274,7 +274,7 @@ impl MessageBuilder {
         self
     }
 
-    pub fn map(mut self, mut f: impl FnMut(Self) -> Self) -> Self {
+    pub fn map(self, mut f: impl FnMut(Self) -> Self) -> Self {
         f(self)
     }
 

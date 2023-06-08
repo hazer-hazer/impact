@@ -1,5 +1,5 @@
 use super::{impl_with_hir_id, item::ItemId, Expr, HirId, Pat, WithHirId};
-use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
+use crate::span::{impl_with_span, Span, WithSpan};
 
 #[derive(Debug)]
 pub struct StmtNode {

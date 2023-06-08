@@ -5,7 +5,7 @@ use std::{
 
 use super::kind::Kind;
 use crate::{
-    cli::color::{Color, Colorize, WithColor},
+    cli::color::{Color, WithColor},
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,

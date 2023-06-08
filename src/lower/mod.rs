@@ -16,7 +16,7 @@ use crate::{
         Body, BodyId, ExprDefKind, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind,
         TyRes, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
-    message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageStorage},
     parser::token::{FloatKind, IntKind},
     resolve::{
         builtin::DeclareBuiltin,

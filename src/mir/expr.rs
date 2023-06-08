@@ -2,13 +2,13 @@ use super::{
     build::{unpack, MirBuilder},
     scalar::Scalar,
     thir::{ExprCategory, ExprId, ExprKind, Lit, Pat, PatKind},
-    BBWith, Const, LValue, Local, Operand, Projection, RValue, Ty, BB,
+    BBWith, Const, LValue, Local, Operand, RValue, Ty, BB,
 };
 use crate::{
     cli::verbose,
     hir::ExprDefKind,
     mir::{thir::Expr, InfixOp},
-    resolve::{builtin::ValueBuiltin, def::DefKind},
+    resolve::{builtin::ValueBuiltin},
     typeck::ty::{FloatKind, IntKind},
 };
 

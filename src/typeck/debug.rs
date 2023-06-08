@@ -1,26 +1,22 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{fmt::Display};
 
 use super::{
-    ctx::InferCtx,
-    kind::{Kind, KindEx, KindVarId},
-    ty::{Ex, TyVarId},
+    kind::{Kind, KindEx},
+    ty::{Ex},
     TyResult, TypeckErr,
 };
 use crate::{
     cli::color::{Color, Colorize, WithColor},
     dt::idx::{declare_idx, IndexVec},
     hir::{
-        expr::{Arm, ExprKind, TyExpr},
+        expr::{Arm, ExprKind},
         pat::PatKind,
         Block, BodyId, Expr, Map, Pat, HIR,
     },
-    interface::writer::{out, Writer},
     parser::token::Punct,
     pp::{
         pp::{pp, PP},
-        AstLikePP, AstPPMode,
     },
-    session::Session,
     typeck::ty::Ty,
 };
 

@@ -1,7 +1,6 @@
 use super::{super::ty::TyKind, Kind, KindEx, KindSort, Ty};
 use crate::{
     typeck::{
-        ctx::InferCtx,
         debug::{tcdbg, InferStepKind},
         TyResult, TypeckErr, Typecker,
     },

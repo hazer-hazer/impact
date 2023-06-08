@@ -1,5 +1,5 @@
 use super::{
-    ty::{ExKind, FloatKind, IntKind, Ty, TyKind, VariantId},
+    ty::{ExKind, FloatKind, IntKind, Ty, TyKind},
     TyResult, TypeckErr, Typecker, Typed,
 };
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
     session::SessionHolder,
-    span::{sym::Ident, Spanned, WithSpan},
+    span::{Spanned, WithSpan},
     typeck::{
         debug::{tcdbg, InferEntryKind, InferStepKind},
         kind::{Kind, KindSort},

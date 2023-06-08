@@ -2,7 +2,7 @@ use self::message::{Message, MessageStorage};
 use crate::{
     cli::{color::Colorize, verbose},
     dt::bool_enum::bool_enum,
-    session::{Session, SessionHolder, SessionHolderMut},
+    session::{Session, SessionHolderMut},
 };
 
 pub mod debug_emitter;

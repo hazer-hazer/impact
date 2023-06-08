@@ -10,7 +10,6 @@ use super::{
 };
 use crate::{
     resolve::builtin::{TyBuiltin, ValueBuiltin},
-    session::SessionHolder,
     span::sym::Ident,
 };
 
@@ -140,7 +139,7 @@ pub trait HirVisitor {
         }
     }
 
-    fn visit_unit_pat(&mut self, hir: &HIR) {}
+    fn visit_unit_pat(&mut self, _hir: &HIR) {}
 
     fn visit_ident_pat(&mut self, ident: Ident, hir: &HIR) {
         self.visit_ident(ident, hir);
@@ -163,9 +162,9 @@ pub trait HirVisitor {
         }
     }
 
-    fn visit_lit_expr(&mut self, _: &Lit, hir: &HIR) {}
+    fn visit_lit_expr(&mut self, _: &Lit, _hir: &HIR) {}
 
-    fn visit_path_expr(&mut self, _path: ExprPath, hir: &HIR) {}
+    fn visit_path_expr(&mut self, _path: ExprPath, _hir: &HIR) {}
 
     fn visit_block_expr(&mut self, block: Block, hir: &HIR) {
         self.visit_block(block, hir)
@@ -194,7 +193,7 @@ pub trait HirVisitor {
         self.visit_ident(field, hir);
     }
 
-    fn visit_builtin_expr(&mut self, _bt: &ValueBuiltin, hir: &HIR) {}
+    fn visit_builtin_expr(&mut self, _bt: &ValueBuiltin, _hir: &HIR) {}
 
     fn visit_match_expr(&mut self, subject: Expr, arms: &[Arm], hir: &HIR) {
         self.visit_expr(subject, hir);
@@ -217,7 +216,7 @@ pub trait HirVisitor {
         }
     }
 
-    fn visit_ty_path(&mut self, _path: &TyPath, hir: &HIR) {}
+    fn visit_ty_path(&mut self, _path: &TyPath, _hir: &HIR) {}
 
     fn visit_func_ty(&mut self, params: &[Ty], body: Ty, hir: &HIR) {
         walk_each!(self, params.iter().copied(), visit_ty, hir);
@@ -229,10 +228,10 @@ pub trait HirVisitor {
         walk_each!(self, args.iter().copied(), visit_ty, hir);
     }
 
-    fn visit_builtin_ty(&mut self, _bt: &TyBuiltin, hir: &HIR) {}
+    fn visit_builtin_ty(&mut self, _bt: &TyBuiltin, _hir: &HIR) {}
 
     // Fragments //
-    fn visit_ident(&mut self, _: Ident, hir: &HIR) {}
+    fn visit_ident(&mut self, _: Ident, _hir: &HIR) {}
     fn visit_block(&mut self, block: Block, hir: &HIR) {
         let block = hir.block(block);
         walk_each!(self, block.stmts().iter().copied(), visit_stmt, hir);

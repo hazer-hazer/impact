@@ -7,7 +7,6 @@ use crate::{
     resolve::builtin::ValueBuiltin,
     session::{impl_session_holder, Session, SessionHolder},
     span::WithSpan,
-    typeck::tyctx::TyCtx,
 };
 
 pub struct ThirBuilder<'ctx> {
@@ -140,7 +139,7 @@ impl<'ctx> ThirBuilder<'ctx> {
     }
 
     fn local(&mut self, local: &hir::stmt::Local) -> Stmt {
-        let ty = self.tyctx().tyof(local.id());
+        let _ty = self.tyctx().tyof(local.id());
         Stmt::Local(self.pat(local.pat), self.expr(local.value))
     }
 

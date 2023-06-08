@@ -3,7 +3,6 @@
 
 use core::panic;
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     fmt::{Debug, Display},
 };
@@ -16,7 +15,7 @@ use self::{
     ty::TyNode,
 };
 use crate::{
-    cli::color::{Color, WithColor},
+    cli::color::{Color},
     dt::{
         idx::{declare_idx, Idx, IndexVec},
         new_type::new_type,

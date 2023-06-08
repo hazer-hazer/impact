@@ -12,8 +12,7 @@ use inkwell::{
 
 use crate::{
     cli::verbose,
-    hir::{self, item::ItemId, Map, HIR},
-    message::message::impl_message_holder,
+    hir::{item::ItemId, Map, HIR},
     mir::{Ty, MIR},
     resolve::{
         builtin::Builtin,

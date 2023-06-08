@@ -12,7 +12,7 @@ use crate::{
     cli::verbose,
     hir::{HirId, Map, HIR},
     interface::writer::outln,
-    message::message::{impl_message_holder, MessageHolder, MessageStorage},
+    message::message::{impl_message_holder, MessageStorage},
     resolve::def::DefId,
     session::{impl_session_holder, stage_result, Session, SessionHolder, Stage, StageResult},
     typeck::{
