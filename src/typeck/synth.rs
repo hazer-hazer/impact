@@ -170,7 +170,7 @@ impl<'hir> Typecker<'hir> {
                 | ExprDefKind::Ctor
                 | ExprDefKind::Func
                 | ExprDefKind::Value => Ok(self.tyctx().def_ty(def_id).expect(&format!(
-                    "Expected type of def {} ty be collected at conv stage",
+                    "Expected type of {} definition to be collected at conv stage",
                     self.sess.def_table.def(def_id)
                 ))),
             },
@@ -453,10 +453,7 @@ impl<'hir> Typecker<'hir> {
         let lhs_ty = self.synth_expr(call.lhs)?;
         let lhs_ty = lhs_ty.apply_ctx(self);
         self._synth_call(
-            Spanned::new(
-                self.hir.expr(call.lhs).span(),
-                Typed::new(call.lhs, lhs_ty),
-            ),
+            Spanned::new(self.hir.expr(call.lhs).span(), Typed::new(call.lhs, lhs_ty)),
             &call.args,
         )
     }

@@ -324,8 +324,8 @@ impl<'a, D> AstLikePP<'a, D> {
         }
 
         let res = self.sess.res.get(NamePath::new(path.id())).expect(&format!(
-            "No unresolved paths must exist after name resolution. Unresolved path `{}`",
-            path
+            "No unresolved paths must exist after name resolution. Unresolved path `{path}`{}",
+            path.id()
         ));
 
         let node_id = match res.kind() {

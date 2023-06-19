@@ -178,6 +178,7 @@ impl ResolutionResultImpl for ResolutionResult<Res> {
                     )
                     .candidate(err.candidate)
                     .emit(mh);
+
                 Res::error()
             },
         }
@@ -401,13 +402,13 @@ impl<'ast> NameResolver<'ast> {
         Err(ResolutionErr::relative(search_for, candidate))
     }
 
-    fn resolve_member(&mut self, field: &Ident) -> Res {
-        self.resolve_relative(SearchFor(
-            *field,
-            SearchForKind::Def(DefKind::FieldAccessor),
-        ))
-        .emit(self)
-    }
+    // fn resolve_member(&mut self, field: &Ident) -> Res {
+    //     self.resolve_relative(SearchFor(
+    //         *field,
+    //         SearchForKind::Def(DefKind::FieldAccessor),
+    //     ))
+    //     .emit(self)
+    // }
 
     fn resolve_module_relative(&mut self, name: Ident) -> ResolutionResult<ModuleId> {
         let search_for = SearchFor(name, SearchForKind::Def(DefKind::Mod));
@@ -460,6 +461,8 @@ impl<'ast> NameResolver<'ast> {
             self.resolve_path_absolute(search_for_kind, path)
         }
         .emit(self);
+
+        verbose!("Resolve path `{path}`{} as {res}", path.id());
 
         self.sess.res.set(NamePath::new(path.id()), res);
     }
@@ -671,6 +674,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
 
         self.exit_scope();
 
+        // Resolve builtin declaration
         if params.is_empty() {
             if let ExprKind::Call(Call { lhs, args }) = body.as_deref().unwrap().kind() {
                 if let ExprKind::Path(PathExpr(path)) = lhs.as_deref().unwrap().kind() {
@@ -787,12 +791,12 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         unreachable!()
     }
 
-    fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast PR<IdentNode>) {
-        walk_pr!(self, lhs, visit_expr);
-        let field = field.as_ref().unwrap();
-        let res = self.resolve_member(&field.ident);
-        self.sess.res.set(NamePath::new(field.id()), res);
-    }
+    // fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast
+    // PR<IdentNode>) {     walk_pr!(self, lhs, visit_expr);
+    //     let field = field.as_ref().unwrap();
+    //     let res = self.resolve_member(&field.ident);
+    //     self.sess.res.set(NamePath::new(field.id()), res);
+    // }
 
     // FIXME: Should resolve to field accessor NodeId
     // fn visit_dot_op_expr(&mut self, lhs: &'ast PR<N<Expr>>, field: &'ast
@@ -830,6 +834,8 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             ExprKind::Infix(infix) => self.visit_infix_expr(infix),
             ExprKind::Call(call) => {
                 if let Some(path) = Self::match_path_expr(&call.lhs) {
+                    walk_each_pr!(self, &call.args, visit_expr);
+
                     let search_for_kind = match path.target_name().kind() {
                         Some(kind) => match kind {
                             IdentKind::Var => SearchForKind::Def(DefKind::Func),

@@ -293,6 +293,20 @@ impl<'hir> TyConv<'hir> {
                     .set_field_accessor_field_id(field_accessor_def_id, field_id);
             });
 
+        let ctor_ty = struct_ty.substituted_forall_body(Ty::tight_func(
+            Some(struct_.ctor_def_id),
+            struct_ty
+                .as_struct()
+                .unwrap()
+                .fields
+                .iter()
+                .map(|f| f.ty)
+                .collect(),
+            struct_ty,
+        ));
+
+        self.tyctx_mut().type_def(struct_.ctor_def_id, ctor_ty);
+
         struct_ty
     }
 
