@@ -90,7 +90,7 @@ impl Display for DefKind {
                 DefKind::Variant => "variant",
                 DefKind::Struct => "struct",
                 DefKind::Ctor => "constructor",
-                DefKind::FieldAccessor => "field accessor",
+                DefKind::FieldAccessor => "field",
                 DefKind::TyParam => "type parameter",
             }
         )

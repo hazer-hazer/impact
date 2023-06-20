@@ -17,7 +17,7 @@ struct String =
     field: str
 
 main () =
-    a = String "a"
+    a = String.String "a"
     b = 123
 
     puts (String.field a)

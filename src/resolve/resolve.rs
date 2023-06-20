@@ -329,7 +329,10 @@ impl<'ast> NameResolver<'ast> {
         module_id: ModuleId,
         search_for: SearchFor,
     ) -> Result<DefId, Candidate> {
-        verbose!("Resolve {search_for} in {module_id}");
+        let name = search_for.0;
+        let ns = search_for.1.namespace();
+        verbose!("Resolve {name} from {ns} in {module_id}");
+
         match self
             .sess
             .def_table
@@ -412,7 +415,6 @@ impl<'ast> NameResolver<'ast> {
 
     fn resolve_module_relative(&mut self, name: Ident) -> ResolutionResult<ModuleId> {
         let search_for = SearchFor(name, SearchForKind::Def(DefKind::Mod));
-
         let relative_res = self.resolve_relative(search_for)?;
 
         let def_id = match relative_res.kind() {
@@ -475,6 +477,8 @@ impl<'ast> NameResolver<'ast> {
         path: &Path,
     ) -> ResolutionResult<Res> {
         assert!(path.segments().len() > 1);
+
+        let target_ns = search_for_kind.namespace();
 
         let mut search_mod =
             self.resolve_module_relative(*path.segments().first().as_ref().unwrap().expect_name())?;
