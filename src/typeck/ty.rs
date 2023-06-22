@@ -9,6 +9,7 @@ use crate::{
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
+    session::{MaybeWithSession, WithSess, WithoutSess},
     span::sym::Ident,
     utils::macros::match_opt,
 };
@@ -19,7 +20,7 @@ declare_idx!(TyVarId, u32, "{}", Color::Cyan);
 declare_idx!(VariantId, u32, "{}", Color::White);
 
 impl TyVarId {
-    pub fn pretty(&self) -> String {
+    pub fn real_name(&self) -> String {
         Ty::ty_var_name_or_id(*self)
     }
 }
@@ -270,7 +271,7 @@ impl<To> MapTy<To, Field<To>> for Field {
 
 impl std::fmt::Display for Field {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.name, self.ty)
+        write!(f, "{}: {}", self.name, self.ty.without_sess())
     }
 }
 
@@ -324,7 +325,6 @@ impl std::fmt::Display for Variant {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Adt<T = Ty> {
     pub def_id: DefId,
-    // TODO: IndexVec smallvec of 1 optimization for structs
     pub variants: IndexVec<VariantId, Variant<T>>,
 }
 
@@ -483,10 +483,10 @@ impl std::fmt::Display for TyKind {
                 "({} -> {})",
                 params
                     .iter()
-                    .map(ToString::to_string)
+                    .map(|p| p.without_sess().to_string())
                     .collect::<Vec<_>>()
                     .join(" - "),
-                body
+                body.without_sess()
             ),
             TyKind::FuncDef(_def_id, params, body) => {
                 write!(
@@ -494,19 +494,21 @@ impl std::fmt::Display for TyKind {
                     "{} -> {}",
                     params
                         .iter()
-                        .map(ToString::to_string)
+                        .map(|p| p.without_sess().to_string())
                         .collect::<Vec<_>>()
                         .join(" "),
-                    body,
+                    body.without_sess(),
                     // def_id
                 )
             },
             TyKind::Adt(adt) => adt.fmt(f),
             TyKind::Struct(data) => data.fmt(f),
-            TyKind::Ref(ty) => write!(f, "ref {ty}"),
-            &TyKind::Var(id) => write!(f, "{}", id.pretty()),
+            TyKind::Ref(ty) => write!(f, "ref {}", ty.without_sess()),
+            &TyKind::Var(id) => write!(f, "{}", id.real_name()),
             TyKind::Existential(ex) => write!(f, "{ex}"),
-            TyKind::Forall(alpha, ty) => write!(f, "(∀{}. {ty})", alpha.pretty()),
+            TyKind::Forall(alpha, ty) => {
+                write!(f, "(∀{}. {})", alpha.real_name(), ty.without_sess())
+            },
             TyKind::Kind(kind) => write!(f, "{kind}"),
         }
     }
@@ -736,17 +738,75 @@ impl Ty {
 
 impl std::fmt::Debug for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Ty({})", self)
+        write!(f, "Ty({})", self.without_sess())
     }
 }
 
-impl std::fmt::Display for Ty {
+impl<'sess, 'a> std::fmt::Display for WithSess<'sess, 'a, Ty> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.kind().to_string().fmt(f)
+        match self.value.kind() {
+            TyKind::Error => write!(f, "?"),
+            TyKind::Unit => write!(f, "()"),
+            TyKind::Bool => write!(f, "bool"),
+            TyKind::Int(kind) => write!(f, "{kind}"),
+            TyKind::Float(kind) => write!(f, "{kind}"),
+            TyKind::Str => write!(f, "str"),
+            TyKind::FuncDef(def_id, params, body) => write!(
+                f,
+                "function {} of type {} -> {}",
+                self.sess.def_table.def(*def_id).name(),
+                params
+                    .iter()
+                    .map(|p| p.with_sess(self.sess).to_string())
+                    .collect::<Vec<_>>()
+                    .join(" - "),
+                body.with_sess(self.sess)
+            ),
+            TyKind::Func(params, body) => write!(
+                f,
+                "{} -> {}",
+                params
+                    .iter()
+                    .map(|p| p.with_sess(self.sess).to_string())
+                    .collect::<Vec<_>>()
+                    .join(" - "),
+                body.with_sess(self.sess)
+            ),
+            TyKind::Adt(adt) => write!(
+                f,
+                "data type {}",
+                self.sess.def_table.def(adt.def_id).name()
+            ),
+            TyKind::Struct(struct_) => write!(
+                f,
+                "struct {}",
+                self.sess.def_table.def(struct_.def_id).name()
+            ),
+            TyKind::Ref(inner) => write!(f, "ref {}", inner.with_sess(self.sess)),
+            TyKind::Var(var) => write!(f, "{}", var.real_name()),
+            // FIXME: Maybe not "?"
+            TyKind::Existential(ex) => write!(f, "?"),
+            TyKind::Forall(alpha, body) => {
+                write!(f, "∀{}. {}", alpha.real_name(), body.with_sess(self.sess))
+            },
+            TyKind::Kind(_) => todo!(),
+        }
     }
 }
 
-impl WithColor for Ty {
+impl<'a> std::fmt::Display for WithoutSess<'a, Ty> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value.kind())
+    }
+}
+
+impl<'sess, 'a> WithColor for WithSess<'sess, 'a, Ty> {
+    fn fg_color() -> Option<Color> {
+        Some(Color::BrightBlue)
+    }
+}
+
+impl<'a> WithColor for WithoutSess<'a, Ty> {
     fn fg_color() -> Option<Color> {
         Some(Color::BrightBlue)
     }

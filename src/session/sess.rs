@@ -56,6 +56,10 @@ impl Session {
         );
         (node_id, def_id)
     }
+
+    pub fn with<'sess, 'a, T>(&'sess self, value: &'a T) -> WithSess<'sess, 'a, T> {
+        WithSess::new(self, value)
+    }
 }
 
 pub trait SessionHolder {
@@ -115,3 +119,36 @@ macro_rules! impl_session_holder {
 }
 
 pub(crate) use impl_session_holder;
+
+pub struct WithSess<'sess, 'a, T> {
+    pub sess: &'sess Session,
+    pub value: &'a T,
+}
+
+impl<'sess, 'a, T> WithSess<'sess, 'a, T> {
+    pub fn new(sess: &'sess Session, value: &'a T) -> Self {
+        Self { sess, value }
+    }
+}
+
+pub struct WithoutSess<'a, T> {
+    pub value: &'a T,
+}
+
+impl<'a, T> WithoutSess<'a, T> {
+    pub fn new(value: &'a T) -> Self {
+        Self { value }
+    }
+}
+
+pub trait MaybeWithSession<'sess, 'a>: Sized {
+    fn with_sess(&'a self, sess: &'sess Session) -> WithSess<'sess, 'a, Self> {
+        WithSess::new(sess, self)
+    }
+
+    fn without_sess(&'a self) -> WithoutSess<'a, Self> {
+        WithoutSess::new(self)
+    }
+}
+
+impl<'sess, 'a, T: Sized> MaybeWithSession<'sess, 'a> for T {}

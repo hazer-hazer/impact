@@ -21,7 +21,7 @@ use crate::{
     typeck::{
         kind::{Kind, KindEx, KindSort},
         ty::{Ex, TyKind, TyVarId},
-    },
+    }, session::MaybeWithSession,
 };
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -199,7 +199,7 @@ impl Ty {
     }
 
     pub fn assert_is_ty(&self) {
-        assert!(self.is_ty(), "Expected a type, got {}", self);
+        assert!(self.is_ty(), "Expected a type, got {}", self.without_sess());
     }
 
     pub fn is_solved(&self) -> bool {
@@ -257,8 +257,6 @@ impl Ty {
     }
 
     pub fn substitute(&self, subst: TyVarId, with: Ty) -> Ty {
-        verbose!("Substitute {subst} in {self} with {with}");
-
         match self.kind() {
             TyKind::Error
             | TyKind::Unit
@@ -313,7 +311,7 @@ impl Ty {
 
     pub fn mono(self) -> MonoTy {
         self.as_mono()
-            .expect(&format!("{} expected to be a mono type", self))
+            .expect(&format!("{} expected to be a mono type", self.without_sess()))
     }
 
     pub fn mono_checked(self) -> Self {
@@ -325,7 +323,7 @@ impl Ty {
     pub fn apply_ctx(self, ctx: &impl AlgoCtx) -> Ty {
         let ty = self._apply_ctx(ctx);
         if self != ty {
-            verbose!("Applying ctx on type it is solved as {self} => {ty}");
+            verbose!("Applying ctx on type it is solved as {} => {}", self.without_sess(), ty.without_sess());
         }
         ty
     }

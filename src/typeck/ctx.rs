@@ -3,7 +3,7 @@ use super::{
     ty::{Ex, ExId, ExKind, Ty, TyVarId},
     ty_infer::MonoTy,
 };
-use crate::{cli::verbose, dt::idx::IndexVec};
+use crate::{cli::verbose, dt::idx::IndexVec, session::MaybeWithSession};
 
 pub trait AlgoCtx {
     fn get_solution(&self, ex: Ex) -> Option<Ty>;
@@ -38,12 +38,10 @@ impl GlobalCtx {
     /// having either successfully inferred type or a typeck error.
     pub fn add(&mut self, depth: usize, ctx: InferCtx) {
         ctx.solved().for_each(|(ex, &sol)| {
-            verbose!("Extract solution {ex} = {sol} to global ctx from [CTX {depth}]");
             assert!(self.solved.insert(ex, sol).is_none());
         });
 
         ctx.solved_kind_exes().for_each(|(ex, &sol)| {
-            verbose!("Extract solution {ex} = {sol} to global ctx from [CTX {depth}]");
             assert!(self.solved_kind_exes.insert(ex, sol).is_none());
         });
 
@@ -85,8 +83,8 @@ impl GlobalCtx {
                 self.solved.insert(ex.id(), sol).is_none(),
                 "Tried to override solution of {} = {} to {}",
                 ex,
-                self.solved.get_unwrap(ex.id()),
-                sol
+                self.solved.get_unwrap(ex.id()).without_sess(),
+                sol.without_sess()
             );
             Some(sol)
         } else {
@@ -238,8 +236,8 @@ impl InferCtx {
             self.solved.insert(ex.id(), sol).is_none(),
             "Tried to override solution of {} = {} to {}",
             ex,
-            self.solved.get_unwrap(ex.id()),
-            sol
+            self.solved.get_unwrap(ex.id()).without_sess(),
+            sol.without_sess()
         );
     }
 

@@ -21,6 +21,7 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefMap},
     },
+    session::MaybeWithSession,
     span::sym::Ident,
 };
 
@@ -139,7 +140,6 @@ impl TyCtx {
         Id: Into<HirId>,
     {
         let id = id.into();
-        verbose!("Type node {id} with {ty}");
         // assert!(
         //     self.typed.insert(id, ty).is_none(),
         //     "{} is already typed with {}",
@@ -162,7 +162,11 @@ impl TyCtx {
             // FIXME: We need somehow emit messages and then check for bugs like this
             // assert!(applied.is_solved(), "Unsolved type {applied} after typeck");
             if applied != *ty {
-                verbose!("Applying global ctx on ty it is solved as {ty} => {applied}");
+                verbose!(
+                    "Applying global ctx on ty it is solved as {} => {}",
+                    (*ty).without_sess(),
+                    applied.without_sess()
+                );
             }
             *ty = applied;
         });
@@ -280,11 +284,10 @@ impl TyCtx {
     }
 
     pub fn bind_ty_var(&mut self, def_id: Option<DefId>, expr: Expr, var: TyVarId, ty: Ty) {
-        verbose!("Bind type variable {var} = {ty}");
         assert!(
             ty.is_mono(),
             "Cannot bind polytype {} to type variable {}",
-            ty,
+            ty.without_sess(),
             var
         );
         assert!(
@@ -296,7 +299,7 @@ impl TyCtx {
             "Tried to rebind type variable {} in expression {} to {}",
             var,
             expr,
-            ty
+            ty.without_sess()
         );
 
         if let Some(def_id) = def_id {
@@ -333,6 +336,6 @@ impl TyCtx {
     // Debug //
     pub fn pp_typed_node(&self, id: HirId) -> String {
         self.node_type(id)
-            .map_or("(?)".to_string(), |ty| format!("{ty}"))
+            .map_or("(?)".to_string(), |ty| ty.without_sess().to_string())
     }
 }

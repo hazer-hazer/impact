@@ -1,8 +1,8 @@
-use std::{fmt::Display};
+use std::fmt::Display;
 
 use super::{
     kind::{Kind, KindEx},
-    ty::{Ex},
+    ty::Ex,
     TyResult, TypeckErr,
 };
 use crate::{
@@ -14,9 +14,8 @@ use crate::{
         Block, BodyId, Expr, Map, Pat, HIR,
     },
     parser::token::Punct,
-    pp::{
-        pp::{pp, PP},
-    },
+    pp::pp::{pp, PP},
+    session::MaybeWithSession,
     typeck::ty::Ty,
 };
 
@@ -295,28 +294,30 @@ impl PP {
     fn step(&mut self, step: &InferStep, ctx: &IDCtx) -> &mut PP {
         self.out_indent();
         match &step.kind {
-            &InferStepKind::Synthesized(ty) => pp!(self, "Synthesized ", { color: ty }),
+            &InferStepKind::Synthesized(ty) => {
+                pp!(self, "Synthesized ", { color: ty.without_sess() })
+            },
             &InferStepKind::CtxApplied(before, after) => {
                 pp!(
                     self,
                     "Applying current context on ",
-                    { color: before },
+                    { color: before.without_sess() },
                     " => ",
-                    { color: after },
+                    { color: after.without_sess() },
                     {if (before == after) {string: " (No difference)".yellow()}}
                 );
             },
             &InferStepKind::Check(expr, ty, ref res) => {
-                pp!(self, "Check ", {expr: expr, ctx}, " is of type ", {color: ty}, " => ", {ty_result: res});
+                pp!(self, "Check ", {expr: expr, ctx}, " is of type ", {color: ty.without_sess()}, " => ", {ty_result: &res.map(|ty| ty.without_sess())});
             },
             &InferStepKind::Subtype(ty, subtype_of, ref res) => {
                 pp!(
                     self,
-                    { color: ty },
+                    { color: ty.without_sess() },
                     " is a subtype of ",
-                    { color: subtype_of },
+                    { color: subtype_of.without_sess() },
                     " => ",
-                    { ty_result: res }
+                    { ty_result: &res.map(|ty| ty.without_sess()) }
                 );
             },
             &InferStepKind::SubtypeKind(kind, subkind_of, ref res) => {
@@ -330,7 +331,7 @@ impl PP {
                 );
             },
             &InferStepKind::Solve(ex, ty) => {
-                pp!(self, "Solve ", { color: ex }, " = ", { color: ty });
+                pp!(self, "Solve ", { color: ex }, " = ", { color: ty.without_sess() });
             },
             &InferStepKind::SolveKind(ex, kind) => {
                 pp!(self, "Solve ", { color: ex }, " = ", { color: kind });

@@ -11,12 +11,13 @@ use crate::{
         Expr, Map,
     },
     message::message::MessageBuilder,
+    session::{MaybeWithSession, SessionHolder},
     span::{Spanned, WithSpan},
     typeck::{
         ctx::AlgoCtx,
         ty::{Adt, ExPair, Field, FieldId, Struct, Variant, VariantId},
         TypeckErr,
-    }, session::SessionHolder,
+    },
 };
 
 #[derive(Clone, Copy)]
@@ -63,21 +64,16 @@ impl<'hir> Typecker<'hir> {
     /// expr_id == HirId::synth(18, 4) && ty.as_ex().map_or(false, |ex| ex.id ==
     /// ExId::new(1))
     pub fn check(&mut self, expr: Expr, ty: Ty) -> TyResult<Ty> {
-        verbose!("Check expr {expr} is of type {ty}");
-
         let checked = self._check(expr, ty);
 
         tcdbg!(self, step InferStepKind::Check(expr, ty, checked));
 
         match checked {
             Ok(ok) => {
-                verbose!("Expr {expr} is of type {ty}");
                 self.type_inferring_node(expr, ty);
                 Ok(ok.apply_ctx(self))
             },
             Err(_) => {
-                verbose!("Failed: Expr {expr} is NOT of type {ty}");
-
                 let span = self.hir.expr_result_span(expr);
 
                 MessageBuilder::error()
@@ -157,7 +153,7 @@ impl<'hir> Typecker<'hir> {
             //     )
             // },
             (_, &TyKind::Forall(alpha, body)) => self.under_ctx(|this| {
-                tcdbg!(this, add alpha, format!("(?) <: forall {}. {body}", alpha.colorized()));
+                tcdbg!(this, add alpha, format!("(?) <: forall {}. {}", alpha.colorized(), body.without_sess()));
                 this.add_var(alpha);
                 this._check(expr_id, body)?;
                 Ok(ty)
@@ -244,7 +240,6 @@ impl<'hir> Typecker<'hir> {
 
     /// Subtype logic starts here.
     pub(super) fn _subtype(&mut self, l_ty: Ty, r_ty: Ty) -> TyResult<Ty> {
-        verbose!("subtype {l_ty} {r_ty}");
         let subtype = match (l_ty.kind(), r_ty.kind()) {
             (TyKind::Kind(_), _) | (_, TyKind::Kind(_)) => self.subtype_kind(l_ty, r_ty),
 
@@ -321,7 +316,7 @@ impl<'hir> Typecker<'hir> {
                 let with_substituted_alpha = body.substitute(alpha, ex_ty);
 
                 self.under_ctx(|this| {
-                    tcdbg!(this, add ex, format!("forall {}. {body} => {with_substituted_alpha}", alpha.colorized()));
+                    tcdbg!(this, add ex, format!("forall {}. {} => {}", alpha.colorized(), body.with_sess(self.sess()), with_substituted_alpha.with_sess(self.sess())));
                     this.add_ex(ex);
                     this._subtype(with_substituted_alpha, r_ty)
                 })
@@ -329,7 +324,7 @@ impl<'hir> Typecker<'hir> {
 
             // (?) <: forall a. body
             (_, &TyKind::Forall(alpha, body)) => self.under_ctx(|this| {
-                tcdbg!(this, add alpha, format!("(?) <: forall {}. {body}", alpha.colorized()));
+                tcdbg!(this, add alpha, format!("(?) <: forall {}. {}", alpha.colorized(), body.with_sess(self.sess())));
                 this.add_var(alpha);
                 this._subtype(l_ty, body)
             }),
@@ -437,7 +432,7 @@ impl<'hir> Typecker<'hir> {
             },
             &TyKind::Forall(alpha, body) => self.try_to(|this| {
                 this.under_ctx(|this| {
-                    tcdbg!(this, add alpha, format!("InstL {} <: forall {}. {body}", ex.colorized(), alpha.colorized()));
+                    tcdbg!(this, add alpha, format!("InstL {} <: forall {}. {}", ex.colorized(), alpha.colorized(), body.with_sess(self.sess())));
                     this.add_var(alpha);
                     this.instantiate_l(ex, body)
                 })
@@ -481,7 +476,7 @@ impl<'hir> Typecker<'hir> {
                 let alpha_ex = this.fresh_ex(ExKind::Common);
 
                 this.under_ctx(|this| {
-                    tcdbg!(this, add ex, format!("InstR forall {}. {body} <: {}", alpha.colorized(), ex.colorized()));
+                    tcdbg!(this, add ex, format!("InstR forall {}. {} <: {}", alpha.colorized(), ex.colorized(), body.with_sess(self.sess())));
                     this.add_ex(alpha_ex);
                     let alpha_ex_ty = Ty::ex(alpha_ex);
                     let body_ty = body.substitute(alpha, alpha_ex_ty);

@@ -14,7 +14,10 @@ use crate::{
     interface::writer::outln,
     message::message::{impl_message_holder, MessageStorage},
     resolve::def::DefId,
-    session::{impl_session_holder, stage_result, Session, SessionHolder, Stage, StageResult},
+    session::{
+        impl_session_holder, stage_result, MaybeWithSession, Session, SessionHolder, Stage,
+        StageResult,
+    },
     typeck::{
         conv::TyConv,
         debug::{tcdbg, InferEntryKind, InferStepKind},
@@ -76,7 +79,7 @@ where
     T: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.0, self.1)
+        write!(f, "{}: {}", self.0, self.1.without_sess())
     }
 }
 
@@ -127,7 +130,11 @@ impl<'hir> Typecker<'hir> {
 
     // Errors //
     fn ty_illformed(&mut self, ty: Ty) -> TyResult<Ty> {
-        panic!("Illformed type {}; Context:\n{}", ty, self.dump_ctx_stack());
+        panic!(
+            "Illformed type {}; Context:\n{}",
+            ty.without_sess(),
+            self.dump_ctx_stack()
+        );
         // Err(TypeckErr::Check)
     }
 
@@ -235,10 +242,7 @@ impl<'hir> Typecker<'hir> {
         res
     }
 
-    fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T>
-    where
-        T: Display + Copy,
-    {
+    fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T> {
         let restore = self.enter_try_mode();
         let ie = tcdbg!(self, enter InferEntryKind::TryTo);
         let res = f(self);
@@ -374,13 +378,14 @@ impl<'hir> Typecker<'hir> {
         tcdbg!(self, step InferStepKind::Solve(ex, sol.ty));
         if let &MonoTyKind::Ex(sol_ex) = &sol.sort {
             assert_ne!(
-                sol_ex, ex,
+                sol_ex,
+                ex,
                 "Tried to solve ex with itself {} / {}",
-                ex, sol.ty
+                ex,
+                sol.ty.without_sess()
             );
         }
         let ty = sol.ty;
-        verbose!("Solve {} as {} in [CTX {}]", ex, ty, self.ctx_depth());
         self.ctx_mut().solve(ex, sol);
         ty
         // self._ascend_ctx_mut(|ctx| ctx.solve(ex, sol))
@@ -571,7 +576,7 @@ impl<'hir> Typecker<'hir> {
         let solved = exes
             .1
             .into_iter()
-            .map(|(ex, sol)| format!("  {} = {}", ex, sol))
+            .map(|(ex, sol)| format!("  {} = {}", ex, sol.without_sess()))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -586,7 +591,7 @@ impl<'hir> Typecker<'hir> {
             .global_ctx
             .solved()
             .iter_enumerated_flat()
-            .map(|(ex, sol)| format!("  {} = {}", ex, sol))
+            .map(|(ex, sol)| format!("  {} = {}", ex, sol.without_sess()))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -628,7 +633,7 @@ impl<'hir> Typecker<'hir> {
                 .iter()
                 .fold(String::new(), |s, (expr, bindings)| {
                     let bs = bindings.iter().fold(String::new(), |s, (var, ty)| {
-                        format!("{}  {}: {}\n", s, var, ty)
+                        format!("{}  {}: {}\n", s, var, ty.without_sess())
                     });
                     format!("{}{}\n{}", s, expr, bs)
                 });

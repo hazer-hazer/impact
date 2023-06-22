@@ -3,7 +3,7 @@ use crate::{
     cli::color::Colorize,
     hir::{HirId, Map},
     message::message::MessageBuilder,
-    session::SessionHolder,
+    session::{MaybeWithSession, SessionHolder},
 };
 
 impl<'hir> Typecker<'hir> {
@@ -33,7 +33,7 @@ impl<'hir> Typecker<'hir> {
                 .text(format!("Failed to infer type of {kind}"))
                 .label(span, format!("{ty_str}"))
                 // FIXME: Add and use `Debug` labels
-                .label(span, format!("[DEBUG] {}", ty.map_or(Self::uninferred_ty(), |ty| ty.to_string()))),
+                .label(span, format!("[DEBUG] {}", ty.map_or(Self::uninferred_ty(), |ty| ty.without_sess().to_string()))),
         )
     }
 
@@ -45,7 +45,7 @@ impl<'hir> Typecker<'hir> {
                 KindSort::Ex(_) => Self::uninferred_ty(),
                 _ => kind.to_string(),
             },
-            _ => ty.to_string(),
+            _ => ty.without_sess().to_string(),
         }
     }
 
