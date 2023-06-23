@@ -11,12 +11,13 @@ use crate::{
         Expr, Map,
     },
     message::message::MessageBuilder,
+    session::SessionHolder,
     span::{Spanned, WithSpan},
     typeck::{
         ctx::AlgoCtx,
         ty::{Adt, ExPair, Field, FieldId, Struct, Variant, VariantId},
         TypeckErr,
-    }, session::SessionHolder,
+    },
 };
 
 #[derive(Clone, Copy)]
@@ -65,7 +66,13 @@ impl<'hir> Typecker<'hir> {
     pub fn check(&mut self, expr: Expr, ty: Ty) -> TyResult<Ty> {
         verbose!("Check expr {expr} is of type {ty}");
 
-        let checked = self._check(expr, ty);
+        let expr_ty = self.synth_expr(expr)?;
+
+        let span = self.hir.expr(expr).span();
+        let expr_ty = expr_ty.apply_ctx(self);
+        let ty = ty.apply_ctx(self);
+
+        let checked = self.subtype(Spanned::new(span, expr_ty), ty);
 
         tcdbg!(self, step InferStepKind::Check(expr, ty, checked));
 
@@ -82,15 +89,7 @@ impl<'hir> Typecker<'hir> {
 
                 MessageBuilder::error()
                     .span(span)
-                    .text(format!(
-                        "Type mismatch: expected {}{}",
-                        ty,
-                        if let Some(got) = self.tyctx().node_type(expr) {
-                            format!(", got {}", got)
-                        } else {
-                            "".to_string()
-                        }
-                    ))
+                    .text(format!("Type mismatch: expected {}, got {}", expr_ty, ty))
                     .label(span, format!("Must be of type {}", ty))
                     .emit(self);
 
@@ -100,72 +99,72 @@ impl<'hir> Typecker<'hir> {
     }
 
     /// Type check logic starts here.
-    fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
-        let expr = self.hir.expr(expr_id);
+    // fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
+    //     let expr = self.hir.expr(expr_id);
 
-        match (expr.kind(), ty.kind()) {
-            (&ExprKind::Lit(lit), check) => {
-                match (lit, check) {
-                    (Lit::Bool(_), TyKind::Bool) | (Lit::String(_), TyKind::Str) => Ok(ty),
-                    (Lit::Int(_, ast_kind), &TyKind::Int(kind)) => IntKind::try_from(ast_kind)
-                        .map_or_else(
-                            |_| self.expr_subtype(expr_id, ty),
-                            |kind_| {
-                                if kind == kind_ {
-                                    Ok(ty)
-                                } else {
-                                    Err(TypeckErr::LateReport)
-                                }
-                            },
-                        ),
+    //     match (expr.kind(), ty.kind()) {
+    //         (&ExprKind::Lit(lit), check) => {
+    //             match (lit, check) {
+    //                 (Lit::Bool(_), TyKind::Bool) | (Lit::String(_), TyKind::Str) => Ok(ty),
+    //                 (Lit::Int(_, ast_kind), &TyKind::Int(kind)) => IntKind::try_from(ast_kind)
+    //                     .map_or_else(
+    //                         |_| self.expr_subtype(expr_id, ty),
+    //                         |kind_| {
+    //                             if kind == kind_ {
+    //                                 Ok(ty)
+    //                             } else {
+    //                                 Err(TypeckErr::LateReport)
+    //                             }
+    //                         },
+    //                     ),
 
-                    (Lit::Float(_, ast_kind), &TyKind::Float(kind)) => {
-                        FloatKind::try_from(ast_kind).map_or_else(
-                            |_| self.expr_subtype(expr_id, ty),
-                            |kind_| {
-                                if kind == kind_ {
-                                    Ok(ty)
-                                } else {
-                                    Err(TypeckErr::LateReport)
-                                }
-                            },
-                        )
-                    },
+    //                 (Lit::Float(_, ast_kind), &TyKind::Float(kind)) => {
+    //                     FloatKind::try_from(ast_kind).map_or_else(
+    //                         |_| self.expr_subtype(expr_id, ty),
+    //                         |kind_| {
+    //                             if kind == kind_ {
+    //                                 Ok(ty)
+    //                             } else {
+    //                                 Err(TypeckErr::LateReport)
+    //                             }
+    //                         },
+    //                     )
+    //                 },
 
-                    // Unequal literals (not existentials as we not failed
-                    //  to construct PrimTy of Lit without context)
-                    _ => self.expr_subtype(expr_id, ty),
-                }
-            },
+    //                 // Unequal literals (not existentials as we not failed
+    //                 //  to construct PrimTy of Lit without context)
+    //                 _ => self.expr_subtype(expr_id, ty),
+    //             }
+    //         },
 
-            // (
-            //     &ExprKind::Lambda(Lambda { body_id: body, .. }),
-            //     TyKind::FuncDef(_, params_tys, body_ty),
-            // ) => {
-            //     let param_names = self
-            //         .hir
-            //         .body(body)
-            //         .params
-            //         .iter()
-            //         .filter_map(|param| self.hir.pat_names(*param))
-            //         .flatten()
-            //         .collect::<Vec<Ident>>();
+    //         // (
+    //         //     &ExprKind::Lambda(Lambda { body_id: body, .. }),
+    //         //     TyKind::FuncDef(_, params_tys, body_ty),
+    //         // ) => {
+    //         //     let param_names = self
+    //         //         .hir
+    //         //         .body(body)
+    //         //         .params
+    //         //         .iter()
+    //         //         .filter_map(|param| self.hir.pat_names(*param))
+    //         //         .flatten()
+    //         //         .collect::<Vec<Ident>>();
 
-            //     self.under_ctx(
-            //         InferCtx::new_with_term_map(&param_names, &params_tys),
-            //         |this| this._check(self.hir.body(body).value, *body_ty),
-            //     )
-            // },
-            (_, &TyKind::Forall(alpha, body)) => self.under_ctx(|this| {
-                tcdbg!(this, add alpha, format!("(?) <: forall {}. {body}", alpha.colorized()));
-                this.add_var(alpha);
-                this._check(expr_id, body)?;
-                Ok(ty)
-            }),
+    //         //     self.under_ctx(
+    //         //         InferCtx::new_with_term_map(&param_names, &params_tys),
+    //         //         |this| this._check(self.hir.body(body).value, *body_ty),
+    //         //     )
+    //         // },
+    //         (_, &TyKind::Forall(alpha, body)) => self.under_ctx(|this| {
+    //             tcdbg!(this, add alpha, format!("(?) <: forall {}. {body}", alpha.colorized()));
+    //             this.add_var(alpha);
+    //             this._check(expr_id, body)?;
+    //             Ok(ty)
+    //         }),
 
-            _ => self.expr_subtype(expr_id, ty),
-        }
-    }
+    //         _ => self.expr_subtype(expr_id, ty),
+    //     }
+    // }
 
     // /// Checks if `l_ty` is a subtype of `r_ty` assuming that returned error is
     // /// reported.
@@ -201,15 +200,15 @@ impl<'hir> Typecker<'hir> {
 
     // Subtyping //
     /// Checks if expression's type is a subtype of `ty`.
-    fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
-        let expr_ty = self.synth_expr(expr_id)?;
+    // fn expr_subtype(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
+    //     let expr_ty = self.synth_expr(expr_id)?;
 
-        let span = self.hir.expr(expr_id).span();
-        let l = expr_ty.apply_ctx(self);
-        let r = ty.apply_ctx(self);
+    //     let span = self.hir.expr(expr_id).span();
+    //     let l = expr_ty.apply_ctx(self);
+    //     let r = ty.apply_ctx(self);
 
-        self.subtype(Spanned::new(span, l), r)
-    }
+    //     self.subtype(Spanned::new(span, l), r)
+    // }
 
     /// Checks if `l_ty` is a subtype of `r_ty`.
     ///

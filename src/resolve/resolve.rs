@@ -478,8 +478,6 @@ impl<'ast> NameResolver<'ast> {
     ) -> ResolutionResult<Res> {
         assert!(path.segments().len() > 1);
 
-        let target_ns = search_for_kind.namespace();
-
         let mut search_mod =
             self.resolve_module_relative(*path.segments().first().as_ref().unwrap().expect_name())?;
 

@@ -234,7 +234,7 @@ impl<'hir> Typecker<'hir> {
 
     fn synth_match_expr(&mut self, &subject: &Expr, arms: &[Arm]) -> TyResult<Ty> {
         let subject_node = self.hir.expr(subject);
-        let subject_ty = self.synth_expr(subject);
+        let subject_ty = self.synth_expr(subject)?;
         let arms_tys = arms
             .iter()
             .map(|arm| Ok(self.synth_arm(arm)?))
@@ -252,11 +252,12 @@ impl<'hir> Typecker<'hir> {
                         (self.hir.expr(arm.body).span(), format!("is {arm_ty}"))
                     }))
                     .emit(self);
-                Err(TypeckErr::Reported)
-            } else {
-                Ok(first_arm_ty)
             }
-        } else if let Ok(subject_ty) = subject_ty {
+
+            // Note: Even if match arms have incompatible types, we synthesize match type as
+            // first arm type
+            Ok(first_arm_ty)
+        } else {
             MessageBuilder::error()
                 .span(subject_node.span())
                 .text(format!(
@@ -264,10 +265,6 @@ impl<'hir> Typecker<'hir> {
                 ))
                 .emit_single_label(self);
             Err(TypeckErr::Reported)
-        } else {
-            // TODO: Idk what to do if failed to infer subject_ty
-            todo!();
-            // Err(TypeckErr::LateReport)
         }
     }
 
