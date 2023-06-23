@@ -121,8 +121,6 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             return;
         }
 
-        verbose!("Gen body of function{}: {}", self.func_def_id, self.func_ty);
-
         let body_bb = self.ctx.llvm_ctx.append_basic_block(self.func, "body");
         self.builder.position_at_end(body_bb);
 

@@ -21,7 +21,7 @@ use crate::{
     typeck::{
         kind::{Kind, KindEx, KindSort},
         ty::{Ex, TyKind, TyVarId},
-    },
+    }, session::MaybeWithSession,
 };
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -257,8 +257,6 @@ impl Ty {
     }
 
     pub fn substitute(&self, subst: TyVarId, with: Ty) -> Ty {
-        verbose!("Substitute {subst} in {self} with {with}");
-
         match self.kind() {
             TyKind::Error
             | TyKind::Unit
@@ -325,7 +323,7 @@ impl Ty {
     pub fn apply_ctx(self, ctx: &impl AlgoCtx) -> Ty {
         let ty = self._apply_ctx(ctx);
         if self != ty {
-            verbose!("Applying ctx on type it is solved as {self} => {ty}");
+            verbose!("Applying ctx on type it is solved as {} => {}", self, ty);
         }
         ty
     }

@@ -1,8 +1,8 @@
-use std::{fmt::Display};
+use std::fmt::Display;
 
 use super::{
     kind::{Kind, KindEx},
-    ty::{Ex},
+    ty::Ex,
     TyResult, TypeckErr,
 };
 use crate::{
@@ -14,9 +14,8 @@ use crate::{
         Block, BodyId, Expr, Map, Pat, HIR,
     },
     parser::token::Punct,
-    pp::{
-        pp::{pp, PP},
-    },
+    pp::pp::{pp, PP},
+    session::MaybeWithSession,
     typeck::ty::Ty,
 };
 
@@ -295,7 +294,9 @@ impl PP {
     fn step(&mut self, step: &InferStep, ctx: &IDCtx) -> &mut PP {
         self.out_indent();
         match &step.kind {
-            &InferStepKind::Synthesized(ty) => pp!(self, "Synthesized ", { color: ty }),
+            &InferStepKind::Synthesized(ty) => {
+                pp!(self, "Synthesized ", { color: ty })
+            },
             &InferStepKind::CtxApplied(before, after) => {
                 pp!(
                     self,
@@ -307,7 +308,7 @@ impl PP {
                 );
             },
             &InferStepKind::Check(expr, ty, ref res) => {
-                pp!(self, "Check ", {expr: expr, ctx}, " is of type ", {color: ty}, " => ", {ty_result: res});
+                pp!(self, "Check ", {expr: expr, ctx}, " is of type ", {color: ty}, " => ", {ty_result: &res.map(|ty| ty)});
             },
             &InferStepKind::Subtype(ty, subtype_of, ref res) => {
                 pp!(
@@ -316,7 +317,7 @@ impl PP {
                     " is a subtype of ",
                     { color: subtype_of },
                     " => ",
-                    { ty_result: res }
+                    { ty_result: &res.map(|ty| ty) }
                 );
             },
             &InferStepKind::SubtypeKind(kind, subkind_of, ref res) => {

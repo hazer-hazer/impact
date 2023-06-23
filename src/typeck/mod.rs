@@ -14,7 +14,10 @@ use crate::{
     interface::writer::outln,
     message::message::{impl_message_holder, MessageStorage},
     resolve::def::DefId,
-    session::{impl_session_holder, stage_result, Session, SessionHolder, Stage, StageResult},
+    session::{
+        impl_session_holder, stage_result, MaybeWithSession, Session, SessionHolder, Stage,
+        StageResult,
+    },
     typeck::{
         conv::TyConv,
         debug::{tcdbg, InferEntryKind, InferStepKind},
@@ -235,10 +238,7 @@ impl<'hir> Typecker<'hir> {
         res
     }
 
-    fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T>
-    where
-        T: Display + Copy,
-    {
+    fn try_to<T>(&mut self, mut f: impl FnMut(&mut Self) -> TyResult<T>) -> TyResult<T> {
         let restore = self.enter_try_mode();
         let ie = tcdbg!(self, enter InferEntryKind::TryTo);
         let res = f(self);
@@ -380,7 +380,6 @@ impl<'hir> Typecker<'hir> {
             );
         }
         let ty = sol.ty;
-        verbose!("Solve {} as {} in [CTX {}]", ex, ty, self.ctx_depth());
         self.ctx_mut().solve(ex, sol);
         ty
         // self._ascend_ctx_mut(|ctx| ctx.solve(ex, sol))

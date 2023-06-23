@@ -13,7 +13,7 @@ use crate::{
     },
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
-    session::SessionHolder,
+    session::{MaybeWithSession, SessionHolder},
     span::{Spanned, WithSpan},
     typeck::{
         debug::{tcdbg, InferEntryKind, InferStepKind},
@@ -126,8 +126,6 @@ impl<'hir> Typecker<'hir> {
             &ExprKind::Builtin(bt) => Ok(self.tyctx().builtin(bt.into())),
             ExprKind::Match(subject, arms) => self.synth_match_expr(subject, arms),
         }?;
-
-        verbose!("Synthesized type of expression {expr} = {expr_ty}");
 
         tcdbg!(self, step InferStepKind::Synthesized(expr_ty));
 
@@ -249,7 +247,10 @@ impl<'hir> Typecker<'hir> {
                     .span(self.hir.expr(arms.first().unwrap().body).span())
                     .text(format!("Match arms have incompatible types"))
                     .label_iter(arms_tys.iter().zip(arms.iter()).map(|(arm_ty, arm)| {
-                        (self.hir.expr(arm.body).span(), format!("is {arm_ty}"))
+                        (
+                            self.hir.expr(arm.body).span(),
+                            format!("is {}", arm_ty.with_sess(self.sess())),
+                        )
                     }))
                     .emit(self);
             }
@@ -261,7 +262,8 @@ impl<'hir> Typecker<'hir> {
             MessageBuilder::error()
                 .span(subject_node.span())
                 .text(format!(
-                    "Not all possible values of match value with type {subject_ty} handled"
+                    "Not all possible values of match value with type {} handled",
+                    subject_ty.with_sess(self.sess())
                 ))
                 .emit_single_label(self);
             Err(TypeckErr::Reported)
@@ -361,10 +363,6 @@ impl<'hir> Typecker<'hir> {
             });
 
             let body_ty = this.check_discard_err(self.hir.body(body_id).value, body_ex.1);
-            verbose!(
-                "Body ty {body_ty} checked against body existential {}",
-                body_ex.1
-            );
 
             // Apply context to function parameter to get its inferred type.
             let params_tys = params
@@ -405,8 +403,6 @@ impl<'hir> Typecker<'hir> {
                     }
                 },
             );
-
-            verbose!("Func ty {func_ty}");
 
             Ok(func_ty)
         })
@@ -508,7 +504,7 @@ impl<'hir> Typecker<'hir> {
             },
             &TyKind::Forall(alpha, ty) => {
                 let alpha_ex = self.add_fresh_common_ex();
-                tcdbg!(self, add alpha_ex.0, format!("call forall {}. {ty}", alpha_ex.0.colorized()));
+                tcdbg!(self, add alpha_ex.0, format!("call forall {}. {}", alpha_ex.0.colorized(), ty.with_sess(self.sess())));
 
                 let substituted_ty = ty.substitute(alpha, alpha_ex.1);
                 let body_ty = self._synth_call(
@@ -566,9 +562,9 @@ impl<'hir> Typecker<'hir> {
                 },
                 KindSort::Abs(..) | KindSort::Var(_) => {
                     MessageBuilder::error()
-                        .text(format!("{} cannot be called", lhs_ty))
+                        .text(format!("{} cannot be called", lhs_ty.with_sess(self.sess())))
                         .span(span)
-                        .label(span, format!("has type {} which cannot be called", lhs_ty))
+                        .label(span, format!("has type {} which cannot be called", lhs_ty.with_sess(self.sess())))
                         .emit(self);
 
                     Err(TypeckErr::Reported)
@@ -578,9 +574,9 @@ impl<'hir> Typecker<'hir> {
             // already be replaced with existentials"
             _ => {
                 MessageBuilder::error()
-                    .text(format!("{} cannot be called", lhs_ty))
+                    .text(format!("{} cannot be called", lhs_ty.with_sess(self.sess())))
                     .span(span)
-                    .label(span, format!("has type {} which cannot be called", lhs_ty))
+                    .label(span, format!("has type {} which cannot be called", lhs_ty.with_sess(self.sess())))
                     .emit(self);
 
                 Err(TypeckErr::Reported)
