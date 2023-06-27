@@ -3,9 +3,9 @@ pub mod build;
 use std::fmt::Display;
 
 use crate::{
-    cli::color::{Color},
+    cli::color::Color,
     dt::idx::{declare_idx, IndexVec},
-    hir::{BodyId, HirId, OwnerId},
+    hir::{BodyId, HirId, OwnerId, ValueDefKind},
     resolve::{builtin::ValueBuiltin, def::DefId},
     span::{
         impl_with_span,
@@ -80,7 +80,7 @@ impl Display for ExprCategory {
 pub enum ExprKind {
     Lit(Lit),
     LocalRef(LocalVar),
-    Def(DefId, Ty),
+    Def(DefId, ValueDefKind, Ty),
     Block(BlockId),
     Ref(ExprId),
     Call {
@@ -101,8 +101,8 @@ impl Display for ExprKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExprKind::Lit(lit) => write!(f, "{lit}"),
-            ExprKind::LocalRef(local) => write!(f, "{local}"),
-            ExprKind::Def(def_id, ty) => write!(f, "{def_id}: {ty}"),
+            ExprKind::LocalRef(local) => write!(f, "local{local}"),
+            ExprKind::Def(def_id, kind, ty) => write!(f, "{kind} {def_id}: {ty}"),
             ExprKind::Block(block_id) => write!(f, "block_{block_id}"),
             ExprKind::Ref(expr) => write!(f, "ref {expr}"),
             ExprKind::Call { func_ty, lhs, args } => {

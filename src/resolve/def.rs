@@ -32,8 +32,6 @@ pub enum DefKind {
     TyParam,
     External,
 
-    Local,
-
     DeclareBuiltin,
 }
 
@@ -66,7 +64,6 @@ impl DefKind {
             DefKind::Ctor => Namespace::Value,
             DefKind::FieldAccessor => Namespace::Value,
             DefKind::TyParam => Namespace::Type,
-            DefKind::Local => unreachable!(),
         }
     }
 }
@@ -85,7 +82,6 @@ impl Display for DefKind {
                 DefKind::External => "external item",
                 DefKind::Root => "[ROOT]",
                 DefKind::DeclareBuiltin => "[`builtin`]",
-                DefKind::Local => "local",
                 DefKind::Adt => "data type",
                 DefKind::Variant => "variant",
                 DefKind::Struct => "struct",
@@ -611,7 +607,6 @@ impl<'a> DebugModuleTree<'a> {
                     | DefKind::DeclareBuiltin
                     | DefKind::Value
                     | DefKind::TyAlias
-                    | DefKind::Local
                     | DefKind::External
                     | DefKind::Ctor
                     | DefKind::FieldAccessor

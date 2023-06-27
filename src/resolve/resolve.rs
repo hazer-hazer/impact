@@ -259,7 +259,7 @@ impl<'ast> NameResolver<'ast> {
                 .label(ident.span(), "Redefined here".to_string())
                 .emit(self);
         } else {
-            self.sess.def_table.define(node_id, DefKind::Local, ident);
+            // self.sess.def_table.define(node_id, DefKind::Local, ident);
             self.locals_spans.insert(node_id, ident.span());
         }
     }
@@ -320,7 +320,6 @@ impl<'ast> NameResolver<'ast> {
                 // Yeah, crutches
                 return Res::declare_builtin();
             },
-            DefKind::Local => unreachable!(),
         }
     }
 
@@ -446,7 +445,6 @@ impl<'ast> NameResolver<'ast> {
             | DefKind::Func
             | DefKind::Value
             | DefKind::Lambda
-            | DefKind::Local
             | DefKind::External
             | DefKind::TyParam => unreachable!(),
         }
@@ -621,13 +619,19 @@ impl<'ast> NameResolver<'ast> {
 impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_err(&mut self, _: &'ast ErrorNode) {}
 
+    // fn visit_local_stmt(&mut self, pat: &'ast PR<N<Pat>>, value: &'ast
+    // PR<N<Expr>>) {     walk_pr!(self, pat, visit_pat);
+    //     walk_pr!(self, value, visit_expr);
+    //     match pat.as_ref().unwrap().kind() {
+    //         PatKind::Unit => {},
+    //         PatKind::Ident(name) => {
+    //             self.define_local(pat.as_ref().unwrap().id(),
+    // name.as_ref().unwrap());         },
+    //     }
+    // }
+
     fn visit_item(&mut self, item: &'ast Item) {
         match item.kind() {
-            ItemKind::Decl(name, params, body) if params.is_empty() => {
-                self.define_local(item.id(), name.as_ref().unwrap());
-                self.visit_decl_item(name, params, body, item.id());
-                return;
-            },
             ItemKind::Extern(items) => return self.visit_extern_block(items),
             _ => {},
         }
@@ -646,6 +650,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             },
             ItemKind::Type(name, generics, ty) => self.visit_ty_item(name, generics, ty, item.id()),
             ItemKind::Decl(name, params, body) => {
+                assert!(!matches!(self.scope(), Scope::Local(_)) || !params.is_empty());
                 self.visit_decl_item(name, params, body, item.id());
             },
             ItemKind::Adt(name, generics, variants) => {
@@ -663,7 +668,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_decl_item(
         &mut self,
         name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<Pat>>,
+        params: &'ast Vec<PR<N<Pat>>>,
         body: &'ast PR<N<Expr>>,
         id: NodeId,
     ) {
@@ -762,7 +767,10 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         verbose!("Visit pat {}", pat.id());
         match pat.kind() {
             PatKind::Unit => {},
-            PatKind::Ident(ident) => self.define_local(pat.id(), ident.as_ref().unwrap()),
+            PatKind::Ident(ident) => {
+                let ident = ident.as_ref().unwrap();
+                self.define_local(ident.id, &ident.ident);
+            },
         }
     }
 

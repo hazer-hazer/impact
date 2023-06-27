@@ -117,7 +117,7 @@ pub trait AstVisitor<'ast> {
     fn visit_decl_item(
         &mut self,
         name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<Pat>>, // FIXME: Replace with slice
+        params: &'ast Vec<PR<N<Pat>>>, // FIXME: Replace with slice
         body: &'ast PR<N<Expr>>,
         _: NodeId,
     ) {
@@ -183,8 +183,8 @@ pub trait AstVisitor<'ast> {
 
     fn visit_unit_pat(&mut self) {}
 
-    fn visit_ident_pat(&mut self, ident: &'ast Ident) {
-        self.visit_ident(ident);
+    fn visit_ident_pat(&mut self, ident: &'ast IdentNode) {
+        self.visit_ident_node(ident);
     }
 
     // Expressions //

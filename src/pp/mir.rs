@@ -1,9 +1,6 @@
 use std::str::from_utf8;
 
-use super::{
-    hir::{walk_each_delim},
-    AstLikePP,
-};
+use super::{hir::walk_each_delim, AstLikePP};
 use crate::{
     hir::{
         expr::Lambda, item::ItemId, pat::PatKind, visitor::HirVisitor, BodyId, BodyOwner, Map, Pat,
@@ -189,11 +186,11 @@ impl<'ctx> HirVisitor for MirPrinter<'ctx> {
         let pat = self.hir.pat(pat);
         match pat.kind() {
             PatKind::Unit => self.pp.kw(Kw::Unit),
-            PatKind::Ident(ident) => self
+            &PatKind::Ident(ident, name_id) => self
                 .pp
                 .string(ident)
                 .punct(Punct::Colon)
-                .string(self.sess.tyctx.tyof(pat.id())),
+                .string(self.sess.tyctx.tyof(name_id.id())),
         };
     }
 

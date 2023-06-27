@@ -23,13 +23,10 @@ impl StmtNode {
 
 #[derive(Debug)]
 pub struct Local {
-    pub id: HirId,
     pub pat: Pat,
     pub value: Expr,
     pub span: Span,
 }
-
-impl_with_hir_id!(Local);
 
 #[derive(Debug)]
 pub enum StmtKind {

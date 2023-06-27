@@ -13,6 +13,7 @@ use crate::{
     span::{
         source::SourceId,
         sym::{Ident, Internable},
+        WithSpan,
     },
 };
 
@@ -151,11 +152,25 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             _ => {},
         }
 
+        verbose!("{item}");
+
         // Do not collect locals, they are defined and resolved in NameResolver.
         if let ModuleKind::Block(_) = self.module().kind() {
             match item.kind() {
-                ItemKind::Decl(name, params, body) if params.is_empty() => {
-                    self.visit_decl_item(name, params, body, item.id());
+                ItemKind::Decl(name, params, _) if params.is_empty() => {
+                    let name_span = name.as_ref().unwrap().span();
+                    MessageBuilder::error()
+                        .span(item.span())
+                        .text("Value declarations are not allowed in local scope".to_string())
+                        .label(
+                            item.span(),
+                            "Value declaration is not allowed in local scope".to_string(),
+                        )
+                        .label(
+                            name_span.point_before_lo(),
+                            "Add `let` here to declare local variable".to_string(),
+                        )
+                        .emit(self);
                     return;
                 },
                 _ => {},

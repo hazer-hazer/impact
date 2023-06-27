@@ -1,12 +1,12 @@
 use super::{impl_with_hir_id, BodyId, HirId, OwnerId, Ty, Variant, WithHirId, ROOT_OWNER_ID};
 use crate::{
-    cli::color::{Color},
+    cli::color::Color,
     dt::idx::declare_idx,
     resolve::def::DefId,
     span::{impl_with_span, sym::Ident, Span, WithSpan},
 };
 
-declare_idx!(ItemId, OwnerId, "item{}", Color::Yellow);
+declare_idx!(ItemId, OwnerId, "[item{}]", Color::Yellow);
 pub const ROOT_ITEM_ID: ItemId = ItemId(ROOT_OWNER_ID);
 
 impl ItemId {

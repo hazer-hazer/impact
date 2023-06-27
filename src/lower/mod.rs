@@ -13,8 +13,8 @@ use crate::{
         self,
         item::{Adt, ItemId, ItemNode, Mod, Struct, TyAlias},
         stmt::Local,
-        Body, BodyId, ExprDefKind, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind,
-        TyRes, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
+        Body, BodyId, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind, TyRes,
+        ValueDefKind, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
     message::message::{impl_message_holder, MessageBuilder, MessageStorage},
     parser::token::{FloatKind, IntKind},
@@ -231,7 +231,6 @@ impl<'ast> Lower<'ast> {
                 .map(|item| hir::stmt::StmtKind::Item(item))
                 .collect(),
             StmtKind::Local(pat, value) => vec![hir::stmt::StmtKind::Local(Local {
-                id: self.lower_node_id(stmt.id()),
                 pat: lower_pr!(self, pat, lower_pat),
                 value: lower_pr!(self, value, lower_expr),
                 span: stmt.span(),
@@ -335,7 +334,7 @@ impl<'ast> Lower<'ast> {
     fn lower_decl_item(
         &mut self,
         _name: &PR<Ident>,
-        ast_params: &Vec<PR<Pat>>,
+        ast_params: &Vec<PR<N<Pat>>>,
         body: &PR<N<Expr>>,
         def_id: DefId,
     ) -> hir::item::ItemKind {
@@ -457,7 +456,10 @@ impl<'ast> Lower<'ast> {
 
         let kind = match pat.kind() {
             PatKind::Unit => hir::pat::PatKind::Unit,
-            PatKind::Ident(ident) => hir::pat::PatKind::Ident(lower_pr!(self, ident, lower_ident)),
+            PatKind::Ident(ident) => hir::pat::PatKind::Ident(
+                lower_pr!(self, ident.as_ref().map(|node| &node.ident), lower_ident),
+                self.lower_node_id(ident.id()),
+            ),
         };
 
         self.add_node(hir::Node::Pat(hir::pat::PatNode::new(id, kind, pat.span())))
@@ -718,11 +720,11 @@ impl<'ast> Lower<'ast> {
 
                 ExprRes::Def(
                     match def.kind() {
-                        DefKind::Func => ExprDefKind::Func,
-                        DefKind::Value => ExprDefKind::Value,
-                        DefKind::Ctor => ExprDefKind::Ctor,
-                        DefKind::FieldAccessor => ExprDefKind::FieldAccessor,
-                        DefKind::External => ExprDefKind::External,
+                        DefKind::Func => ValueDefKind::Func,
+                        DefKind::Value => ValueDefKind::Value,
+                        DefKind::Ctor => ValueDefKind::Ctor,
+                        DefKind::FieldAccessor => ValueDefKind::FieldAccessor,
+                        DefKind::External => ValueDefKind::External,
                         _ => unreachable!(),
                     },
                     def_id,
@@ -794,17 +796,11 @@ impl<'ast> Lower<'ast> {
             },
             StmtKind::Local(pat, value) => {
                 let span = last_stmt.span();
-                let id = self.lower_node_id(last_stmt.id());
                 let pat = lower_pr!(self, pat, lower_pat);
                 let value = lower_pr!(self, value, lower_expr);
                 stmts.push(self.stmt(
                     span,
-                    hir::stmt::StmtKind::Local(hir::stmt::Local {
-                        id,
-                        pat,
-                        value,
-                        span,
-                    }),
+                    hir::stmt::StmtKind::Local(hir::stmt::Local { pat, value, span }),
                 ));
                 None
             },
@@ -852,7 +848,8 @@ impl<'ast> Lower<'ast> {
     }
 
     fn pat_ident(&mut self, ident: Ident) -> hir::Pat {
-        self.pat(ident.span(), hir::pat::PatKind::Ident(ident))
+        let name_id = self.next_hir_id();
+        self.pat(ident.span(), hir::pat::PatKind::Ident(ident, name_id))
     }
 
     fn ty(&mut self, span: Span, kind: hir::ty::TyKind) -> hir::Ty {

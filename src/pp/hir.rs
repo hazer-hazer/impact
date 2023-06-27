@@ -90,7 +90,7 @@ impl<'a> HirVisitor for HirPP<'a> {
 
     fn visit_local_stmt(&mut self, local: &Local, hir: &HIR) {
         self.visit_pat(local.pat, hir);
-        self.pp.ty_anno(local.id).op(Op::Assign);
+        self.pp.op(Op::Assign);
         self.visit_expr(local.value, hir);
     }
 
@@ -336,8 +336,8 @@ impl<'a> HirVisitor for HirPP<'a> {
             PatKind::Unit => {
                 self.pp.kw(Kw::Unit);
             },
-            &PatKind::Ident(ident) => {
-                self.visit_ident_pat(ident, hir);
+            &PatKind::Ident(ident, name_id) => {
+                self.visit_ident_pat(ident, name_id, hir);
             },
         }
 

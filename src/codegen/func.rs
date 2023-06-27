@@ -62,7 +62,7 @@ impl<'ink> FunctionMap<'ink> {
 
     fn add_instance<F>(
         &mut self,
-        def_id: DefId,
+        func_def_id: DefId,
         func_ty: InstantiatedTy,
         mut with: F,
     ) -> Result<(), DefId>
@@ -71,21 +71,21 @@ impl<'ink> FunctionMap<'ink> {
     {
         match func_ty {
             InstantiatedTy::Mono(ty) => {
-                let value = with(def_id, ty);
+                let value = with(func_def_id, ty);
                 self.insert_mono(ty, value);
                 Ok(())
             },
             InstantiatedTy::Poly(poly) => {
                 poly.iter().for_each(|inst| {
                     let (ty, _) = inst.unwrap();
-                    let value = with(def_id, ty);
+                    let value = with(func_def_id, ty);
                     self.insert_poly(ty, value);
                 });
                 Ok(())
             },
             InstantiatedTy::None => {
                 // FIXME: Is this place right for unused warning?
-                Err(def_id)
+                Err(func_def_id)
             },
         }
     }
@@ -168,114 +168,6 @@ pub struct FunctionsCodeGen<'ink, 'ctx> {
 
 impl_message_holder!(FunctionsCodeGen<'ink, 'ctx>);
 impl_session_holder!(FunctionsCodeGen<'ink, 'ctx>; ctx.sess);
-
-impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
-    fn visit_body(&mut self, _body: BodyId, owner: BodyOwner, _hir: &HIR) {
-        if !self.ctx.should_be_built(owner.def_id) {
-            return;
-        }
-
-        let def_id = owner.def_id;
-
-        let owner_ty = self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id));
-
-        // For Func or Lambda owner we get its type (possibly polymorphic, in which case
-        // we monomorphize it). For value we'll generate anonymous function of
-        // type `() -> ValueType` and then immediately call it.
-        let func_ty = match owner.kind {
-            BodyOwnerKind::Value => {
-                InstantiatedTy::Mono(Ty::func(Some(def_id), vec![Ty::unit()], owner_ty))
-            },
-            BodyOwnerKind::Func | BodyOwnerKind::Lambda => self.ctx.inst_ty(owner_ty, def_id),
-        };
-
-        self.function_map
-            .add_instance(def_id, func_ty, |def_id, ty| {
-                self.ctx.func_value(def_id, ty)
-            })
-            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
-    }
-
-    fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, _hir: &HIR) {
-        let def_id = item_id.def_id();
-        let ty = self.ctx.sess.tyctx.tyof(item_id.hir_id());
-
-        verbose!("Ty of external item: {ty}");
-
-        if ty.is_func_like() {
-            let func = self.ctx.func_value(def_id, ty);
-            self.function_map.externals.insert(def_id, func);
-        } else {
-            todo!("Extern values")
-        }
-    }
-
-    fn visit_variant(&mut self, &hir_vid: &hir::Variant, hir: &HIR) {
-        let variant = self.ctx.hir.variant(hir_vid);
-
-        // TODO: Will be used to get ADT variant by id
-        let vid = self.ctx.sess.tyctx.variant_id(variant.def_id);
-
-        let v_ctor_id = variant.ctor_def_id;
-
-        let ctor_ty = self.ctx.sess.tyctx.def_ty(v_ctor_id).unwrap();
-        let ctor_func_ty = self.ctx.inst_ty(ctor_ty, v_ctor_id);
-
-        self.visit_ident(variant.name, hir);
-        walk_each!(self, variant.fields.iter(), visit_field, hir);
-
-        // TODO: Somehow canonicalize fields order, maybe FieldId from type <=>
-        //  parameter index?
-
-        let _adt_ty = self.ctx.sess.tyctx.tyof(hir_vid);
-
-        self.function_map
-            .add_instance(v_ctor_id, ctor_func_ty, |_def_id, ty| {
-                self.ctx.simple_func(
-                    &format!("ctor_{vid}"),
-                    self.ctx.conv_ty(ty).into_function_type(),
-                    |_builder, params| {
-                        // Fields types are constructor parameters types
-                        let fields_tys = params
-                            .iter()
-                            .map(|param| param.get_type().as_basic_type_enum())
-                            .collect::<Vec<_>>();
-
-                        let variant_struct_ty = self.ctx.llvm_ctx.struct_type(&fields_tys, false);
-
-                        Some(variant_struct_ty.const_named_struct(params).into())
-                    },
-                )
-            })
-            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
-    }
-
-    fn visit_field(&mut self, field: &hir::item::Field, _hir: &HIR) {
-        if let Some(accessor_def_id) = field.accessor_def_id {
-            let accessor_ty = self.ctx.sess.tyctx.def_ty(accessor_def_id).unwrap();
-            let accessor_func_ty = self.ctx.inst_ty(accessor_ty, accessor_def_id);
-            let field_id = self.ctx.sess.tyctx.field_accessor_field_id(accessor_def_id);
-
-            self.function_map
-                .add_instance(accessor_def_id, accessor_func_ty, |_def_id, ty| {
-                    // TODO: ADT variants fields
-                    self.ctx.simple_func(
-                        &format!("field_accessor_{field_id}"),
-                        self.ctx.conv_ty(ty).into_function_type(),
-                        |builder, params| {
-                            let adt = params.get(0).unwrap().into_struct_value();
-                            builder.build_extract_value(
-                                adt,
-                                field_id.inner(),
-                                &format!("field_{field_id}"),
-                            )
-                        },
-                    )
-                })
-                .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
-        }
-    }
-}
 
 impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
     pub fn new(ctx: CodeGenCtx<'ink, 'ctx>) -> Self {
@@ -385,11 +277,121 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
             .text(format!("Unused {}", def.kind()))
             .emit_single_label(self);
     }
+
+    fn gen_ctor(&mut self, ctor_def_id: DefId) {
+        let ctor_ty = self.ctx.sess().tyctx().def_ty(ctor_def_id).unwrap();
+        let ctor_func_ty = self.ctx.inst_ty(ctor_ty, ctor_def_id);
+
+        // TODO: Somehow canonicalize fields order, maybe FieldId from type <=>
+        //  parameter index?
+
+        self.function_map
+            .add_instance(ctor_def_id, ctor_func_ty, |func_def_id, func_inst_ty| {
+                self.ctx.simple_func(
+                    &format!("ctor_{ctor_def_id}"),
+                    self.ctx.conv_ty(func_inst_ty).into_function_type(),
+                    |builder, params| {
+                        let field_tys = params
+                            .iter()
+                            .map(|param| param.get_type().as_basic_type_enum())
+                            .collect::<Vec<_>>();
+
+                        let return_ty = self.ctx.llvm_ctx.struct_type(&field_tys, false);
+
+                        Some(return_ty.const_named_struct(params).into())
+                    },
+                )
+            })
+            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
+    }
 }
 
-impl<'ink, 'ctx> Stage< FunctionMap<'ink>, CodeGenCtx<'ink, 'ctx>>
-    for FunctionsCodeGen<'ink, 'ctx>
-{
+impl<'ink, 'ctx> HirVisitor for FunctionsCodeGen<'ink, 'ctx> {
+    fn visit_body(&mut self, _body: BodyId, owner: BodyOwner, _hir: &HIR) {
+        if !self.ctx.should_be_built(owner.def_id) {
+            return;
+        }
+
+        let def_id = owner.def_id;
+
+        let owner_ty = self.ctx.sess.tyctx.tyof(HirId::new_owner(def_id));
+
+        // For Func or Lambda owner we get its type (possibly polymorphic, in which case
+        // we monomorphize it). For value we'll generate anonymous function of
+        // type `() -> ValueType` and then immediately call it.
+        let func_ty = match owner.kind {
+            BodyOwnerKind::Value => {
+                InstantiatedTy::Mono(Ty::func(Some(def_id), vec![Ty::unit()], owner_ty))
+            },
+            BodyOwnerKind::Func | BodyOwnerKind::Lambda => self.ctx.inst_ty(owner_ty, def_id),
+        };
+
+        self.function_map
+            .add_instance(def_id, func_ty, |def_id, ty| {
+                self.ctx.func_value(def_id, ty)
+            })
+            .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
+    }
+
+    fn visit_extern_item(&mut self, _: Ident, _: &ExternItem, item_id: ItemId, _hir: &HIR) {
+        let def_id = item_id.def_id();
+        let ty = self.ctx.sess.tyctx.tyof(item_id.hir_id());
+
+        verbose!("Ty of external item: {ty}");
+
+        if ty.is_func_like() {
+            let func = self.ctx.func_value(def_id, ty);
+            self.function_map.externals.insert(def_id, func);
+        } else {
+            todo!("Extern values")
+        }
+    }
+
+    fn visit_struct_item(&mut self, name: Ident, data: &hir::item::Struct, _id: ItemId, hir: &HIR) {
+        self.visit_ident(name, hir);
+        self.visit_generic_params(&data.generics, hir);
+        walk_each!(self, data.fields.iter(), visit_field, hir);
+
+        self.gen_ctor(data.ctor_def_id);
+    }
+
+    fn visit_variant(&mut self, &hir_vid: &hir::Variant, hir: &HIR) {
+        let variant = self.ctx.hir.variant(hir_vid);
+
+        self.visit_ident(variant.name, hir);
+        walk_each!(self, variant.fields.iter(), visit_field, hir);
+
+        self.gen_ctor(variant.ctor_def_id);
+    }
+
+    fn visit_field(&mut self, field: &hir::item::Field, _hir: &HIR) {
+        if let Some(accessor_def_id) = field.accessor_def_id {
+            let accessor_ty = self.ctx.sess.tyctx.def_ty(accessor_def_id).unwrap();
+            let accessor_func_ty = self.ctx.inst_ty(accessor_ty, accessor_def_id);
+            let field_id = self.ctx.sess.tyctx.field_accessor_field_id(accessor_def_id);
+
+            self.function_map
+                .add_instance(accessor_def_id, accessor_func_ty, |_def_id, ty| {
+                    // TODO: ADT variants fields
+                    self.ctx.simple_func(
+                        &format!("field_accessor_{field_id}"),
+                        self.ctx.conv_ty(ty).into_function_type(),
+                        |builder, params| {
+                            let adt = params.get(0).unwrap().into_struct_value();
+                            builder.build_extract_value(
+                                adt,
+                                field_id.inner(),
+                                &format!("field_{field_id}"),
+                            )
+                        },
+                    )
+                })
+                .unwrap_or_else(|def_id| self.unused_instance_warning(def_id));
+        }
+    }
+}
+
+impl<'ink, 'ctx> Stage<FunctionMap<'ink>, CodeGenCtx<'ink, 'ctx>> for FunctionsCodeGen<'ink, 'ctx> {
     fn run(mut self) -> StageResult<FunctionMap<'ink>, CodeGenCtx<'ink, 'ctx>> {
         self.gen_functions();
         stage_result(self.ctx, self.function_map, self.msg)

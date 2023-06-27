@@ -45,8 +45,13 @@ impl<'a> ThirPrinter<'a> {
             ExprKind::LocalRef(local) => {
                 self.pp.string(local);
             },
-            &ExprKind::Def(def_id, ty) => {
-                self.pp.color(def_id).punct(Punct::Colon).string(ty);
+            &ExprKind::Def(def_id, kind, ty) => {
+                self.pp
+                    .string(kind)
+                    .sp()
+                    .color(def_id)
+                    .punct(Punct::Colon)
+                    .string(ty);
             },
             &ExprKind::Block(id) => self.block(id),
             &ExprKind::Ref(expr) => {

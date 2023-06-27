@@ -72,30 +72,34 @@ impl<'hir> Typecker<'hir> {
 
         let checked = self.subtype(Spanned::new(span, expr_ty), ty);
 
-        tcdbg!(self, step InferStepKind::Check(expr, ty, checked));
+        tcdbg!(self, step InferStepKind::Check(expr, expr_ty, ty, checked));
 
         match checked {
             Ok(ok) => {
                 self.type_inferring_node(expr, ty);
                 Ok(ok.apply_ctx(self))
             },
-            Err(_) => {
-                let span = self.hir.expr_result_span(expr);
+            Err(err) => {
+                if let TypeckErr::LateReport = err {
+                    let span = self.hir.expr_result_span(expr);
 
-                MessageBuilder::error()
-                    .span(span)
-                    .text(format!(
-                        "Type mismatch: expected {}, got {}",
-                        expr_ty.with_sess(self.sess()),
-                        ty.with_sess(self.sess())
-                    ))
-                    .label(
-                        span,
-                        format!("Must be of type {}", ty.with_sess(self.sess())),
-                    )
-                    .emit(self);
+                    MessageBuilder::error()
+                        .span(span)
+                        .text(format!(
+                            "Type mismatch: expected {}, got {}",
+                            expr_ty.with_sess(self.sess()),
+                            ty.with_sess(self.sess())
+                        ))
+                        .label(
+                            span,
+                            format!("Must be of type {}", ty.with_sess(self.sess())),
+                        )
+                        .emit(self);
 
-                Err(TypeckErr::Reported)
+                    Err(TypeckErr::Reported)
+                } else {
+                    Err(err)
+                }
             },
         }
     }
@@ -336,6 +340,13 @@ impl<'hir> Typecker<'hir> {
 
             // adt₁ <: adt₂
             (TyKind::Adt(adt), TyKind::Adt(adt_)) if adt.def_id == adt_.def_id => Ok(r_ty),
+
+            // struct₁ <: struct₂
+            (TyKind::Struct(struct1), TyKind::Struct(struct2))
+                if struct1.def_id == struct2.def_id =>
+            {
+                Ok(r_ty)
+            },
 
             // InstL
             (&TyKind::Existential(ex), _) if ex.is_common() => {

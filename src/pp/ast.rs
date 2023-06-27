@@ -62,7 +62,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     }
 
     fn visit_local_stmt(&mut self, pat: &'ast PR<N<Pat>>, value: &'ast PR<N<Expr>>) {
-        self.kw(Kw::Let);
+        self.kw(Kw::Let).sp();
         walk_pr!(self, pat, visit_pat);
         self.op(Op::Assign);
         walk_pr!(self, value, visit_expr);
@@ -122,7 +122,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_decl_item(
         &mut self,
         name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<Pat>>,
+        params: &'ast Vec<PR<N<Pat>>>,
         body: &'ast PR<N<Expr>>,
         id: NodeId,
     ) {
@@ -199,7 +199,13 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
                 self.kw(Kw::Unit);
             },
             PatKind::Ident(ident) => {
-                walk_pr!(self, ident, name, pat.id(), true);
+                walk_pr!(
+                    self,
+                    ident.as_ref().map(|node| &node.ident),
+                    name,
+                    ident.id(),
+                    true
+                );
             },
         }
         self.node_id(pat);

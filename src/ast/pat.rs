@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{impl_with_node_id, pr_display, NodeId, WithNodeId, PR};
+use super::{impl_with_node_id, pr_display, NodeId, WithNodeId, PR, IdentNode};
 use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 
 #[derive(Debug)]
@@ -9,7 +9,7 @@ pub enum PatKind {
 
     // TODO: Replace Unit variant with Path pattern which refers to builtin type `()`
     Unit,
-    Ident(PR<Ident>),
+    Ident(PR<IdentNode>),
 }
 
 impl Display for PatKind {

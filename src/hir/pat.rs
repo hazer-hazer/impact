@@ -4,7 +4,7 @@ use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 #[derive(Debug)]
 pub enum PatKind {
     Unit,
-    Ident(Ident),
+    Ident(Ident, HirId),
 }
 
 #[derive(Debug)]

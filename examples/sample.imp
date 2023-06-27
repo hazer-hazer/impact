@@ -17,13 +17,8 @@ struct String =
     field: str
 
 main () =
-    a = String "a"
-    b = 123
+    let a = String "a"
 
     puts (String.field a)
-
-    match a
-        s => a
-        c => b
 
     ()

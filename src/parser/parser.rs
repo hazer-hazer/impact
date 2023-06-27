@@ -443,7 +443,23 @@ impl Parser {
     }
 
     fn _parse_stmt(&mut self) -> PR<N<Stmt>> {
-        if let Some(item) = self.parse_opt_item() {
+        if self.is(TokenCmp::Kw(Kw::Let)) {
+            let lo = self.span();
+            self.just_skip(TokenCmp::Kw(Kw::Let));
+            let pat = self.parse_pat("local variable name (pattern)");
+            self.expect(TokenCmp::Op(Op::Assign))?;
+            let value = self.parse_expr();
+
+            if !is_block_ended!(value) {
+                self.expect_semis("initializer")?;
+            }
+
+            Ok(Box::new(Stmt::new(
+                self.next_node_id(),
+                StmtKind::Local(pat, value),
+                self.close_span(lo),
+            )))
+        } else if let Some(item) = self.parse_opt_item() {
             let span = item.span();
 
             if !is_block_ended!(item) {
@@ -843,17 +859,24 @@ impl Parser {
     }
 
     // Patterns //
-    fn parse_pat(&mut self, expected: &str) -> PR<Pat> {
+    fn parse_pat(&mut self, expected: &str) -> PR<N<Pat>> {
         let lo = self.span();
 
         let kind = self.parse_pat_kind(expected)?;
 
-        Ok(Pat::new(self.next_node_id(), kind, self.close_span(lo)))
+        Ok(Box::new(Pat::new(
+            self.next_node_id(),
+            kind,
+            self.close_span(lo),
+        )))
     }
 
     fn parse_pat_kind(&mut self, expected: &str) -> PR<PatKind> {
         if self.is(TokenCmp::Ident) {
-            Ok(PatKind::Ident(self.parse_ident("[bug] ident pattern")))
+            Ok(PatKind::Ident(
+                self.parse_ident("[bug] ident pattern")
+                    .map(|ident| IdentNode::new(self.next_node_id(), ident)),
+            ))
         } else if self.skip(TokenCmp::Punct(Punct::LParen)).is_some() {
             self.skip_opt_nls();
             // TODO: Tuple pattern
@@ -881,7 +904,7 @@ impl Parser {
         let pe = self.enter_entity(ParseEntryKind::Opt, "expression");
 
         let expr = if self.is(TokenCmp::Kw(Kw::Let)) {
-            Some(self.parse_let())
+            Some(self.parse_let_block_expr())
         } else if self.is(TokenCmp::Kw(Kw::Match)) {
             Some(self.parse_match_expr())
         } else {
@@ -893,7 +916,7 @@ impl Parser {
         expr
     }
 
-    fn parse_let(&mut self) -> PR<N<Expr>> {
+    fn parse_let_block_expr(&mut self) -> PR<N<Expr>> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "let expression");
 
         let lo = self.span();

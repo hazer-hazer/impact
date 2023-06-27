@@ -6,9 +6,9 @@ use super::{
 };
 use crate::{
     cli::verbose,
-    hir::ExprDefKind,
+    hir::ValueDefKind,
     mir::{thir::Expr, InfixOp},
-    resolve::{builtin::ValueBuiltin},
+    resolve::builtin::ValueBuiltin,
     typeck::ty::{FloatKind, IntKind},
 };
 
@@ -126,23 +126,23 @@ impl<'ctx> MirBuilder<'ctx> {
                 self.builder.references_body(body_id);
                 bb.with(RValue::Closure(def_id))
             },
-            &ExprKind::Def(def_id, ty) => {
-                let rvalue = match self.sess.def_table.def(def_id).kind().try_into().unwrap() {
-                    ExprDefKind::External => {
+            &ExprKind::Def(def_id, kind, ty) => {
+                let rvalue = match kind {
+                    ValueDefKind::External => {
                         if ty.is_func_like() {
                             RValue::FuncRef(def_id, ty)
                         } else {
                             RValue::ValueRef(def_id)
                         }
                     },
-                    ExprDefKind::Func => RValue::FuncRef(def_id, ty),
-                    ExprDefKind::Value => RValue::ValueRef(def_id),
+                    ValueDefKind::Func => RValue::FuncRef(def_id, ty),
+                    ValueDefKind::Value => RValue::ValueRef(def_id),
                     // ExprDefKind::Lambda => {
                     //     assert!(ty.is_instantiated());
                     //     RValue::ClosureRef(def_id)
                     // },
-                    ExprDefKind::Ctor => RValue::Ctor(def_id, ty),
-                    ExprDefKind::FieldAccessor => RValue::FieldAccessor(def_id, ty),
+                    ValueDefKind::Ctor => RValue::Ctor(def_id, ty),
+                    ValueDefKind::FieldAccessor => RValue::FieldAccessor(def_id, ty),
                 };
                 bb.with(rvalue)
             },

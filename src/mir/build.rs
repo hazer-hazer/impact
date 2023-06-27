@@ -5,7 +5,7 @@ use super::{
     BBWith, Body, BodyBuilder, LValue, Local, MIR,
 };
 use crate::{
-    cli::verbose,
+    cli::{color::WithColor, verbose},
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, Map, OwnerId, HIR},
     message::message::{impl_message_holder, MessageStorage},
     pp::thir::ThirPrinter,
@@ -58,9 +58,13 @@ impl<'ctx> MirBuilder<'ctx> {
 
         let (thir, thir_entry_expr) = ThirBuilder::new(&sess, hir, body_owner).build_body_thir();
 
-        if false {
+        if true {
             let pp = ThirPrinter::new(&sess, &thir);
-            verbose!("{body_owner} body THIR:\n{}", pp.print(thir_entry_expr));
+            verbose!(
+                "{} body THIR:\n{}",
+                body_owner.colorized(),
+                pp.print(thir_entry_expr)
+            );
         }
 
         let this = Self {

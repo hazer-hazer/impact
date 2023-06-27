@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     cli::{color::Colorize, verbose},
-    hir::{ExprDefKind, HIR},
+    hir::{ValueDefKind, HIR},
     message::message::{impl_message_holder, MessageStorage},
     mir::MIR,
     session::{impl_session_holder, stage_result, Session, Stage, StageResult, StageResultImpl},
@@ -81,7 +81,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
             .iter_internal()
             .try_fold(ctx, |ctx, (def_id, inst)| {
                 match ctx.sess.def_table.def(def_id).kind().try_into().unwrap() {
-                    ExprDefKind::Value | ExprDefKind::Func => match inst {
+                    ValueDefKind::Value | ValueDefKind::Func => match inst {
                         &FuncInstance::Mono(ty, func) => {
                             let ((), ctx) =
                                 BodyCodeGen::new(ctx, def_id, ty, func, &function_map, &value_map)
@@ -106,7 +106,7 @@ impl<'ink, 'ctx> CodeGen<'ink, 'ctx> {
                                 })
                         },
                     },
-                    ExprDefKind::Ctor | ExprDefKind::FieldAccessor | ExprDefKind::External => {
+                    ValueDefKind::Ctor | ValueDefKind::FieldAccessor | ValueDefKind::External => {
                         return Ok(ctx)
                     },
                 }

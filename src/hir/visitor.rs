@@ -6,7 +6,7 @@ use super::{
     pat::PatKind,
     stmt::{Local, StmtKind},
     ty::TyKind,
-    Block, BodyId, BodyOwner, Expr, ExprPath, Map, Pat, Stmt, Ty, TyPath, Variant, HIR,
+    Block, BodyId, BodyOwner, Expr, ExprPath, HirId, Map, Pat, Stmt, Ty, TyPath, Variant, HIR,
 };
 use crate::{
     resolve::builtin::{TyBuiltin, ValueBuiltin},
@@ -135,13 +135,13 @@ pub trait HirVisitor {
         let pat = hir.pat(pat);
         match pat.kind() {
             PatKind::Unit => self.visit_unit_pat(hir),
-            &PatKind::Ident(ident) => self.visit_ident_pat(ident, hir),
+            &PatKind::Ident(ident, name_id) => self.visit_ident_pat(ident, name_id, hir),
         }
     }
 
     fn visit_unit_pat(&mut self, _hir: &HIR) {}
 
-    fn visit_ident_pat(&mut self, ident: Ident, hir: &HIR) {
+    fn visit_ident_pat(&mut self, ident: Ident, name_id: HirId, hir: &HIR) {
         self.visit_ident(ident, hir);
     }
 

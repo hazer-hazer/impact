@@ -3,7 +3,7 @@ use super::{
     StmtId, THIR,
 };
 use crate::{
-    hir::{self, ExprDefKind, Map, OwnerId, WithHirId, HIR},
+    hir::{self, Map, OwnerId, ValueDefKind, WithHirId, HIR},
     resolve::builtin::ValueBuiltin,
     session::{impl_session_holder, Session, SessionHolder},
     span::WithSpan,
@@ -63,11 +63,13 @@ impl<'ctx> ThirBuilder<'ctx> {
             },
             &hir::expr::ExprKind::Path(path) => match self.hir.expr_path(path).res() {
                 &hir::ExprRes::Def(kind, def_id) => match kind {
-                    ExprDefKind::Ctor
-                    | ExprDefKind::FieldAccessor
-                    | ExprDefKind::External
-                    | ExprDefKind::Func
-                    | ExprDefKind::Value => ExprKind::Def(def_id, self.tyctx().tyof(expr_id)),
+                    ValueDefKind::Ctor
+                    | ValueDefKind::FieldAccessor
+                    | ValueDefKind::External
+                    | ValueDefKind::Func
+                    | ValueDefKind::Value => {
+                        ExprKind::Def(def_id, kind, self.tyctx().tyof(expr_id))
+                    },
                 },
                 &hir::ExprRes::Local(hir_id) => ExprKind::LocalRef(LocalVar::new(hir_id)),
             },
@@ -139,7 +141,6 @@ impl<'ctx> ThirBuilder<'ctx> {
     }
 
     fn local(&mut self, local: &hir::stmt::Local) -> Stmt {
-        let _ty = self.tyctx().tyof(local.id());
         Stmt::Local(self.pat(local.pat), self.expr(local.value))
     }
 
@@ -163,9 +164,9 @@ impl<'ctx> ThirBuilder<'ctx> {
 
         let kind = match pat.kind() {
             hir::pat::PatKind::Unit => PatKind::Unit,
-            &hir::pat::PatKind::Ident(ident) => PatKind::Ident {
+            &hir::pat::PatKind::Ident(ident, name_id) => PatKind::Ident {
                 name: ident,
-                var: LocalVar::new(pat.id()),
+                var: LocalVar::new(name_id),
                 ty,
             },
         };

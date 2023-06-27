@@ -15,7 +15,7 @@ use self::{
     ty::TyNode,
 };
 use crate::{
-    cli::color::{Color},
+    cli::color::Color,
     dt::{
         idx::{declare_idx, Idx, IndexVec},
         new_type::new_type,
@@ -301,7 +301,7 @@ macro_rules! hir_nodes {
             fn pat_names(self, pat: Pat) -> Option<Vec<Ident>> {
                 match self.pat(pat).kind() {
                     pat::PatKind::Unit => None,
-                    &pat::PatKind::Ident(name) => Some(vec![name]),
+                    &pat::PatKind::Ident(name, _) => Some(vec![name]),
                 }
             }
 
@@ -678,7 +678,7 @@ impl Display for TyRes {
 /// Lambda: Remove, because lambdas are anonymous, hence we cannot refer to it
 /// by path. Please, read `TyDefKind` description.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum ExprDefKind {
+pub enum ValueDefKind {
     Func,
     Value,
     Ctor,
@@ -686,7 +686,7 @@ pub enum ExprDefKind {
     External,
 }
 
-impl Display for ExprDefKind {
+impl Display for ValueDefKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let def_kind: DefKind = (*self).into();
         write!(f, "{def_kind}")
@@ -694,7 +694,7 @@ impl Display for ExprDefKind {
 }
 
 sub_enum_conversion! {
-    ExprDefKind <: DefKind {
+    ValueDefKind <: DefKind {
         Func,
         Value,
         Ctor,
@@ -705,7 +705,7 @@ sub_enum_conversion! {
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum ExprRes {
-    Def(ExprDefKind, DefId),
+    Def(ValueDefKind, DefId),
     Local(HirId),
 }
 

@@ -12,7 +12,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Arm {
-    pub pat: PR<Pat>,
+    pub pat: PR<N<Pat>>,
     pub body: PR<N<Expr>>,
     pub span: Span,
 }
@@ -184,7 +184,7 @@ impl Display for PathExpr {
 
 #[derive(Debug)]
 pub struct Lambda {
-    pub params: Vec<PR<Pat>>,
+    pub params: Vec<PR<N<Pat>>>,
     pub body: PR<N<Expr>>,
 }
 

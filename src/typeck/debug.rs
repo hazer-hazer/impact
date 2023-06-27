@@ -96,7 +96,7 @@ pub enum InferStepKind {
     CtxApplied(Ty, Ty),
 
     /// Check whether expr is of a specific type or not
-    Check(Expr, Ty, TyResult<Ty>),
+    Check(Expr, Ty, Ty, TyResult<Ty>),
 
     /// Check if lhs type is subtype of rhs type
     Subtype(Ty, Ty, TyResult<Ty>),
@@ -253,7 +253,7 @@ impl PP {
         let pat = ctx.hir.pat(pat);
         match pat.kind() {
             PatKind::Unit => self.str("()"),
-            PatKind::Ident(name) => self.string(name),
+            PatKind::Ident(name, _) => self.string(name),
         }
     }
 
@@ -307,8 +307,8 @@ impl PP {
                     {if (before == after) {string: " (No difference)".yellow()}}
                 );
             },
-            &InferStepKind::Check(expr, ty, ref res) => {
-                pp!(self, "Check ", {expr: expr, ctx}, " is of type ", {color: ty}, " => ", {ty_result: &res.map(|ty| ty)});
+            &InferStepKind::Check(expr, expr_ty, ty, ref res) => {
+                pp!(self, "Check expr `", {expr: expr, ctx}, "` (", {color: expr_ty}, ") is of type ", {color: ty}, " => ", {ty_result: &res.map(|ty| ty)});
             },
             &InferStepKind::Subtype(ty, subtype_of, ref res) => {
                 pp!(

@@ -134,7 +134,7 @@ impl Display for Variant {
 pub enum ItemKind {
     Type(PR<Ident>, GenericParams, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
-    Decl(PR<Ident>, Vec<PR<Pat>>, PR<N<Expr>>),
+    Decl(PR<Ident>, Vec<PR<N<Pat>>>, PR<N<Expr>>),
     Adt(PR<Ident>, GenericParams, Vec<PR<Variant>>),
     Struct(
         PR<Ident>,

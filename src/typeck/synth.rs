@@ -1,5 +1,5 @@
 use super::{
-    ty::{ExKind, FloatKind, IntKind, Ty, TyKind},
+    ty::{ExKind, FloatKind, IntKind, Ty, TyKind, TyVarId},
     TyResult, TypeckErr, Typecker, Typed,
 };
 use crate::{
@@ -9,12 +9,12 @@ use crate::{
         expr::{Arm, Call, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Local, StmtKind},
-        Block, Body, BodyId, Expr, ExprDefKind, ExprPath, ExprRes, Map, Pat, Stmt,
+        Block, Body, BodyId, Expr, ExprPath, ExprRes, Map, Pat, Stmt, TyRes, ValueDefKind,
     },
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
     session::{MaybeWithSession, SessionHolder},
-    span::{Spanned, WithSpan},
+    span::{sym::Ident, Spanned, WithSpan},
     typeck::{
         debug::{tcdbg, InferEntryKind, InferStepKind},
         kind::{Kind, KindSort},
@@ -105,8 +105,10 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
+        self.synth_pat(local.pat);
+
         let local_ty = self.synth_expr(local.value)?.apply_ctx(self);
-        self.type_inferring_node(local.id, local_ty);
+
         Ok(Ty::unit())
     }
 
@@ -163,11 +165,11 @@ impl<'hir> Typecker<'hir> {
         match res {
             &ExprRes::Def(def_kind, def_id) => match def_kind {
                 // Definition types collected in `conv`
-                ExprDefKind::External
-                | ExprDefKind::FieldAccessor
-                | ExprDefKind::Ctor
-                | ExprDefKind::Func
-                | ExprDefKind::Value => Ok(self.tyctx().def_ty(def_id).expect(&format!(
+                ValueDefKind::External
+                | ValueDefKind::FieldAccessor
+                | ValueDefKind::Ctor
+                | ValueDefKind::Func
+                | ValueDefKind::Value => Ok(self.tyctx().def_ty(def_id).expect(&format!(
                     "Expected type of {} definition to be collected at conv stage",
                     self.sess.def_table.def(def_id)
                 ))),
@@ -313,27 +315,67 @@ impl<'hir> Typecker<'hir> {
     // }
 
     // TODO: Update if type annotations added
-    fn get_param_type(&mut self, pat: Pat) -> Vec<(Pat, Ty)> {
-        match self.hir.pat(pat).kind() {
-            hir::pat::PatKind::Unit => vec![(pat, Ty::unit())],
-            &hir::pat::PatKind::Ident(name) => {
-                let ex = self.add_fresh_kind_ex_as_ty();
-                tcdbg!(self, add ex.0, format!("parameter {name}: {}", ex.0.colorized()));
-                vec![(pat, ex.1)]
-            },
-        }
-    }
+    // fn get_param_type(&mut self, pat: Pat) -> Vec<(Pat, Ty)> {
+    //     match self.hir.pat(pat).kind() {
+    //         hir::pat::PatKind::Unit => vec![(pat, Ty::unit())],
+    //         &hir::pat::PatKind::Ident(name, _) => {
+    //             let ex = self.add_fresh_kind_ex_as_ty();
+    //             tcdbg!(self, add ex.0, format!("parameter {name}: {}",
+    // ex.0.colorized()));             vec![(pat, ex.1)]
+    //         },
+    //     }
+    // }
 
-    fn get_typed_pat(&mut self, pat: Pat) -> Ty {
-        match self.hir.pat(pat).kind() {
+    // fn get_typed_pat(&mut self, pat: Pat) -> Ty {
+    //     match self.hir.pat(pat).kind() {
+    //         hir::pat::PatKind::Unit => Ty::unit(),
+
+    //         // Assumed that all names in pattern are typed, at least as
+    // existentials         &hir::pat::PatKind::Ident(_, name_id) => {
+    //             self.tyctx_mut().node_type(name_id).unwrap().apply_ctx(self)
+    //         },
+    //     }
+    // }
+
+    /// Synthesize pattern virgin type (before usage)
+    // TODO: Annotations
+    fn synth_pat(&mut self, pat: Pat) -> Ty {
+        let kind_ty = match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => Ty::unit(),
+            &hir::pat::PatKind::Ident(_, name_id) => {
+                let name_ex = self.add_fresh_kind_ex_as_ty().1;
+                self.type_inferring_node(name_id, name_ex);
+                name_ex
+            },
+        };
 
-            // Assumed that all names in pattern are typed, at least as existentials
-            &hir::pat::PatKind::Ident(_) => {
-                self.tyctx_mut().node_type(pat).unwrap().apply_ctx(self)
+        self.type_inferring_node(pat, kind_ty);
+
+        kind_ty
+    }
+
+    fn get_pat_inner_tys(&self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
+        match self.hir.pat(pat).kind() {
+            hir::pat::PatKind::Unit => vec![(None, Ty::unit())],
+            &hir::pat::PatKind::Ident(name, name_id) => {
+                vec![(Some(name), self.tyctx().node_type(name_id).unwrap())]
             },
         }
     }
+
+    // fn generalize_unsolved(&mut self, ty: Ty) -> (Ty, Vec<TyVarId>) {
+    //     if let Some(ex) = self.is_unsolved_ex(ty) {
+    //         let ty_var = Ty::next_ty_var_id(None);
+    //         self.solve(ex, Ty::var(ty_var).mono());
+    //         Ty::forall(ty_var, ty)
+    //     } else if let Some(ex) = self.is_unsolved_kind_ex(ty) {
+    //         let kind_var = Kind::next_kind_var_id(None);
+    //         self.solve_kind_ex(ex, Kind::new_var(kind_var).as_mono().unwrap());
+    //         Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
+    //     } else {
+    //         func_ty
+    //     }
+    // }
 
     fn synth_value_body(&mut self, expr: Expr) -> TyResult<Ty> {
         self.synth_expr(expr)
@@ -347,29 +389,17 @@ impl<'hir> Typecker<'hir> {
             return self.synth_value_body(*value);
         }
 
-        let params_pats_tys = params
-            .iter()
-            .copied()
-            .map(|param| self.get_param_type(param))
-            .collect::<Vec<_>>();
+        // Set virgin parameters types
+        params.iter().for_each(|&pat| {
+            self.synth_pat(pat);
+        });
 
         let body_ex = self.add_fresh_kind_ex_as_ty();
 
         tcdbg!(self, add body_ex.0, "function body");
 
         self.under_ctx(|this| {
-            params_pats_tys.iter().flatten().for_each(|&(pat, ty)| {
-                this.type_inferring_node(pat, ty);
-            });
-
             let body_ty = this.check_discard_err(self.hir.body(body_id).value, body_ex.1);
-
-            // Apply context to function parameter to get its inferred type.
-            let params_tys = params
-                .iter()
-                .copied()
-                .map(|param| this.get_typed_pat(param))
-                .collect::<Vec<_>>();
 
             // If we know of which type function parameter is -- check inferred one against
             // it
@@ -380,31 +410,99 @@ impl<'hir> Typecker<'hir> {
             //     param_ty
             // };
 
-            params
+            // Parameter types after body check with applied context
+            // let params_tys = params
+            //     .iter()
+            //     .copied()
+            //     .map(|pat| self.tyctx().node_type(pat).unwrap().apply_ctx(this))
+            //     .collect::<Vec<_>>();
+
+            // let generalized_params_tys =
+            // params_tys.iter().copied().zip(params.iter()).fold((), |ty| {
+            //     if let Some(ex) = ty.as_ex() {
+            //         let var = Ty::next_ty_var_id(name)
+            //         self.solve(ex, Ty::var(var).mono());
+            //     }
+            // });
+
+            let body_ty = body_ty.apply_ctx(this);
+
+            let params_tys = params
                 .iter()
                 .copied()
-                .zip(params_tys.iter().copied())
-                .for_each(|(param, ty)| this.type_inferring_node(param, ty));
+                .map(|pat| this.tyctx().node_type(pat).unwrap())
+                .collect::<Vec<_>>();
 
-            // FIXME: Clone
-            let func_ty = params_tys.iter().fold(
-                Ty::func(Some(owner_def_id), params_tys.clone(), body_ty),
-                |func_ty, &param_ty| {
-                    if let Some(ex) = this.is_unsolved_ex(param_ty) {
-                        let ty_var = Ty::next_ty_var_id(None);
-                        this.solve(ex, Ty::var(ty_var).mono());
-                        Ty::forall(ty_var, func_ty)
-                    } else if let Some(ex) = this.is_unsolved_kind_ex(param_ty) {
-                        let kind_var = Kind::next_kind_var_id(None);
-                        this.solve_kind_ex(ex, Kind::new_var(kind_var).as_mono().unwrap());
-                        Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
-                    } else {
-                        func_ty
-                    }
+            // For each unsolved existential we produce new level of universal
+            // quantification. So, e.g. `id a = a` will give us `forall a. a ->
+            // a` type FIXME: Clone
+            let generalized_func_ty = params.iter().copied().fold(
+                Ty::func(Some(owner_def_id), params_tys, body_ty),
+                |func_ty, param| {
+                    let param_tys = this.get_pat_inner_tys(param);
+                    param_tys
+                        .iter()
+                        .copied()
+                        .fold(func_ty, |func_ty, (name, param_inner_ty)| {
+                            if let Some(ex) = param_inner_ty.as_ex() {
+                                let var = Ty::next_ty_var_id(name);
+                                this.solve(ex, Ty::var(var).mono());
+                                Ty::forall(var, func_ty)
+                            } else if let Some(kind_ex) = param_inner_ty.as_kind_ex() {
+                                let kind_var = Kind::next_kind_var_id(name);
+                                this.solve_kind_ex(kind_ex, Kind::new_var(kind_var).mono());
+                                Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
+                            } else {
+                                func_ty
+                            }
+                        })
                 },
             );
 
-            Ok(func_ty)
+            // let generalized_unsolved_params = params.iter().copied().fold(
+            //     (
+            //         params
+            //             .iter()
+            //             .copied()
+            //             .map(|pat| this.get_applied_pat_ty(pat)),
+            //         Vec::new(),
+            //     ),
+            //     |(mut vars, mut param_tys), pat| match this.hir.pat(pat).kind() {
+            //         hir::pat::PatKind::Unit => param_tys.push(Ty::unit()),
+            //         &hir::pat::PatKind::Ident(name, name_id) => {
+            //             let name_ty = this.tyctx().node_type(name_id).unwrap();
+            //             if !name_ty.is_solved() {
+            //                 let var = Ty::next_ty_var_id(Some(name));
+            //                 this.solve(name_ty.as_ex().unwrap(), Ty::var(var).mono());
+            //                 Ty::forall(var, body)
+            //             }
+            //         },
+            //     },
+            // );
+
+            // let func_ty = params
+            //     .iter()
+            //     .copied()
+            //     .map(|pat| self.apply_node_type(pat))
+            //     .fold(
+            //         Ty::func(Some(owner_def_id), param_tys.collect::<Vec<_>>(), body_ty),
+            //         |func_ty, &param_ty| {
+            //             if let Some(ex) = this.is_unsolved_ex(param_ty) {
+            //                 let ty_var = Ty::next_ty_var_id(None);
+            //                 this.solve(ex, Ty::var(ty_var).mono());
+            //                 Ty::forall(ty_var, func_ty)
+            //             } else if let Some(ex) = this.is_unsolved_kind_ex(param_ty) {
+            //                 let kind_var = Kind::next_kind_var_id(None);
+            //                 this.solve_kind_ex(ex,
+            // Kind::new_var(kind_var).as_mono().unwrap());
+            // Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
+            //             } else {
+            //                 func_ty
+            //             }
+            //         },
+            //     );
+
+            Ok(generalized_func_ty)
         })
     }
 
@@ -562,9 +660,18 @@ impl<'hir> Typecker<'hir> {
                 },
                 KindSort::Abs(..) | KindSort::Var(_) => {
                     MessageBuilder::error()
-                        .text(format!("{} cannot be called", lhs_ty.with_sess(self.sess())))
+                        .text(format!(
+                            "{} cannot be called",
+                            lhs_ty.with_sess(self.sess())
+                        ))
                         .span(span)
-                        .label(span, format!("has type {} which cannot be called", lhs_ty.with_sess(self.sess())))
+                        .label(
+                            span,
+                            format!(
+                                "has type {} which cannot be called",
+                                lhs_ty.with_sess(self.sess())
+                            ),
+                        )
                         .emit(self);
 
                     Err(TypeckErr::Reported)
@@ -574,9 +681,18 @@ impl<'hir> Typecker<'hir> {
             // already be replaced with existentials"
             _ => {
                 MessageBuilder::error()
-                    .text(format!("{} cannot be called", lhs_ty.with_sess(self.sess())))
+                    .text(format!(
+                        "{} cannot be called",
+                        lhs_ty.with_sess(self.sess())
+                    ))
                     .span(span)
-                    .label(span, format!("has type {} which cannot be called", lhs_ty.with_sess(self.sess())))
+                    .label(
+                        span,
+                        format!(
+                            "has type {} which cannot be called",
+                            lhs_ty.with_sess(self.sess())
+                        ),
+                    )
                     .emit(self);
 
                 Err(TypeckErr::Reported)

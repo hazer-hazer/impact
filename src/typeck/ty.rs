@@ -772,20 +772,18 @@ impl<'sess, 'a> std::fmt::Display for WithSess<'sess, 'a, Ty> {
                     .join(" - "),
                 body.with_sess(self.sess)
             ),
-            TyKind::Adt(adt) => write!(
-                f,
-                "data type {}",
-                self.sess.def_table.def(adt.def_id).name()
-            ),
-            TyKind::Struct(struct_) => write!(
-                f,
-                "struct {}",
-                self.sess.def_table.def(struct_.def_id).name()
-            ),
+            TyKind::Adt(adt) => write!(f, "{}", self.sess.def_table.def(adt.def_id).name()),
+            TyKind::Struct(struct_) => {
+                write!(f, "{}", self.sess.def_table.def(struct_.def_id).name())
+            },
             TyKind::Ref(inner) => write!(f, "ref {}", inner.with_sess(self.sess)),
             TyKind::Var(var) => write!(f, "{}", var.real_name()),
             // FIXME: Maybe not "?"
-            TyKind::Existential(ex) => write!(f, "?"),
+            TyKind::Existential(ex) => match ex.kind() {
+                ExKind::Common => write!(f, "(?)"),
+                ExKind::Int => write!(f, "int"),
+                ExKind::Float => write!(f, "float"),
+            },
             TyKind::Forall(alpha, body) => {
                 write!(f, "∀{}. {}", alpha.real_name(), body.with_sess(self.sess))
             },
