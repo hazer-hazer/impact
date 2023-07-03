@@ -1,7 +1,7 @@
 use super::{
     expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
     item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
-    pat::{Pat, PatKind},
+    pat::{Pat, PatKind, StructPatField},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
     ErrorNode, IdentNode, NodeId, Path, WithNodeId, AST, N, PR,
@@ -178,6 +178,7 @@ pub trait AstVisitor<'ast> {
         match pat.kind() {
             PatKind::Unit => self.visit_unit_pat(),
             PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
+            PatKind::Struct(path, fields, rest) => self.visit_struct_pat(path, fields, *rest),
         }
     }
 
@@ -185,6 +186,23 @@ pub trait AstVisitor<'ast> {
 
     fn visit_ident_pat(&mut self, ident: &'ast IdentNode) {
         self.visit_ident_node(ident);
+    }
+
+    fn visit_struct_pat(
+        &mut self,
+        path: &'ast TyPath,
+        fields: &'ast [PR<StructPatField>],
+        rest: bool,
+    ) {
+        self.visit_ty_path(path);
+        walk_each_pr!(self, fields, visit_struct_pat_field);
+    }
+
+    fn visit_struct_pat_field(&mut self, field: &'ast StructPatField) {
+        if let Some(name) = field.name.as_ref() {
+            walk_pr!(self, name, visit_ident);
+        }
+        walk_pr!(self, &field.pat, visit_pat);
     }
 
     // Expressions //

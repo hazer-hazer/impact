@@ -127,6 +127,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
         match pat.kind() {
             pat::PatKind::Unit => self.visit_unit_pat(),
             pat::PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
+            pat::PatKind::Struct(path, fields, rest) => self.visit_struct_pat(path, fields, *rest),
         }
     }
 

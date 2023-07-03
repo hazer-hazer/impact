@@ -207,8 +207,26 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
                     true
                 );
             },
+            PatKind::Struct(path, fields, rest) => self.visit_struct_pat(path, fields, *rest),
         }
         self.node_id(pat);
+    }
+
+    fn visit_struct_pat(
+        &mut self,
+        path: &'ast crate::ast::ty::TyPath,
+        fields: &'ast [PR<crate::ast::pat::StructPatField>],
+        rest: bool,
+    ) {
+        self.visit_ty_path(path);
+        self.sp();
+        walk_each_pr_delim!(self, fields, visit_struct_pat_field, ", ");
+        if rest {
+            if fields.len() > 0 {
+                self.str(", ");
+            }
+            self.str("...");
+        }
     }
 
     // Expressions //

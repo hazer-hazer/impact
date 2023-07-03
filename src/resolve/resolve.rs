@@ -771,6 +771,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 let ident = ident.as_ref().unwrap();
                 self.define_local(ident.id, &ident.ident);
             },
+            PatKind::Struct(..) => todo!(),
         }
     }
 

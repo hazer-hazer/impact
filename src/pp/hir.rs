@@ -12,7 +12,7 @@ use crate::{
     },
     parser::token::{Op, Punct},
     resolve::builtin::{TyBuiltin, ValueBuiltin},
-    session::{impl_session_holder, Session, SessionHolder},
+    session::{impl_session_holder, Session},
     span::sym::{Ident, Kw},
     typeck::ty,
 };
