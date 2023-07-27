@@ -192,8 +192,7 @@ impl<'hir> Typecker<'hir> {
     //     lhs: Expr,
     //     field_name: Ident,
     //     expr_id: Expr,
-    // ) -> TyResult<Ty> {
-    //     let lhs_ty = self.synth_expr(lhs)?;
+    // ) -> TyResult<Ty> { let lhs_ty = self.synth_expr(lhs)?;
 
     //     // FIXME: Really bug if not adt?
     //     let adt = lhs_ty.as_adt().unwrap();

@@ -302,6 +302,7 @@ macro_rules! hir_nodes {
                 match self.pat(pat).kind() {
                     pat::PatKind::Unit => None,
                     &pat::PatKind::Ident(name, _) => Some(vec![name]),
+                    &pat::PatKind::Struct(_, fields, _) => Some(fields.iter().map(|field| self.pat_names(field.pat)).collect::<Result<Vec<_>, _>>().ok()?)
                 }
             }
 
