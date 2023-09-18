@@ -3,7 +3,6 @@ use crate::{
     cli::color::Colorize,
     hir::{HirId, Map},
     message::message::MessageBuilder,
-    session::{MaybeWithSession, SessionHolder},
 };
 
 impl<'hir> Typecker<'hir> {

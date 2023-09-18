@@ -1,3 +1,5 @@
+use inkwell::values;
+
 use super::{
     Arm, Block, BlockId, Expr, ExprId, ExprKind, Lit, LocalVar, Param, ParamId, Pat, PatId,
     PatKind, Stmt, StmtId, THIR,
@@ -42,8 +44,8 @@ impl<'ctx> ThirBuilder<'ctx> {
         (self.thir, expr)
     }
 
-    fn param(&mut self, param: hir::Pat) -> ParamId {
-        let pat = self.pat(param);
+    fn param(&mut self, param: hir::Param) -> ParamId {
+        let pat = self.pat(self.hir.param(param).pat);
         self.thir.add_param(Param { pat })
     }
 
@@ -84,6 +86,13 @@ impl<'ctx> ThirBuilder<'ctx> {
                 def_id,
             },
             hir::expr::ExprKind::Call(call) => self.call(call),
+            hir::expr::ExprKind::Tuple(values) => ExprKind::Tuple(
+                values
+                    .iter()
+                    .copied()
+                    .map(|value| self.expr(value))
+                    .collect(),
+            ),
             &hir::expr::ExprKind::Let(block) => ExprKind::Block(self.block(block)),
             &hir::expr::ExprKind::Ty(hir::expr::TyExpr { expr, ty: _ }) => {
                 ExprKind::Ty(self.expr(expr), self.tyctx().tyof(expr_id))
@@ -188,6 +197,9 @@ impl<'ctx> ThirBuilder<'ctx> {
                 PatKind::Struct(struct_ty, fields)
             },
             &hir::pat::PatKind::Or(lpat, rpat) => PatKind::Or(self.pat(lpat), self.pat(rpat)),
+            hir::pat::PatKind::Tuple(pats) => {
+                PatKind::Tuple(pats.iter().copied().map(|pat| self.pat(pat)).collect())
+            },
         };
 
         self.thir.add_pat(Pat {

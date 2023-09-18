@@ -5,7 +5,7 @@ use crate::{
     ast::{
         expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
         is_block_ended,
-        item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
+        item::{ExternItem, Field, GenericParams, Item, ItemKind, Param, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
@@ -607,6 +607,17 @@ impl Parser {
         )))
     }
 
+    fn parse_param(&mut self) -> Param {
+        let lo = self.span();
+        let pat = self.parse_pat("parameter pattern");
+
+        Param {
+            id: self.next_node_id(),
+            pat,
+            span: self.close_span(lo),
+        }
+    }
+
     fn parse_decl_item(&mut self) -> PR<N<Item>> {
         let pe = self.enter_entity(ParseEntryKind::Expect, "declaration");
 
@@ -615,8 +626,8 @@ impl Parser {
         // `parse_ident_in_path` is used to allow `() = ()`
         let name = self.parse_ident_decl_name("function name");
 
-        let params = self.parse_many_until(TokenCmp::Op(Op::Assign), |this| {
-            this.parse_pat("function parameter (pattern)")
+        let params = self.parse_many_until(TokenCmp::Op(Op::Assign), |this: &mut Parser| {
+            this.parse_param()
         });
 
         self.expect(TokenCmp::Op(Op::Assign))?;
@@ -1152,9 +1163,29 @@ impl Parser {
         let (kind, advance) = if let Some(_) = self.skip(TokenCmp::Punct(Punct::LParen)) {
             let expr = self.parse_expr();
 
-            self.expect(TokenCmp::Punct(Punct::RParen)).ok()?;
+            if self.skip(TokenCmp::Punct(Punct::Comma)).is_some() {
+                self.skip_opt_nls();
 
-            (Some(Ok(ExprKind::Paren(expr))), false)
+                let mut values = vec![expr];
+                while !self.eof() && !self.is(TokenCmp::Punct(Punct::RParen)) {
+                    values.push(self.parse_expr());
+
+                    self.skip_opt_nls();
+
+                    if !self.skip(TokenCmp::Punct(Punct::Comma)).is_some() {
+                        break;
+                    }
+                    self.skip_opt_nls();
+                }
+
+                self.expect(TokenCmp::Punct(Punct::RParen)).ok()?;
+
+                (Some(Ok(ExprKind::Tuple(values))), false)
+            } else {
+                self.expect(TokenCmp::Punct(Punct::RParen)).ok()?;
+
+                (Some(Ok(ExprKind::Paren(expr))), false)
+            }
         } else {
             match kind {
                 TokenKind::Bool(val) => (Some(Ok(ExprKind::Lit(Lit::Bool(val.into())))), true),
@@ -1258,9 +1289,8 @@ impl Parser {
 
         self.just_skip(TokenCmp::Punct(Punct::Backslash));
 
-        let params = self.parse_many_until(TokenCmp::Punct(Punct::Arrow), |this| {
-            this.parse_pat("lambda parameter (pattern)")
-        });
+        let params =
+            self.parse_many_until(TokenCmp::Punct(Punct::Arrow), |this| this.parse_param());
 
         self.skip(TokenCmp::Punct(Punct::Arrow));
 

@@ -1,4 +1,9 @@
-use super::pp::{pp, PP};
+use inkwell::values;
+
+use super::{
+    pp::{pp, PP},
+    AstLikePP, AstPPMode,
+};
 use crate::{
     hir::BodyId,
     mir::thir::{Arm, BlockId, ExprId, ExprKind, Pat, PatId, PatKind, Stmt, StmtId, THIR},
@@ -66,6 +71,9 @@ impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
             } => {
                 pp!(self, {expr: *lhs}, {punct: Punct::LParen}, {delim {sp} / expr: args.iter().copied()}, {punct: Punct::RParen}, ...)
             },
+            ExprKind::Tuple(values) => {
+                pp!(self, {punct: Punct::LParen}, {delim {punct: Punct::Comma} / expr: values.iter().copied()}, {punct: Punct::RParen}, ...)
+            },
             &ExprKind::Lambda { def_id, body_id } => {
                 pp!(self, "lambda", {color: def_id}, "{", {string: body_id}, "}", ...)
             },
@@ -103,6 +111,9 @@ impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
             },
             &PatKind::Or(lpat, rpat) => pp!(self, {pat: lpat}, {op: Op::BitOr}, {pat: rpat}, ...),
             PatKind::Struct(..) => todo!(),
+            PatKind::Tuple(pats) => {
+                pp!(self, {punct: Punct::LParen}, {delim {punct: Punct::Comma} / pat: pats.iter().copied()}, {punct: Punct::RParen}, ...)
+            },
         }
     }
 

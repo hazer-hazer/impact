@@ -1,4 +1,4 @@
-use super::{HirId, Ty, TyPath, WithHirId, impl_with_hir_id};
+use super::{impl_with_hir_id, HirId, Ty, TyPath, WithHirId};
 use crate::{
     resolve::builtin::TyBuiltin,
     span::{impl_with_span, Span, WithSpan},
@@ -24,11 +24,11 @@ impl TyNode {
     }
 }
 
-
 #[derive(Debug)]
 pub enum TyKind {
     Path(TyPath),
     Func(Vec<Ty>, Ty),
     App(Ty, Vec<Ty>),
     Builtin(TyBuiltin),
+    Tuple(Vec<Ty>),
 }

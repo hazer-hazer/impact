@@ -202,7 +202,6 @@ macro_rules! hir_nodes {
             fn string_lit_value(self, expr: Expr) -> Option<Symbol>;
             fn owner_body(self, owner_id: OwnerId) -> Option<BodyId>;
             fn body_owner_kind(self, owner_id: OwnerId) -> BodyOwnerKind;
-            // fn pat_names(self, pat: Pat) -> Option<Vec<Ident>>;
             fn expr_result_span(self, expr_id: Expr) -> Span;
             fn block_result_span(self, block: Block) -> Span;
             fn return_ty_span(self, def_id: DefId) -> Span;
@@ -313,6 +312,7 @@ macro_rules! hir_nodes {
                     | ExprKind::Path(_)
                     | ExprKind::Lambda(_)
                     | ExprKind::Call(_)
+                    | ExprKind::Tuple(_)
                     | ExprKind::Builtin(_)
                     | ExprKind::Ty(_) => expr.span(),
                     &ExprKind::Block(block) | &ExprKind::Let(block) => self.block_result_span(block),
@@ -336,11 +336,12 @@ macro_rules! hir_nodes {
             /// Assumes def_id points to Func or Lambda
             fn return_ty_span(self, def_id: DefId) -> Span {
                 self.pat(
+                    self.param(
                     self.body(self.owner_body(def_id.into()).unwrap())
                         .params
                         .last()
                         .copied()
-                        .unwrap(),
+                        .unwrap()).pat,
                 )
                 .span()
                 .point_after_hi()
@@ -360,7 +361,7 @@ macro_rules! hir_nodes {
             fn body_return_ty_span(self, def_id: DefId) -> Span {
                 let body = self.body(self.owner_body(def_id.into()).unwrap());
                 if let Some(param) = body.params.last().copied() {
-                    self.pat(param).span().point_after_hi()
+                    self.pat(self.param(param).pat).span().point_after_hi()
                 } else {
                     self.item(ItemId::new(def_id.into()))
                         .name()
@@ -381,6 +382,7 @@ hir_nodes!(
     expr_path ExprPath PathNode<ExprRes>,
     ty_path TyPath PathNode<TyRes>,
     variant Variant VariantNode,
+    param Param ParamNode,
     /
     item Item ItemNode,
     root Root Mod,
@@ -398,6 +400,7 @@ pub enum NodeKind {
     ExprPath,
     TyPath,
     Variant,
+    Param,
     Item,
     Root,
     Error,
@@ -417,6 +420,7 @@ impl Display for NodeKind {
                 NodeKind::ExprPath => "expression path",
                 NodeKind::TyPath => "type path",
                 NodeKind::Variant => "variant",
+                NodeKind::Param => "parameter",
                 NodeKind::Item => "item",
                 NodeKind::Root => "root",
                 NodeKind::Error => "[ERROR]",
@@ -452,6 +456,7 @@ impl_with_node_kind!(
     PathNode<ExprRes>: NodeKind::ExprPath,
     PathNode<TyRes>: NodeKind::TyPath,
     VariantNode: NodeKind::Variant,
+    Param: NodeKind::Param,
     ItemNode: NodeKind::Item,
     Mod: NodeKind::Root,
     ErrorNode: NodeKind::Error
@@ -476,6 +481,7 @@ impl Node {
             Node::ExprPath(path) => path.id(),
             Node::TyPath(path) => path.id(),
             Node::Variant(variant) => variant.id(),
+            Node::Param(param) => param.id(),
             Node::Item(item) => HirId::new_owner(item.def_id()),
             Node::Root(_root) => HirId::new_owner(ROOT_DEF_ID),
             Node::Error(error) => error.id,
@@ -492,6 +498,7 @@ impl Node {
             Node::ExprPath(_) => NodeKind::ExprPath,
             Node::TyPath(_) => NodeKind::TyPath,
             Node::Variant(_) => NodeKind::Variant,
+            Node::Param(_) => NodeKind::Param,
             Node::Item(_) => NodeKind::Item,
             Node::Root(_) => NodeKind::Root,
             Node::Error(_) => NodeKind::Error,
@@ -589,17 +596,24 @@ impl BodyOwner {
 }
 
 #[derive(Debug)]
+pub struct ParamNode {
+    pub id: HirId,
+    pub pat: Pat,
+    pub span: Span,
+}
+
+impl_with_span!(ParamNode);
+impl_with_hir_id!(ParamNode);
+
+#[derive(Debug)]
 pub struct Body {
-    pub params: Vec<Pat>,
+    pub params: Vec<Param>,
     pub value: Expr,
 }
 
 impl Body {
-    pub fn new(param: Vec<Pat>, value: Expr) -> Self {
-        Self {
-            params: param,
-            value,
-        }
+    pub fn new(params: Vec<Param>, value: Expr) -> Self {
+        Self { params, value }
     }
 
     pub fn id(&self) -> BodyId {

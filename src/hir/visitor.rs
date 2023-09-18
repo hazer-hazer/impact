@@ -6,7 +6,8 @@ use super::{
     pat::{PatKind, StructPatField},
     stmt::{Local, StmtKind},
     ty::TyKind,
-    Block, BodyId, BodyOwner, Expr, ExprPath, HirId, Map, Pat, Stmt, Ty, TyPath, Variant, HIR,
+    Block, BodyId, BodyOwner, Expr, ExprPath, HirId, Map, Param, Pat, Stmt, Ty, TyPath, Variant,
+    HIR,
 };
 use crate::{
     resolve::builtin::{TyBuiltin, ValueBuiltin},
@@ -21,6 +22,7 @@ macro_rules! walk_each {
     };
 }
 
+use inkwell::values;
 pub(crate) use walk_each;
 
 pub trait HirVisitor {
@@ -126,8 +128,12 @@ pub trait HirVisitor {
 
     fn visit_body(&mut self, body: BodyId, _owner: BodyOwner, hir: &HIR) {
         let body = hir.body(body);
-        walk_each!(self, body.params.iter().copied(), visit_pat, hir);
+        walk_each!(self, body.params.iter().copied(), visit_param, hir);
         self.visit_expr(body.value, hir);
+    }
+
+    fn visit_param(&mut self, param: Param, hir: &HIR) {
+        self.visit_pat(hir.param(param).pat, hir);
     }
 
     // Patterns //
@@ -140,6 +146,7 @@ pub trait HirVisitor {
                 self.visit_struct_pat(ty_path, fields, rest, hir)
             },
             PatKind::Or(lpat, rpat) => self.visit_or_pat(lpat, rpat, hir),
+            PatKind::Tuple(pats) => self.visit_tuple_pat(pats, hir),
         }
     }
 
@@ -172,6 +179,9 @@ pub trait HirVisitor {
         self.visit_pat(lpat, hir);
         self.visit_pat(rpat, hir);
     }
+    fn visit_tuple_pat(&mut self, pats: &[Pat], hir: &HIR) {
+        walk_each!(self, pats.iter().copied(), visit_pat, hir);
+    }
 
     // Expressions //
     fn visit_expr(&mut self, expr: Expr, hir: &HIR) {
@@ -181,6 +191,7 @@ pub trait HirVisitor {
             &ExprKind::Path(path) => self.visit_path_expr(path, hir),
             &ExprKind::Block(block) => self.visit_block_expr(block, hir),
             ExprKind::Call(call) => self.visit_call_expr(call, hir),
+            ExprKind::Tuple(values) => self.visit_tuple_expr(values, hir),
             &ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
@@ -201,6 +212,10 @@ pub trait HirVisitor {
     fn visit_call_expr(&mut self, call: &Call, hir: &HIR) {
         self.visit_expr(call.lhs, hir);
         walk_each!(self, call.args.iter().copied(), visit_expr, hir);
+    }
+
+    fn visit_tuple_expr(&mut self, values: &[Expr], hir: &HIR) {
+        walk_each!(self, values.iter().copied(), visit_expr, hir);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
@@ -241,6 +256,7 @@ pub trait HirVisitor {
             TyKind::Func(params, body) => self.visit_func_ty(params, *body, hir),
             TyKind::App(cons, args) => self.visit_ty_app(*cons, args, hir),
             TyKind::Builtin(bt) => self.visit_builtin_ty(bt, hir),
+            TyKind::Tuple(tys) => self.visit_tuple_ty(tys, hir),
         }
     }
 
@@ -257,6 +273,10 @@ pub trait HirVisitor {
     }
 
     fn visit_builtin_ty(&mut self, _bt: &TyBuiltin, _hir: &HIR) {}
+
+    fn visit_tuple_ty(&mut self, tys: &[Ty], hir: &HIR) {
+        walk_each!(self, tys.iter().copied(), visit_ty, hir);
+    }
 
     // Fragments //
     fn visit_ident(&mut self, _: Ident, _hir: &HIR) {}

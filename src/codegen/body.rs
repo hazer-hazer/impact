@@ -1,7 +1,7 @@
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
-    values::{BasicValue, BasicValueEnum, CallableValue, FunctionValue, PointerValue},
+    values::{self, BasicValue, BasicValueEnum, CallableValue, FunctionValue, PointerValue},
 };
 
 use super::{ctx::CodeGenCtx, func::FunctionMap, value::ValueMap};
@@ -248,6 +248,22 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     .try_as_basic_value()
                     .unwrap_left()
             },
+            RValue::Tuple(values) => {
+                let values = values
+                    .iter()
+                    .map(|value| self.operand_to_value(value).into())
+                    .collect::<Vec<BasicValueEnum>>();
+
+                let tuple_ty = self.ctx.llvm_ctx.struct_type(
+                    &values
+                        .iter()
+                        .map(|value| value.get_type())
+                        .collect::<Vec<_>>(),
+                    false,
+                );
+
+                tuple_ty.const_named_struct(&values).into()
+            },
             RValue::Ref(lv) => self.local_value(lv.local).into(),
             &RValue::Ctor(def_id, ty) => self.function_map.instance_basic_value(def_id, ty),
             &RValue::FieldAccessor(def_id, ty) => {
@@ -312,6 +328,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 TyKind::Str => todo!(),
                 TyKind::Func(..) | TyKind::FuncDef(..) | TyKind::Unit => todo!(),
                 TyKind::Ref(_)
+                | TyKind::Tuple(_)
                 | TyKind::Existential(_)
                 | TyKind::Forall(..)
                 | TyKind::Error
@@ -337,6 +354,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 TyKind::Kind(_) => todo!(),
                 TyKind::Adt(_adt) => todo!(),
                 TyKind::Struct(_) => todo!(),
+                TyKind::Tuple(_) => todo!(),
             },
             ConstKind::Slice { data } => self.build_cstring_value(data),
         }

@@ -18,6 +18,7 @@ pub enum PatKind {
         bool,
     ),
     Or(Pat, Pat),
+    Tuple(Vec<Pat>),
 }
 
 #[derive(Debug)]

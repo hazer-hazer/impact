@@ -132,6 +132,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
                 walk_pr!(self, lpat, visit_pat);
                 walk_pr!(self, rpat, visit_pat);
             },
+            pat::PatKind::Tuple(pats) => self.visit_tuple_pat(pats),
         }
     }
 
@@ -143,7 +144,9 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(infix) => self.visit_infix_expr(infix),
-            ExprKind::Call(call) => self.visit_app_expr(call),
+            ExprKind::Call(call) => self.visit_call_expr(call),
+            ExprKind::Tuple(values) => self.visit_tuple_expr(values),
+
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
@@ -160,6 +163,7 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             ty::TyKind::Paren(inner) => self.visit_paren_ty(inner),
             ty::TyKind::App(cons, args) => self.visit_ty_app(cons, args),
             ty::TyKind::AppExpr(cons, args) => self.visit_ty_app_expr(cons, args),
+            ty::TyKind::Tuple(tys) => self.visit_tuple_ty(tys),
         }
     }
 

@@ -21,7 +21,6 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefMap},
     },
-    session::MaybeWithSession,
     span::sym::Ident,
 };
 
@@ -255,6 +254,12 @@ impl TyCtx {
             )),
             TyKind::Struct(data) => Ok(Ty::struct_(
                 data.map_ty(&mut |ty| self._instantiated_ty(expr, ty))?,
+            )),
+            TyKind::Tuple(tys) => Ok(Ty::tuple(
+                tys.iter()
+                    .copied()
+                    .map(|ty| self._instantiated_ty(expr, ty))
+                    .collect::<Result<Vec<_>, _>>()?,
             )),
         }
     }

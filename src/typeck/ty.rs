@@ -10,7 +10,7 @@ use crate::{
     dt::idx::{declare_idx, Idx, IndexVec},
     hir::{self},
     resolve::def::DefId,
-    session::{MaybeWithSession, WithSess, WithoutSess},
+    session::{MaybeWithSession, WithSess},
     span::sym::Ident,
     utils::macros::{match_opt, match_result},
 };
@@ -407,13 +407,7 @@ impl Adt {
     }
 
     pub fn max_variant_size(&self) -> Option<u32> {
-        self.variants
-            .iter()
-            .map(|v| v.size())
-            .collect::<Option<Vec<_>>>()?
-            .iter()
-            .copied()
-            .max()
+        self.variants.iter().map(|v| v.size()).max().flatten()
     }
 }
 
@@ -506,6 +500,8 @@ pub enum TyKind {
     Struct(Struct),
     Ref(Ty),
 
+    Tuple(Vec<Ty>),
+
     Var(TyVarId),
     Existential(Ex),
     Forall(TyVarId, Ty),
@@ -551,6 +547,14 @@ impl Display for TyKind {
             TyKind::Adt(adt) => adt.fmt(f),
             TyKind::Struct(data) => data.fmt(f),
             TyKind::Ref(ty) => write!(f, "ref {}", ty),
+            TyKind::Tuple(tys) => write!(
+                f,
+                "({})",
+                tys.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             &TyKind::Var(id) => write!(f, "{}", id.real_name()),
             TyKind::Existential(ex) => write!(f, "{ex}"),
             TyKind::Forall(alpha, ty) => {
@@ -610,6 +614,10 @@ impl Ty {
         } else {
             TyKind::Func(params, body)
         })
+    }
+
+    pub fn tuple(tys: Vec<Ty>) -> Ty {
+        Self::new(TyKind::Tuple(tys))
     }
 
     /// Generate function if there're more than one parameter, otherwise type is
@@ -673,6 +681,7 @@ impl Ty {
             TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_mono()),
             TyKind::Forall(..) => false,
             TyKind::Ref(ty) => ty.is_mono(),
+            TyKind::Tuple(tys) => tys.iter().all(Ty::is_mono),
             TyKind::Kind(_) => false,
         }
     }
@@ -700,6 +709,7 @@ impl Ty {
             TyKind::Struct(s) => s.walk_tys().all(|ty| ty.is_instantiated()),
             TyKind::Adt(adt) => adt.walk_tys().all(|ty| ty.is_instantiated()),
             TyKind::Ref(ty) => ty.is_instantiated(),
+            TyKind::Tuple(tys) => tys.iter().all(Ty::is_mono),
             TyKind::Kind(_) => false,
         }
     }
@@ -715,6 +725,10 @@ impl Ty {
 
     pub fn as_int(&self) -> TypeAsResult<IntKind> {
         match_result!(self.kind(), &TyKind::Int(kind) => kind)
+    }
+
+    pub fn as_tuple(&self) -> TypeAsResult<&[Ty]> {
+        match_result!(self.kind(), TyKind::Tuple(tys) => tys)
     }
 
     pub fn as_float_kind(&self) -> TypeAsResult<FloatKind> {
@@ -768,13 +782,16 @@ impl Ty {
             TyKind::Bool => Some(1),
             TyKind::Int(kind) => Some(kind.bytes().into()),
             TyKind::Float(kind) => Some(kind.bytes().into()),
-            TyKind::Str => None,
+            TyKind::Str => todo!(),
             // TODO: Functions might be just usize
             TyKind::FuncDef(..) => todo!(),
             TyKind::Func(..) => todo!(),
             TyKind::Adt(adt) => adt.max_variant_size(),
             TyKind::Struct(s) => s.size(),
             TyKind::Ref(_) => Some(IntKind::Uint.bytes().into()),
+            TyKind::Struct(data) => data.size(),
+            TyKind::Ref(_) => Some(IntKind::Uint.bytes().into()),
+            TyKind::Tuple(tys) => tys.iter().map(|ty| ty.size()).sum(),
             TyKind::Var(_) => panic!(),
             TyKind::Existential(_) => panic!(),
             TyKind::Forall(..) => panic!(),
@@ -824,6 +841,14 @@ impl<'sess, 'a> Display for WithSess<'sess, 'a, Ty> {
                 write!(f, "{}", self.sess.def_table.def(struct_.data.def_id).name())
             },
             TyKind::Ref(inner) => write!(f, "ref {}", inner.with_sess(self.sess)),
+            TyKind::Tuple(tys) => write!(
+                f,
+                "({})",
+                tys.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             TyKind::Var(var) => write!(f, "{}", var.real_name()),
             // FIXME: Maybe not "?"
             TyKind::Existential(ex) => match ex.kind() {

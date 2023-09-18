@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use inkwell::values;
+
 use super::{
     builtin::Builtin,
     def::{DefId, ModuleId, Namespace, ROOT_DEF_ID, ROOT_MODULE_ID},
@@ -8,7 +10,7 @@ use super::{
 use crate::{
     ast::{
         expr::{Arm, Block, Call, Expr, ExprKind, Lit, PathExpr},
-        item::{GenericParams, Item, ItemKind, Variant},
+        item::{GenericParams, Item, ItemKind, Param, Variant},
         pat::{Pat, PatKind},
         ty::{Ty, TyKind, TyPath},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
@@ -668,7 +670,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
     fn visit_decl_item(
         &mut self,
         name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<N<Pat>>>,
+        params: &'ast [Param],
         body: &'ast PR<N<Expr>>,
         id: NodeId,
     ) {
@@ -676,7 +678,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
 
         self.enter_local_scope();
 
-        walk_each_pr!(self, params, visit_pat);
+        params.iter().for_each(|param| self.visit_param(param));
         walk_pr!(self, body, visit_expr);
 
         self.exit_scope();
@@ -783,6 +785,10 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 walk_pr!(self, lpat, visit_pat);
                 walk_pr!(self, rpat, visit_pat);
             },
+            PatKind::Struct(..) => todo!(),
+            PatKind::Tuple(pats) => {
+                walk_each_pr!(self, pats, visit_pat);
+            },
         }
     }
 
@@ -870,9 +876,10 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                     };
                     self.resolve_path(path, search_for_kind);
                 } else {
-                    self.visit_app_expr(call);
+                    self.visit_call_expr(call);
                 }
             },
+            ExprKind::Tuple(values) => self.visit_tuple_expr(values),
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => {
@@ -908,6 +915,7 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
             TyKind::App(cons, args) => self.visit_ty_app(cons, args),
             TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
+            TyKind::Tuple(tys) => self.visit_tuple_ty(tys),
         }
     }
 }

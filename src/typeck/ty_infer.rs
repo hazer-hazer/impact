@@ -21,7 +21,7 @@ use crate::{
     typeck::{
         kind::{Kind, KindEx, KindSort},
         ty::{Ex, TyKind, TyVarId},
-    }, session::MaybeWithSession,
+    },
 };
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -130,8 +130,16 @@ impl Ty {
                 .map(|ty| ty.inner_ty_vars())
                 .flatten()
                 .collect(),
-            TyKind::Struct(data) => data.walk_tys().map(|ty| ty.inner_ty_vars()).flatten().collect(),
+            TyKind::Struct(data) => data
+                .walk_tys()
+                .map(|ty| ty.inner_ty_vars())
+                .flatten()
+                .collect(),
             TyKind::Ref(ty) => ty.inner_ty_vars(),
+            TyKind::Tuple(tys) => tys.iter()
+            .map(|ty| ty.inner_ty_vars())
+            .flatten()
+            .collect(),
             &TyKind::Var(var) => HashSet::from([var]),
             // Forall type variable is ignored, as might be unused in body
             TyKind::Forall(_, ty) => ty.inner_ty_vars(),
@@ -167,6 +175,7 @@ impl Ty {
             TyKind::Adt(adt) => Box::new(adt.walk_tys()),
             TyKind::Struct(data) => Box::new(data.walk_tys()),
             TyKind::Ref(ty) => ty.walk_inner_tys(),
+            TyKind::Tuple(tys) => Box::new(tys.iter().copied()),
             TyKind::Forall(_, body) => body.walk_inner_tys(),
             TyKind::Kind(kind) => kind.walk_inner_tys(),
         }
@@ -185,6 +194,7 @@ impl Ty {
             | TyKind::Func(_, _)
             | TyKind::Adt(..)
             | TyKind::Ref(_)
+            | TyKind::Tuple(_)
             // TODO: Can existentials and vars be higher-kinded?
             | TyKind::Var(_)
             | TyKind::Existential(_)|
@@ -216,6 +226,7 @@ impl Ty {
             TyKind::Existential(_) => false,
             TyKind::Forall(_, ty) => ty.is_solved(),
             TyKind::Ref(ty) => ty.is_solved(),
+            TyKind::Tuple(tys) => tys.iter().all(Ty::is_solved),
             TyKind::Kind(kind) => kind.is_solved(),
         }
     }
@@ -238,6 +249,7 @@ impl Ty {
             TyKind::Kind(kind) => kind.contains_ty_ex(ex),
             TyKind::Adt(adt) => adt.walk_tys().any(|ty| ty.contains_ex(ex)),
             TyKind::Struct(data) => data.walk_tys().any(|ty| ty.contains_ex(ex)),
+            TyKind::Tuple(tys) => tys.iter().any(|ty| ty.contains_ex(ex)),
         }
     }
 
@@ -291,7 +303,10 @@ impl Ty {
             },
             TyKind::Kind(kind) => Ty::ty_kind(kind.substitute_ty(subst, Kind::new_ty(with))),
             TyKind::Adt(adt) => Ty::adt(adt.map_ty_pure(&mut |ty| Ok(ty.substitute(subst, with)))),
-            TyKind::Struct(data) => Ty::struct_(data.map_ty_pure(&mut |ty| Ok(ty.substitute(subst, with)))),
+            TyKind::Struct(data) => {
+                Ty::struct_(data.map_ty_pure(&mut |ty| Ok(ty.substitute(subst, with))))
+            },
+            TyKind::Tuple(tys) => Ty::tuple(tys.iter().map(|ty| ty.substitute(subst, with)).collect()),
         }
     }
 
@@ -361,6 +376,7 @@ impl Ty {
             },
             TyKind::Adt(adt) => Ty::adt(adt.map_ty_pure(&mut |ty| Ok(ty._apply_ctx(ctx)))),
             TyKind::Struct(data) => Ty::struct_(data.map_ty_pure(&mut |ty| Ok(ty._apply_ctx(ctx)))),
+            TyKind::Tuple(tys) => Ty::tuple(tys.iter().copied().map(|ty|ty.apply_ctx(ctx)).collect()),
         }
     }
 }
@@ -378,6 +394,7 @@ pub enum MonoTyKind {
     Func(Vec<Box<MonoTy>>, Box<MonoTy>),
     Ref(Box<MonoTy>),
     Adt(Adt<MonoTy>),
+    Tuple(Vec<Box<MonoTy>>),
     Struct(Struct<MonoTy>),
     Kind(Box<MonoKind>),
 }
@@ -414,6 +431,7 @@ impl TryFrom<Ty> for MonoTy {
             TyKind::Adt(adt) => Some(MonoTyKind::Adt(adt.map_ty(&mut |ty| ty.try_into())?)),
             TyKind::Struct(data) => Some(MonoTyKind::Struct(data.map_ty(&mut |ty| ty.try_into())?)),
             &TyKind::Existential(ex) => Some(MonoTyKind::Ex(ex)),
+            TyKind::Tuple(tys) => Some(MonoTyKind::Tuple(tys.iter().copied().map(TryInto::try_into).collect::<Result<Vec<_>, _>>()?.into_iter().map(Box::new).collect())),
             &TyKind::Var(var) => Some(MonoTyKind::Var(var)),
             &TyKind::Kind(kind) => Some(MonoTyKind::Kind(Box::new(kind.try_into()?))),
             TyKind::Forall(..) => None,

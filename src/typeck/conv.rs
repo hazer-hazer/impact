@@ -16,7 +16,7 @@ use crate::{
         builtin::TyBuiltin,
         def::{DefId, DefMap},
     },
-    session::{impl_session_holder, stage_result, Session, SessionHolder, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
     span::{
         sym::{Ident, Internable},
         WithSpan,
@@ -96,6 +96,9 @@ impl<'hir> TyConv<'hir> {
                         ),
                     ))
                 },
+            },
+            hir::ty::TyKind::Tuple(tys) => {
+                Ty::tuple(tys.iter().copied().map(|ty| self.conv(ty, None)).collect())
             },
         }
     }

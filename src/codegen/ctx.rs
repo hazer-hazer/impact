@@ -119,6 +119,16 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
             TyKind::Kind(_) => todo!(),
             TyKind::Adt(_) => self.conv_adt_ty(ty),
             TyKind::Struct(data) => self.conv_struct_ty(data),
+            TyKind::Tuple(tys) => self
+                .llvm_ctx
+                .struct_type(
+                    &tys.iter()
+                        .copied()
+                        .map(|ty| self.conv_basic_ty(ty).into())
+                        .collect::<Vec<_>>(),
+                    false,
+                )
+                .into(),
             // TyKind::Struct(data) => conv,
         }
     }
@@ -132,10 +142,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
 
         assert!(!adt_ty.variants.is_empty());
 
-        let max_variant_size = adt_ty
-            .max_variant_size()
-            .expect("[BUG] Unknown size of ADT type must be checked before codegen");
-
+        let max_variant_size = adt_ty.max_variant_size().unwrap();
         let fitted_tag_ty = self.fitted_uint(adt_ty.variants.len());
 
         self.llvm_ctx

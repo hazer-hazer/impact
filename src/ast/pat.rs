@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use super::{impl_with_node_id, pr_display, ty::TyPath, IdentNode, NodeId, WithNodeId, N, PR};
+use super::{
+    impl_with_node_id, pr_display, prs_display_join, ty::TyPath, IdentNode, NodeId, WithNodeId, N,
+    PR,
+};
 use crate::span::{impl_with_span, sym::Ident, Span, WithSpan};
 
 #[derive(Debug)]
@@ -35,6 +38,7 @@ pub enum PatKind {
     ),
 
     Or(PR<N<Pat>>, PR<N<Pat>>),
+    Tuple(Vec<PR<N<Pat>>>),
 }
 
 impl Display for PatKind {
@@ -50,6 +54,7 @@ impl Display for PatKind {
                 if *rest { ", ..." } else { "" }
             ),
             PatKind::Or(lpat, rpat) => write!(f, "{} | {}", pr_display(lpat), pr_display(rpat)),
+            PatKind::Tuple(pats) => write!(f, "({})", prs_display_join(pats, ", ")),
         }
     }
 }

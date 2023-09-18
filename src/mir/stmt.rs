@@ -24,6 +24,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Def(..)
             | ExprKind::Block(_)
             | ExprKind::Call { .. }
+            | ExprKind::Tuple(_)
             | ExprKind::Lambda { .. }
             | ExprKind::Ty(..)
             | ExprKind::Ref(_)

@@ -1,3 +1,5 @@
+use inkwell::values;
+
 use super::{
     build::{unpack, MirBuilder},
     scalar::Scalar,
@@ -71,6 +73,7 @@ impl<'ctx> MirBuilder<'ctx> {
             ExprKind::Lit(_)
             | ExprKind::Block(_)
             | ExprKind::Call { .. }
+            | ExprKind::Tuple(_)
             | ExprKind::Lambda { .. }
             | ExprKind::Ty(..)
             | ExprKind::Def(..)
@@ -92,6 +95,27 @@ impl<'ctx> MirBuilder<'ctx> {
             &ExprKind::Ty(expr_id, _) => self.as_rvalue(bb, expr_id),
 
             // ExprKind::FieldAccess(..)  => {},
+            ExprKind::Block(_) | ExprKind::LocalRef(_) => {
+                assert!(!matches!(
+                    expr.categorize(),
+                    ExprCategory::AsRValue | ExprCategory::Const
+                ));
+
+                let operand = unpack!(bb = self.as_operand(bb, expr_id));
+
+                bb.with(operand.rvalue())
+            },
+
+            ExprKind::Tuple(values) => {
+                let values_operands = values
+                    .clone()
+                    .iter()
+                    .copied()
+                    .map(|value| unpack!(bb = self.as_operand(bb, value)))
+                    .collect();
+
+                bb.with(RValue::Tuple(values_operands))
+            },
             // ExprKind::Call { func_ty, lhs, args } => {
             //     // FIXME: Clone
             //     let func_ty = *func_ty;
@@ -267,6 +291,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Def(..)
             | ExprKind::Lambda { .. }
             // | ExprKind::FieldAccess(..)
+            | ExprKind::Tuple(_)
             | ExprKind::Builtin(_) => {
                 assert!(!matches!(
                     expr.categorize(),
@@ -299,6 +324,7 @@ impl<'ctx> MirBuilder<'ctx> {
             PatKind::Struct(ty, fields) => {
                 todo!()
             },
+            PatKind::Tuple(_) => todo!(),
         }
         bb.unit()
     }

@@ -1,8 +1,10 @@
+use inkwell::values;
+
 use super::AstLikePP;
 use crate::{
     ast::{
         expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, TyExpr},
-        item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
+        item::{ExternItem, Field, GenericParams, Item, ItemKind, Param, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind},
@@ -122,7 +124,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
     fn visit_decl_item(
         &mut self,
         name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<N<Pat>>>,
+        params: &'ast [Param],
         body: &'ast PR<N<Expr>>,
         id: NodeId,
     ) {
@@ -130,7 +132,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         if !params.is_empty() {
             self.sp();
         }
-        walk_each_pr_delim!(self, params, visit_pat, " ");
+        params.iter().for_each(|param| self.visit_param(param));
         self.op(Op::Assign);
         walk_pr!(self, body, visit_expr);
     }
@@ -209,6 +211,11 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             },
             PatKind::Struct(path, fields, rest) => self.visit_struct_pat(path, fields, *rest),
             PatKind::Or(lpat, rpat) => self.visit_or_pat(lpat, rpat),
+            PatKind::Tuple(pats) => {
+                self.punct(Punct::LParen);
+                walk_each_pr_delim!(self, pats, visit_pat, ", ");
+                self.punct(Punct::RParen);
+            },
         }
         self.node_id(pat);
     }
@@ -248,7 +255,8 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(infix) => self.visit_infix_expr(infix),
-            ExprKind::Call(call) => self.visit_app_expr(call),
+            ExprKind::Call(call) => self.visit_call_expr(call),
+            ExprKind::Tuple(values) => self.visit_tuple_expr(values),
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
@@ -272,15 +280,24 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
 
     fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
         self.punct(Punct::Backslash);
-        walk_each_pr_delim!(self, &lambda.params, visit_pat, " ");
+        lambda.params.iter().for_each(|param| {
+            self.visit_param(param);
+            self.sp();
+        });
         self.punct(Punct::Arrow);
         walk_pr!(self, &lambda.body, visit_expr);
     }
 
-    fn visit_app_expr(&mut self, call: &'ast Call) {
+    fn visit_call_expr(&mut self, call: &'ast Call) {
         walk_pr!(self, &call.lhs, visit_expr);
         self.sp();
         walk_each_pr_delim!(self, &call.args, visit_expr, " ");
+    }
+
+    fn visit_tuple_expr(&mut self, values: &'ast [PR<N<Expr>>]) {
+        self.punct(Punct::LParen);
+        walk_each_pr_delim!(self, values, visit_expr, ", ");
+        self.punct(Punct::RParen);
     }
 
     fn visit_let_expr(&mut self, block: &'ast PR<Block>) {
@@ -321,6 +338,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
             TyKind::App(cons, arg) => self.visit_ty_app(cons, arg),
             TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
+            TyKind::Tuple(tys) => self.visit_tuple_ty(tys),
         }
         self.node_id(ty);
     }
@@ -347,6 +365,12 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
         walk_pr!(self, cons, visit_ty);
         self.sp();
         walk_each_pr_delim!(self, args, visit_expr, " ");
+    }
+
+    fn visit_tuple_ty(&mut self, tys: &'ast [PR<N<Ty>>]) {
+        self.punct(Punct::LParen);
+        walk_each_pr_delim!(self, tys, visit_ty, ", ");
+        self.punct(Punct::RParen);
     }
 
     // Fragments //

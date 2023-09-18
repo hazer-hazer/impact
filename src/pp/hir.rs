@@ -1,4 +1,4 @@
-use super::{AstLikePP, AstPPMode};
+use super::{pp::pp, AstLikePP, AstPPMode};
 use crate::{
     cli::color::Colorize,
     hir::{
@@ -49,6 +49,7 @@ macro_rules! walk_each_delim {
     };
 }
 
+use inkwell::values;
 pub(crate) use walk_each_delim;
 
 pub struct HirPP<'a> {
@@ -150,7 +151,7 @@ impl<'a> HirVisitor for HirPP<'a> {
         walk_each_delim!(
             self,
             hir.body(body).params.iter().copied(),
-            visit_pat,
+            visit_param,
             " ",
             hir
         );
@@ -225,6 +226,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             &ExprKind::Path(path) => self.visit_path_expr(path, hir),
             &ExprKind::Block(block) => self.visit_block_expr(block, hir),
             ExprKind::Call(call) => self.visit_call_expr(call, hir),
+            ExprKind::Tuple(values) => self.visit_tuple_expr(values, hir),
             &ExprKind::Let(block) => self.visit_let_expr(block, hir),
             ExprKind::Lambda(lambda) => self.visit_lambda(lambda, hir),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr, hir),
@@ -249,7 +251,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
         let body = hir.body(lambda.body_id);
         self.pp.punct(Punct::Backslash);
-        walk_each_delim!(self, body.params.iter().copied(), visit_pat, " ", hir);
+        walk_each_delim!(self, body.params.iter().copied(), visit_param, " ", hir);
         self.pp.punct(Punct::Arrow);
         self.visit_expr(body.value, hir);
     }
@@ -258,6 +260,12 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.visit_expr(call.lhs, hir);
         self.pp.sp();
         walk_each_delim!(self, call.args.iter().copied(), visit_expr, " ", hir);
+    }
+
+    fn visit_tuple_expr(&mut self, values: &[Expr], hir: &HIR) {
+        self.pp.punct(Punct::LParen);
+        walk_each_delim!(self, values.iter().copied(), visit_expr, ", ", hir);
+        self.pp.punct(Punct::RParen);
     }
 
     fn visit_let_expr(&mut self, block: Block, hir: &HIR) {
@@ -303,6 +311,7 @@ impl<'a> HirVisitor for HirPP<'a> {
             TyKind::Func(params, body) => self.visit_func_ty(params, *body, hir),
             TyKind::App(cons, arg) => self.visit_ty_app(*cons, arg, hir),
             TyKind::Builtin(bt) => self.visit_builtin_ty(bt, hir),
+            TyKind::Tuple(tys) => self.visit_tuple_ty(tys, hir),
         }
         self.pp.hir_id(ty);
     }
@@ -328,6 +337,12 @@ impl<'a> HirVisitor for HirPP<'a> {
         self.pp.string(bt);
     }
 
+    fn visit_tuple_ty(&mut self, tys: &[Ty], hir: &HIR) {
+        self.pp.punct(Punct::LParen);
+        walk_each_delim!(self, tys.iter().copied(), visit_ty, ", ", hir);
+        self.pp.punct(Punct::RParen);
+    }
+
     // Patterns //
     fn visit_pat(&mut self, pat_id: Pat, hir: &HIR) {
         let pat = hir.pat(pat_id);
@@ -346,9 +361,16 @@ impl<'a> HirVisitor for HirPP<'a> {
                 self.pp.op(Op::BitOr);
                 self.visit_pat(rpat, hir);
             },
+            PatKind::Tuple(pats) => self.visit_tuple_pat(pats, hir),
         }
 
         self.pp.ty_anno(pat_id);
+    }
+
+    fn visit_tuple_pat(&mut self, pats: &[Pat], hir: &HIR) {
+        self.pp.punct(Punct::LParen);
+        walk_each_delim!(self, pats.iter().copied(), visit_pat, ", ", hir);
+        self.pp.punct(Punct::RParen);
     }
 
     // Fragments //

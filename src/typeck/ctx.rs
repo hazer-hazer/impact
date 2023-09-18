@@ -3,7 +3,7 @@ use super::{
     ty::{Ex, ExId, ExKind, Ty, TyVarId},
     ty_infer::MonoTy,
 };
-use crate::{cli::verbose, dt::idx::IndexVec, session::MaybeWithSession};
+use crate::dt::idx::IndexVec;
 
 pub trait AlgoCtx {
     fn get_solution(&self, ex: Ex) -> Option<Ty>;

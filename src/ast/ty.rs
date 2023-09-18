@@ -60,6 +60,8 @@ pub enum TyKind {
     Paren(PR<N<Ty>>),
     App(PR<N<Ty>>, Vec<PR<N<Ty>>>),
 
+    Tuple(Vec<PR<N<Ty>>>),
+
     // Now only used for builtins but may be used for const parameters
     AppExpr(PR<N<Ty>>, Vec<PR<N<Expr>>>),
 }
@@ -83,6 +85,7 @@ impl Display for TyKind {
             TyKind::AppExpr(cons, args) => {
                 write!(f, "{} {}", pr_display(cons), prs_display_join(args, " "))
             },
+            TyKind::Tuple(tys) => write!(f, "({})", prs_display_join(tys, ", ")),
         }
     }
 }
@@ -98,6 +101,7 @@ impl NodeKindStr for TyKind {
             TyKind::AppExpr(cons, _) | TyKind::App(cons, _) => {
                 format!("{} type constructor", pr_node_kind_str(cons))
             },
+            TyKind::Tuple(_) => format!("tuple"),
         }
     }
 }

@@ -11,8 +11,7 @@ use crate::{
     message::{
         human_lang::items_are,
         message::{
-            impl_message_holder, MessageBuilder, MessageStorage, NameKind, Solution,
-            SolutionKind,
+            impl_message_holder, MessageBuilder, MessageStorage, NameKind, Solution, SolutionKind,
         },
     },
     parser::lexer::CUSTOM_OP_CHARS,

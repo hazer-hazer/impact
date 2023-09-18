@@ -286,11 +286,11 @@ impl<'ink, 'ctx> FunctionsCodeGen<'ink, 'ctx> {
         //  parameter index?
 
         self.function_map
-            .add_instance(ctor_def_id, ctor_func_ty, |func_def_id, func_inst_ty| {
+            .add_instance(ctor_def_id, ctor_func_ty, |_func_def_id, func_inst_ty| {
                 self.ctx.simple_func(
                     &format!("ctor_{ctor_def_id}"),
                     self.ctx.conv_ty(func_inst_ty).into_function_type(),
-                    |builder, params| {
+                    |_builder, params| {
                         let field_tys = params
                             .iter()
                             .map(|param| param.get_type().as_basic_type_enum())

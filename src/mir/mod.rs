@@ -12,6 +12,8 @@ use std::{
     fmt::Display,
 };
 
+use inkwell::values;
+
 use self::scalar::Scalar;
 pub use crate::typeck::ty::Ty;
 use crate::{
@@ -278,6 +280,8 @@ pub enum RValue {
         args: Vec<Operand>,
         // target: BB,
     },
+
+    Tuple(Vec<Operand>),
 }
 
 impl Display for RValue {
@@ -295,6 +299,15 @@ impl Display for RValue {
                 "{}({})",
                 lhs,
                 args.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            RValue::Tuple(values) => write!(
+                f,
+                "({})",
+                values
+                    .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")

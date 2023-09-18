@@ -11,11 +11,10 @@ use crate::{
     hir::{
         expr::{Arm, ExprKind},
         pat::PatKind,
-        Block, BodyId, Expr, Map, Pat, HIR,
+        Block, BodyId, Expr, Map, Param, Pat, HIR,
     },
     parser::token::{Op, Punct},
     pp::pp::{pp, PP},
-    session::MaybeWithSession,
     typeck::ty::Ty,
 };
 
@@ -58,6 +57,7 @@ macro_rules! tcdbg {
 
 }
 
+use inkwell::values;
 pub(super) use tcdbg;
 
 pub enum InferEntryKind {
@@ -202,6 +202,7 @@ pub trait InferDebugPP {
     fn arm(&mut self, arm: &Arm) -> &mut Self;
     fn block(&mut self, block: Block) -> &mut Self;
     fn body(&mut self, body: BodyId) -> &mut Self;
+    fn param(&mut self, param: Param) -> &mut Self;
     fn pat(&mut self, pat: Pat) -> &mut Self;
     fn entry(&mut self, entry: InferEntryId) -> &mut Self;
     fn step(&mut self, step: &InferStep) -> &mut Self;
@@ -245,6 +246,14 @@ impl<'a> InferDebugPP for PP<InferDebugPPCtx<'a>> {
             },
             &ExprKind::Let(block) => self.block(block),
             ExprKind::Ty(ty_expr) => self.expr(ty_expr.expr).str(": [ty]"),
+            ExprKind::Tuple(values) => {
+                values.iter().copied().for_each(|value| {
+                    self.expr(value);
+                });
+                self
+            },
+            &ExprKind::Let(block) => self.block(block),
+            ExprKind::Ty(ty_expr) => self.expr(ty_expr.expr).str(": [ty]"),
             &ExprKind::Builtin(bt) => self.string(bt),
             ExprKind::Match(subject, arms) => {
                 pp!(self, "match ", {expr: *subject}, {delim ", " / arm: arms.iter()}, ...)
@@ -260,13 +269,17 @@ impl<'a> InferDebugPP for PP<InferDebugPPCtx<'a>> {
         pp!(self, "{...;", {expr?: self.ctx().hir.block(block).expr()}, "}", ...)
     }
 
+    fn param(&mut self, param: Param) -> &mut Self {
+        pp!(self, {pat: self.ctx().hir.param(param).pat}, ...)
+    }
+
     fn body(&mut self, body: BodyId) -> &mut Self {
         let body = self.ctx().hir.body(body);
 
         pp!(
             self,
             "\\",
-            {delim " " / pat: body.params.iter().copied()},
+            {delim " " / param: body.params.iter().copied()},
             " -> ",
             {expr: body.value},
             ...
@@ -280,6 +293,9 @@ impl<'a> InferDebugPP for PP<InferDebugPPCtx<'a>> {
             PatKind::Ident(name, _) => self.string(name),
             PatKind::Struct(..) => todo!(),
             &PatKind::Or(lpat, rpat) => pp!(self, {pat: lpat}, {op: Op::BitOr}, {pat: rpat}, ...),
+            PatKind::Tuple(pats) => {
+                pp!(self, "(", {delim ", " / pat: pats.iter().copied()}, ")", ...)
+            },
         }
     }
 
@@ -293,7 +309,7 @@ impl<'a> InferDebugPP for PP<InferDebugPPCtx<'a>> {
                 pp!(self, {line: "Try to"});
             },
             &InferEntryKind::ForExpr(expr) => {
-                pp!(self, "For expr `", {expr: expr}, "`", {nl});
+                pp!(self, "For expr `", { expr: expr }, "`", { nl });
             },
             InferEntryKind::UnderCtx(depth) => {
                 pp!(

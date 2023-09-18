@@ -2,6 +2,8 @@ pub mod build;
 
 use std::fmt::Display;
 
+use inkwell::values;
+
 use crate::{
     cli::color::Color,
     dt::idx::{declare_idx, IndexVec},
@@ -67,7 +69,7 @@ pub enum DecisionTree {
     Match {
         subject: ExprId,
         pat: PatId,
-        then: Deci,
+        then: Box<DecisionTree>,
     },
 }
 
@@ -109,6 +111,7 @@ pub enum ExprKind {
         lhs: ExprId,
         args: Vec<ExprId>,
     },
+    Tuple(Vec<ExprId>),
     Lambda {
         def_id: DefId,
         body_id: BodyId,
@@ -138,6 +141,15 @@ impl Display for ExprKind {
                         .join(", ")
                 )
             },
+            ExprKind::Tuple(values) => write!(
+                f,
+                "({})",
+                values
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             ExprKind::Lambda { def_id, body_id } => write!(f, "λ{def_id} {{{body_id}}}"),
             ExprKind::Ty(expr, ty) => write!(f, "{expr}: {ty}"),
             // ExprKind::FieldAccess(lhs, variant, field) => {
@@ -174,9 +186,11 @@ impl Expr {
             ExprKind::Ref(_) | ExprKind::Call { .. } | ExprKind::Block(_) | ExprKind::Match(..) => {
                 ExprCategory::StoreRValue
             },
-            ExprKind::Def(..) | ExprKind::Lambda { .. } | ExprKind::Builtin(_) => {
-                ExprCategory::AsRValue
-            },
+
+            ExprKind::Tuple(_)
+            | ExprKind::Def(..)
+            | ExprKind::Lambda { .. }
+            | ExprKind::Builtin(_) => ExprCategory::AsRValue,
 
             // FIXME: Ascription is an lvalue or category of inner expression?
             ExprKind::Ty(..) => todo!(),
@@ -196,6 +210,7 @@ pub enum PatKind {
     Ident { name: Ident, var: LocalVar, ty: Ty },
     Struct(Ty, IndexVec<FieldId, Option<(Option<Ident>, PatId)>>),
     Or(PatId, PatId),
+    Tuple(Vec<PatId>),
 }
 
 impl Display for PatKind {
@@ -222,11 +237,11 @@ impl Display for PatKind {
                     ""
                 }
             ),
+            PatKind::Tuple(..) => todo!(),
         }
     }
 }
 
-#[derive(Clone)]
 pub struct Pat {
     pub ty: Ty,
     pub kind: PatKind,
@@ -253,7 +268,6 @@ pub struct THIR {
     blocks: IndexVec<BlockId, Block>,
     params: IndexVec<ParamId, Param>,
     pats: IndexVec<PatId, Pat>,
-    decision_trees: IndexVec<>
 }
 
 impl THIR {

@@ -61,6 +61,12 @@ impl<'ctx> MirBuilder<'ctx> {
                 todo!()
             },
             PatKind::Struct(ty, fields) => todo!(),
+            PatKind::Tuple(pats) => {
+                pats.clone()
+                    .iter()
+                    .copied()
+                    .for_each(|pat| self.declare_bindings(pat, is_param));
+            },
         }
     }
 

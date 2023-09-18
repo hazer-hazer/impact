@@ -4,7 +4,7 @@ use super::{
     TyResult, Typecker,
 };
 use crate::{
-    cli::{color::WithColor, verbose},
+    cli::verbose,
     dt::idx::IndexVec,
     hir::{
         expr::{ExprKind, Lit},
@@ -474,6 +474,7 @@ impl<'hir> Typecker<'hir> {
 
             TyKind::Struct(_) => self.instantiate_struct(InstantiateDir::Left, r_ty, ex),
             TyKind::Adt(_) => self.instantiate_adt(InstantiateDir::Left, r_ty, ex),
+            TyKind::Tuple(_) => self.instantiate_tuple(InstantiateDir::Left, r_ty, ex),
 
             TyKind::Kind(_) => unreachable!(),
         }
@@ -520,6 +521,7 @@ impl<'hir> Typecker<'hir> {
 
             TyKind::Struct(_) => self.instantiate_struct(InstantiateDir::Right, l_ty, ex),
             TyKind::Adt(_) => self.instantiate_adt(InstantiateDir::Right, l_ty, ex),
+            TyKind::Tuple(_) => self.instantiate_tuple(InstantiateDir::Right, l_ty, ex),
 
             TyKind::Kind(_) => unreachable!(),
         }
@@ -645,6 +647,29 @@ impl<'hir> Typecker<'hir> {
                 .iter_enumerated()
                 .try_for_each(|(fid, f)| {
                     this.instantiate(dir.alternate(), f.ty, field_exes[fid].1 .0)?;
+                    Ok(())
+                })?;
+
+            Ok(ty)
+        })
+    }
+
+    fn instantiate_tuple(&mut self, dir: InstantiateDir, ty: Ty, ex: Ex) -> TyResult<Ty> {
+        let tuple = ty.as_tuple().unwrap();
+
+        self.try_to(|this| {
+            let values_exes = this.add_fresh_common_ex_list(tuple.len());
+
+            let tuple_ex = Ty::tuple(values_exes.iter().map(|ex| ex.1).collect());
+
+            this.solve(ex, tuple_ex.mono());
+
+            tuple
+                .iter()
+                .copied()
+                .zip(values_exes.iter().copied())
+                .try_for_each(|(value_ty, (value_ex, _))| {
+                    this.instantiate(dir.alternate(), value_ty, value_ex)?;
                     Ok(())
                 })?;
 

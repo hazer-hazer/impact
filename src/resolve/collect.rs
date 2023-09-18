@@ -1,3 +1,5 @@
+use inkwell::values;
+
 use super::def::{DefId, DefKind, Module, ModuleId, ModuleKind, ROOT_DEF_ID};
 use crate::{
     ast::{
@@ -264,7 +266,8 @@ impl<'ast> AstVisitor<'ast> for DefCollector<'ast> {
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(infix) => self.visit_infix_expr(infix),
-            ExprKind::Call(call) => self.visit_app_expr(call),
+            ExprKind::Call(call) => self.visit_call_expr(call),
+            ExprKind::Tuple(values) => self.visit_tuple_expr(values),
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
             ExprKind::Lambda(lambda) => {

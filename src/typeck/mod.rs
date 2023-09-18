@@ -15,10 +15,7 @@ use crate::{
     message::message::{impl_message_holder, MessageStorage},
     pp::pp::PP,
     resolve::def::DefId,
-    session::{
-        impl_session_holder, stage_result, MaybeWithSession, Session, SessionHolder, Stage,
-        StageResult,
-    },
+    session::{impl_session_holder, stage_result, Session, SessionHolder, Stage, StageResult},
     typeck::{
         conv::TyConv,
         debug::{tcdbg, InferDebugPP, InferEntryKind, InferStepKind},

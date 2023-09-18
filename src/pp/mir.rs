@@ -1,5 +1,7 @@
 use std::str::from_utf8;
 
+use inkwell::values;
+
 use super::{
     hir::walk_each_delim,
     pp::{pp, PP},
@@ -73,7 +75,9 @@ impl<'ctx> MirPrinter for PP<MirPPCtx<'ctx>> {
         pp!(self, { out_indent });
         match &stmt.kind {
             StmtKind::Assign(lvalue, rvalue) => {
-                pp!(self, {lvalue: lvalue}, {op: Op::Assign}, {rvalue: rvalue});
+                pp!(self, { lvalue: lvalue }, { op: Op::Assign }, {
+                    rvalue: rvalue
+                });
             },
         }
         pp!(self, {punct: Punct::Semi}, {nl}, ...)
@@ -111,6 +115,9 @@ impl<'ctx> MirPrinter for PP<MirPPCtx<'ctx>> {
                 pp!(self, "(", {operand: lhs}, ")", {sp}, {delim " " / operand: args.iter()}, ...)
                 // self.pp.string(format!(" -> {}", target));
             },
+            RValue::Tuple(values) => {
+                pp!(self, {punct: Punct::LParen}, {delim ", " / operand: values.iter()}, {punct: Punct::RParen}, ...)
+            },
             &RValue::FuncRef(def_id, ty) => {
                 let def = self.ctx().sess.def_table.def(def_id);
                 // match def.kind() {
@@ -144,9 +151,9 @@ impl<'ctx> MirPrinter for PP<MirPPCtx<'ctx>> {
 
     fn const_(&mut self, const_: &Const) -> &mut Self {
         match &const_.kind {
-            ConstKind::Scalar(scalar) => pp!(self, {string: scalar}),
+            ConstKind::Scalar(scalar) => pp!(self, { string: scalar }),
             // FIXME: ZeroSized formatting?
-            ConstKind::ZeroSized => pp!(self, {kw: Kw::Unit}),
+            ConstKind::ZeroSized => pp!(self, { kw: Kw::Unit }),
             ConstKind::Slice { data } => match const_.ty.kind() {
                 crate::typeck::ty::TyKind::Str => {
                     pp!(self, {"\"{}\"", from_utf8(data).unwrap()});
@@ -203,11 +210,14 @@ impl<'ctx> HirVisitor for PP<MirPPCtx<'ctx>> {
             &PatKind::Or(lpat, rpat) => {
                 pp!(self, {visit_pat: lpat, hir}, {op: Op::BitOr}, {visit_pat: rpat, hir}, ...)
             },
+            PatKind::Tuple(pats) => {
+                pp!(self, {punct: Punct::LParen}, {delim ", " / visit_pat: pats.iter().copied(), hir}, {punct: Punct::RParen}, ...)
+            },
         };
     }
 
     fn visit_body(&mut self, body: BodyId, _owner: BodyOwner, hir: &HIR) {
-        pp!(self, {delim {sp} / visit_pat: self.ctx().hir.body(body).params.iter().copied(), hir}, {sp});
+        pp!(self, {delim {sp} / visit_param: self.ctx().hir.body(body).params.iter().copied(), hir}, {sp});
 
         if let Some(body) = self.ctx().mir.bodies.get(&body) {
             self.print_body(body);

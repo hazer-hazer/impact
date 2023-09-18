@@ -1,6 +1,6 @@
 use super::{
     expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
-    item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
+    item::{ExternItem, Field, GenericParams, Item, ItemKind, Param, TyParam, Variant},
     pat::{Pat, PatKind, StructPatField},
     stmt::{Stmt, StmtKind},
     ty::{Ty, TyKind, TyPath},
@@ -114,15 +114,19 @@ pub trait AstVisitor<'ast> {
         walk_pr!(self, name, visit_ident);
     }
 
+    fn visit_param(&mut self, param: &'ast Param) {
+        walk_pr!(self, &param.pat, visit_pat);
+    }
+
     fn visit_decl_item(
         &mut self,
         name: &'ast PR<Ident>,
-        params: &'ast Vec<PR<N<Pat>>>, // FIXME: Replace with slice
+        params: &'ast [Param],
         body: &'ast PR<N<Expr>>,
         _: NodeId,
     ) {
         walk_pr!(self, name, visit_ident);
-        walk_each_pr!(self, params, visit_pat);
+        params.iter().for_each(|param| self.visit_param(param));
         walk_pr!(self, body, visit_expr);
     }
 
@@ -182,6 +186,7 @@ pub trait AstVisitor<'ast> {
             PatKind::Or(lpat, rpat) => {
                 self.visit_or_pat(lpat, rpat);
             },
+            PatKind::Tuple(pats) => self.visit_tuple_pat(pats),
         }
     }
 
@@ -207,6 +212,9 @@ pub trait AstVisitor<'ast> {
         }
         walk_pr!(self, &field.pat, visit_pat);
     }
+    fn visit_tuple_pat(&mut self, pats: &'ast [PR<N<Pat>>]) {
+        walk_each_pr!(self, pats, visit_pat);
+    }
 
     fn visit_or_pat(&mut self, lpat: &'ast PR<N<Pat>>, rpat: &'ast PR<N<Pat>>) {
         walk_pr!(self, lpat, visit_pat);
@@ -221,7 +229,8 @@ pub trait AstVisitor<'ast> {
             ExprKind::Path(path) => self.visit_path_expr(path),
             ExprKind::Block(block) => self.visit_block_expr(block),
             ExprKind::Infix(infix) => self.visit_infix_expr(infix),
-            ExprKind::Call(call) => self.visit_app_expr(call),
+            ExprKind::Call(call) => self.visit_call_expr(call),
+            ExprKind::Tuple(values) => self.visit_tuple_expr(values),
             ExprKind::Let(block) => self.visit_let_expr(block),
             ExprKind::Lambda(lambda) => self.visit_lambda_expr(lambda),
             ExprKind::Ty(ty_expr) => self.visit_type_expr(ty_expr),
@@ -248,13 +257,20 @@ pub trait AstVisitor<'ast> {
         walk_pr!(self, &infix.rhs, visit_expr);
     }
 
-    fn visit_app_expr(&mut self, call: &'ast Call) {
+    fn visit_call_expr(&mut self, call: &'ast Call) {
         walk_pr!(self, &call.lhs, visit_expr);
         walk_each_pr!(self, &call.args, visit_expr);
     }
 
+    fn visit_tuple_expr(&mut self, values: &'ast [PR<N<Expr>>]) {
+        walk_each_pr!(self, values, visit_expr);
+    }
+
     fn visit_lambda_expr(&mut self, lambda: &'ast Lambda) {
-        walk_each_pr!(self, &lambda.params, visit_pat);
+        lambda
+            .params
+            .iter()
+            .for_each(|param| self.visit_param(param));
         walk_pr!(self, &lambda.body, visit_expr);
     }
 
@@ -290,6 +306,7 @@ pub trait AstVisitor<'ast> {
             TyKind::Paren(inner) => self.visit_paren_ty(inner),
             TyKind::App(cons, args) => self.visit_ty_app(cons, args),
             TyKind::AppExpr(cons, const_arg) => self.visit_ty_app_expr(cons, const_arg),
+            TyKind::Tuple(tys) => self.visit_tuple_ty(tys),
         }
     }
 
@@ -316,6 +333,10 @@ pub trait AstVisitor<'ast> {
     fn visit_ty_app_expr(&mut self, cons: &'ast PR<N<Ty>>, args: &'ast [PR<N<Expr>>]) {
         walk_pr!(self, cons, visit_ty);
         walk_each_pr!(self, args, visit_expr);
+    }
+
+    fn visit_tuple_ty(&mut self, tys: &'ast [PR<N<Ty>>]) {
+        walk_each_pr!(self, tys, visit_ty);
     }
 
     // Fragments //

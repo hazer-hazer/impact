@@ -1,7 +1,9 @@
+use inkwell::values;
+
 use crate::{
     ast::{
         expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},
-        item::{ExternItem, Field, GenericParams, Item, ItemKind, TyParam, Variant},
+        item::{ExternItem, Field, GenericParams, Item, ItemKind, Param, TyParam, Variant},
         pat::{Pat, PatKind},
         stmt::{Stmt, StmtKind},
         ty::{Ty, TyKind, TyPath},
@@ -13,8 +15,8 @@ use crate::{
         self,
         item::{Adt, ItemId, ItemNode, Mod, Struct, TyAlias},
         stmt::Local,
-        Body, BodyId, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, TyDefKind, TyRes,
-        ValueDefKind, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
+        Body, BodyId, ExprRes, HirId, Node, Owner, OwnerChildId, OwnerId, ParamNode, TyDefKind,
+        TyRes, ValueDefKind, FIRST_OWNER_CHILD_ID, HIR, OWNER_SELF_CHILD_ID,
     },
     message::message::{impl_message_holder, MessageBuilder, MessageStorage},
     parser::token::{FloatKind, IntKind},
@@ -331,10 +333,21 @@ impl<'ast> Lower<'ast> {
         })
     }
 
+    fn lower_param(&mut self, param: &Param) -> hir::Param {
+        let id = self.lower_node_id(param.id());
+        let pat = lower_pr!(self, &param.pat, lower_pat);
+        self.add_node(hir::Node::Param(hir::ParamNode {
+            id,
+            pat,
+            span: param.span(),
+        }))
+        .into()
+    }
+
     fn lower_decl_item(
         &mut self,
         _name: &PR<Ident>,
-        ast_params: &Vec<PR<N<Pat>>>,
+        ast_params: &Vec<Param>,
         body: &PR<N<Expr>>,
         def_id: DefId,
     ) -> hir::item::ItemKind {
@@ -349,7 +362,7 @@ impl<'ast> Lower<'ast> {
 
         let params = ast_params
             .iter()
-            .map(|param| lower_pr!(self, param, lower_pat))
+            .map(|param| self.lower_param(param))
             .collect::<Vec<_>>();
 
         let body = self.body(params, body);
@@ -465,6 +478,7 @@ impl<'ast> Lower<'ast> {
                 lower_pr!(self, lpat, lower_pat),
                 lower_pr!(self, rpat, lower_pat),
             ),
+            PatKind::Tuple(pats) => hir::pat::PatKind::Tuple(lower_each_pr!(self, pats, lower_pat)),
         };
 
         self.add_node(hir::Node::Pat(hir::pat::PatNode::new(id, kind, pat.span())))
@@ -481,6 +495,7 @@ impl<'ast> Lower<'ast> {
             ExprKind::Infix(infix) => self.lower_infix_expr(infix),
             ExprKind::Lambda(lambda) => self.lower_lambda_expr(lambda, expr.id()),
             ExprKind::Call(call) => self.lower_call_expr(call),
+            ExprKind::Tuple(values) => self.lower_tuple_expr(values),
             ExprKind::Let(block) => self.lower_let_expr(block),
             ExprKind::Ty(ty_expr) => self.lower_ty_expr(ty_expr),
             ExprKind::DotOp(lhs, field) => self.lower_dot_op_expr(lhs, field),
@@ -556,7 +571,11 @@ impl<'ast> Lower<'ast> {
     }
 
     fn lower_lambda_expr(&mut self, lambda: &Lambda, node_id: NodeId) -> hir::expr::ExprKind {
-        let params = lower_each_pr!(self, &lambda.params, lower_pat);
+        let params = lambda
+            .params
+            .iter()
+            .map(|param| self.lower_param(param))
+            .collect();
         let body = lower_pr!(self, &lambda.body, lower_expr);
         hir::expr::ExprKind::Lambda(hir::expr::Lambda {
             def_id: self.sess.def_table.get_def_id(node_id).unwrap(),
@@ -569,6 +588,11 @@ impl<'ast> Lower<'ast> {
         let args = lower_each_pr!(self, &call.args, lower_expr);
 
         hir::expr::ExprKind::Call(hir::expr::Call { lhs, args })
+    }
+
+    fn lower_tuple_expr(&mut self, values: &[PR<N<Expr>>]) -> hir::expr::ExprKind {
+        let values = lower_each_pr!(self, values, lower_expr);
+        hir::expr::ExprKind::Tuple(values)
     }
 
     fn lower_let_expr(&mut self, block: &PR<Block>) -> hir::expr::ExprKind {
@@ -630,6 +654,7 @@ impl<'ast> Lower<'ast> {
             TyKind::Paren(inner) => return lower_pr!(self, inner, lower_ty),
             TyKind::App(cons, args) => Ok(self.lower_ty_app(cons, args)),
             TyKind::AppExpr(cons, args) => self.lower_ty_app_expr(cons, args),
+            TyKind::Tuple(tys) => Ok(self.lower_tuple_ty(tys)),
         };
 
         let id = self.lower_node_id(ty.id());
@@ -692,6 +717,10 @@ impl<'ast> Lower<'ast> {
             )
             .emit_single_label(self);
         Err(())
+    }
+
+    fn lower_tuple_ty(&mut self, tys: &[PR<N<Ty>>]) -> hir::ty::TyKind {
+        hir::ty::TyKind::Tuple(lower_each_pr!(self, tys, lower_ty))
     }
 
     // Fragments //
@@ -900,7 +929,7 @@ impl<'ast> Lower<'ast> {
         )
     }
 
-    fn body(&mut self, params: Vec<hir::Pat>, value: hir::Expr) -> BodyId {
+    fn body(&mut self, params: Vec<hir::Param>, value: hir::Expr) -> BodyId {
         let body = Body::new(params, value);
         let id = body.id();
 
@@ -919,8 +948,16 @@ impl<'ast> Lower<'ast> {
         id
     }
 
+    fn param(&mut self, span: Span, pat: hir::Pat) -> hir::Param {
+        let id = self.next_hir_id();
+        self.add_node(hir::Node::Param(ParamNode { id, pat, span }))
+            .into()
+    }
+
     fn builtin_func(&mut self) -> ItemId {
-        let params = vec![self.pat_ident(Ident::kw(Kw::Underscore))];
+        let param_name = Ident::kw(Kw::Underscore);
+        let pat = self.pat_ident(param_name);
+        let params = vec![self.param(param_name.span(), pat)];
         let body = self.expr_lit(
             Span::new_error(),
             hir::expr::Lit::String(DeclareBuiltin::sym()),

@@ -131,10 +131,26 @@ impl Display for Variant {
 }
 
 #[derive(Debug)]
+pub struct Param {
+    pub id: NodeId,
+    pub pat: PR<N<Pat>>,
+    pub span: Span,
+}
+
+impl_with_node_id!(Param);
+impl_with_span!(Param);
+
+impl Display for Param {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", pr_display(&self.pat))
+    }
+}
+
+#[derive(Debug)]
 pub enum ItemKind {
     Type(PR<Ident>, GenericParams, PR<N<Ty>>),
     Mod(PR<Ident>, Vec<PR<N<Item>>>),
-    Decl(PR<Ident>, Vec<PR<N<Pat>>>, PR<N<Expr>>),
+    Decl(PR<Ident>, Vec<Param>, PR<N<Expr>>),
     Adt(PR<Ident>, GenericParams, Vec<PR<Variant>>),
     Struct(
         PR<Ident>,
@@ -174,7 +190,7 @@ impl Display for ItemKind {
                 pr_display(name),
                 params
                     .iter()
-                    .map(|param| pr_display(param))
+                    .map(|param| param.to_string())
                     .collect::<Vec<_>>()
                     .join(" "),
                 pr_display(body)

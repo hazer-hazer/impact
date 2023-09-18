@@ -1,8 +1,10 @@
 use std::fmt::Display;
 
+use inkwell::values;
+
 use super::{
-    impl_with_node_id, is_block_ended, pat::Pat, pr_display, stmt::Stmt, ty::Ty, IdentNode,
-    IsBlockEnded, NodeId, NodeKindStr, Path, WithNodeId, N, PR,
+    impl_with_node_id, is_block_ended, item::Param, pat::Pat, pr_display, stmt::Stmt, ty::Ty,
+    IdentNode, IsBlockEnded, NodeId, NodeKindStr, Path, WithNodeId, N, PR,
 };
 use crate::{
     ast::prs_display_join,
@@ -39,6 +41,7 @@ pub enum ExprKind {
     Infix(Infix),
     Lambda(Lambda),
     Call(Call),
+    Tuple(Vec<PR<N<Expr>>>),
     Let(PR<Block>),
     Ty(TyExpr),
     DotOp(PR<N<Expr>>, PR<IdentNode>),
@@ -48,7 +51,12 @@ pub enum ExprKind {
 impl IsBlockEnded for ExprKind {
     fn is_block_ended(&self) -> bool {
         match self {
-            Self::DotOp(..) | Self::Lit(_) | Self::Path(_) | Self::Ty(_) | Self::Paren(_) => false,
+            Self::DotOp(..)
+            | Self::Lit(_)
+            | Self::Path(_)
+            | Self::Ty(_)
+            | Self::Paren(_)
+            | Self::Tuple(_) => false,
             Self::Block(_) | Self::Let(_) => true,
             Self::Infix(infix) => is_block_ended!(infix.rhs),
             Self::Lambda(lambda) => is_block_ended!(lambda.body),
@@ -75,6 +83,7 @@ impl Display for ExprKind {
             Self::Infix(infix) => write!(f, "{infix}"),
             Self::Lambda(lambda) => write!(f, "{lambda}"),
             Self::Call(call) => write!(f, "{call}"),
+            Self::Tuple(values) => write!(f, "({})", prs_display_join(values, ", ")),
             Self::Let(block) => write!(f, "{}", pr_display(block)),
             Self::Ty(ty_expr) => write!(f, "{ty_expr}"),
             Self::DotOp(expr, field) => {
@@ -99,6 +108,7 @@ impl NodeKindStr for ExprKind {
             Self::Path(_) => "path",
             Self::Lambda(_) => "lambda",
             Self::Call(_) => "function call",
+            Self::Tuple(_) => "tuple",
             Self::Let(_) => "let expression",
             Self::Ty(_) => "type ascription",
             Self::Infix(_) => "infix expression",
@@ -184,7 +194,7 @@ impl Display for PathExpr {
 
 #[derive(Debug)]
 pub struct Lambda {
-    pub params: Vec<PR<N<Pat>>>,
+    pub params: Vec<Param>,
     pub body: PR<N<Expr>>,
 }
 
@@ -193,7 +203,11 @@ impl Display for Lambda {
         write!(
             f,
             "{} -> {}",
-            prs_display_join(&self.params, " "),
+            self.params
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" "),
             pr_display(&self.body)
         )
     }
