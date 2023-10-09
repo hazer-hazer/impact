@@ -28,6 +28,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Ty(..)
             | ExprKind::Ref(_)
             // | ExprKind::FieldAccess(..)
+            | ExprKind::Match(_, _) 
             | ExprKind::Builtin(_) => {
                 let _temp = unpack!(bb = self.as_temp(bb, expr_id));
             },

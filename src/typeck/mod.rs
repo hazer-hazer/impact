@@ -13,6 +13,7 @@ use crate::{
     hir::{HirId, Map, HIR},
     interface::writer::outln,
     message::message::{impl_message_holder, MessageStorage},
+    pp::pp::PP,
     resolve::def::DefId,
     session::{
         impl_session_holder, stage_result, MaybeWithSession, Session, SessionHolder, Stage,
@@ -20,7 +21,7 @@ use crate::{
     },
     typeck::{
         conv::TyConv,
-        debug::{tcdbg, InferEntryKind, InferStepKind},
+        debug::{tcdbg, InferEntryKind, InferStepKind, InferDebugPP},
         kind::MonoKindSort,
         ty_infer::MonoTyKind,
     },
@@ -707,7 +708,7 @@ impl<'hir> Stage<()> for Typecker<'hir> {
                 dbg,
                 self.sess.writer,
                 "Typeck debug tree:\n {}",
-                self.dbg.get_string(self.hir.into())
+                self.dbg.make_pp(self.hir.into()).pp().get_string()
             );
         }
 

@@ -202,7 +202,7 @@ macro_rules! hir_nodes {
             fn string_lit_value(self, expr: Expr) -> Option<Symbol>;
             fn owner_body(self, owner_id: OwnerId) -> Option<BodyId>;
             fn body_owner_kind(self, owner_id: OwnerId) -> BodyOwnerKind;
-            fn pat_names(self, pat: Pat) -> Option<Vec<Ident>>;
+            // fn pat_names(self, pat: Pat) -> Option<Vec<Ident>>;
             fn expr_result_span(self, expr_id: Expr) -> Span;
             fn block_result_span(self, block: Block) -> Span;
             fn return_ty_span(self, def_id: DefId) -> Span;
@@ -298,13 +298,13 @@ macro_rules! hir_nodes {
                 }
             }
 
-            fn pat_names(self, pat: Pat) -> Option<Vec<Ident>> {
-                match self.pat(pat).kind() {
-                    pat::PatKind::Unit => None,
-                    &pat::PatKind::Ident(name, _) => Some(vec![name]),
-                    &pat::PatKind::Struct(_, fields, _) => Some(fields.iter().map(|field| self.pat_names(field.pat)).collect::<Result<Vec<_>, _>>().ok()?)
-                }
-            }
+            // fn pat_names(self, pat: Pat) -> Option<Vec<Ident>> {
+            //     match self.pat(pat).kind() {
+            //         pat::PatKind::Unit => None,
+            //         &pat::PatKind::Ident(name, _) => Some(vec![name]),
+            //         &pat::PatKind::Struct(_, fields, _) => Some(fields.iter().map(|field| self.pat_names(field.pat)).collect::<Result<Vec<_>, _>>().ok()?)
+            //     }
+            // }
 
             fn expr_result_span(self, expr_id: Expr) -> Span {
                 let expr = self.expr(expr_id);

@@ -1,7 +1,7 @@
 use super::{
     build::{unpack, MirBuilder},
     scalar::Scalar,
-    thir::{ExprCategory, ExprId, ExprKind, Lit, Pat, PatKind},
+    thir::{Arm, ExprCategory, ExprId, ExprKind, Lit, Pat, PatKind},
     BBWith, Const, LValue, Local, Operand, RValue, Ty, BB,
 };
 use crate::{
@@ -75,6 +75,7 @@ impl<'ctx> MirBuilder<'ctx> {
             | ExprKind::Ty(..)
             | ExprKind::Def(..)
             | ExprKind::Ref(_)
+            | ExprKind::Match(..)
             | ExprKind::Builtin(_) => {
                 let temp = unpack!(bb = self.as_temp(bb, expr_id));
                 bb.with(temp.lvalue(None))
@@ -91,16 +92,6 @@ impl<'ctx> MirBuilder<'ctx> {
             &ExprKind::Ty(expr_id, _) => self.as_rvalue(bb, expr_id),
 
             // ExprKind::FieldAccess(..)  => {},
-            ExprKind::Block(_) | ExprKind::LocalRef(_) => {
-                assert!(!matches!(
-                    expr.categorize(),
-                    ExprCategory::AsRValue | ExprCategory::Const
-                ));
-
-                let operand = unpack!(bb = self.as_operand(bb, expr_id));
-
-                bb.with(operand.rvalue())
-            },
             // ExprKind::Call { func_ty, lhs, args } => {
             //     // FIXME: Clone
             //     let func_ty = *func_ty;
@@ -158,7 +149,11 @@ impl<'ctx> MirBuilder<'ctx> {
                     panic!("Ref constructor used as a standalone expression and must not appear on MIR building stage as ValueBuiltin")
                 },
             },
-            ExprKind::Call { .. } | ExprKind::Ref(_) => {
+            ExprKind::Block(_)
+            | ExprKind::LocalRef(_)
+            | ExprKind::Call { .. }
+            | ExprKind::Match(..)
+            | ExprKind::Ref(_) => {
                 assert!(!matches!(
                     expr.categorize(),
                     ExprCategory::AsRValue | ExprCategory::Const
@@ -183,7 +178,7 @@ impl<'ctx> MirBuilder<'ctx> {
         let expr = self.thir.expr(expr_id);
         verbose!("Store {lvalue} = {expr}");
         match &expr.kind {
-            // FIXME
+            // FIXME: Cast logic?
             &ExprKind::Ty(expr_id, _) => self.store_expr(bb, lvalue, expr_id),
 
             ExprKind::LocalRef(_) => {
@@ -223,6 +218,49 @@ impl<'ctx> MirBuilder<'ctx> {
                 let operand = unpack!(bb = self.as_operand(bb, arg));
                 self.push_assign(bb, lvalue, operand.rvalue());
                 bb.unit()
+            },
+
+            /*
+             * match goes brrrr
+             * 
+             * match subject
+             *   pat1 => body1
+             *   pat2 => body2
+             *   _ => bodyElse
+             * 
+             * bbAfter
+             * 
+             * 
+             * Go backward?
+             * 
+             * For each pattern we do switch
+             * switch(subject, [patN], [bodyN, bbN+1])
+             * 
+             * First, we make an subject operand.
+             * let subject = eval subject; // make an operand
+             * 
+             * We have bbAfter, this is the BB we'll return from match generation.
+             * Start with it, go backward.
+             * 
+             * 
+             * Arm = {
+             *   switch(subject, [])
+             * }
+             */
+            ExprKind::Match(subject, arms) => {
+                let subject = unpack!(bb = self.as_operand(bb, *subject));
+
+
+
+                // self.builder.terminate_switch(bb, subject, targets);
+
+                let else_bb = self.builder.begin_bb();
+
+                // arms.iter().rev().fold((else_bb, bb), |(mut else_bb, body_bb), arm| {
+
+                // });
+
+                else_bb.unit()
             },
 
             ExprKind::Lit(_)

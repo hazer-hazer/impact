@@ -208,6 +208,7 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
                 );
             },
             PatKind::Struct(path, fields, rest) => self.visit_struct_pat(path, fields, *rest),
+            PatKind::Or(lpat, rpat) => self.visit_or_pat(lpat, rpat),
         }
         self.node_id(pat);
     }
@@ -227,6 +228,12 @@ impl<'ast> AstVisitor<'ast> for AstLikePP<'ast, ()> {
             }
             self.str("...");
         }
+    }
+
+    fn visit_or_pat(&mut self, lpat: &'ast PR<N<Pat>>, rpat: &'ast PR<N<Pat>>) {
+        walk_pr!(self, lpat, visit_pat);
+        self.op(Op::BitOr);
+        walk_pr!(self, rpat, visit_pat);
     }
 
     // Expressions //

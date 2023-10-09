@@ -13,7 +13,7 @@ use crate::{
         pat::PatKind,
         Block, BodyId, Expr, Map, Pat, HIR,
     },
-    parser::token::Punct,
+    parser::token::{Op, Punct},
     pp::pp::{pp, PP},
     session::MaybeWithSession,
     typeck::ty::Ty,
@@ -116,13 +116,7 @@ pub struct InferStep {
 }
 
 type Entries = IndexVec<InferEntryId, InferEntry>;
-struct IDCtx<'ctx> {
-    hir: &'ctx HIR,
-    entries: &'ctx Entries,
-}
-
 pub struct InferDebug {
-    pp: PP,
     entries: Entries,
     entry: Option<InferEntryId>,
 }
@@ -130,22 +124,28 @@ pub struct InferDebug {
 impl InferDebug {
     pub fn new() -> Self {
         Self {
-            pp: PP::new(),
             entries: Default::default(),
             entry: None,
         }
     }
 
-    pub fn get_string(mut self, hir: &HIR) -> String {
-        self.pp.entry(
-            InferEntryId(0),
-            &IDCtx {
-                hir,
-                entries: &self.entries,
-            },
-        );
-        self.pp.get_string()
+    pub fn make_pp<'a>(&'a self, hir: &'a HIR) -> PP<InferDebugPPCtx<'a>> {
+        PP::new(InferDebugPPCtx {
+            hir,
+            entries: &self.entries,
+        })
     }
+
+    // pub fn get_string(mut self, hir: &HIR) -> String {
+    //     self.pp.entry(
+    //         InferEntryId(0),
+    //         &InferDebugPPCtx {
+    //             hir,
+    //             entries: &self.entries,
+    //         },
+    //     );
+    //     self.pp.get_string()
+    // }
 
     fn entry_mut(&mut self) -> &mut InferEntry {
         self.entries.get_mut(self.entry.unwrap()).unwrap()
@@ -188,8 +188,32 @@ impl InferDebug {
     }
 }
 
-impl PP {
-    fn ty_result<T>(&mut self, res: &TyResult<T>) -> &mut PP
+pub struct InferDebugPPCtx<'ctx> {
+    hir: &'ctx HIR,
+    entries: &'ctx Entries,
+}
+
+pub trait InferDebugPP {
+    fn pp(self) -> Self;
+    fn ty_result<T>(&mut self, res: &TyResult<T>) -> &mut Self
+    where
+        T: Display + WithColor;
+    fn expr(&mut self, expr: Expr) -> &mut Self;
+    fn arm(&mut self, arm: &Arm) -> &mut Self;
+    fn block(&mut self, block: Block) -> &mut Self;
+    fn body(&mut self, body: BodyId) -> &mut Self;
+    fn pat(&mut self, pat: Pat) -> &mut Self;
+    fn entry(&mut self, entry: InferEntryId) -> &mut Self;
+    fn step(&mut self, step: &InferStep) -> &mut Self;
+}
+
+impl<'a> InferDebugPP for PP<InferDebugPPCtx<'a>> {
+    fn pp(mut self) -> Self {
+        self.entry(InferEntryId(0));
+        self
+    }
+
+    fn ty_result<T>(&mut self, res: &TyResult<T>) -> &mut Self
     where
         T: Display + WithColor,
     {
@@ -206,59 +230,61 @@ impl PP {
         self
     }
 
-    fn expr(&mut self, expr: Expr, ctx: &IDCtx) -> &mut PP {
-        match ctx.hir.expr(expr).kind() {
+    fn expr(&mut self, expr: Expr) -> &mut Self {
+        match self.ctx().hir.expr(expr).kind() {
             ExprKind::Lit(lit) => self.string(lit),
-            &ExprKind::Path(path) => self.string(ctx.hir.expr_path(path)),
-            &ExprKind::Block(block) => self.block(block, ctx),
-            ExprKind::Lambda(lambda) => self.body(lambda.body_id, ctx),
+            &ExprKind::Path(path) => self.string(self.ctx().hir.expr_path(path)),
+            &ExprKind::Block(block) => self.block(block),
+            ExprKind::Lambda(lambda) => self.body(lambda.body_id),
             ExprKind::Call(call) => {
-                self.expr(call.lhs, ctx).sp();
+                self.expr(call.lhs).sp();
                 call.args.iter().copied().for_each(|arg| {
-                    self.expr(arg, ctx);
+                    self.expr(arg);
                 });
                 self
             },
-            &ExprKind::Let(block) => self.block(block, ctx),
-            ExprKind::Ty(ty_expr) => self.expr(ty_expr.expr, ctx).str(": [ty]"),
+            &ExprKind::Let(block) => self.block(block),
+            ExprKind::Ty(ty_expr) => self.expr(ty_expr.expr).str(": [ty]"),
             &ExprKind::Builtin(bt) => self.string(bt),
             ExprKind::Match(subject, arms) => {
-                pp!(self, "match ", {expr: *subject, ctx}, {delim ", " / arm: arms.iter(), ctx}, ...)
+                pp!(self, "match ", {expr: *subject}, {delim ", " / arm: arms.iter()}, ...)
             },
         }
     }
 
-    fn arm(&mut self, arm: &Arm, ctx: &IDCtx) -> &mut PP {
-        pp!(self, {pat: arm.pat, ctx}, {punct: Punct::FatArrow}, {expr: arm.body, ctx}, ...)
+    fn arm(&mut self, arm: &Arm) -> &mut Self {
+        pp!(self, {pat: arm.pat}, {punct: Punct::FatArrow}, {expr: arm.body}, ...)
     }
 
-    fn block(&mut self, block: Block, ctx: &IDCtx) -> &mut PP {
-        pp!(self, "{...;", {expr?: ctx.hir.block(block).expr(), ctx}, "}", ...)
+    fn block(&mut self, block: Block) -> &mut Self {
+        pp!(self, "{...;", {expr?: self.ctx().hir.block(block).expr()}, "}", ...)
     }
 
-    fn body(&mut self, body: BodyId, ctx: &IDCtx) -> &mut PP {
-        let body = ctx.hir.body(body);
+    fn body(&mut self, body: BodyId) -> &mut Self {
+        let body = self.ctx().hir.body(body);
 
         pp!(
             self,
             "\\",
-            {delim " " / pat: body.params.iter().copied(), ctx},
+            {delim " " / pat: body.params.iter().copied()},
             " -> ",
-            {expr: body.value, ctx},
+            {expr: body.value},
             ...
         )
     }
 
-    fn pat(&mut self, pat: Pat, ctx: &IDCtx) -> &mut PP {
-        let pat = ctx.hir.pat(pat);
+    fn pat(&mut self, pat: Pat) -> &mut Self {
+        let pat = self.ctx().hir.pat(pat);
         match pat.kind() {
             PatKind::Unit => self.str("()"),
             PatKind::Ident(name, _) => self.string(name),
+            PatKind::Struct(..) => todo!(),
+            &PatKind::Or(lpat, rpat) => pp!(self, {pat: lpat}, {op: Op::BitOr}, {pat: rpat}, ...),
         }
     }
 
-    fn entry(&mut self, entry: InferEntryId, ctx: &IDCtx) -> &mut PP {
-        let entry = ctx.entries.get(entry).unwrap();
+    fn entry(&mut self, entry: InferEntryId) -> &mut Self {
+        let entry = self.ctx().entries.get(entry).unwrap();
 
         pp!(self, { out_indent }, {if (entry.failed) "❌"}, {str: "> "});
 
@@ -267,7 +293,7 @@ impl PP {
                 pp!(self, {line: "Try to"});
             },
             &InferEntryKind::ForExpr(expr) => {
-                pp!(self, "For expr `", {expr: expr, ctx}, "`", {nl});
+                pp!(self, "For expr `", {expr: expr}, "`", {nl});
             },
             InferEntryKind::UnderCtx(depth) => {
                 pp!(
@@ -281,17 +307,17 @@ impl PP {
         pp!(
             self,
             {indent},
-            {delim {nl} / step: entry.steps.iter(), ctx},
+            {delim {nl} / step: entry.steps.iter()},
             {if (entry.steps.is_empty()) [out_indent, "[Nothing done]"]},
             {nl, out_indent, indent},
             {if (!entry.children.is_empty()) {line: "and then"} else {line: "[No subentries]"}},
-            {delim {nl} / entry: entry.children.iter().copied(), ctx},
+            {delim {nl} / entry: entry.children.iter().copied()},
             {dedent, dedent},
             ...
         )
     }
 
-    fn step(&mut self, step: &InferStep, ctx: &IDCtx) -> &mut PP {
+    fn step(&mut self, step: &InferStep) -> &mut Self {
         self.out_indent();
         match &step.kind {
             &InferStepKind::Synthesized(ty) => {
@@ -308,7 +334,7 @@ impl PP {
                 );
             },
             &InferStepKind::Check(expr, expr_ty, ty, ref res) => {
-                pp!(self, "Check expr `", {expr: expr, ctx}, "` (", {color: expr_ty}, ") is of type ", {color: ty}, " => ", {ty_result: &res.map(|ty| ty)});
+                pp!(self, "Check expr `", {expr: expr}, "` (", {color: expr_ty}, ") is of type ", {color: ty}, " => ", {ty_result: &res.map(|ty| ty)});
             },
             &InferStepKind::Subtype(ty, subtype_of, ref res) => {
                 pp!(

@@ -92,6 +92,9 @@ impl<'hir> Typecker<'hir> {
         match stmt.kind() {
             &StmtKind::Expr(expr) => {
                 self.synth_expr(expr)?;
+                // Expression statement is always an unused result, thus we need to default all
+                // number existentials
+                self.default_number_exes();
             },
             &StmtKind::Item(item) => {
                 self.synth_item(item)?;
@@ -272,7 +275,8 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_arm(&mut self, arm: &Arm) -> TyResult<Ty> {
-        // TODO: Synth optional type of pattern
+        self.synth_pat(arm.pat);
+        // // TODO: Synth optional type of pattern
         self.synth_expr(arm.body)
     }
 
@@ -346,6 +350,12 @@ impl<'hir> Typecker<'hir> {
                 self.type_inferring_node(name_id, name_ex);
                 name_ex
             },
+            hir::pat::PatKind::Struct(..) => todo!(),
+            &hir::pat::PatKind::Or(lpat, rpat) => {
+                let pat_ty = self.synth_pat(lpat);
+                self.synth_pat(rpat);
+                pat_ty
+            },
         };
 
         self.type_inferring_node(pat, kind_ty);
@@ -353,12 +363,18 @@ impl<'hir> Typecker<'hir> {
         kind_ty
     }
 
+    /// Return list of types and pattern names. This is used for replacement of
+    /// unsolved existentials with universally quantifiers, and names are just
+    /// for readability to name universally quantified variables as their
+    /// pattern names.
     fn get_pat_inner_tys(&self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![(None, Ty::unit())],
             &hir::pat::PatKind::Ident(name, name_id) => {
                 vec![(Some(name), self.tyctx().node_type(name_id).unwrap())]
             },
+            hir::pat::PatKind::Struct(..) => todo!(),
+            &hir::pat::PatKind::Or(lpat, rpat) => self.get_pat_inner_tys(lpat).exte,
         }
     }
 

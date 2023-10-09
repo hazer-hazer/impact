@@ -18,7 +18,7 @@ use crate::{
         builtin::Builtin,
         def::{DefId, DefKind},
     },
-    session::{impl_session_holder, Session, SessionHolder},
+    session::{impl_session_holder, Session},
     typeck::{
         ty::{self, FloatKind, TyKind, TyMap, VariantId},
         tyctx::InstantiatedTy,

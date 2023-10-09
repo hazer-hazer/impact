@@ -6,14 +6,17 @@ use crate::{
 
 /// Mini-DSL for PP
 macro_rules! pp {
+    // Main entry point, call `pp!(pp, arg1, ..., argN)`, often pp arg is `self`
     ($pp: expr $(,$args: tt)* $(,)?) => {{
         $(pp!(@inner $pp, $args));*
     }};
 
+    // `pp!(pp, ...)` gives you `pp`, used at the end to return pp
     (@inner $pp: expr, ...) => {
         $pp
     };
 
+    // `pp!(pp, {pp_method1, ..., pp_methodN})`
     (@inner $pp: expr, {$first: ident $(,$rest: ident)+}) => {{
         pp!(@inner $pp, {$first});
         $(pp!(@inner $pp, {$rest}));*
@@ -60,11 +63,11 @@ macro_rules! pp {
         });
     };
 
-    (@inner $pp: expr, {delim $delim: tt / $fmt:ident: $iter: expr $(,$args: expr)*}) => {
+    (@inner $pp: expr, {delim $delim: tt / $fmt:ident: $iter: expr $(,$args: expr)*}) => {{
         let mut iter = $iter;
 
-        if let Some(first) = iter.next() {
-            $pp.$fmt(first, $($args),*);
+        if let Some(next) = iter.next() {
+            $pp.$fmt(next, $($args),*);
 
             for el in iter {
                 pp!($pp, $delim);
@@ -72,26 +75,32 @@ macro_rules! pp {
                 $pp.$fmt(el, $($args),*);
             }
         }
-    };
+    }};
 }
 
 pub(crate) use pp;
 
-pub struct PP {
+pub struct PP<C> {
     out: String,
     indent_level: u32,
+    ctx: C,
 }
 
-impl PP {
-    pub fn new() -> Self {
+impl<C> PP<C> {
+    pub fn new(ctx: C) -> Self {
         Self {
             out: String::new(),
             indent_level: 0,
+            ctx,
         }
     }
 }
 
-impl PP {
+impl<C> PP<C> {
+    pub fn ctx(&self) -> &C {
+        &self.ctx
+    }
+
     pub fn get_string(self) -> String {
         self.out
     }

@@ -128,6 +128,10 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
             pat::PatKind::Unit => self.visit_unit_pat(),
             pat::PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
             pat::PatKind::Struct(path, fields, rest) => self.visit_struct_pat(path, fields, *rest),
+            pat::PatKind::Or(lpat, rpat) => {
+                walk_pr!(self, lpat, visit_pat);
+                walk_pr!(self, rpat, visit_pat);
+            },
         }
     }
 
@@ -169,6 +173,6 @@ impl<'ast> AstVisitor<'ast> for AstMapFiller<'ast> {
     }
 
     fn visit_err(&mut self, _: &'ast ErrorNode) {
-        todo!()
+        panic!("Called AstMapFiller with AST containing error nodes")
     }
 }

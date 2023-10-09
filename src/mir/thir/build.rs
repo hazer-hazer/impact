@@ -1,5 +1,5 @@
 use super::{
-    Block, BlockId, Expr, ExprId, ExprKind, Lit, LocalVar, Param, ParamId, Pat, PatKind, Stmt,
+    Arm, Block, BlockId, Expr, ExprId, ExprKind, Lit, LocalVar, Param, ParamId, Pat, PatKind, Stmt,
     StmtId, THIR,
 };
 use crate::{
@@ -95,7 +95,10 @@ impl<'ctx> ThirBuilder<'ctx> {
             //     )
             // },
             &hir::expr::ExprKind::Builtin(bt) => ExprKind::Builtin(bt),
-            hir::expr::ExprKind::Match(..) => todo!(),
+            hir::expr::ExprKind::Match(subject, arms) => ExprKind::Match(
+                self.expr(*subject),
+                arms.iter().map(|arm| self.arm(arm)).collect(),
+            ),
         };
 
         self.thir.add_expr(Expr {
@@ -169,6 +172,7 @@ impl<'ctx> ThirBuilder<'ctx> {
                 var: LocalVar::new(name_id),
                 ty,
             },
+            hir::pat::PatKind::Struct(..) => todo!(),
         };
 
         Pat {
@@ -176,5 +180,11 @@ impl<'ctx> ThirBuilder<'ctx> {
             kind,
             span: pat.span(),
         }
+    }
+
+    fn arm(&mut self, arm: &hir::expr::Arm) -> Arm {
+        let pat = self.pat(arm.pat);
+        let body = self.expr(arm.body);
+        Arm { pat, body }
     }
 }

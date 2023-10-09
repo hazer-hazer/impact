@@ -1,4 +1,4 @@
-// Ty methods used only in typeck and unavailable outside of typeck
+/// Ty methods used only in typeck and unavailable outside of typeck
 
 use std::{
     collections::HashSet,

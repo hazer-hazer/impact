@@ -19,6 +19,9 @@ struct String =
 main () =
     let a = String "a"
 
+    match a
+        m => 1
+
     puts (String.field a)
 
     ()

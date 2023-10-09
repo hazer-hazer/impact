@@ -50,6 +50,17 @@ impl Display for Lit {
     }
 }
 
+pub struct Arm {
+    pub pat: Pat,
+    pub body: ExprId,
+}
+
+impl std::fmt::Display for Arm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} => {}", self.pat, self.body)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExprCategory {
     Const,
@@ -95,6 +106,7 @@ pub enum ExprKind {
     Ty(ExprId, Ty),
     // FieldAccess(ExprId, VariantId, FieldId),
     Builtin(ValueBuiltin),
+    Match(ExprId, Vec<Arm>),
 }
 
 impl Display for ExprKind {
@@ -122,6 +134,14 @@ impl Display for ExprKind {
             //     write!(f, "{lhs}.{variant}.{field}")
             // },
             ExprKind::Builtin(bt) => write!(f, "{bt}"),
+            ExprKind::Match(subject, arms) => write!(
+                f,
+                "match {subject} {{{}}}",
+                arms.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
         }
     }
 }
@@ -141,7 +161,7 @@ impl Expr {
             // ExprKind::FieldAccess(..) => ExprCategory::LValue,
             ExprKind::LocalRef(_) => ExprCategory::LValue,
 
-            ExprKind::Ref(_) | ExprKind::Call { .. } | ExprKind::Block(_) => {
+            ExprKind::Ref(_) | ExprKind::Call { .. } | ExprKind::Block(_) | ExprKind::Match(..) => {
                 ExprCategory::StoreRValue
             },
             ExprKind::Def(..) | ExprKind::Lambda { .. } | ExprKind::Builtin(_) => {
@@ -166,11 +186,26 @@ pub enum PatKind {
     Ident { name: Ident, var: LocalVar, ty: Ty },
 }
 
+impl Display for PatKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PatKind::Unit => write!(f, "()"),
+            PatKind::Ident { name, var, ty } => write!(f, "{name}{var}: {ty}"),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct Pat {
     pub ty: Ty,
     pub kind: PatKind,
     pub span: Span,
+}
+
+impl Display for Pat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.kind, self.ty)
+    }
 }
 
 pub struct Param {

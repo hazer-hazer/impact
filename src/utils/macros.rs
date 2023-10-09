@@ -29,6 +29,26 @@ macro_rules! match_opt {
 
 pub(crate) use match_opt;
 
+macro_rules! match_result {
+    ($err: expr, $expr: expr, $($patterns: pat => $arms: expr),+) => {
+        match $expr {
+            $($patterns => Ok($arms),)+
+            _ => Err($err),
+        }
+    };
+
+    ($expr: expr, $($patterns: pat => $arms: expr),+) => {
+        match_result!(
+            format!("{} does not match any of these patterns: {{{}}}", $expr, stringify!($($patterns),+)),
+            $expr,
+            $($patterns => $arms),+
+        )
+    };
+
+}
+
+pub(crate) use match_result;
+
 macro_rules! concat_string {
     () => { String::with_capacity(0) };
     ($($s:expr),+) => {{

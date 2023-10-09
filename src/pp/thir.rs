@@ -1,87 +1,82 @@
-use super::{AstLikePP, AstPPMode};
+use super::pp::{pp, PP};
 use crate::{
-    mir::thir::{BlockId, ExprId, ExprKind, Pat, PatKind, Stmt, StmtId, THIR},
+    hir::BodyId,
+    mir::thir::{Arm, BlockId, ExprId, ExprKind, Pat, PatKind, Stmt, StmtId, THIR},
     parser::token::Punct,
     session::Session,
     span::sym::Kw,
 };
 
-pub struct ThirPrinter<'a> {
-    pp: AstLikePP<'a>,
+pub struct ThirPPCtx<'a> {
     thir: &'a THIR,
 }
 
-impl<'a> ThirPrinter<'a> {
-    pub fn new(sess: &'a Session, thir: &'a THIR) -> Self {
-        Self {
-            pp: AstLikePP::new(sess, AstPPMode::Normal),
-            thir,
-        }
+impl<'a> ThirPPCtx<'a> {
+    pub fn new(thir: &'a THIR) -> Self {
+        Self { thir }
+    }
+}
+
+pub trait ThirPrinter {
+    fn pp(self, thir_entry_expr: ExprId) -> Self;
+    fn stmt(&mut self, id: StmtId) -> &mut Self;
+    fn expr(&mut self, id: ExprId) -> &mut Self;
+    fn arm(&mut self, arm: &Arm) -> &mut Self;
+    fn pat(&mut self, pat: &Pat) -> &mut Self;
+    fn block(&mut self, id: BlockId) -> &mut Self;
+}
+
+impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
+    fn pp(mut self, thir_entry_expr: ExprId) -> Self {
+        pp!(self, {expr: thir_entry_expr}, ...)
     }
 
-    pub fn print(mut self, thir_entry_expr: ExprId) -> String {
-        self.expr(thir_entry_expr);
-        self.pp.get_string()
-    }
-
-    fn stmt(&mut self, id: StmtId) {
-        self.pp.out_indent();
-        let stmt = self.thir.stmt(id);
+    fn stmt(&mut self, id: StmtId) -> &mut Self {
+        pp!(self, { out_indent });
+        let stmt = self.ctx().thir.stmt(id);
         match stmt {
             &Stmt::Expr(id) => self.expr(id),
             Stmt::Local(pat, init) => {
                 self.pat(&pat);
-                self.expr(*init);
+                self.expr(*init)
             },
         }
     }
 
-    fn expr(&mut self, id: ExprId) {
-        let expr = self.thir.expr(id);
+    fn expr(&mut self, id: ExprId) -> &mut Self {
+        let expr = self.ctx().thir.expr(id);
         match &expr.kind {
             ExprKind::Lit(lit) => {
-                self.pp.string(lit);
+                pp!(self, { "{lit}" }, ...)
             },
             ExprKind::LocalRef(local) => {
-                self.pp.string(local);
+                pp!(self, { "{local}" }, ...)
             },
             &ExprKind::Def(def_id, kind, ty) => {
-                self.pp
-                    .string(kind)
-                    .sp()
-                    .color(def_id)
-                    .punct(Punct::Colon)
-                    .string(ty);
+                pp!(self, {string: kind}, {sp}, {color: def_id}, {punct: Punct::Colon}, {string: ty}, ...)
             },
             &ExprKind::Block(id) => self.block(id),
             &ExprKind::Ref(expr) => {
-                self.pp.str("ref ");
-                self.expr(expr);
+                pp!(self, "ref", {sp}, {expr: expr}, ...)
             },
             ExprKind::Call {
                 func_ty: _,
                 lhs,
                 args,
             } => {
-                self.expr(*lhs);
-                self.pp.punct(Punct::LParen);
-                args.iter().copied().for_each(|arg| self.expr(arg));
-                self.pp.punct(Punct::RParen);
+                pp!(self, {expr: *lhs}, {punct: Punct::LParen}, {delim {sp} / expr: args.iter().copied()}, {punct: Punct::RParen}, ...)
             },
             &ExprKind::Lambda { def_id, body_id } => {
-                self.pp
-                    .str("lambda")
-                    .color(def_id)
-                    .str("{")
-                    .string(body_id)
-                    .str("}");
+                pp!(self, "lambda", {color: def_id}, "{", {string: body_id}, "}", ...)
             },
             &ExprKind::Ty(expr, ty) => {
-                self.expr(expr);
-                self.pp.punct(Punct::Colon).string(ty);
+                pp!(self, {expr: expr}, {punct: Punct::Colon}, {string: ty}, ...)
             },
             ExprKind::Builtin(bt) => {
-                self.pp.string(bt);
+                pp!(self, {string: bt}, ...)
+            },
+            ExprKind::Match(subject, arms) => {
+                pp!(self, "match", {sp}, {expr: *subject}, {delim {nl} / arm: arms.iter()}, ...)
             },
             // &ExprKind::FieldAccess(lhs, field, _) => {
             //     self.expr(lhs);
@@ -90,34 +85,28 @@ impl<'a> ThirPrinter<'a> {
         }
     }
 
-    fn pat(&mut self, pat: &Pat) {
+    fn arm(&mut self, arm: &Arm) -> &mut Self {
+        pp!(self, {pat: &arm.pat}, {punct: Punct::FatArrow}, {expr: arm.body}, ...)
+    }
+
+    fn pat(&mut self, pat: &Pat) -> &mut Self {
         match pat.kind {
             PatKind::Unit => {
-                self.pp.kw(Kw::Unit);
+                pp!(self, {kw: Kw::Unit}, ...)
             },
             PatKind::Ident {
                 name,
                 var: _,
                 ty: _,
             } => {
-                self.pp.string(name);
+                pp!(self, {string: name}, ...)
             },
         }
     }
 
-    fn block(&mut self, id: BlockId) {
-        let block = self.thir.block(id);
-        self.pp.indent();
-        block.stmts.iter().copied().for_each(|stmt| {
-            self.stmt(stmt);
-            self.pp.nl();
-        });
-        self.pp.out_indent();
-        block.expr.map(|expr| {
-            self.expr(expr);
-            self.pp.nl();
-        });
-        self.pp.dedent();
+    fn block(&mut self, id: BlockId) -> &mut Self {
+        let block = self.ctx().thir.block(id);
+        pp!(self, {indent}, {delim {nl, out_indent} / stmt: block.stmts.iter().copied()}, {expr?: block.expr}, {nl, dedent}, ...)
     }
 }
 

@@ -2,6 +2,7 @@ mod block;
 pub mod build;
 mod expr;
 mod local;
+mod pat_matches;
 pub mod scalar;
 mod stmt;
 pub mod thir;
@@ -14,7 +15,7 @@ use std::{
 use self::scalar::Scalar;
 pub use crate::typeck::ty::Ty;
 use crate::{
-    cli::color::{Color},
+    cli::color::Color,
     dt::idx::{declare_idx, IndexVec},
     hir::BodyId,
     resolve::{
@@ -334,10 +335,37 @@ impl Display for Stmt {
     }
 }
 
-#[derive(Clone, Copy)]
+pub type SwitchValue = u64;
+
+#[derive(Clone)]
+pub struct SwitchTargets {
+    values: Vec<SwitchValue>,
+    branches: Vec<BB>,
+}
+
+impl SwitchTargets {}
+
+impl Display for SwitchTargets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}; else -> {}]",
+            self.values
+                .iter()
+                .zip(self.branches.iter())
+                .map(|(v, bb)| format!("{v} -> {bb}"))
+                .collect::<Vec<_>>()
+                .join("; "),
+            self.branches.last().unwrap()
+        )
+    }
+}
+
+#[derive(Clone)]
 pub enum TerminatorKind {
     Goto(BB),
     Return,
+    Switch(Operand, SwitchTargets),
 }
 
 impl Display for TerminatorKind {
@@ -345,11 +373,12 @@ impl Display for TerminatorKind {
         match self {
             TerminatorKind::Goto(to) => write!(f, "goto {to}"),
             TerminatorKind::Return => "return".fmt(f),
+            TerminatorKind::Switch(operand, targets) => write!(f, "switch {operand} {targets}"),
         }
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Terminator {
     pub kind: TerminatorKind,
 }
@@ -481,6 +510,15 @@ impl BodyBuilder {
             bb,
             Terminator {
                 kind: TerminatorKind::Goto(goto),
+            },
+        )
+    }
+
+    pub fn terminate_switch(&mut self, bb: BB, operand: Operand, targets: SwitchTargets) {
+        self.terminate(
+            bb,
+            Terminator {
+                kind: TerminatorKind::Switch(operand, targets),
             },
         )
     }

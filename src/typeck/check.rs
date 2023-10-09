@@ -267,7 +267,7 @@ impl<'hir> Typecker<'hir> {
             (TyKind::Existential(ex1), TyKind::Existential(ex2)) if ex1 == ex2 => Ok(r_ty),
 
             // Int existentials //
-            // ^a < Int
+            // ^a <: Int
             (&TyKind::Existential(int_ex), TyKind::Int(_)) if int_ex.is_int() => {
                 Ok(self.solve(int_ex, r_ty.mono()))
             },

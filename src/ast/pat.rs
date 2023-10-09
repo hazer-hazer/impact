@@ -33,6 +33,8 @@ pub enum PatKind {
         /// rest
         bool,
     ),
+
+    Or(PR<N<Pat>>, PR<N<Pat>>),
 }
 
 impl Display for PatKind {
@@ -44,13 +46,10 @@ impl Display for PatKind {
                 f,
                 "{} {}{}",
                 pr_display(&struct_path.0),
-                fields
-                    .iter()
-                    .map(pr_display)
-                    .collect::<Vec<_>>()
-                    .join(", "),
+                fields.iter().map(pr_display).collect::<Vec<_>>().join(", "),
                 if *rest { ", ..." } else { "" }
             ),
+            PatKind::Or(lpat, rpat) => write!(f, "{} | {}", pr_display(lpat), pr_display(rpat)),
         }
     }
 }

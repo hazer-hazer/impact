@@ -1,213 +1,218 @@
 use std::str::from_utf8;
 
-use super::{hir::walk_each_delim, AstLikePP};
+use super::{
+    hir::walk_each_delim,
+    pp::{pp, PP},
+    AstLikePP,
+};
 use crate::{
     hir::{
         expr::Lambda, item::ItemId, pat::PatKind, visitor::HirVisitor, BodyId, BodyOwner, Map, Pat,
         WithHirId, HIR,
     },
     mir::{
-        Body, Const, ConstKind, LValue, Operand, ProjectionKind, RValue, Stmt, StmtKind,
-        Terminator, TerminatorKind, MIR,
+        Body, Const, ConstKind, LValue, Local, LocalInfo, Operand, ProjectionKind, RValue, Stmt,
+        StmtKind, Terminator, TerminatorKind, MIR,
     },
     parser::token::{Op, Punct},
     session::{impl_session_holder, Session, SessionHolder},
     span::sym::{Ident, Kw},
 };
 
-pub struct MirPrinter<'ctx> {
+pub struct MirPPCtx<'ctx> {
     hir: &'ctx HIR,
-    pub pp: AstLikePP<'ctx>,
     sess: &'ctx Session,
     mir: &'ctx MIR,
 }
 
-impl_session_holder!(MirPrinter<'ctx>);
-
-impl<'ctx> MirPrinter<'ctx> {
-    pub fn new(sess: &'ctx Session, hir: &'ctx HIR, mir: &'ctx MIR) -> Self {
-        Self {
-            hir,
-            pp: AstLikePP::new(&sess, super::AstPPMode::Normal),
-            sess,
-            mir,
-        }
+impl<'ctx> MirPPCtx<'ctx> {
+    pub fn new(hir: &'ctx HIR, sess: &'ctx Session, mir: &'ctx MIR) -> Self {
+        Self { hir, sess, mir }
     }
+}
 
-    fn print_body(&mut self, body: &Body) {
-        self.pp.ch('{').nl().indent();
+impl_session_holder!(MirPPCtx<'ctx>);
+
+pub trait MirPrinter {
+    // fn print_body_local(&mut self, local: (Local, &LocalInfo)) -> &mut Self;
+    fn print_body(&mut self, body: &Body) -> &mut Self;
+    fn print_stmt(&mut self, stmt: &Stmt) -> &mut Self;
+    fn lvalue(&mut self, lvalue: &LValue) -> &mut Self;
+    fn rvalue(&mut self, rvalue: &RValue) -> &mut Self;
+    fn operand(&mut self, operand: &Operand) -> &mut Self;
+    fn const_(&mut self, const_: &Const) -> &mut Self;
+    fn terminator(&mut self, terminator: &Terminator) -> &mut Self;
+}
+
+impl<'ctx> MirPrinter for PP<MirPPCtx<'ctx>> {
+    // fn print_body_local(&mut self, (local, info): (Local, &LocalInfo)) -> &mut
+    // Self {     pp!(self, {out_indent}, {"{}: {} // `{}`", local, info.ty,
+    // info.name}, ...)
+    // }
+
+    fn print_body(&mut self, body: &Body) -> &mut Self {
+        pp!(
+            self,
+            "{", {nl, indent},
+        );
+
         for (local, info) in body.locals.iter_enumerated() {
             // TODO: Print additional info such as span
-            self.pp
-                .out_indent()
-                .string(format!("{}: {} // `{}`", local, info.ty, info.name))
-                .nl();
+            pp!(self, {out_indent}, {"{}: {} // `{}`", local, info.ty, info.name}, {nl});
         }
 
         for (bb_id, bb) in body.basic_blocks.iter_enumerated() {
-            self.pp
-                .out_indent()
-                .string(format!("{}: {{", bb_id))
-                .nl()
-                .indent();
-            bb.stmts.iter().for_each(|stmt| {
-                self.print_stmt(stmt);
-            });
-            self.print_terminator(&bb.terminator);
-            self.pp.nl().dedent().out_indent().ch('}').nl();
+            pp!(self, {out_indent}, {"{}: {{", bb_id}, {nl, indent}, {each / print_stmt: bb.stmts.iter()});
+            self.terminator(&bb.terminator);
+            pp!(self, {nl, dedent, out_indent}, "}", {nl});
         }
-        self.pp.dedent().out_indent().ch('}').nl();
+        pp!(self, {dedent, out_indent}, "}", {nl}, ...)
     }
 
-    fn print_stmt(&mut self, stmt: &Stmt) {
-        self.pp.out_indent();
+    fn print_stmt(&mut self, stmt: &Stmt) -> &mut Self {
+        pp!(self, { out_indent });
         match &stmt.kind {
             StmtKind::Assign(lvalue, rvalue) => {
-                self.print_lvalue(lvalue);
-                self.pp.op(Op::Assign);
-                self.print_rvalue(rvalue);
+                pp!(self, {lvalue: lvalue}, {op: Op::Assign}, {rvalue: rvalue});
             },
         }
-        self.pp.ch(';').nl();
+        pp!(self, {punct: Punct::Semi}, {nl}, ...)
     }
 
-    fn print_lvalue(&mut self, lvalue: &LValue) {
-        self.pp.string(lvalue.local);
+    fn lvalue(&mut self, lvalue: &LValue) -> &mut Self {
+        pp!(self, {string: lvalue.local});
 
         if let Some(proj) = lvalue.proj {
             match proj.kind {
                 ProjectionKind::Field(vid, fid) => {
-                    self.pp.string(vid).punct(Punct::Dot).string(fid);
+                    pp!(self, {string: vid}, {punct: Punct::Dot}, {string: fid}, ...)
                 },
             }
+        } else {
+            self
         }
     }
 
-    fn print_rvalue(&mut self, rvalue: &RValue) {
+    fn rvalue(&mut self, rvalue: &RValue) -> &mut Self {
         match rvalue {
-            RValue::Operand(operand) => self.print_operand(operand),
+            RValue::Operand(operand) => self.operand(operand),
             // RValue::Infix(lhs, op, rhs) => {
             //     self.print_operand(lhs);
             //     self.pp.string(format!(" {} ", op));
             //     self.print_operand(rhs);
             // },
             RValue::Infix(op) => {
-                self.pp.punct(Punct::LParen).string(op).punct(Punct::RParen);
+                pp!(self, {punct: Punct::LParen}, {string: op}, {punct: Punct::RParen}, ...)
             },
             RValue::Closure(def_id) => {
-                self.pp.string(format!("closure{}", def_id));
+                pp!(self, {"closure{}", def_id}, ...)
             },
             RValue::Call { lhs, args } => {
-                self.pp.ch('(');
-                self.print_operand(lhs);
-                self.pp.sp();
-                walk_each_delim!(self, args.iter(), print_operand, " ");
-                self.pp.ch(')');
+                pp!(self, "(", {operand: lhs}, ")", {sp}, {delim " " / operand: args.iter()}, ...)
                 // self.pp.string(format!(" -> {}", target));
             },
             &RValue::FuncRef(def_id, ty) => {
-                let def = self.sess.def_table.def(def_id);
+                let def = self.ctx().sess.def_table.def(def_id);
                 // match def.kind() {
                 //     DefKind::Func => todo!(),
                 //     DefKind::Value => todo!(),
                 // }
-                self.pp.string(format!("{}: {}", def.name(), ty));
+                pp!(self, {"{}: {}", def.name(), ty}, ...)
             },
             &RValue::ClosureRef(def_id) | &RValue::ValueRef(def_id) => {
-                let def = self.sess.def_table.def(def_id);
-                self.pp.string(def);
+                let def = self.ctx().sess.def_table.def(def_id);
+                pp!(self, {string: def}, ...)
             },
             RValue::Ref(lv) => {
-                self.pp.str("ref ");
-                self.print_lvalue(lv);
+                pp!(self, "ref ", {lvalue: lv}, ...)
             },
             RValue::Ctor(def_id, ty) => {
-                self.pp.string(format!("ctor{def_id}: {ty}"));
+                pp!(self, {"ctor{def_id}: {ty}"}, ...)
             },
             RValue::FieldAccessor(def_id, ty) => {
-                self.pp.string(format!("field_accessor{def_id}: {ty}"));
+                pp!(self, {"field_accessor{def_id}: {ty}"}, ...)
             },
         }
     }
 
-    fn print_operand(&mut self, operand: &Operand) {
+    fn operand(&mut self, operand: &Operand) -> &mut Self {
         match operand {
-            Operand::LValue(lvalue) => self.print_lvalue(lvalue),
-            Operand::Const(const_) => self.print_const(const_),
+            Operand::LValue(lvalue) => self.lvalue(lvalue),
+            Operand::Const(const_) => self.const_(const_),
         }
     }
 
-    fn print_const(&mut self, const_: &Const) {
+    fn const_(&mut self, const_: &Const) -> &mut Self {
         match &const_.kind {
-            ConstKind::Scalar(scalar) => self.pp.string(scalar),
+            ConstKind::Scalar(scalar) => pp!(self, {string: scalar}),
             // FIXME: ZeroSized formatting?
-            ConstKind::ZeroSized => self.pp.kw(Kw::Unit),
+            ConstKind::ZeroSized => pp!(self, {kw: Kw::Unit}),
             ConstKind::Slice { data } => match const_.ty.kind() {
                 crate::typeck::ty::TyKind::Str => {
-                    self.pp.string(format!("\"{}\"", from_utf8(data).unwrap()))
+                    pp!(self, {"\"{}\"", from_utf8(data).unwrap()});
                 },
-                _ => self.pp.string(format!("{:02x?}", data)),
+                _ => {
+                    pp!(self, {"{:02x?}", data});
+                },
             },
         };
-        self.pp.punct(Punct::Colon).string(const_.ty);
+        pp!(self, {punct: Punct::Colon}, {string: const_.ty}, ...)
     }
 
-    fn print_terminator(&mut self, terminator: &Terminator) {
-        self.pp.out_indent();
+    fn terminator(&mut self, terminator: &Terminator) -> &mut Self {
+        pp!(self, { out_indent });
         match &terminator.kind {
-            TerminatorKind::Goto(target) => self.pp.string(format!("goto {}", target)),
-            TerminatorKind::Return => self.pp.str("return"),
-        };
+            TerminatorKind::Goto(target) => pp!(self, {"goto {}", target}, ...),
+            TerminatorKind::Return => pp!(self, "return", ...),
+            TerminatorKind::Switch(operand, targets) => {
+                pp!(self, { "switch {operand} {targets}" }, ...)
+            },
+        }
     }
 }
 
-impl<'ctx> HirVisitor for MirPrinter<'ctx> {
+impl<'ctx> HirVisitor for PP<MirPPCtx<'ctx>> {
     fn visit_func_item(&mut self, name: Ident, body: BodyId, id: ItemId, hir: &HIR) {
-        if id.def_id() == self.sess.def_table.builtin_func().def_id() {
+        if id.def_id() == self.ctx().sess.def_table.builtin_func().def_id() {
             return;
         }
 
-        self.pp.str("func").sp().string(name.original_string()).sp();
+        pp!(self, "func", {sp}, {string: name.original_string()}, {sp});
         self.visit_body(body, BodyOwner::func(id.def_id()), hir);
     }
 
     fn visit_lambda(&mut self, lambda: &Lambda, hir: &HIR) {
-        self.pp.str("[lambda").string(lambda.def_id).str("]");
+        pp!(self, "[lambda", {string: lambda.def_id}, "]");
         self.visit_body(lambda.body_id, BodyOwner::lambda(lambda.def_id), hir);
     }
 
     fn visit_value_item(&mut self, name: Ident, value: BodyId, id: ItemId, hir: &HIR) {
-        self.pp.string(name.original_string()).op(Op::Assign);
+        pp!(self, {string: name.original_string()}, {op: Op::Assign});
         self.visit_body(value, BodyOwner::value(id.def_id()), hir);
     }
 
     // Note: Only used for parameters
-    fn visit_pat(&mut self, pat: Pat, _hir: &HIR) {
-        let pat = self.hir.pat(pat);
+    fn visit_pat(&mut self, pat: Pat, hir: &HIR) {
+        let pat = self.ctx().hir.pat(pat);
         match pat.kind() {
-            PatKind::Unit => self.pp.kw(Kw::Unit),
-            &PatKind::Ident(ident, name_id) => self
-                .pp
-                .string(ident)
-                .punct(Punct::Colon)
-                .string(self.sess.tyctx.tyof(name_id.id())),
+            PatKind::Unit => pp!(self, {kw: Kw::Unit}, ...),
+            &PatKind::Ident(ident, name_id) => {
+                pp!(self, {string: ident}, {punct: Punct::Colon}, {string: self.ctx().sess.tyctx().tyof(name_id.id())}, ...)
+            },
+            PatKind::Struct(..) => todo!(),
+            &PatKind::Or(lpat, rpat) => {
+                pp!(self, {visit_pat: lpat, hir}, {op: Op::BitOr}, {visit_pat: rpat, hir}, ...)
+            },
         };
     }
 
     fn visit_body(&mut self, body: BodyId, _owner: BodyOwner, hir: &HIR) {
-        walk_each_delim!(
-            self,
-            self.hir.body(body).params.iter().copied(),
-            visit_pat,
-            " ",
-            hir
-        );
-        self.pp.sp();
+        pp!(self, {delim {sp} / visit_pat: self.ctx().hir.body(body).params.iter().copied(), hir}, {sp});
 
-        if let Some(body) = self.mir.bodies.get(&body) {
+        if let Some(body) = self.ctx().mir.bodies.get(&body) {
             self.print_body(body);
         } else {
-            self.pp.str("[NO BODY]").nl();
+            pp!(self, "[NO BODY]", { nl });
         }
     }
 }

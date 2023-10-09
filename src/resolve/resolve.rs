@@ -12,7 +12,7 @@ use crate::{
         pat::{Pat, PatKind},
         ty::{Ty, TyKind, TyPath},
         visitor::{walk_each_pr, walk_pr, AstVisitor},
-        ErrorNode, IdentNode, NodeId, NodeMap, Path, WithNodeId, AST, N, PR,
+        ErrorNode, NodeId, NodeMap, Path, WithNodeId, AST, N, PR,
     },
     cli::verbose,
     message::message::{impl_message_holder, MessageBuilder, MessageHolder, MessageStorage},
@@ -771,7 +771,18 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
                 let ident = ident.as_ref().unwrap();
                 self.define_local(ident.id, &ident.ident);
             },
-            PatKind::Struct(..) => todo!(),
+            PatKind::Struct(ty_path, fields, _) => {
+                // TODO: Only DefKind::Struct can be here?
+                self.resolve_path(
+                    ty_path.0.as_ref().unwrap(),
+                    SearchForKind::Def(DefKind::Struct),
+                );
+                walk_each_pr!(self, fields, visit_struct_pat_field);
+            },
+            PatKind::Or(lpat, rpat) => {
+                walk_pr!(self, lpat, visit_pat);
+                walk_pr!(self, rpat, visit_pat);
+            },
         }
     }
 
@@ -790,6 +801,8 @@ impl<'ast> AstVisitor<'ast> for NameResolver<'ast> {
         self.exit_scope();
     }
 
+    // These "path" visitors below are unreachable because all path resolution is
+    // handled in usage-specific way for better error messages
     fn visit_path_expr(&mut self, _path: &'ast PathExpr) {
         unreachable!();
     }

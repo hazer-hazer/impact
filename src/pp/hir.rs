@@ -339,6 +339,12 @@ impl<'a> HirVisitor for HirPP<'a> {
             &PatKind::Ident(ident, name_id) => {
                 self.visit_ident_pat(ident, name_id, hir);
             },
+            PatKind::Struct(ty_path, fields, rest) => todo!(),
+            &PatKind::Or(lpat, rpat) => {
+                self.visit_pat(lpat, hir);
+                self.pp.op(Op::BitOr);
+                self.visit_pat(rpat, hir);
+            },
         }
 
         self.pp.ty_anno(pat_id);

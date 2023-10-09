@@ -11,7 +11,7 @@ use crate::{
     resolve::def::DefId,
     session::{MaybeWithSession, WithSess, WithoutSess},
     span::sym::Ident,
-    utils::macros::match_opt,
+    utils::macros::{match_opt, match_result},
 };
 
 declare_idx!(TyId, u32, "#{}", Color::BrightYellow);
@@ -437,6 +437,8 @@ impl std::fmt::Display for Struct {
     }
 }
 
+pub type TypeAsResult<T> = Result<T, String>;
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum TyKind {
     Error,
@@ -658,20 +660,20 @@ impl Ty {
     }
 
     // Getters //
-    pub fn as_adt(&self) -> Option<&Adt> {
-        match_opt!(self.kind(), TyKind::Adt(adt) => adt)
+    pub fn as_adt(&self) -> TypeAsResult<&Adt> {
+        match_result!(self.kind(), TyKind::Adt(adt) => adt)
     }
 
-    pub fn as_struct(&self) -> Option<&Struct> {
-        match_opt!(self.kind(), TyKind::Struct(struct_) => struct_)
+    pub fn as_struct(&self) -> TypeAsResult<&Struct> {
+        match_result!(self.kind(), TyKind::Struct(struct_) => struct_)
     }
 
-    pub fn as_int(&self) -> Option<IntKind> {
-        match_opt!(self.kind(), &TyKind::Int(kind) => kind)
+    pub fn as_int(&self) -> TypeAsResult<IntKind> {
+        match_result!(self.kind(), &TyKind::Int(kind) => kind)
     }
 
-    pub fn as_float_kind(&self) -> Option<FloatKind> {
-        match_opt!(self.kind(), &TyKind::Float(kind) => kind)
+    pub fn as_float_kind(&self) -> TypeAsResult<FloatKind> {
+        match_result!(self.kind(), &TyKind::Float(kind) => kind)
     }
 
     // FIXME: Unused
@@ -958,8 +960,8 @@ mod tests {
 
     #[test]
     fn as_adt() {
-        assert_eq!(Ty::adt(make_adt()).as_adt(), Some(&make_adt()));
-        assert!(matches!(super_simple_ty().as_adt(), None));
+        assert_eq!(Ty::adt(make_adt()).as_adt(), Ok(&make_adt()));
+        assert!(matches!(super_simple_ty().as_adt(), Err(..)));
     }
 
     #[test]

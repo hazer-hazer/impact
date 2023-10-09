@@ -179,6 +179,9 @@ pub trait AstVisitor<'ast> {
             PatKind::Unit => self.visit_unit_pat(),
             PatKind::Ident(ident) => walk_pr!(self, ident, visit_ident_pat),
             PatKind::Struct(path, fields, rest) => self.visit_struct_pat(path, fields, *rest),
+            PatKind::Or(lpat, rpat) => {
+                self.visit_or_pat(lpat, rpat);
+            },
         }
     }
 
@@ -192,7 +195,7 @@ pub trait AstVisitor<'ast> {
         &mut self,
         path: &'ast TyPath,
         fields: &'ast [PR<StructPatField>],
-        rest: bool,
+        _rest: bool,
     ) {
         self.visit_ty_path(path);
         walk_each_pr!(self, fields, visit_struct_pat_field);
@@ -203,6 +206,11 @@ pub trait AstVisitor<'ast> {
             walk_pr!(self, name, visit_ident);
         }
         walk_pr!(self, &field.pat, visit_pat);
+    }
+
+    fn visit_or_pat(&mut self, lpat: &'ast PR<N<Pat>>, rpat: &'ast PR<N<Pat>>) {
+        walk_pr!(self, lpat, visit_pat);
+        walk_pr!(self, rpat, visit_pat);
     }
 
     // Expressions //

@@ -461,6 +461,10 @@ impl<'ast> Lower<'ast> {
                 self.lower_node_id(ident.id()),
             ),
             PatKind::Struct(..) => todo!(),
+            PatKind::Or(lpat, rpat) => hir::pat::PatKind::Or(
+                lower_pr!(self, lpat, lower_pat),
+                lower_pr!(self, rpat, lower_pat),
+            ),
         };
 
         self.add_node(hir::Node::Pat(hir::pat::PatNode::new(id, kind, pat.span())))

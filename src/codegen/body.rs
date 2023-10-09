@@ -15,7 +15,7 @@ use crate::{
         Ty, BB, START_BB,
     },
     resolve::{builtin::Builtin, def::DefId},
-    session::{impl_session_holder, stage_result, SessionHolder, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Stage, StageResult},
     typeck::ty::{FloatKind, TyKind},
 };
 
@@ -187,8 +187,8 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
     fn gen_terminator(&mut self, terminator: &Terminator) {
         verbose!("Gen terminator {terminator}");
 
-        match terminator.kind {
-            TerminatorKind::Goto(bb) => {
+        match &terminator.kind {
+            &TerminatorKind::Goto(bb) => {
                 let ll_bb = self.gen_bb(bb);
                 self.builder.build_unconditional_branch(ll_bb);
             },
@@ -198,6 +198,9 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                     &format!("load_{}", self.local_name(Local::return_local())),
                 );
                 self.builder.build_return(Some(&return_local));
+            },
+            TerminatorKind::Switch(operand, targets) => {
+                todo!()
             },
         }
     }

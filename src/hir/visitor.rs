@@ -3,7 +3,7 @@ use super::{
     item::{
         Adt, ExternItem, Field, GenericParams, ItemId, ItemKind, Mod, Struct, TyAlias, TyParam,
     },
-    pat::PatKind,
+    pat::{PatKind, StructPatField},
     stmt::{Local, StmtKind},
     ty::TyKind,
     Block, BodyId, BodyOwner, Expr, ExprPath, HirId, Map, Pat, Stmt, Ty, TyPath, Variant, HIR,
@@ -136,13 +136,41 @@ pub trait HirVisitor {
         match pat.kind() {
             PatKind::Unit => self.visit_unit_pat(hir),
             &PatKind::Ident(ident, name_id) => self.visit_ident_pat(ident, name_id, hir),
+            PatKind::Struct(ty_path, fields, rest) => {
+                self.visit_struct_pat(ty_path, fields, rest, hir)
+            },
+            PatKind::Or(lpat, rpat) => self.visit_or_pat(lpat, rpat, hir),
         }
     }
 
     fn visit_unit_pat(&mut self, _hir: &HIR) {}
 
-    fn visit_ident_pat(&mut self, ident: Ident, name_id: HirId, hir: &HIR) {
+    fn visit_ident_pat(&mut self, ident: Ident, _name_id: HirId, hir: &HIR) {
         self.visit_ident(ident, hir);
+    }
+
+    fn visit_struct_pat(
+        &mut self,
+        ty_path: &TyPath,
+        fields: &[StructPatField],
+        _rest: &bool,
+        hir: &HIR,
+    ) {
+        self.visit_ty_path(ty_path, hir);
+        walk_each!(self, fields.iter(), visit_struct_pat_field, hir);
+    }
+
+    fn visit_struct_pat_field(&mut self, field: &StructPatField, hir: &HIR) {
+        if let Some(name) = field.name {
+            self.visit_ident(name, hir);
+        }
+
+        self.visit_pat(field.pat, hir);
+    }
+
+    fn visit_or_pat(&mut self, &lpat: &Pat, &rpat: &Pat, hir: &HIR) {
+        self.visit_pat(lpat, hir);
+        self.visit_pat(rpat, hir);
     }
 
     // Expressions //

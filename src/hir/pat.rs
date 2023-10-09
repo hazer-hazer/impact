@@ -17,6 +17,7 @@ pub enum PatKind {
         /// rest
         bool,
     ),
+    Or(Pat, Pat),
 }
 
 #[derive(Debug)]

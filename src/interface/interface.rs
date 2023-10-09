@@ -15,7 +15,13 @@ use crate::{
     lower::Lower,
     mir::build::BuildFullMir,
     parser::{lexer::Lexer, parser::Parser},
-    pp::{defs::DefPrinter, hir::HirPP, mir::MirPrinter, AstLikePP, AstPPMode},
+    pp::{
+        defs::DefPrinter,
+        hir::HirPP,
+        mir::{MirPPCtx, MirPrinter},
+        pp::PP,
+        AstLikePP, AstPPMode,
+    },
     resolve::{
         collect::DefCollector,
         def::{DefId, ModuleId},
@@ -200,10 +206,9 @@ impl<'ast> Interface {
         let (mir, mut sess) = BuildFullMir::new(sess, &hir).run_and_emit()?;
 
         if sess.config().check_pp_stage(stage) {
-            let mut pp = MirPrinter::new(&sess, &hir, &mir);
+            let mut pp = PP::new(MirPPCtx::new(&hir, &sess, &mir));
             pp.visit_hir(&hir);
-            let mir = pp.pp.get_string();
-            outln!(dbg, sess.writer, "== MIR ==\n{}", mir);
+            outln!(dbg, sess.writer, "== MIR ==\n{}", pp.get_string());
         }
 
         let sess = self.should_stop(sess, stage)?;

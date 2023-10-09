@@ -8,9 +8,12 @@ use crate::{
     cli::{color::WithColor, verbose},
     hir::{self, visitor::HirVisitor, BodyId, BodyOwnerKind, HirId, Map, OwnerId, HIR},
     message::message::{impl_message_holder, MessageStorage},
-    pp::thir::ThirPrinter,
+    pp::{
+        pp::PP,
+        thir::{ThirPPCtx, ThirPrinter},
+    },
     resolve::builtin::Builtin,
-    session::{impl_session_holder, stage_result, Session, SessionHolder, Stage, StageResult},
+    session::{impl_session_holder, stage_result, Session, Stage, StageResult},
 };
 
 macro_rules! unpack {
@@ -59,11 +62,11 @@ impl<'ctx> MirBuilder<'ctx> {
         let (thir, thir_entry_expr) = ThirBuilder::new(&sess, hir, body_owner).build_body_thir();
 
         if true {
-            let pp = ThirPrinter::new(&sess, &thir);
+            let pp = PP::new(ThirPPCtx::new(&thir));
             verbose!(
                 "{} body THIR:\n{}",
                 body_owner.colorized(),
-                pp.print(thir_entry_expr)
+                pp.pp(thir_entry_expr).get_string()
             );
         }
 
