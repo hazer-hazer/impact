@@ -1,15 +1,16 @@
 use super::{
-    ty::{ExKind, FloatKind, IntKind, Ty, TyKind, TyVarId},
+    ty::{ExKind, FloatKind, IntKind, Ty, TyKind},
     TyResult, TypeckErr, Typecker, Typed,
 };
 use crate::{
     cli::verbose,
+    dt::idx::IndexVec,
     hir::{
         self,
         expr::{Arm, Call, ExprKind, Lit, TyExpr},
         item::{ItemId, ItemKind, Mod},
         stmt::{Local, StmtKind},
-        Block, Body, BodyId, Expr, ExprPath, ExprRes, Map, Pat, Stmt, TyRes, ValueDefKind,
+        Block, Body, BodyId, Expr, ExprPath, ExprRes, Map, Pat, Stmt, ValueDefKind,
     },
     message::message::MessageBuilder,
     resolve::def::{DefId, DefKind},
@@ -108,9 +109,9 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
-        self.synth_pat(local.pat);
+        let _synth_local_body_anyway = self.synth_pat(local.pat);
 
-        let local_ty = self.synth_expr(local.value)?.apply_ctx(self);
+        let _local_ty = self.synth_expr(local.value)?.apply_ctx(self);
 
         Ok(Ty::unit())
     }
@@ -275,7 +276,7 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_arm(&mut self, arm: &Arm) -> TyResult<Ty> {
-        self.synth_pat(arm.pat);
+        let _synth_arm_body_anyway = self.synth_pat(arm.pat);
         // // TODO: Synth optional type of pattern
         self.synth_expr(arm.body)
     }
@@ -342,7 +343,7 @@ impl<'hir> Typecker<'hir> {
 
     /// Synthesize pattern virgin type (before usage)
     // TODO: Annotations
-    fn synth_pat(&mut self, pat: Pat) -> Ty {
+    fn synth_pat(&mut self, pat: Pat) -> TyResult<Ty> {
         let kind_ty = match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => Ty::unit(),
             &hir::pat::PatKind::Ident(_, name_id) => {
@@ -350,17 +351,49 @@ impl<'hir> Typecker<'hir> {
                 self.type_inferring_node(name_id, name_ex);
                 name_ex
             },
-            hir::pat::PatKind::Struct(..) => todo!(),
+            hir::pat::PatKind::Struct(ty_path, fields, _rest) => {
+                let struct_res = self.hir.ty_path(*ty_path).res().def_id();
+                let pat_ty = self.tyctx().def_ty(struct_res).unwrap();
+
+                let pat_struct_ty = pat_ty.as_struct().unwrap();
+
+                // Do checks
+                pat_struct_ty
+                    .fields
+                    .iter_enumerated()
+                    .map(|(field_id, field)| {
+                        
+                    });
+
+                // let pat_fields = fields
+                //     .iter()
+                //     .map(|field| {
+                //         self.synth_pat(field.pat)?;
+                //         Ok(())
+                //     })
+                //     .collect::<Result<Vec<_>, _>>()?;
+
+                // // Either all fields in pattern have names or none.
+                // let canon_fields = StructTyFields::new_of(struct_pat_ty.fields_count());
+                // struct_pat_ty
+                //     .fields
+                //     .iter_enumerated()
+                //     .map(|(field_id, field)| {
+
+                //     });
+
+                todo!()
+            },
             &hir::pat::PatKind::Or(lpat, rpat) => {
-                let pat_ty = self.synth_pat(lpat);
-                self.synth_pat(rpat);
+                let pat_ty = self.synth_pat(lpat)?;
+                self.synth_pat(rpat)?;
                 pat_ty
             },
         };
 
         self.type_inferring_node(pat, kind_ty);
 
-        kind_ty
+        Ok(kind_ty)
     }
 
     /// Return list of types and pattern names. This is used for replacement of
@@ -368,13 +401,31 @@ impl<'hir> Typecker<'hir> {
     /// for readability to name universally quantified variables as their
     /// pattern names.
     fn get_pat_inner_tys(&self, pat: Pat) -> Vec<(Option<Ident>, Ty)> {
+        // Assert type for this pattern already synthesized, as we don't synth type of
+        // pattern in this function
+        assert!(self.tyctx().node_type(pat).is_some());
+
         match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => vec![(None, Ty::unit())],
             &hir::pat::PatKind::Ident(name, name_id) => {
                 vec![(Some(name), self.tyctx().node_type(name_id).unwrap())]
             },
-            hir::pat::PatKind::Struct(..) => todo!(),
-            &hir::pat::PatKind::Or(lpat, rpat) => self.get_pat_inner_tys(lpat).exte,
+            hir::pat::PatKind::Struct(ty_path, fields, _rest) => {
+                let mut tys = fields
+                    .iter()
+                    .map(|field| (field.name, self.tyctx().tyof(field.pat)))
+                    .collect::<Vec<_>>();
+                tys.push((
+                    Some(self.hir.ty_path(*ty_path).target_name()),
+                    self.tyctx().tyof(pat),
+                ));
+                tys
+            },
+            &hir::pat::PatKind::Or(lpat, rpat) => self
+                .get_pat_inner_tys(lpat)
+                .into_iter()
+                .chain(self.get_pat_inner_tys(rpat).into_iter())
+                .collect(),
         }
     }
 
@@ -405,9 +456,10 @@ impl<'hir> Typecker<'hir> {
         }
 
         // Set virgin parameters types
-        params.iter().for_each(|&pat| {
-            self.synth_pat(pat);
-        });
+        params.iter().try_for_each(|&pat| {
+            self.synth_pat(pat)?;
+            Ok(())
+        })?;
 
         let body_ex = self.add_fresh_kind_ex_as_ty();
 

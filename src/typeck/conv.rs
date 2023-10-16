@@ -1,6 +1,8 @@
 use super::{
     kind::{Kind, KindEx},
-    ty::{Adt, Field, FieldId, IntKind, Struct, TyVarId, Variant, VariantId},
+    ty::{
+        Adt, Field, FieldId, FieldList, IntKind, Struct, TyVarId, Variant, VariantData, VariantId,
+    },
     tyctx::TyCtx,
 };
 use crate::{
@@ -11,7 +13,7 @@ use crate::{
         visitor::{walk_each, HirVisitor},
         BodyOwner, Map, TyDefKind, TyPath, TyRes, WithHirId, HIR,
     },
-    message::message::{impl_message_holder, MessageStorage},
+    message::message::{impl_message_holder, MessageBuilder, MessageStorage},
     resolve::{
         builtin::TyBuiltin,
         def::{DefId, DefMap},
@@ -234,14 +236,11 @@ impl<'hir> TyConv<'hir> {
     fn conv_variant(&mut self, &variant: &hir::Variant, adt_def_id: DefId) -> Variant {
         let variant = self.hir.variant(variant);
         Variant {
-            def_id: variant.def_id,
             name: variant.name,
-            fields: variant
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, field)| self.conv_field(index, field, adt_def_id))
-                .collect(),
+            data: VariantData {
+                def_id: variant.def_id,
+                fields: self.conv_fields(&variant.fields, adt_def_id),
+            },
         }
     }
 
@@ -249,15 +248,11 @@ impl<'hir> TyConv<'hir> {
         let struct_ = self.hir.item(ItemId::new(struct_def_id.into())).struct_();
 
         let struct_ty = self.conv_ty_def(struct_def_id, &struct_.generics, |this| {
-            let fields = struct_
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, field)| this.conv_field(index, field, struct_def_id))
-                .collect();
             Ty::struct_(Struct {
-                def_id: struct_def_id,
-                fields,
+                data: VariantData {
+                    def_id: struct_def_id,
+                    fields: self.conv_fields(&struct_.fields, struct_def_id),
+                },
             })
         });
 
@@ -307,17 +302,46 @@ impl<'hir> TyConv<'hir> {
 
         self.tyctx_mut().type_def(struct_.ctor_def_id, ctor_ty);
 
+        // Check struct if fully named or fully anon
+        if let Some(first_field) = struct_.fields.first() {
+            assert!(struct_
+                .fields
+                .iter()
+                .fold(first_field.name.is_some(), |named, field| named
+                    == field.name.is_some()));
+        }
+
         struct_ty
     }
 
-    fn conv_field(&mut self, index: usize, field: &hir::item::Field, adt_def_id: DefId) -> Field {
-        let ty = self.conv(field.ty, Some(adt_def_id));
-        self.tyctx_mut().type_node(field.id(), ty);
-        Field {
-            name: field
-                .name
-                .unwrap_or_else(|| Ident::new(field.span(), index.to_string().intern())),
-            ty,
+    fn conv_fields(&mut self, fields: &[hir::item::Field], adt_def_id: DefId) -> FieldList {
+        let named = if let Some(first_field) = fields.first() {
+            let named = first_field.name.is_some();
+            let all_same = fields
+                .iter()
+                .fold(named, |named, field| field.name.is_some() == named);
+
+            // User error must be produced in AST checks
+            assert!(all_same);
+
+            named
+        };
+
+        if named {
+            FieldList::Named(fields.iter().map(|field| {
+                let ty = self.conv(field.ty, Some(adt_def_id));
+                self.tyctx_mut().type_node(field.id(), ty);
+                Field {
+                    name: field.name.unwrap(),
+                    ty,
+                }
+            }))
+        } else {
+            FieldList::Anon(fields.iter().map(|field| {
+                let ty = self.conv(field.ty, Some(adt_def_id));
+                self.tyctx_mut().type_node(field.id(), ty);
+                Field { name: (), ty }
+            }))
         }
     }
 }

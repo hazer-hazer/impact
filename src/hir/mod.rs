@@ -667,6 +667,14 @@ pub enum TyRes {
     Def(TyDefKind, DefId),
 }
 
+impl TyRes {
+    pub fn def_id(&self) -> DefId {
+        match self {
+            &TyRes::Def(_, def_id) => def_id,
+        }
+    }
+}
+
 impl Display for TyRes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -1,6 +1,6 @@
 use super::{
-    Arm, Block, BlockId, Expr, ExprId, ExprKind, Lit, LocalVar, Param, ParamId, Pat, PatKind, Stmt,
-    StmtId, THIR,
+    Arm, Block, BlockId, Expr, ExprId, ExprKind, Lit, LocalVar, Param, ParamId, Pat, PatId,
+    PatKind, Stmt, StmtId, THIR,
 };
 use crate::{
     hir::{self, Map, OwnerId, ValueDefKind, WithHirId, HIR},
@@ -161,7 +161,7 @@ impl<'ctx> ThirBuilder<'ctx> {
         self.thir.add_block(Block { stmts, expr })
     }
 
-    fn pat(&mut self, pat: hir::Pat) -> Pat {
+    fn pat(&mut self, pat: hir::Pat) -> PatId {
         let pat = self.hir.pat(pat);
         let ty = self.tyctx().tyof(pat.id());
 
@@ -173,13 +173,14 @@ impl<'ctx> ThirBuilder<'ctx> {
                 ty,
             },
             hir::pat::PatKind::Struct(..) => todo!(),
+            hir::pat::PatKind::Or(lpat, rpat) => todo!(),
         };
 
-        Pat {
+        self.thir.add_pat(Pat {
             ty,
             kind,
             span: pat.span(),
-        }
+        })
     }
 
     fn arm(&mut self, arm: &hir::expr::Arm) -> Arm {

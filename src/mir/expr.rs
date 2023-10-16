@@ -1,7 +1,7 @@
 use super::{
     build::{unpack, MirBuilder},
     scalar::Scalar,
-    thir::{Arm, ExprCategory, ExprId, ExprKind, Lit, Pat, PatKind},
+    thir::{Arm, ExprCategory, ExprId, ExprKind, Lit, Pat, PatId, PatKind},
     BBWith, Const, LValue, Local, Operand, RValue, Ty, BB,
 };
 use crate::{
@@ -282,16 +282,19 @@ impl<'ctx> MirBuilder<'ctx> {
     pub(super) fn store_expr_in_pat(
         &mut self,
         mut bb: BB,
-        pat: &Pat,
+        pat: PatId,
         expr_id: ExprId,
     ) -> BBWith<()> {
-        match pat.kind {
+        match self.thir.pat(pat).kind {
             PatKind::Unit => todo!(),
             PatKind::Ident { var, .. } => {
                 let local = self.resolve_local_var(var);
                 let rvalue = unpack!(bb = self.as_rvalue(bb, expr_id));
                 verbose!("Store {local} = {rvalue}");
                 self.push_assign(bb, local.lvalue(None), rvalue);
+            },
+            PatKind::Or(lpat, rpat) => {
+                todo!()
             },
         }
         bb.unit()

@@ -1,5 +1,5 @@
 use std::{
-    fmt::Formatter,
+    fmt::{Display, Formatter},
     hash::{Hash, Hasher},
 };
 
@@ -32,7 +32,7 @@ pub enum ExKind {
     Float,
 }
 
-impl std::fmt::Display for ExKind {
+impl Display for ExKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExKind::Common => "",
@@ -90,7 +90,7 @@ impl Ex {
     }
 }
 
-impl std::fmt::Display for Ex {
+impl Display for Ex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.kind(), self.id())
     }
@@ -165,7 +165,7 @@ impl IntKind {
     }
 }
 
-impl std::fmt::Display for IntKind {
+impl Display for IntKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -215,7 +215,7 @@ impl TryFrom<hir::expr::FloatKind> for FloatKind {
 
 pub const DEFAULT_FLOAT_KIND: FloatKind = FloatKind::F32;
 
-impl std::fmt::Display for FloatKind {
+impl Display for FloatKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -250,41 +250,139 @@ pub trait MapTy<To, S> {
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct Field<T = Ty> {
-    pub name: Ident,
+pub struct Field<Name, T = Ty> {
+    pub name: Name,
     pub ty: T,
 }
 
-impl<To> MapTy<To, Field<To>> for Field {
-    fn map_ty<E, F>(&self, f: &mut F) -> Result<Field<To>, E>
+impl<Name, To> MapTy<To, Field<Name, To>> for Field<Name> {
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<Field<Name, To>, E>
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
-        let ty = f(self.ty)?;
-
         Ok(Field {
             name: self.name,
-            ty,
+            ty: f(self.ty)?,
         })
     }
 }
 
-impl std::fmt::Display for Field {
+impl Display for Field<Ident> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.name, self.ty)
     }
 }
 
+impl Display for Field<()> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.ty)
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum FieldList<T = Ty> {
+    Anon(IndexVec<FieldId, Field<(), T>>),
+    Named(IndexVec<FieldId, Field<Ident, T>>),
+}
+
+impl FieldList {
+    pub fn size(&self) -> Option<u32> {
+        match self {
+            FieldList::Anon(fields) => fields.iter().map(|f| f.ty.size()).sum(),
+            FieldList::Named(fields) => fields.iter().map(|f| f.ty.size()).sum(),
+        }
+    }
+
+    pub fn get(id: FieldId) -> &Field<>
+}
+
+impl<To> MapTy<To, FieldList<To>> for FieldList {
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<FieldList<To>, E>
+    where
+        F: FnMut(Ty) -> Result<To, E>,
+    {
+        Ok(match self {
+            FieldList::Anon(fields) => {
+                Self::Anon(fields.iter().map(|field| field.map_ty(f)).collect()?)
+            },
+            FieldList::Named(fields) => {
+                Self::Named(fields.iter().map(|field| field.map_ty(f)).collect()?)
+            },
+        })
+    }
+}
+
+impl Display for FieldList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FieldList::Anon(fields) => write!(
+                f,
+                "{}",
+                fields
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FieldList::Named(fields) => write!(
+                f,
+                "{}",
+                fields
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct VariantData<T = Ty> {
+    pub def_id: DefId,
+    pub fields: FieldList<T>,
+}
+
+impl VariantData {
+    pub fn size(&self) -> Option<u32> {
+        self.fields.size()
+    }
+
+    pub fn walk_ty(&self) -> Box<dyn Iterator<Item = Ty>> {
+        match &self.fields {
+            FieldList::Anon(fields) => Box::new(fields.iter().map(|f| f.ty)),
+            FieldList::Named(fields) => Box::new(fields.iter().map(|f| f.ty)),
+        }
+    }
+}
+
+impl Display for VariantData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fields)
+    }
+}
+
+impl<To> MapTy<To, VariantData<To>> for VariantData {
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<VariantData<To>, E>
+    where
+        F: FnMut(Ty) -> Result<To, E>,
+    {
+        Ok(VariantData {
+            def_id: self.def_id,
+            fields: self.fields.map_ty(f)?,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Variant<T = Ty> {
-    pub def_id: DefId,
     pub name: Ident,
-    pub fields: IndexVec<FieldId, Field<T>>,
+    pub data: VariantData<T>,
 }
 
 impl Variant<Ty> {
     pub fn size(&self) -> Option<u32> {
-        self.fields.iter().map(|f| f.ty.size()).sum()
+        self.data.fields.size()
     }
 }
 
@@ -293,32 +391,16 @@ impl<To> MapTy<To, Variant<To>> for Variant {
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
-        let fields = self
-            .fields
-            .iter()
-            .map(|field| field.map_ty(f))
-            .collect::<Result<_, _>>()?;
-
         Ok(Variant {
-            def_id: self.def_id,
             name: self.name,
-            fields,
+            data: self.data.map_ty(f)?,
         })
     }
 }
 
-impl std::fmt::Display for Variant {
+impl Display for Variant {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {}",
-            self.name,
-            self.fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        write!(f, "{} {}", self.name, self.data)
     }
 }
 
@@ -330,10 +412,7 @@ pub struct Adt<T = Ty> {
 
 impl Adt {
     pub fn walk_tys<'a>(&'a self) -> impl Iterator<Item = Ty> + 'a {
-        self.variants
-            .iter()
-            .map(|v| v.fields.iter().map(|f| f.ty))
-            .flatten()
+        // self.variants.iter().map(|v| v.)
     }
 
     pub fn variant(&self, vid: VariantId) -> &Variant {
@@ -373,7 +452,7 @@ impl<To> MapTy<To, Adt<To>> for Adt {
     }
 }
 
-impl std::fmt::Display for Adt {
+impl Display for Adt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -390,18 +469,7 @@ impl std::fmt::Display for Adt {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Struct<T = Ty> {
-    pub def_id: DefId,
-    pub fields: IndexVec<FieldId, Field<T>>,
-}
-
-impl Struct {
-    pub fn walk_tys<'a>(&'a self) -> impl Iterator<Item = Ty> + 'a {
-        self.fields.iter().map(|f| f.ty)
-    }
-
-    pub fn size(&self) -> Option<u32> {
-        self.fields.iter().map(|f| f.ty.size()).sum()
-    }
+    pub data: VariantData<T>,
 }
 
 impl<To> MapTy<To, Struct<To>> for Struct {
@@ -409,31 +477,15 @@ impl<To> MapTy<To, Struct<To>> for Struct {
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
-        let fields = self
-            .fields
-            .iter()
-            .map(|field| field.map_ty(f))
-            .collect::<Result<_, _>>()?;
-
         Ok(Struct {
-            def_id: self.def_id,
-            fields,
+            data: self.data.map_ty(f),
         })
     }
 }
 
-impl std::fmt::Display for Struct {
+impl Display for Struct {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "struct {} = {}",
-            self.def_id,
-            self.fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        write!(f, "struct {}", self.data)
     }
 }
 
@@ -471,7 +523,7 @@ pub enum TyKind {
     Kind(Kind),
 }
 
-impl std::fmt::Display for TyKind {
+impl Display for TyKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TyKind::Error => write!(f, "[ERROR]"),
@@ -744,7 +796,7 @@ impl std::fmt::Debug for Ty {
     }
 }
 
-impl<'sess, 'a> std::fmt::Display for WithSess<'sess, 'a, Ty> {
+impl<'sess, 'a> Display for WithSess<'sess, 'a, Ty> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.value.kind() {
             TyKind::Error => write!(f, "?"),
@@ -794,7 +846,7 @@ impl<'sess, 'a> std::fmt::Display for WithSess<'sess, 'a, Ty> {
     }
 }
 
-impl std::fmt::Display for Ty {
+impl Display for Ty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.kind())
     }
@@ -816,7 +868,7 @@ impl WithColor for Ty {
 #[cfg(test)]
 mod tests {
     // Ty tests //
-    use super::{Ex, ExId, Field, Ty, TyVarId, Variant};
+    use super::{Ex, ExId, Field, FieldList, Ty, TyVarId, Variant, VariantData};
     use crate::{
         dt::idx::IndexVec,
         resolve::def::DefId,
@@ -869,18 +921,24 @@ mod tests {
         Ty::default_int()
     }
 
-    fn make_field() -> Field {
+    fn make_field() -> Field<Ident> {
         Field {
             name: Ident::synthetic("a".intern()),
             ty: super_simple_ty(),
         }
     }
 
+    fn make_fields() -> FieldList {
+        FieldList::Named(IndexVec::from_iter([make_field()]))
+    }
+
     fn make_variant() -> Variant {
         Variant {
-            def_id: DefId::new(0),
+            data: VariantData {
+                def_id: DefId::new(0),
+                fields: make_fields(),
+            },
             name: Ident::synthetic("a".intern()),
-            fields: IndexVec::from_iter([make_field()]),
         }
     }
 

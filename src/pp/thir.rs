@@ -1,8 +1,8 @@
 use super::pp::{pp, PP};
 use crate::{
     hir::BodyId,
-    mir::thir::{Arm, BlockId, ExprId, ExprKind, Pat, PatKind, Stmt, StmtId, THIR},
-    parser::token::Punct,
+    mir::thir::{Arm, BlockId, ExprId, ExprKind, Pat, PatId, PatKind, Stmt, StmtId, THIR},
+    parser::token::{Op, Punct},
     session::Session,
     span::sym::Kw,
 };
@@ -22,7 +22,7 @@ pub trait ThirPrinter {
     fn stmt(&mut self, id: StmtId) -> &mut Self;
     fn expr(&mut self, id: ExprId) -> &mut Self;
     fn arm(&mut self, arm: &Arm) -> &mut Self;
-    fn pat(&mut self, pat: &Pat) -> &mut Self;
+    fn pat(&mut self, pat: PatId) -> &mut Self;
     fn block(&mut self, id: BlockId) -> &mut Self;
 }
 
@@ -36,9 +36,9 @@ impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
         let stmt = self.ctx().thir.stmt(id);
         match stmt {
             &Stmt::Expr(id) => self.expr(id),
-            Stmt::Local(pat, init) => {
-                self.pat(&pat);
-                self.expr(*init)
+            &Stmt::Local(pat, init) => {
+                self.pat(pat);
+                self.expr(init)
             },
         }
     }
@@ -86,11 +86,11 @@ impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
     }
 
     fn arm(&mut self, arm: &Arm) -> &mut Self {
-        pp!(self, {pat: &arm.pat}, {punct: Punct::FatArrow}, {expr: arm.body}, ...)
+        pp!(self, {pat: arm.pat}, {punct: Punct::FatArrow}, {expr: arm.body}, ...)
     }
 
-    fn pat(&mut self, pat: &Pat) -> &mut Self {
-        match pat.kind {
+    fn pat(&mut self, pat: PatId) -> &mut Self {
+        match self.ctx().thir.pat(pat).kind {
             PatKind::Unit => {
                 pp!(self, {kw: Kw::Unit}, ...)
             },
@@ -101,6 +101,7 @@ impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
             } => {
                 pp!(self, {string: name}, ...)
             },
+            PatKind::Or(lpat, rpat) => pp!(self, {pat: lpat}, {op: Op::BitOr}, {pat: rpat}, ...),
         }
     }
 

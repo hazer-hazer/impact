@@ -19,11 +19,12 @@ declare_idx!(ExprId, u32, "{}", Color::Green);
 declare_idx!(BlockId, u32, "{}", Color::Blue);
 declare_idx!(StmtId, u32, "{}", Color::Yellow);
 declare_idx!(ParamId, u32, "{}", Color::White);
+declare_idx!(PatId, u32, "pat#{}", Color::White);
 declare_idx!(wrapper LocalVar, HirId, "{}");
 
 pub enum Stmt {
     Expr(ExprId),
-    Local(Pat, ExprId),
+    Local(PatId, ExprId),
 }
 
 pub struct Block {
@@ -51,7 +52,7 @@ impl Display for Lit {
 }
 
 pub struct Arm {
-    pub pat: Pat,
+    pub pat: PatId,
     pub body: ExprId,
 }
 
@@ -184,6 +185,7 @@ impl Display for Expr {
 pub enum PatKind {
     Unit,
     Ident { name: Ident, var: LocalVar, ty: Ty },
+    Or(PatId, PatId),
 }
 
 impl Display for PatKind {
@@ -191,6 +193,7 @@ impl Display for PatKind {
         match self {
             PatKind::Unit => write!(f, "()"),
             PatKind::Ident { name, var, ty } => write!(f, "{name}{var}: {ty}"),
+            PatKind::Or(lpat, rpat) => write!(f, "{lpat} | {rpat}"),
         }
     }
 }
@@ -209,7 +212,7 @@ impl Display for Pat {
 }
 
 pub struct Param {
-    pub pat: Pat,
+    pub pat: PatId,
     // ty: Ty,
     // hir_id: HirId,
 }
@@ -221,6 +224,7 @@ pub struct THIR {
     exprs: IndexVec<ExprId, Expr>,
     blocks: IndexVec<BlockId, Block>,
     params: IndexVec<ParamId, Param>,
+    pats: IndexVec<PatId, Pat>,
 }
 
 impl THIR {
@@ -231,6 +235,7 @@ impl THIR {
             exprs: Default::default(),
             blocks: Default::default(),
             params: Default::default(),
+            pats: Default::default(),
         }
     }
 
@@ -248,6 +253,10 @@ impl THIR {
 
     pub fn param(&self, id: ParamId) -> &Param {
         self.params.get(id).unwrap()
+    }
+
+    pub fn pat(&self, id: PatId) -> &Pat {
+        self.pats.get(id).unwrap()
     }
 
     pub fn params_count(&self) -> usize {
@@ -268,6 +277,10 @@ impl THIR {
 
     pub fn add_param(&mut self, param: Param) -> ParamId {
         self.params.push(param)
+    }
+
+    pub fn add_pat(&mut self, pat: Pat) -> PatId {
+        self.pats.push(pat)
     }
 
     pub fn body_owner(&self) -> OwnerId {

@@ -18,7 +18,13 @@
       "request": "launch",
       "name": "Debug executable 'impact'",
       "cargo": {
-        "args": ["build", "--bin=impact", "--package=impact", "--features", "verbose_debug"],
+        "args": [
+          "build",
+          "--bin=impact",
+          "--package=impact",
+          "--features",
+          "verbose_debug"
+        ],
         "filter": {
           "name": "impact",
           "kind": "bin"
@@ -39,6 +45,26 @@
         }
       },
       "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Verbose debug",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=impact",
+          "--package=impact",
+          "--features",
+          "verbose_debug"
+        ],
+        "filter": {
+          "name": "impact",
+          "kind": "bin"
+        }
+      },
+      "args": ["--pp-stages=all"],
       "cwd": "${workspaceFolder}"
     }
   ]

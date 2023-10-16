@@ -1,6 +1,6 @@
 use super::{
     build::MirBuilder,
-    thir::{LocalVar, ParamId, Pat, PatKind},
+    thir::{LocalVar, ParamId, Pat, PatId, PatKind},
     LValue, Local, LocalInfo, Ty,
 };
 use crate::span::{
@@ -38,10 +38,11 @@ impl<'ctx> MirBuilder<'ctx> {
         }
 
         let pat = self.thir.param(param_id).pat;
-        self.declare_bindings(&pat, true);
+        self.declare_bindings(pat, true);
     }
 
-    pub fn declare_bindings(&mut self, pat: &Pat, is_param: bool) {
+    pub fn declare_bindings(&mut self, pat: PatId, is_param: bool) {
+        let pat = self.thir.pat(pat);
         match pat.kind {
             PatKind::Unit => {},
             PatKind::Ident { var, ty, name } => {
@@ -55,6 +56,9 @@ impl<'ctx> MirBuilder<'ctx> {
                     },
                 );
                 self.bind_local_var(var.into(), local);
+            },
+            PatKind::Or(lpat, rpat) => {
+                todo!()
             },
         }
     }
