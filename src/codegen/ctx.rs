@@ -162,6 +162,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
             .variants
             .get(vid)
             .unwrap()
+            .data
             .fields
             .iter()
             .map(|field| self.conv_basic_ty(field.ty))
@@ -172,6 +173,7 @@ impl<'ink, 'ctx> CodeGenCtx<'ink, 'ctx> {
         self.llvm_ctx
             .struct_type(
                 &struct_ty
+                    .data
                     .fields
                     .iter()
                     .copied()

@@ -90,7 +90,7 @@ impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
     }
 
     fn pat(&mut self, pat: PatId) -> &mut Self {
-        match self.ctx().thir.pat(pat).kind {
+        match &self.ctx().thir.pat(pat).kind {
             PatKind::Unit => {
                 pp!(self, {kw: Kw::Unit}, ...)
             },
@@ -101,7 +101,8 @@ impl<'a> ThirPrinter for PP<ThirPPCtx<'a>> {
             } => {
                 pp!(self, {string: name}, ...)
             },
-            PatKind::Or(lpat, rpat) => pp!(self, {pat: lpat}, {op: Op::BitOr}, {pat: rpat}, ...),
+            &PatKind::Or(lpat, rpat) => pp!(self, {pat: lpat}, {op: Op::BitOr}, {pat: rpat}, ...),
+            PatKind::Struct(..) => todo!(),
         }
     }
 

@@ -285,15 +285,18 @@ impl<'ctx> MirBuilder<'ctx> {
         pat: PatId,
         expr_id: ExprId,
     ) -> BBWith<()> {
-        match self.thir.pat(pat).kind {
+        match &self.thir.pat(pat).kind {
             PatKind::Unit => todo!(),
-            PatKind::Ident { var, .. } => {
+            &PatKind::Ident { var, .. } => {
                 let local = self.resolve_local_var(var);
                 let rvalue = unpack!(bb = self.as_rvalue(bb, expr_id));
                 verbose!("Store {local} = {rvalue}");
                 self.push_assign(bb, local.lvalue(None), rvalue);
             },
             PatKind::Or(lpat, rpat) => {
+                todo!()
+            },
+            PatKind::Struct(ty, fields) => {
                 todo!()
             },
         }

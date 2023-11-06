@@ -21,7 +21,7 @@ use crate::{
     },
     typeck::{
         conv::TyConv,
-        debug::{tcdbg, InferEntryKind, InferStepKind, InferDebugPP},
+        debug::{tcdbg, InferDebugPP, InferEntryKind, InferStepKind},
         kind::MonoKindSort,
         ty_infer::MonoTyKind,
     },
@@ -85,6 +85,16 @@ where
 }
 
 pub type TyResult<T> = Result<T, TypeckErr>;
+
+pub trait TyResultImpl {
+    fn unwrap_as_ty(&self) -> Ty;
+}
+
+impl TyResultImpl for TyResult<Ty> {
+    fn unwrap_as_ty(&self) -> Ty {
+        self.unwrap_or(Ty::error())
+    }
+}
 
 pub struct Typecker<'hir> {
     hir: &'hir HIR,

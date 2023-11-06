@@ -69,7 +69,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
             func_ty,
             func,
             builder,
-            locals_values: IndexVec::new_of(body.locals.len()),
+            locals_values: IndexVec::with_capacity(body.locals.len()),
             function_map,
             value_map,
             msg: Default::default(),

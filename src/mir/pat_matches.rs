@@ -34,13 +34,14 @@ impl<'ctx> MirBuilder<'ctx> {
         pat: &Pat,
         target: BB,
     ) -> SwitchTargets {
-        match pat.kind {
+        match &pat.kind {
             // Irrefutable
             PatKind::Unit => {
                 todo!()
             },
             PatKind::Ident { name, var, ty } => todo!(),
             PatKind::Or(lpat, rpat) => todo!(),
+            PatKind::Struct(ty, fields) => todo!(),
         }
     }
 }

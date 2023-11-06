@@ -1,6 +1,6 @@
 use super::{
-    ty::{ExKind, FloatKind, IntKind, Ty, TyKind},
-    TyResult, TypeckErr, Typecker, Typed,
+    ty::{ExKind, FloatKind, IntKind, Struct, Ty, TyKind, VariantData},
+    TyResult, TyResultImpl, TypeckErr, Typecker, Typed,
 };
 use crate::{
     cli::verbose,
@@ -19,6 +19,7 @@ use crate::{
     typeck::{
         debug::{tcdbg, InferEntryKind, InferStepKind},
         kind::{Kind, KindSort},
+        ty::{Field, FieldId},
     },
 };
 
@@ -109,9 +110,15 @@ impl<'hir> Typecker<'hir> {
     }
 
     fn synth_local_stmt(&mut self, local: &Local) -> TyResult<Ty> {
-        let _synth_local_body_anyway = self.synth_pat(local.pat);
+        let pat_ty = self.synth_pat(local.pat)?;
 
-        let _local_ty = self.synth_expr(local.value)?.apply_ctx(self);
+        // FIXME: Do pattern check
+        let body_ty = self.synth_expr(local.value)?.apply_ctx(self);
+
+        self.subtype(
+            Spanned::new(self.hir.pat(local.pat).span(), pat_ty),
+            body_ty,
+        )?;
 
         Ok(Ty::unit())
     }
@@ -191,56 +198,12 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    // fn synth_field_access_expr(
-    //     &mut self,
-    //     lhs: Expr,
-    //     field_name: Ident,
-    //     expr_id: Expr,
-    // ) -> TyResult<Ty> { let lhs_ty = self.synth_expr(lhs)?;
-
-    //     // FIXME: Really bug if not adt?
-    //     let adt = lhs_ty.as_adt().unwrap();
-    //     let variants = &adt.variants;
-
-    //     assert!(!variants.is_empty());
-
-    //     if variants.len() > 1 {
-    //         // TODO: Better message
-    //         MessageBuilder::error()
-    //             .span(field_name.span())
-    //             .text("Cannot get field from enum".to_string())
-    //             .emit_single_label(self);
-    //     }
-
-    //     let variant_id = VariantId::new(0);
-    //     let variant = &variants[variant_id];
-    //     let field = variant
-    //         .fields
-    //         .iter_enumerated()
-    //         .find(|(_, field)| field.name == field_name);
-
-    //     if let Some(field) = field {
-    //         self.tyctx_mut().set_field_index(expr_id, field.0);
-    //         Ok(field.1.ty)
-    //     } else {
-    //         MessageBuilder::error()
-    //             .span(self.hir.expr(expr_id).span())
-    //             .text(format!(
-    //                 "Data type {} does not have field {}",
-    //                 self.tyctx().ty_name(lhs_ty).unwrap(),
-    //                 field_name
-    //             ))
-    //             .emit_single_label(self);
-    //         Err(TypeckErr::Reported)
-    //     }
-    // }
-
     fn synth_match_expr(&mut self, &subject: &Expr, arms: &[Arm]) -> TyResult<Ty> {
         let subject_node = self.hir.expr(subject);
         let subject_ty = self.synth_expr(subject)?;
         let arms_tys = arms
             .iter()
-            .map(|arm| Ok(self.synth_arm(arm)?))
+            .map(|arm| Ok(self.synth_arm(subject_ty, arm)?))
             .collect::<Result<Vec<_>, _>>()?;
         if let Some(&first_arm_ty) = arms_tys.first() {
             if !arms_tys
@@ -275,10 +238,17 @@ impl<'hir> Typecker<'hir> {
         }
     }
 
-    fn synth_arm(&mut self, arm: &Arm) -> TyResult<Ty> {
-        let _synth_arm_body_anyway = self.synth_pat(arm.pat);
+    fn synth_arm(&mut self, subject_ty: Ty, arm: &Arm) -> TyResult<Ty> {
+        let pat_ty = self.synth_pat(arm.pat)?;
         // // TODO: Synth optional type of pattern
-        self.synth_expr(arm.body)
+        let expr_ty = self.synth_expr(arm.body)?;
+
+        self.subtype(
+            Spanned::new(self.hir.pat(arm.pat).span(), pat_ty),
+            subject_ty,
+        )?;
+
+        Ok(expr_ty)
     }
 
     fn synth_block(&mut self, block: Block) -> TyResult<Ty> {
@@ -301,49 +271,9 @@ impl<'hir> Typecker<'hir> {
         })
     }
 
-    // TODO: If needs to be used -- move to HIR methods
-    // fn get_pat_names(&self, pat: Pat) -> Vec<Ident> {
-    //     match self.hir.pat(pat).kind() {
-    //         hir::pat::PatKind::Unit => vec![],
-    //         &hir::pat::PatKind::Ident(name) => vec![name],
-    //     }
-    // }
-
-    /// Get pattern type based on pattern, e.g. unit pattern `()` definitely is
-    /// of unit type.
-    // fn get_early_pat_type(&self, pat: Pat) -> Option<Ty> {
-    //     match self.hir.pat(pat).kind() {
-    //         hir::pat::PatKind::Unit => Some(Ty::unit()),
-    //         hir::pat::PatKind::Ident(_) => None,
-    //     }
-    // }
-
-    // TODO: Update if type annotations added
-    // fn get_param_type(&mut self, pat: Pat) -> Vec<(Pat, Ty)> {
-    //     match self.hir.pat(pat).kind() {
-    //         hir::pat::PatKind::Unit => vec![(pat, Ty::unit())],
-    //         &hir::pat::PatKind::Ident(name, _) => {
-    //             let ex = self.add_fresh_kind_ex_as_ty();
-    //             tcdbg!(self, add ex.0, format!("parameter {name}: {}",
-    // ex.0.colorized()));             vec![(pat, ex.1)]
-    //         },
-    //     }
-    // }
-
-    // fn get_typed_pat(&mut self, pat: Pat) -> Ty {
-    //     match self.hir.pat(pat).kind() {
-    //         hir::pat::PatKind::Unit => Ty::unit(),
-
-    //         // Assumed that all names in pattern are typed, at least as
-    // existentials         &hir::pat::PatKind::Ident(_, name_id) => {
-    //             self.tyctx_mut().node_type(name_id).unwrap().apply_ctx(self)
-    //         },
-    //     }
-    // }
-
     /// Synthesize pattern virgin type (before usage)
     // TODO: Annotations
-    fn synth_pat(&mut self, pat: Pat) -> TyResult<Ty> {
+    pub fn synth_pat(&mut self, pat: Pat) -> TyResult<Ty> {
         let kind_ty = match self.hir.pat(pat).kind() {
             hir::pat::PatKind::Unit => Ty::unit(),
             &hir::pat::PatKind::Ident(_, name_id) => {
@@ -351,38 +281,99 @@ impl<'hir> Typecker<'hir> {
                 self.type_inferring_node(name_id, name_ex);
                 name_ex
             },
-            hir::pat::PatKind::Struct(ty_path, fields, _rest) => {
+            hir::pat::PatKind::Struct(ty_path, pat_fields, rest) => {
                 let struct_res = self.hir.ty_path(*ty_path).res().def_id();
                 let pat_ty = self.tyctx().def_ty(struct_res).unwrap();
 
                 let pat_struct_ty = pat_ty.as_struct().unwrap();
 
-                // Do checks
-                pat_struct_ty
+                // Convert fields to canonical order
+                let synthed_fields = if let Some(names) = pat_struct_ty.data.names_indices() {
+                    pat_fields.iter().fold(
+                        IndexVec::with_capacity(pat_struct_ty.data.fields.len()),
+                        |mut ty_fields, field| {
+                            let name =
+                                field.name.or_else(|| match self.hir.pat(field.pat).kind() {
+                                    &hir::pat::PatKind::Ident(name, _) => Some(name),
+                                    _ => None,
+                                });
+
+                            let field_pat = self.hir.pat(field.pat);
+                            let field_pat_ty = self.synth_pat(field.pat);
+                            if let Some(name) = name {
+                                if let Some(field_id) = names.get(&name) {
+                                    ty_fields[*field_id] = Some((field_pat_ty, field.pat));
+                                } else {
+                                    MessageBuilder::error()
+                                        .text(format!(
+                                            "Struct `{}` does not contain field named `{name}`",
+                                            self.hir.ty_path(*ty_path).target_name()
+                                        ))
+                                        .span(name.span())
+                                        .emit_single_label(self);
+                                }
+                            } else {
+                                MessageBuilder::error()
+                                    .text(format!("Expected field name"))
+                                    .span(field_pat.span().point_before_lo())
+                                    .label(
+                                        field_pat.span().point_before_lo(),
+                                        format!("Add field name here"),
+                                    )
+                                    .emit(self);
+                            }
+
+                            ty_fields
+                        },
+                    )
+                } else {
+                    pat_fields
+                        .iter()
+                        .map(|field| {
+                            assert!(field.name.is_none());
+                            Some((self.synth_pat(field.pat), field.pat))
+                        })
+                        .collect::<IndexVec<FieldId, _>>()
+                };
+
+                let missing_fields_span = self.hir.ty_path(*ty_path).span().point_after_hi();
+                let inferred_fields = pat_struct_ty
+                    .data
                     .fields
-                    .iter_enumerated()
-                    .map(|(field_id, field)| {
-                        
-                    });
+                    .iter()
+                    .zip(synthed_fields)
+                    .map(|(ty_field, pat_field)| {
+                        if let Some((pat_field_ty, pat_field)) = pat_field {
+                            Field {
+                                name: ty_field.name,
+                                ty: self
+                                    .subtype(
+                                        Spanned::new(
+                                            self.hir.pat(pat_field).span(),
+                                            pat_field_ty.unwrap_as_ty(),
+                                        ),
+                                        ty_field.ty,
+                                    )
+                                    .unwrap_as_ty(),
+                            }
+                        } else if *rest {
+                            ty_field.clone()
+                        } else {
+                            MessageBuilder::error()
+                                .span(missing_fields_span)
+                                .text(format!("Missing field"))
+                                .emit_single_label(self);
+                            ty_field.clone()
+                        }
+                    })
+                    .collect();
 
-                // let pat_fields = fields
-                //     .iter()
-                //     .map(|field| {
-                //         self.synth_pat(field.pat)?;
-                //         Ok(())
-                //     })
-                //     .collect::<Result<Vec<_>, _>>()?;
-
-                // // Either all fields in pattern have names or none.
-                // let canon_fields = StructTyFields::new_of(struct_pat_ty.fields_count());
-                // struct_pat_ty
-                //     .fields
-                //     .iter_enumerated()
-                //     .map(|(field_id, field)| {
-
-                //     });
-
-                todo!()
+                Ty::struct_(Struct {
+                    data: VariantData {
+                        def_id: pat_struct_ty.data.def_id,
+                        fields: inferred_fields,
+                    },
+                })
             },
             &hir::pat::PatKind::Or(lpat, rpat) => {
                 let pat_ty = self.synth_pat(lpat)?;
@@ -428,20 +419,6 @@ impl<'hir> Typecker<'hir> {
                 .collect(),
         }
     }
-
-    // fn generalize_unsolved(&mut self, ty: Ty) -> (Ty, Vec<TyVarId>) {
-    //     if let Some(ex) = self.is_unsolved_ex(ty) {
-    //         let ty_var = Ty::next_ty_var_id(None);
-    //         self.solve(ex, Ty::var(ty_var).mono());
-    //         Ty::forall(ty_var, ty)
-    //     } else if let Some(ex) = self.is_unsolved_kind_ex(ty) {
-    //         let kind_var = Kind::next_kind_var_id(None);
-    //         self.solve_kind_ex(ex, Kind::new_var(kind_var).as_mono().unwrap());
-    //         Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
-    //     } else {
-    //         func_ty
-    //     }
-    // }
 
     fn synth_value_body(&mut self, expr: Expr) -> TyResult<Ty> {
         self.synth_expr(expr)
@@ -526,86 +503,9 @@ impl<'hir> Typecker<'hir> {
                 },
             );
 
-            // let generalized_unsolved_params = params.iter().copied().fold(
-            //     (
-            //         params
-            //             .iter()
-            //             .copied()
-            //             .map(|pat| this.get_applied_pat_ty(pat)),
-            //         Vec::new(),
-            //     ),
-            //     |(mut vars, mut param_tys), pat| match this.hir.pat(pat).kind() {
-            //         hir::pat::PatKind::Unit => param_tys.push(Ty::unit()),
-            //         &hir::pat::PatKind::Ident(name, name_id) => {
-            //             let name_ty = this.tyctx().node_type(name_id).unwrap();
-            //             if !name_ty.is_solved() {
-            //                 let var = Ty::next_ty_var_id(Some(name));
-            //                 this.solve(name_ty.as_ex().unwrap(), Ty::var(var).mono());
-            //                 Ty::forall(var, body)
-            //             }
-            //         },
-            //     },
-            // );
-
-            // let func_ty = params
-            //     .iter()
-            //     .copied()
-            //     .map(|pat| self.apply_node_type(pat))
-            //     .fold(
-            //         Ty::func(Some(owner_def_id), param_tys.collect::<Vec<_>>(), body_ty),
-            //         |func_ty, &param_ty| {
-            //             if let Some(ex) = this.is_unsolved_ex(param_ty) {
-            //                 let ty_var = Ty::next_ty_var_id(None);
-            //                 this.solve(ex, Ty::var(ty_var).mono());
-            //                 Ty::forall(ty_var, func_ty)
-            //             } else if let Some(ex) = this.is_unsolved_kind_ex(param_ty) {
-            //                 let kind_var = Kind::next_kind_var_id(None);
-            //                 this.solve_kind_ex(ex,
-            // Kind::new_var(kind_var).as_mono().unwrap());
-            // Ty::ty_kind(Kind::new_forall(kind_var, Kind::new_ty(func_ty)))
-            //             } else {
-            //                 func_ty
-            //             }
-            //         },
-            //     );
-
             Ok(generalized_func_ty)
         })
     }
-
-    // fn synth_lambda_ex(&mut self, lambda: &Lambda) -> TyResult<Ty> {
-    //     // FIXME: Rewrite when `match` added
-
-    //     let param_names = self.get_pat_names(lambda.param);
-
-    //     let param_exes = param_names.iter().fold(HashMap::new(), |mut exes,
-    // &name| {         // FIXME: Should sub-pattern names existentials be
-    // defined outside this context?         let ex =
-    // self.add_fresh_common_ex();         self.type_term(name, ex.1);
-
-    //         assert!(exes.insert(name, ex).is_none());
-    //         exes
-    //     });
-
-    //     let body_ex = self.add_fresh_common_ex();
-
-    //     self.under_new_ctx(|this| {
-    //         // FIXME: Optimize fold moves of vec
-    //         param_exes.iter().for_each(|(&name, &ex)| {
-    //             // FIXME: Should sub-pattern names existentials be defined
-    // outside this context?             this.type_term(name, ex.1);
-    //         });
-
-    //         let body_ty = this.check(self.hir.body_value(lambda.body),
-    // body_ex.1)?;
-
-    //         let param_ty = this.get_typed_pat(lambda.param);
-
-    //         this.type_inferring_node(lambda.param, param_ty);
-
-    //         Ok(Ty::func(param_ty, body_ty))
-    //     })
-    // }
 
     fn synth_call(&mut self, call: &Call, _expr_id: Expr) -> TyResult<Ty> {
         let lhs_ty = self.synth_expr(call.lhs)?;

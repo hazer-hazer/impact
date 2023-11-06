@@ -1,6 +1,6 @@
 use super::{
     debug::{tcdbg, InferStepKind},
-    ty::{Ex, ExKind, FloatKind, IntKind, MapTy, Ty, TyKind},
+    ty::{Ex, ExKind, FloatKind, IntKind, MapTy, Ty, TyKind, VariantData},
     TyResult, Typecker,
 };
 use crate::{
@@ -8,7 +8,8 @@ use crate::{
     dt::idx::IndexVec,
     hir::{
         expr::{ExprKind, Lit},
-        Expr, Map,
+        pat::PatKind,
+        Expr, Map, Pat,
     },
     message::message::MessageBuilder,
     session::{MaybeWithSession, SessionHolder},
@@ -103,6 +104,23 @@ impl<'hir> Typecker<'hir> {
             },
         }
     }
+
+    // pub fn pat_check(&mut self, pat: Pat, ty: Ty) -> TyResult<Ty> {
+    //     match self.hir.pat(pat).kind() {
+    //         PatKind::Unit => {
+
+    //         },
+    //         &PatKind::Ident(name, id) => {
+    //             self.type_inferring_node(id, pat_ty);
+    //         },
+    //         PatKind::Struct(ty_path, fields, rest) => {
+    //             let pat_struct_ty =
+    // self.tyctx().tyof(*ty_path).as_struct().unwrap();         },
+    //         PatKind::Or(..) => {},
+    //     }
+
+    //     Ok(pat_ty)
+    // }
 
     /// Type check logic starts here.
     // fn _check(&mut self, expr_id: Expr, ty: Ty) -> TyResult<Ty> {
@@ -220,7 +238,7 @@ impl<'hir> Typecker<'hir> {
     ///
     /// If we've got an error and `l_ty` is an existential, it is solved as an
     /// error. This logic might be invalid and should be verified.
-    fn subtype(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
+    pub fn subtype(&mut self, l_ty: Spanned<Ty>, r_ty: Ty) -> TyResult<Ty> {
         match self._subtype(*l_ty.node(), r_ty) {
             Ok(ty) => Ok(ty.apply_ctx(self)),
             Err(err) => {
@@ -343,7 +361,7 @@ impl<'hir> Typecker<'hir> {
 
             // struct₁ <: struct₂
             (TyKind::Struct(struct1), TyKind::Struct(struct2))
-                if struct1.def_id == struct2.def_id =>
+                if struct1.data.def_id == struct2.data.def_id =>
             {
                 Ok(r_ty)
             },
@@ -558,7 +576,8 @@ impl<'hir> Typecker<'hir> {
                 .map(|v| {
                     (
                         v,
-                        v.fields
+                        v.data
+                            .fields
                             .iter()
                             .map(|&f| (f, this.add_fresh_common_ex()))
                             .collect::<IndexVec<FieldId, (Field, ExPair)>>(),
@@ -571,12 +590,14 @@ impl<'hir> Typecker<'hir> {
                 variants: variant_exes
                     .iter()
                     .map(|(v, fields)| Variant {
-                        def_id: v.def_id,
                         name: v.name,
-                        fields: fields
-                            .iter()
-                            .map(|(field, (_, ex_ty))| field.map_ty_pure(&mut |_| Ok(*ex_ty)))
-                            .collect(),
+                        data: VariantData {
+                            def_id: v.data.def_id,
+                            fields: fields
+                                .iter()
+                                .map(|(field, (_, ex_ty))| field.map_ty_pure(&mut |_| Ok(*ex_ty)))
+                                .collect(),
+                        },
                     })
                     .collect(),
             });
@@ -584,7 +605,7 @@ impl<'hir> Typecker<'hir> {
             this.solve(ex, adt_ex.mono());
 
             adt.variants.iter_enumerated().try_for_each(|(vid, v)| {
-                v.fields.iter_enumerated().try_for_each(|(fid, f)| {
+                v.data.fields.iter_enumerated().try_for_each(|(fid, f)| {
                     this.instantiate(dir.alternate(), f.ty, variant_exes[vid].1[fid].1 .0)?;
                     Ok(())
                 })?;
@@ -600,25 +621,32 @@ impl<'hir> Typecker<'hir> {
 
         self.try_to(|this| {
             let field_exes = struct_
+                .data
                 .fields
                 .iter()
                 .map(|&f| (f, this.add_fresh_common_ex()))
                 .collect::<IndexVec<FieldId, (Field, ExPair)>>();
 
             let struct_ex = Ty::struct_(Struct {
-                def_id: struct_.def_id,
-                fields: field_exes
-                    .iter()
-                    .map(|(field, (_, ex_ty))| field.map_ty_pure(&mut |_| Ok(*ex_ty)))
-                    .collect(),
+                data: VariantData {
+                    def_id: struct_.data.def_id,
+                    fields: field_exes
+                        .iter()
+                        .map(|(field, (_, ex_ty))| field.map_ty_pure(&mut |_| Ok(*ex_ty)))
+                        .collect(),
+                },
             });
 
             this.solve(ex, struct_ex.mono());
 
-            struct_.fields.iter_enumerated().try_for_each(|(fid, f)| {
-                this.instantiate(dir.alternate(), f.ty, field_exes[fid].1 .0)?;
-                Ok(())
-            })?;
+            struct_
+                .data
+                .fields
+                .iter_enumerated()
+                .try_for_each(|(fid, f)| {
+                    this.instantiate(dir.alternate(), f.ty, field_exes[fid].1 .0)?;
+                    Ok(())
+                })?;
 
             Ok(ty)
         })

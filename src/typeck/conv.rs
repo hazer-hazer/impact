@@ -1,8 +1,6 @@
 use super::{
     kind::{Kind, KindEx},
-    ty::{
-        Adt, Field, FieldId, FieldList, IntKind, Struct, TyVarId, Variant, VariantData, VariantId,
-    },
+    ty::{Adt, Field, FieldId, IntKind, Struct, TyVarId, Variant, VariantData, VariantId},
     tyctx::TyCtx,
 };
 use crate::{
@@ -220,6 +218,7 @@ impl<'hir> TyConv<'hir> {
                     .as_adt()
                     .unwrap()
                     .variant(vid)
+                    .data
                     .fields
                     .iter()
                     .map(|f| f.ty)
@@ -237,10 +236,7 @@ impl<'hir> TyConv<'hir> {
         let variant = self.hir.variant(variant);
         Variant {
             name: variant.name,
-            data: VariantData {
-                def_id: variant.def_id,
-                fields: self.conv_fields(&variant.fields, adt_def_id),
-            },
+            data: self.conv_variant_data(&variant.fields, adt_def_id),
         }
     }
 
@@ -249,10 +245,7 @@ impl<'hir> TyConv<'hir> {
 
         let struct_ty = self.conv_ty_def(struct_def_id, &struct_.generics, |this| {
             Ty::struct_(Struct {
-                data: VariantData {
-                    def_id: struct_def_id,
-                    fields: self.conv_fields(&struct_.fields, struct_def_id),
-                },
+                data: this.conv_variant_data(&struct_.fields, struct_def_id),
             })
         });
 
@@ -293,6 +286,7 @@ impl<'hir> TyConv<'hir> {
             struct_ty
                 .as_struct()
                 .unwrap()
+                .data
                 .fields
                 .iter()
                 .map(|f| f.ty)
@@ -314,7 +308,7 @@ impl<'hir> TyConv<'hir> {
         struct_ty
     }
 
-    fn conv_fields(&mut self, fields: &[hir::item::Field], adt_def_id: DefId) -> FieldList {
+    fn conv_variant_data(&mut self, fields: &[hir::item::Field], adt_def_id: DefId) -> VariantData {
         let named = if let Some(first_field) = fields.first() {
             let named = first_field.name.is_some();
             let all_same = fields
@@ -323,25 +317,17 @@ impl<'hir> TyConv<'hir> {
 
             // User error must be produced in AST checks
             assert!(all_same);
-
-            named
         };
 
-        if named {
-            FieldList::Named(fields.iter().map(|field| {
-                let ty = self.conv(field.ty, Some(adt_def_id));
-                self.tyctx_mut().type_node(field.id(), ty);
-                Field {
-                    name: field.name.unwrap(),
-                    ty,
-                }
-            }))
-        } else {
-            FieldList::Anon(fields.iter().map(|field| {
-                let ty = self.conv(field.ty, Some(adt_def_id));
-                self.tyctx_mut().type_node(field.id(), ty);
-                Field { name: (), ty }
-            }))
+        VariantData {
+            def_id: adt_def_id,
+            fields: fields
+                .iter()
+                .map(|f| Field {
+                    name: f.name,
+                    ty: self.conv(f.ty, Some(adt_def_id)),
+                })
+                .collect(),
         }
     }
 }

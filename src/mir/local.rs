@@ -43,9 +43,9 @@ impl<'ctx> MirBuilder<'ctx> {
 
     pub fn declare_bindings(&mut self, pat: PatId, is_param: bool) {
         let pat = self.thir.pat(pat);
-        match pat.kind {
+        match &pat.kind {
             PatKind::Unit => {},
-            PatKind::Ident { var, ty, name } => {
+            &PatKind::Ident { var, ty, name } => {
                 let local = self.builder.push_local(
                     is_param,
                     LocalInfo {
@@ -60,6 +60,7 @@ impl<'ctx> MirBuilder<'ctx> {
             PatKind::Or(lpat, rpat) => {
                 todo!()
             },
+            PatKind::Struct(ty, fields) => todo!(),
         }
     }
 

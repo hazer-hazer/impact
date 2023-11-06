@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
 };
@@ -250,13 +251,13 @@ pub trait MapTy<To, S> {
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct Field<Name, T = Ty> {
-    pub name: Name,
+pub struct Field<T = Ty> {
+    pub name: Option<Ident>,
     pub ty: T,
 }
 
-impl<Name, To> MapTy<To, Field<Name, To>> for Field<Name> {
-    fn map_ty<E, F>(&self, f: &mut F) -> Result<Field<Name, To>, E>
+impl<To> MapTy<To, Field<To>> for Field {
+    fn map_ty<E, F>(&self, f: &mut F) -> Result<Field<To>, E>
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
@@ -267,98 +268,69 @@ impl<Name, To> MapTy<To, Field<Name, To>> for Field<Name> {
     }
 }
 
-impl Display for Field<Ident> {
+impl Display for Field {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.name, self.ty)
-    }
-}
-
-impl Display for Field<()> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.ty)
-    }
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum FieldList<T = Ty> {
-    Anon(IndexVec<FieldId, Field<(), T>>),
-    Named(IndexVec<FieldId, Field<Ident, T>>),
-}
-
-impl FieldList {
-    pub fn size(&self) -> Option<u32> {
-        match self {
-            FieldList::Anon(fields) => fields.iter().map(|f| f.ty.size()).sum(),
-            FieldList::Named(fields) => fields.iter().map(|f| f.ty.size()).sum(),
-        }
-    }
-
-    pub fn get(id: FieldId) -> &Field<>
-}
-
-impl<To> MapTy<To, FieldList<To>> for FieldList {
-    fn map_ty<E, F>(&self, f: &mut F) -> Result<FieldList<To>, E>
-    where
-        F: FnMut(Ty) -> Result<To, E>,
-    {
-        Ok(match self {
-            FieldList::Anon(fields) => {
-                Self::Anon(fields.iter().map(|field| field.map_ty(f)).collect()?)
-            },
-            FieldList::Named(fields) => {
-                Self::Named(fields.iter().map(|field| field.map_ty(f)).collect()?)
-            },
-        })
-    }
-}
-
-impl Display for FieldList {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FieldList::Anon(fields) => write!(
-                f,
-                "{}",
-                fields
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            FieldList::Named(fields) => write!(
-                f,
-                "{}",
-                fields
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        }
+        write!(
+            f,
+            "{}{}",
+            self.name.map_or("".to_string(), |name| format!("{name}: ")),
+            self.ty
+        )
     }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct VariantData<T = Ty> {
     pub def_id: DefId,
-    pub fields: FieldList<T>,
+    pub fields: IndexVec<FieldId, Field<T>>,
 }
 
 impl VariantData {
     pub fn size(&self) -> Option<u32> {
-        self.fields.size()
+        self.fields.iter().map(|field| field.ty.size()).sum()
     }
 
-    pub fn walk_ty(&self) -> Box<dyn Iterator<Item = Ty>> {
-        match &self.fields {
-            FieldList::Anon(fields) => Box::new(fields.iter().map(|f| f.ty)),
-            FieldList::Named(fields) => Box::new(fields.iter().map(|f| f.ty)),
+    pub fn walk_tys<'a>(&'a self) -> impl Iterator<Item = Ty> + 'a {
+        self.fields.iter().map(|f| f.ty)
+    }
+
+    pub fn is_named(&self) -> bool {
+        if let Some(first) = self.fields.get(0.into()) {
+            first.name.is_some()
+        } else {
+            false
         }
+    }
+
+    pub fn names_indices(&self) -> Option<HashMap<Ident, FieldId>> {
+        if self.is_named() {
+            Some(
+                self.fields
+                    .iter_enumerated()
+                    .map(|(field_id, field)| (field.name.unwrap(), field_id))
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn field(&self, id: FieldId) -> &Field {
+        self.fields.get(id).unwrap()
     }
 }
 
 impl Display for VariantData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.fields)
+        write!(
+            f,
+            "{}",
+            self.fields
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -369,7 +341,11 @@ impl<To> MapTy<To, VariantData<To>> for VariantData {
     {
         Ok(VariantData {
             def_id: self.def_id,
-            fields: self.fields.map_ty(f)?,
+            fields: self
+                .fields
+                .iter()
+                .map(|field| field.map_ty(f))
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -382,7 +358,7 @@ pub struct Variant<T = Ty> {
 
 impl Variant<Ty> {
     pub fn size(&self) -> Option<u32> {
-        self.data.fields.size()
+        self.data.size()
     }
 }
 
@@ -412,7 +388,7 @@ pub struct Adt<T = Ty> {
 
 impl Adt {
     pub fn walk_tys<'a>(&'a self) -> impl Iterator<Item = Ty> + 'a {
-        // self.variants.iter().map(|v| v.)
+        self.variants.iter().map(|v| v.data.walk_tys()).flatten()
     }
 
     pub fn variant(&self, vid: VariantId) -> &Variant {
@@ -420,7 +396,14 @@ impl Adt {
     }
 
     pub fn field_ty(&self, vid: VariantId, fid: FieldId) -> Ty {
-        self.variants.get(vid).unwrap().fields.get(fid).unwrap().ty
+        self.variants
+            .get(vid)
+            .unwrap()
+            .data
+            .fields
+            .get(fid)
+            .unwrap()
+            .ty
     }
 
     pub fn max_variant_size(&self) -> Option<u32> {
@@ -472,13 +455,23 @@ pub struct Struct<T = Ty> {
     pub data: VariantData<T>,
 }
 
+impl Struct {
+    pub fn walk_tys<'a>(&'a self) -> impl Iterator<Item = Ty> + 'a {
+        self.data.walk_tys()
+    }
+
+    pub fn size(&self) -> Option<u32> {
+        self.data.size()
+    }
+}
+
 impl<To> MapTy<To, Struct<To>> for Struct {
     fn map_ty<E, F>(&self, f: &mut F) -> Result<Struct<To>, E>
     where
         F: FnMut(Ty) -> Result<To, E>,
     {
         Ok(Struct {
-            data: self.data.map_ty(f),
+            data: self.data.map_ty(f)?,
         })
     }
 }
@@ -780,7 +773,7 @@ impl Ty {
             TyKind::FuncDef(..) => todo!(),
             TyKind::Func(..) => todo!(),
             TyKind::Adt(adt) => adt.max_variant_size(),
-            TyKind::Struct(data) => data.size(),
+            TyKind::Struct(s) => s.size(),
             TyKind::Ref(_) => Some(IntKind::Uint.bytes().into()),
             TyKind::Var(_) => panic!(),
             TyKind::Existential(_) => panic!(),
@@ -828,7 +821,7 @@ impl<'sess, 'a> Display for WithSess<'sess, 'a, Ty> {
             ),
             TyKind::Adt(adt) => write!(f, "{}", self.sess.def_table.def(adt.def_id).name()),
             TyKind::Struct(struct_) => {
-                write!(f, "{}", self.sess.def_table.def(struct_.def_id).name())
+                write!(f, "{}", self.sess.def_table.def(struct_.data.def_id).name())
             },
             TyKind::Ref(inner) => write!(f, "ref {}", inner.with_sess(self.sess)),
             TyKind::Var(var) => write!(f, "{}", var.real_name()),
@@ -868,7 +861,7 @@ impl WithColor for Ty {
 #[cfg(test)]
 mod tests {
     // Ty tests //
-    use super::{Ex, ExId, Field, FieldList, Ty, TyVarId, Variant, VariantData};
+    use super::{Ex, ExId, Field, Ty, TyVarId, Variant, VariantData};
     use crate::{
         dt::idx::IndexVec,
         resolve::def::DefId,
@@ -921,22 +914,18 @@ mod tests {
         Ty::default_int()
     }
 
-    fn make_field() -> Field<Ident> {
+    fn make_field() -> Field {
         Field {
-            name: Ident::synthetic("a".intern()),
+            name: Some(Ident::synthetic("a".intern())),
             ty: super_simple_ty(),
         }
-    }
-
-    fn make_fields() -> FieldList {
-        FieldList::Named(IndexVec::from_iter([make_field()]))
     }
 
     fn make_variant() -> Variant {
         Variant {
             data: VariantData {
                 def_id: DefId::new(0),
-                fields: make_fields(),
+                fields: IndexVec::from_iter([make_field()]),
             },
             name: Ident::synthetic("a".intern()),
         }

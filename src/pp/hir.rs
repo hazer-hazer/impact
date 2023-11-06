@@ -89,6 +89,7 @@ impl<'a> HirVisitor for HirPP<'a> {
     }
 
     fn visit_local_stmt(&mut self, local: &Local, hir: &HIR) {
+        self.pp.kw(Kw::Let);
         self.visit_pat(local.pat, hir);
         self.pp.op(Op::Assign);
         self.visit_expr(local.value, hir);

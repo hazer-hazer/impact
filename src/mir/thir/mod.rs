@@ -12,7 +12,7 @@ use crate::{
         sym::{Ident, Symbol},
         Span, WithSpan,
     },
-    typeck::ty::{FloatKind, IntKind, Ty},
+    typeck::ty::{FieldId, FloatKind, IntKind, Ty},
 };
 
 declare_idx!(ExprId, u32, "{}", Color::Green);
@@ -20,6 +20,7 @@ declare_idx!(BlockId, u32, "{}", Color::Blue);
 declare_idx!(StmtId, u32, "{}", Color::Yellow);
 declare_idx!(ParamId, u32, "{}", Color::White);
 declare_idx!(PatId, u32, "pat#{}", Color::White);
+
 declare_idx!(wrapper LocalVar, HirId, "{}");
 
 pub enum Stmt {
@@ -60,6 +61,14 @@ impl std::fmt::Display for Arm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} => {}", self.pat, self.body)
     }
+}
+
+pub enum DecisionTree {
+    Match {
+        subject: ExprId,
+        pat: PatId,
+        then: Deci,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -181,10 +190,11 @@ impl Display for Expr {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum PatKind {
     Unit,
     Ident { name: Ident, var: LocalVar, ty: Ty },
+    Struct(Ty, IndexVec<FieldId, Option<(Option<Ident>, PatId)>>),
     Or(PatId, PatId),
 }
 
@@ -194,11 +204,29 @@ impl Display for PatKind {
             PatKind::Unit => write!(f, "()"),
             PatKind::Ident { name, var, ty } => write!(f, "{name}{var}: {ty}"),
             PatKind::Or(lpat, rpat) => write!(f, "{lpat} | {rpat}"),
+            PatKind::Struct(ty, fields) => write!(
+                f,
+                "{ty} {}{}",
+                fields
+                    .iter()
+                    .filter_map(|field| field.as_ref())
+                    .map(|(name, pat)| format!(
+                        "{}{pat}",
+                        name.map_or("".to_string(), |name| format!("{name}: "))
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                if fields.iter().any(|f| f.is_none()) {
+                    ", ..."
+                } else {
+                    ""
+                }
+            ),
         }
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Pat {
     pub ty: Ty,
     pub kind: PatKind,
@@ -225,6 +253,7 @@ pub struct THIR {
     blocks: IndexVec<BlockId, Block>,
     params: IndexVec<ParamId, Param>,
     pats: IndexVec<PatId, Pat>,
+    decision_trees: IndexVec<>
 }
 
 impl THIR {

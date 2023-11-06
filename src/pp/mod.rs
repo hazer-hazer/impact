@@ -217,8 +217,8 @@ impl<'a, D> AstLikePP<'a, D> {
     pub fn kw(&mut self, kw: Kw) -> &mut Self {
         let (pre, post) = match kw {
             Kw::In => (" ", " "),
-            Kw::Struct | Kw::Data | Kw::Extern | Kw::Type | Kw::Mod | Kw::Match => ("", " "),
-            Kw::Unit | Kw::Underscore | Kw::Let | Kw::Root | Kw::Unknown => ("", ""),
+            Kw::Struct | Kw::Data | Kw::Extern | Kw::Type | Kw::Mod | Kw::Match | Kw::Let => ("", " "),
+            Kw::Unit | Kw::Underscore | Kw::Root | Kw::Unknown => ("", ""),
         };
 
         self.str(pre);

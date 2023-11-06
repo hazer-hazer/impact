@@ -3,10 +3,12 @@ use super::{
     PatKind, Stmt, StmtId, THIR,
 };
 use crate::{
+    dt::idx::IndexVec,
     hir::{self, Map, OwnerId, ValueDefKind, WithHirId, HIR},
     resolve::builtin::ValueBuiltin,
     session::{impl_session_holder, Session, SessionHolder},
-    span::WithSpan,
+    span::{sym::Ident, WithSpan},
+    typeck::ty::FieldId,
 };
 
 pub struct ThirBuilder<'ctx> {
@@ -172,8 +174,20 @@ impl<'ctx> ThirBuilder<'ctx> {
                 var: LocalVar::new(name_id),
                 ty,
             },
-            hir::pat::PatKind::Struct(..) => todo!(),
-            hir::pat::PatKind::Or(lpat, rpat) => todo!(),
+            hir::pat::PatKind::Struct(ty_path, fields, _rest) => {
+                let struct_ty = self.tyctx().tyof(*ty_path);
+
+                let fields = fields
+                    .iter()
+                    .map(|field| {
+                        let (_field_ty, field_id) = self.tyctx().pat_field(field.pat);
+                        (field_id, Some((field.name, self.pat(field.pat))))
+                    })
+                    .collect::<IndexVec<FieldId, Option<(Option<Ident>, PatId)>>>();
+
+                PatKind::Struct(struct_ty, fields)
+            },
+            &hir::pat::PatKind::Or(lpat, rpat) => PatKind::Or(self.pat(lpat), self.pat(rpat)),
         };
 
         self.thir.add_pat(Pat {

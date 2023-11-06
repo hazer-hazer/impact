@@ -16,7 +16,7 @@ use super::{
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::{self, Expr, HirId},
+    hir::{self, Expr, HirId, Pat},
     resolve::{
         builtin::Builtin,
         def::{DefId, DefMap},
@@ -75,6 +75,9 @@ pub struct TyCtx {
     variant_indices: DefMap<VariantId>,
     field_accessor_field_id: DefMap<FieldId>,
 
+    // Map field pattern to struct/adt type and corresponding field id
+    pat_fields: HashMap<Pat, (Ty, FieldId)>,
+
     // Metadata //
     // FIXME: Never set
     ty_names: TyMap<Ident>,
@@ -93,6 +96,7 @@ impl TyCtx {
             def_ty_bindings: Default::default(),
             variant_indices: Default::default(),
             field_accessor_field_id: Default::default(),
+            pat_fields: Default::default(),
             ty_names: Default::default(),
         }
     }
@@ -331,6 +335,14 @@ impl TyCtx {
                 }
                 exprs
             })
+    }
+
+    pub fn set_pat_field(&mut self, pat: Pat, ty: Ty, field_id: FieldId) {
+        assert!(self.pat_fields.insert(pat, (ty, field_id)).is_none());
+    }
+
+    pub fn pat_field(&self, pat: Pat) -> (Ty, FieldId) {
+        self.pat_fields.get(&pat).copied().unwrap()
     }
 
     // Debug //

@@ -64,7 +64,7 @@ impl<I: Idx, T> IndexVec<I, T> {
         }
     }
 
-    pub fn new_of(count: usize) -> Self {
+    pub fn with_capacity(count: usize) -> Self {
         Self {
             vec: Vec::with_capacity(count),
             _i: PhantomData::default(),
@@ -175,7 +175,7 @@ impl<I: Idx, T> IndexVec<I, Option<T>> {
             None
         }
     }
-
+    
     #[inline]
     pub fn iter_enumerated_flat(&self) -> impl Iterator<Item = (I, &T)> + '_
     where
