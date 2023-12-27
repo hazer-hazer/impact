@@ -18,10 +18,6 @@ impl<'ctx> MirBuilder<'ctx> {
                     self.declare_bindings(pat, false);
                     unpack!(bb = self.store_expr_in_pat(bb, pat, init));
                 },
-                &Stmt::Local(pat, init) => {
-                    self.declare_bindings(pat, false);
-                    unpack!(bb = self.store_expr_in_pat(bb, pat, init));
-                },
             }
         }
 

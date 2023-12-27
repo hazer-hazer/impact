@@ -22,7 +22,6 @@ macro_rules! walk_each {
     };
 }
 
-use inkwell::values;
 pub(crate) use walk_each;
 
 pub trait HirVisitor {

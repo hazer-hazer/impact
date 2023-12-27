@@ -1,8 +1,7 @@
 pub mod build;
+mod matches;
 
 use std::fmt::Display;
-
-use inkwell::values;
 
 use crate::{
     cli::color::Color,
@@ -65,12 +64,26 @@ impl std::fmt::Display for Arm {
     }
 }
 
+pub enum Projection {
+    // Expr as it is
+    None,
+}
+
 pub enum DecisionTree {
+    /// The index of branch in match expression
+    Branch(usize),
+    Switch {
+        
+    },
     Match {
         subject: ExprId,
+        projection: Projection,
+        /// Only destructured patterns, i.e. no structures, tuple, etc.
         pat: PatId,
         then: Box<DecisionTree>,
     },
+    Body(ExprId),
+    Otherwise(Option<ExprId>),
 }
 
 #[derive(Debug, PartialEq)]

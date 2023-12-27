@@ -1,5 +1,3 @@
-use inkwell::values;
-
 use crate::{
     ast::{
         expr::{Arm, Block, Call, Expr, ExprKind, Infix, Lambda, Lit, PathExpr, TyExpr},

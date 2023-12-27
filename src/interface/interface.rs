@@ -15,13 +15,7 @@ use crate::{
     lower::Lower,
     mir::build::BuildFullMir,
     parser::{lexer::Lexer, parser::Parser},
-    pp::{
-        defs::DefPrinter,
-        hir::HirPP,
-        mir::{MirPPCtx, MirPrinter},
-        pp::PP,
-        AstLikePP, AstPPMode,
-    },
+    pp::{defs::DefPrinter, hir::HirPP, mir::MirPPCtx, pp::PP, AstLikePP, AstPPMode},
     resolve::{
         collect::DefCollector,
         def::{DefId, ModuleId},

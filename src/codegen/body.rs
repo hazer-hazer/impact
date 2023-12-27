@@ -1,7 +1,7 @@
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
-    values::{self, BasicValue, BasicValueEnum, CallableValue, FunctionValue, PointerValue},
+    values::{BasicValue, BasicValueEnum, CallableValue, FunctionValue, PointerValue},
 };
 
 use super::{ctx::CodeGenCtx, func::FunctionMap, value::ValueMap};
@@ -200,7 +200,7 @@ impl<'ink, 'ctx, 'a> BodyCodeGen<'ink, 'ctx, 'a> {
                 self.builder.build_return(Some(&return_local));
             },
             TerminatorKind::Switch(operand, targets) => {
-                todo!()
+                todo!("Switch codegen")
             },
         }
     }

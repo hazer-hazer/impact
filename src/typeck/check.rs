@@ -1,16 +1,12 @@
 use super::{
     debug::{tcdbg, InferStepKind},
-    ty::{Ex, ExKind, FloatKind, IntKind, MapTy, Ty, TyKind, VariantData},
+    ty::{Ex, ExKind, MapTy, Ty, TyKind, VariantData},
     TyResult, Typecker,
 };
 use crate::{
     cli::verbose,
     dt::idx::IndexVec,
-    hir::{
-        expr::{ExprKind, Lit},
-        pat::PatKind,
-        Expr, Map, Pat,
-    },
+    hir::{Expr, Map},
     message::message::MessageBuilder,
     session::{MaybeWithSession, SessionHolder},
     span::{Spanned, WithSpan},

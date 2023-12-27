@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use inkwell::values;
-
 use super::{
     impl_with_node_id, is_block_ended, item::Param, pat::Pat, pr_display, stmt::Stmt, ty::Ty,
     IdentNode, IsBlockEnded, NodeId, NodeKindStr, Path, WithNodeId, N, PR,

@@ -173,11 +173,7 @@ impl<'ctx> MirBuilder<'ctx> {
                     panic!("Ref constructor used as a standalone expression and must not appear on MIR building stage as ValueBuiltin")
                 },
             },
-            ExprKind::Block(_)
-            | ExprKind::LocalRef(_)
-            | ExprKind::Call { .. }
-            | ExprKind::Match(..)
-            | ExprKind::Ref(_) => {
+            ExprKind::Call { .. } | ExprKind::Match(..) | ExprKind::Ref(_) => {
                 assert!(!matches!(
                     expr.categorize(),
                     ExprCategory::AsRValue | ExprCategory::Const
@@ -274,7 +270,9 @@ impl<'ctx> MirBuilder<'ctx> {
             ExprKind::Match(subject, arms) => {
                 let subject = unpack!(bb = self.as_operand(bb, *subject));
 
-
+                let end_bb = self.builder.begin_bb();
+                let arms_blocks = arms.iter().map(|_| self.builder.begin_bb());
+                
 
                 // self.builder.terminate_switch(bb, subject, targets);
 

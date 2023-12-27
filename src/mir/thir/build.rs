@@ -1,5 +1,3 @@
-use inkwell::values;
-
 use super::{
     Arm, Block, BlockId, Expr, ExprId, ExprKind, Lit, LocalVar, Param, ParamId, Pat, PatId,
     PatKind, Stmt, StmtId, THIR,
@@ -14,8 +12,8 @@ use crate::{
 };
 
 pub struct ThirBuilder<'ctx> {
-    hir: &'ctx HIR,
-    sess: &'ctx Session,
+    pub hir: &'ctx HIR,
+    pub sess: &'ctx Session,
     thir: THIR,
 }
 
